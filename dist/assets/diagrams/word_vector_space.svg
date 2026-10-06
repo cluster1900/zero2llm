@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="appleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#f87171"/>
+    </linearGradient>
+    <linearGradient id="pearGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#fde047"/>
+    </linearGradient>
+    <linearGradient id="vecGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="axisArrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="500" rx="16" fill="url(#bgGrad)"/>
+  
+  <!-- Title -->
+  <text x="400" y="40" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="bold" fill="#f8fafc" text-anchor="middle">图 1-1：词嵌入特征空间与高中向量几何（水果坐标系）</text>
+
+  <!-- Subtitle -->
+  <text x="400" y="68" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">每个词语是坐标系里的一个箭头，语义相似度由向量夹角余弦 cos(θ) 决定</text>
+
+  <!-- Grid lines -->
+  <g stroke="#334155" stroke-width="1" stroke-dasharray="3,3">
+    <line x1="120" y1="120" x2="720" y2="120"/>
+    <line x1="120" y1="180" x2="720" y2="180"/>
+    <line x1="120" y1="240" x2="720" y2="240"/>
+    <line x1="120" y1="300" x2="720" y2="300"/>
+    <line x1="120" y1="360" x2="720" y2="360"/>
+    
+    <line x1="240" y1="100" x2="240" y2="420"/>
+    <line x1="360" y1="100" x2="360" y2="420"/>
+    <line x1="480" y1="100" x2="480" y2="420"/>
+    <line x1="600" y1="100" x2="600" y2="420"/>
+  </g>
+
+  <!-- Coordinate Axes -->
+  <!-- Y Axis: 脆度 -->
+  <line x1="120" y1="420" x2="120" y2="90" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#axisArrow)"/>
+  <text x="120" y="78" font-family="sans-serif" font-size="14" font-weight="bold" fill="#38bdf8" text-anchor="middle">纵轴：脆度 (0 ~ 10)</text>
+
+  <!-- X Axis: 甜度 -->
+  <line x1="120" y1="420" x2="750" y2="420" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#axisArrow)"/>
+  <text x="755" y="425" font-family="sans-serif" font-size="14" font-weight="bold" fill="#f43f5e" text-anchor="start">横轴：甜度 (0 ~ 10)</text>
+
+  <!-- Origin label -->
+  <text x="105" y="435" font-family="sans-serif" font-size="12" fill="#64748b">O (0,0)</text>
+
+  <!-- Vector: Apple (8, 9) -> mapped to (120 + 8*60 = 600, 420 - 9*30 = 150) -->
+  <line x1="120" y1="420" x2="595" y2="155" stroke="url(#vecGrad)" stroke-width="3" marker-end="url(#arrow)"/>
+  <!-- Vector: Pear (7.8, 8.5) -> mapped to (120 + 7.8*60 = 588, 420 - 8.5*30 = 165) -->
+  <line x1="120" y1="420" x2="583" y2="170" stroke="#fbbf24" stroke-width="2" stroke-dasharray="4,2" marker-end="url(#arrow)"/>
+
+  <!-- Angle arc θ between Apple and Pear -->
+  <path d="M 310 312 A 220 220 0 0 0 322 305" fill="none" stroke="#a78bfa" stroke-width="2.5"/>
+  <text x="335" y="305" font-family="sans-serif" font-size="14" font-weight="bold" fill="#a78bfa">夹角 θ 极小 (cos θ ≈ 0.999)</text>
+
+  <!-- Points -->
+  <!-- Apple -->
+  <circle cx="600" cy="150" r="8" fill="url(#appleGrad)"/>
+  <rect x="615" y="135" width="145" height="32" rx="6" fill="#1e293b" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="625" y="156" font-family="sans-serif" font-size="13" font-weight="bold" fill="#fca5a5">苹果 (8.0, 9.0)</text>
+
+  <!-- Pear -->
+  <circle cx="588" cy="165" r="7" fill="url(#pearGrad)"/>
+  <rect x="615" y="175" width="145" height="32" rx="6" fill="#1e293b" stroke="#eab308" stroke-width="1.5"/>
+  <text x="625" y="196" font-family="sans-serif" font-size="13" font-weight="bold" fill="#fde047">梨子 (7.8, 8.5)</text>
+
+  <!-- Watermelon (9, 3) -> (660, 330) -->
+  <circle cx="660" cy="330" r="7" fill="#10b981"/>
+  <text x="675" y="335" font-family="sans-serif" font-size="13" fill="#6ee7b7">西瓜 (9.0, 3.0)</text>
+
+  <!-- Banana (8.5, 1) -> (630, 390) -->
+  <circle cx="630" cy="390" r="7" fill="#facc15"/>
+  <text x="645" y="395" font-family="sans-serif" font-size="13" fill="#fef08a">香蕉 (8.5, 1.0)</text>
+
+  <!-- Cucumber (1, 8) -> (180, 180) -->
+  <circle cx="180" cy="180" r="7" fill="#34d399"/>
+  <text x="195" y="185" font-family="sans-serif" font-size="13" fill="#a7f3d0">黄瓜 (1.0, 8.0)</text>
+
+  <!-- Annotation Box -->
+  <rect x="140" y="270" width="220" height="85" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="150" y="295" font-family="sans-serif" font-size="12" font-weight="bold" fill="#38bdf8">💡 高中几何核心认知：</text>
+  <text x="150" y="315" font-family="sans-serif" font-size="11" fill="#cbd5e1">1. 苹果与梨子夹角近乎为 0°</text>
+  <text x="150" y="332" font-family="sans-serif" font-size="11" fill="#cbd5e1">2. 点积与余弦衡量方向一致性</text>
+  <text x="150" y="348" font-family="sans-serif" font-size="11" fill="#cbd5e1">3. 黄瓜脆但不甜，不再和苹果重合</text>
+</svg>
