@@ -29,25 +29,26 @@
 
 从我们刚才手搓的 Baby-GPT，到今天掌控世界算力的千亿大模型，工业界在以下 5 个关键构件上进行了脱胎换骨的升级：
 
+下面按用途把五种改进分成两张图。图中只概括它们的作用，实际收益还取决于模型、训练数据和硬件。
+
 ```mermaid
-mindmap
-  root((现代 LLM 进化利器))
-    旋转位置编码 RoPE
-      复数平面旋转
-      极佳外推长度
-    RMSNorm 极速归一化
-      去掉了复杂的均值计算
-      仅除以均方根,速度飞跃
-    SwiGLU 门控激活
-      信息选择性门控
-      表达能力大幅超越 ReLU
-    混合专家模型 MoE
-      Mixtral：8 个专家里叫醒 2 个
-      DeepSeek-V3：256 个路由专家里叫醒 8 个
-    KV Cache 键值缓存
-      拒绝重复计算
-      打字机速度飙升数十倍
+flowchart LR
+    accTitle: 现代 LLM：位置与信息处理
+    accDescr: RoPE 让注意力分数包含相对位置信息；RMSNorm 用均方根控制尺度；SwiGLU 用门控选择信息。
+    A["模型内部<br/>怎样处理信息"] --> B["RoPE<br/>旋转 Q、K，表达相对位置"]
+    A --> C["RMSNorm<br/>用均方根控制尺度"]
+    A --> D["SwiGLU<br/>通过门控选择信息"]
 ```
+
+```mermaid
+flowchart LR
+    accTitle: 现代 LLM：计算与缓存
+    accDescr: MoE 对每个词只激活部分专家；KV Cache 缓存过去位置的键和值，减少生成时的重复计算。
+    A["计算资源<br/>怎样更有效地使用"] --> B["MoE<br/>每个词只激活部分专家"]
+    A --> C["KV Cache<br/>复用过去的 K、V"]
+```
+
+例如，Mixtral 8×7B 在 8 个专家中选择 2 个；DeepSeek-V3 在 256 个路由专家中选择 8 个，并另有共享专家。RoPE 并不自动保证任意长度的外推，KV Cache 的加速倍数也不是固定常数。
 
 ---
 

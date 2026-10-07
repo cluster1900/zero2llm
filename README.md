@@ -59,7 +59,7 @@ python code/07_baby_gpt.py
 
 如果只想先体验高中数学版的两个实验，可以直接运行 `python3 code/01_vector_similarity.py` 和
 `python3 code/02_manual_attention.py`，它们不需要安装 PyTorch。重新编译 EPUB/HTML 还需要系统中的
-`pandoc`（macOS 可运行 `brew install pandoc`）。
+`pandoc` 和 Node.js 22 或更高版本（macOS 可运行 `brew install pandoc node`），并先运行 `npm ci` 安装锁定版本的图表构建工具。阅读成品不需要这些依赖。
 
 ---
 
@@ -69,7 +69,7 @@ python code/07_baby_gpt.py
 
 ```
 dist/
-├── transformer_for_highschool.html  # 🌟 现代化响应式 Web 阅读器（静态资源本地，公式/动态图需网络）
+├── transformer_for_highschool.html  # 🌟 现代化响应式 Web 阅读器（图表可离线阅读，公式排版需网络）
 ├── index.html                       # 🌟 对应 Web 站点入口文件
 ├── transformer_for_highschool.epub  # 📚 标准 EPUB 电子书 (支持 iPad/Apple Books/Kindle)
 ├── transformer_for_highschool.md    # 📝 完整合并版 Master Markdown 文档
@@ -82,16 +82,17 @@ dist/
 - 特性：
   - 支持 **深色 (Dark) / 浅色 (Light)** 主题一键切换；
   - 集成 **MathJax 3** 高清数学公式渲染；
-  - 集成 **Mermaid.js** 动态交互流程图；
+  - **预渲染流程图**，断网仍显示，点击可查看原尺寸；
   - 左侧常驻章节目录跳转，顶部实时阅读进度条；
   - 代码块高亮显示与一键下载功能。
 
-  公式、Mermaid 图和代码高亮通过 CDN 加载；第一次打开网页时需要网络。没有网络时正文、静态 SVG
-  图片和代码仍可阅读，但公式和部分动态图不会渲染。
+  公式排版和代码高亮通过 CDN 加载，需要网络；正文、全部图表和代码可离线阅读。
 
 ### 2. 电子书阅读器观看（EPUB）：
 - 文件路径：[`dist/transformer_for_highschool.epub`](dist/transformer_for_highschool.epub)
-- 将该文件拖入 macOS **Apple Books（图书）**、传到 **iPad** 或导入 **Kindle / 微信读书 / 掌阅**，即可享受媲美出版图书的离线排版体验！
+- 将文件导入 Apple Books 或其他支持 EPUB 的阅读器；Kindle 可通过 Send to Kindle 转换导入，具体支持以阅读器为准。
+- 图表在构建时转为 2 倍分辨率 PNG 并打包，离线无需脚本；长流程拆成小图，保持比例并限制宽高。
+- 如果阅读器缓存了旧版，移除旧书后重新导入。配套完整代码链接指向 GitHub，打开链接需要网络。
 
 ---
 
@@ -100,8 +101,15 @@ dist/
 如果你修改了 `chapters/` 中的任何 Markdown 章节或添加了新内容，只需运行一行命令：
 
 ```bash
-python3 build.py
+npm ci                # 首次构建；会下载用于渲染的 Chrome
+python3 build.py       # 生成 EPUB / HTML，并检查图表、资源和链接
+npm run check         # 单独检查已有成品
+npm run check:layout  # 检查手机、平板、横屏下的图表尺寸，输出预览截图
 ```
+
+Linux 构建机需要中文字体（例如 `fonts-noto-cjk`）。已有 Chrome 时，可以设置
+`PUPPETEER_EXECUTABLE_PATH` 指向其可执行文件；安装依赖时可设置 `PUPPETEER_SKIP_DOWNLOAD=true`。
+Mermaid 图必须提供 `accTitle` 和 `accDescr`；渲染错误、缺图或内部链接失效会让构建以非零状态退出。
 
 流水线会自动完成合并、生成全新 EPUB 电子书、生成现代化 Web 读物并校验资源完整性！
 
@@ -109,7 +117,7 @@ python3 build.py
 
 ## 🌟 矢量图例资源一览
 
-全书插图均采用 SVG 矢量格式绘制，无限放大不失真：
+网页插图采用 SVG；EPUB 使用构建时生成的 PNG，以兼容不同阅读器。原始矢量图：
 
 - [`assets/diagrams/word_vector_space.svg`](assets/diagrams/word_vector_space.svg)：词嵌入特征空间与水果向量坐标系
 - [`assets/diagrams/attention_mechanism.svg`](assets/diagrams/attention_mechanism.svg)：缩放点积注意力 QKV 计算完整流程图
@@ -118,3 +126,10 @@ python3 build.py
 - [`assets/diagrams/transformer_block.svg`](assets/diagrams/transformer_block.svg)：现代 Pre-LN Transformer Block 积木架构全貌
 - [`assets/diagrams/causal_mask.svg`](assets/diagrams/causal_mask.svg)：因果掩码下三角矩阵与防作弊原理
 - [`assets/diagrams/transformer_full_architecture.svg`](assets/diagrams/transformer_full_architecture.svg)：经典 Transformer 编码器-解码器宏观架构
+
+## 更新 Release 下载文件
+
+`python3 scripts/package_release.py` 校验并将当前 `dist/` 打包到 `.release/`，包含 EPUB、Web ZIP 和 SHA-256 校验值。
+在 GitHub Actions 手动运行 **Refresh book release downloads**，选择已有 Release 标签，即可替换阅读文件。
+也可以在推送到 `main` 的提交消息中加入 `[refresh-release]`，显式更新 `v1.0.0` 的下载文件。
+工作流不会移动旧标签；Release 说明会标出本次阅读文件对应的提交，并用新的附件链接替换旧 ZIP 链接。

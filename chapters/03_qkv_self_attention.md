@@ -72,15 +72,24 @@ $$\text{Attention}(Q, K, V) = \text{Softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right
 
 ![图 3-1：缩放点积注意力计算流程](assets/diagrams/attention_mechanism.svg)
 
+把计算链分成两张图：先做出“相关性分数”，再把分数变成“收集信息的比例”。两张图里的 Score 是同一张表。
+
 ```mermaid
 flowchart TD
-    A["输入词向量矩阵 X [3, 2]"] --> B["矩阵乘 W_Q, W_K, W_V"]
-    B --> C["生成矩阵 Q, K, V [3, 2]"]
-    C --> D["计算点积矩阵: Score = Q · K^T [3, 3]"]
-    D --> E["缩放因子: 除以 √d_k = √2 ≈ 1.414"]
-    E --> F["Softmax 概率归一化: 每行和为 100%"]
-    F --> G["加权加和: Weights · V"]
-    G --> H["融合上下文的新词向量矩阵 Output [3, 2]"]
+    accTitle: 注意力上半程：从输入算出分数
+    accDescr: 输入 X 的形状为 3 乘 2，经过三个投影得到 Q、K、V，再计算 3 乘 3 的点积分数。
+    A["输入 X<br/>形状 [3, 2]"] --> B["分别乘 W_Q、W_K、W_V"]
+    B --> C["得到 Q、K、V<br/>各为 [3, 2]"]
+    C --> D["Score = Q · Kᵀ<br/>形状 [3, 3]"]
+```
+
+```mermaid
+flowchart TD
+    accTitle: 注意力下半程：按比例收集信息
+    accDescr: 分数除以根号 2，每行经 Softmax 得到权重，再与 V 相乘得到 3 乘 2 的输出。
+    A["缩放：Score ÷ √2<br/>√2 ≈ 1.414"] --> B["逐行 Softmax<br/>每行权重之和为 1"]
+    B --> C["权重矩阵乘 V<br/>按比例加权求和"]
+    C --> D["新的词向量 Output<br/>形状 [3, 2]"]
 ```
 
 ### 表 3-1：为什么除以 $\sqrt{d_k}$？手写分数的 Softmax 对照

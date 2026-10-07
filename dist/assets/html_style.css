@@ -373,20 +373,28 @@ img {
   border: 1px solid var(--border-color);
 }
 
-/* Mermaid Diagrams */
-.mermaid {
-  background: var(--bg-card);
-  padding: 1.5rem;
-  border-radius: 10px;
-  margin: 2rem 0;
+/* Diagrams are pre-rendered: available offline and without JavaScript. */
+.diagram-figure {
   max-width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--border-color);
+  margin: 2rem 0;
+  text-align: center;
 }
 
-.mermaid svg {
+img.book-diagram {
   max-width: 100%;
+  max-height: 560px;
+  max-height: min(560px, 75vh);
   height: auto;
+  object-fit: contain;
+  margin: 0.8rem auto;
+  background: #fff;
+}
+
+figcaption, .diagram-caption {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0.5rem 0 1rem;
 }
 
 /* Reading Progress Bar */

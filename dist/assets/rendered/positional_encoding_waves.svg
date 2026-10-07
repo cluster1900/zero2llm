@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 500" width="850" height="500">
+  <defs>
+    <linearGradient id="bgGrad4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e17"/>
+      <stop offset="100%" stop-color="#161e2e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="850" height="500" rx="16" fill="url(#bgGrad4)"/>
+
+  <!-- Title -->
+  <text x="425" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="bold" fill="#f8fafc" text-anchor="middle">图 5-1：正弦余弦位置编码的波形频率谱（时钟三针原理）</text>
+  <text x="425" y="65" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">横轴都是位置 0 到 24。三条曲线按公式画出：快针 sin(pos)，中针 sin(pos/8)，慢针 sin(pos/80)</text>
+
+  <!-- Coordinate system for Wave 1: High Frequency (Dimension 0, like second hand) -->
+  <g transform="translate(100, 110)">
+    <text x="0" y="-10" font-family="sans-serif" font-size="13" font-weight="bold" fill="#38bdf8">快针：sin(位置)，周期约 6.28 个座位。pos=1 才转到约 57 度，不是大半圈</text>
+    <!-- Axes -->
+    <line x1="0" y1="40" x2="680" y2="40" stroke="#475569" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="80" stroke="#475569" stroke-width="1.5"/>
+    <text x="-35" y="10" font-family="sans-serif" font-size="11" fill="#94a3b8">+1.0</text>
+    <text x="-35" y="45" font-family="sans-serif" font-size="11" fill="#94a3b8"> 0.0</text>
+    <text x="-35" y="80" font-family="sans-serif" font-size="11" fill="#94a3b8">-1.0</text>
+
+    <!-- High frequency sine wave -->
+    <path d="M 0.0 40.0 L 5.3 33.2 L 10.7 26.8 L 16.0 20.8 L 21.3 15.6 L 26.7 11.4 L 32.0 8.3 L 37.3 6.5 L 42.7 6.0 L 48.0 6.9 L 53.3 9.1 L 58.7 12.5 L 64.0 17.0 L 69.3 22.5 L 74.7 28.6 L 80.0 35.2 L 85.3 42.0 L 90.7 48.7 L 96.0 55.0 L 101.3 60.8 L 106.7 65.7 L 112.0 69.6 L 117.3 72.4 L 122.7 73.8 L 128.0 73.9 L 133.3 72.6 L 138.7 70.0 L 144.0 66.3 L 149.3 61.5 L 154.7 55.8 L 160.0 49.5 L 165.3 42.8 L 170.7 36.0 L 176.0 29.4 L 181.3 23.2 L 186.7 17.7 L 192.0 13.0 L 197.3 9.4 L 202.7 7.1 L 208.0 6.0 L 213.3 6.4 L 218.7 8.0 L 224.0 10.9 L 229.3 15.0 L 234.7 20.1 L 240.0 26.0 L 245.3 32.4 L 250.7 39.2 L 256.0 45.9 L 261.3 52.5 L 266.7 58.5 L 272.0 63.8 L 277.3 68.1 L 282.7 71.4 L 288.0 73.4 L 293.3 74.0 L 298.7 73.3 L 304.0 71.3 L 309.3 68.0 L 314.7 63.6 L 320.0 58.2 L 325.3 52.2 L 330.7 45.6 L 336.0 38.9 L 341.3 32.1 L 346.7 25.7 L 352.0 19.9 L 357.3 14.8 L 362.7 10.8 L 368.0 7.9 L 373.3 6.3 L 378.7 6.1 L 384.0 7.2 L 389.3 9.6 L 394.7 13.2 L 400.0 17.9 L 405.3 23.5 L 410.7 29.7 L 416.0 36.3 L 421.3 43.1 L 426.7 49.8 L 432.0 56.1 L 437.3 61.7 L 442.7 66.5 L 448.0 70.2 L 453.3 72.7 L 458.7 73.9 L 464.0 73.8 L 469.3 72.3 L 474.7 69.5 L 480.0 65.5 L 485.3 60.6 L 490.7 54.8 L 496.0 48.4 L 501.3 41.7 L 506.7 34.9 L 512.0 28.3 L 517.3 22.2 L 522.7 16.8 L 528.0 12.3 L 533.3 9.0 L 538.7 6.8 L 544.0 6.0 L 549.3 6.5 L 554.7 8.4 L 560.0 11.6 L 565.3 15.8 L 570.7 21.1 L 576.0 27.0 L 581.3 33.5 L 586.7 40.3 L 592.0 47.0 L 597.3 53.5 L 602.7 59.4 L 608.0 64.6 L 613.3 68.8 L 618.7 71.8 L 624.0 73.6 L 629.3 74.0 L 634.7 73.0 L 640.0 70.8" fill="none" stroke="#38bdf8" stroke-width="2.5"/>
+    <circle cx="0" cy="40" r="3.5" fill="#f43f5e"/>
+    <text x="6" y="54" font-family="sans-serif" font-size="10" fill="#fca5a5">pos=0 值为 0</text>
+    <circle cx="26.7" cy="11.4" r="3.5" fill="#f43f5e"/>
+    <text x="34" y="14" font-family="sans-serif" font-size="10" fill="#fca5a5">pos=1 约 0.84，靠近第一座波峰</text>
+    <circle cx="106.7" cy="65.7" r="3.5" fill="#f43f5e"/>
+    <text x="112" y="78" font-family="sans-serif" font-size="10" fill="#fca5a5">pos=4 约 -0.76</text>
+  </g>
+
+  <!-- Coordinate system for Wave 2: Medium Frequency (Dimension 256, like minute hand) -->
+  <g transform="translate(100, 230)">
+    <text x="0" y="-10" font-family="sans-serif" font-size="13" font-weight="bold" fill="#34d399">中针：sin(位置/8)，波长约是快针的 8 倍，前 24 个座位里慢慢爬升</text>
+    <!-- Axes -->
+    <line x1="0" y1="40" x2="680" y2="40" stroke="#475569" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="80" stroke="#475569" stroke-width="1.5"/>
+    <text x="-35" y="10" font-family="sans-serif" font-size="11" fill="#94a3b8">+1.0</text>
+    <text x="-35" y="45" font-family="sans-serif" font-size="11" fill="#94a3b8"> 0.0</text>
+    <text x="-35" y="80" font-family="sans-serif" font-size="11" fill="#94a3b8">-1.0</text>
+
+    <!-- Medium frequency sine wave -->
+    <path d="M 0.0 40.0 L 5.3 39.2 L 10.7 38.3 L 16.0 37.5 L 21.3 36.6 L 26.7 35.8 L 32.0 34.9 L 37.3 34.1 L 42.7 33.2 L 48.0 32.4 L 53.3 31.6 L 58.7 30.8 L 64.0 30.0 L 69.3 29.1 L 74.7 28.3 L 80.0 27.5 L 85.3 26.8 L 90.7 26.0 L 96.0 25.2 L 101.3 24.5 L 106.7 23.7 L 112.0 23.0 L 117.3 22.2 L 122.7 21.5 L 128.0 20.8 L 133.3 20.1 L 138.7 19.4 L 144.0 18.8 L 149.3 18.1 L 154.7 17.5 L 160.0 16.8 L 165.3 16.2 L 170.7 15.6 L 176.0 15.0 L 181.3 14.5 L 186.7 13.9 L 192.0 13.4 L 197.3 12.8 L 202.7 12.3 L 208.0 11.9 L 213.3 11.4 L 218.7 10.9 L 224.0 10.5 L 229.3 10.1 L 234.7 9.7 L 240.0 9.3 L 245.3 9.0 L 250.7 8.6 L 256.0 8.3 L 261.3 8.0 L 266.7 7.7 L 272.0 7.5 L 277.3 7.2 L 282.7 7.0 L 288.0 6.8 L 293.3 6.6 L 298.7 6.5 L 304.0 6.4 L 309.3 6.2 L 314.7 6.2 L 320.0 6.1 L 325.3 6.0 L 330.7 6.0 L 336.0 6.0 L 341.3 6.0 L 346.7 6.0 L 352.0 6.1 L 357.3 6.2 L 362.7 6.3 L 368.0 6.4 L 373.3 6.5 L 378.7 6.7 L 384.0 6.9 L 389.3 7.1 L 394.7 7.3 L 400.0 7.6 L 405.3 7.8 L 410.7 8.1 L 416.0 8.4 L 421.3 8.7 L 426.7 9.1 L 432.0 9.4 L 437.3 9.8 L 442.7 10.2 L 448.0 10.7 L 453.3 11.1 L 458.7 11.5 L 464.0 12.0 L 469.3 12.5 L 474.7 13.0 L 480.0 13.5 L 485.3 14.1 L 490.7 14.6 L 496.0 15.2 L 501.3 15.8 L 506.7 16.4 L 512.0 17.0 L 517.3 17.7 L 522.7 18.3 L 528.0 19.0 L 533.3 19.7 L 538.7 20.3 L 544.0 21.0 L 549.3 21.8 L 554.7 22.5 L 560.0 23.2 L 565.3 24.0 L 570.7 24.7 L 576.0 25.5 L 581.3 26.2 L 586.7 27.0 L 592.0 27.8 L 597.3 28.6 L 602.7 29.4 L 608.0 30.2 L 613.3 31.0 L 618.7 31.9 L 624.0 32.7 L 629.3 33.5 L 634.7 34.4 L 640.0 35.2" fill="none" stroke="#34d399" stroke-width="2.5"/>
+  </g>
+
+  <!-- Coordinate system for Wave 3: Ultra-Low Frequency (Dimension 510, like hour hand) -->
+  <g transform="translate(100, 350)">
+    <text x="0" y="-10" font-family="sans-serif" font-size="13" font-weight="bold" fill="#f59e0b">慢针：sin(位置/80)，同一段位置里几乎还贴着 0，只微微抬起</text>
+    <!-- Axes -->
+    <line x1="0" y1="40" x2="680" y2="40" stroke="#475569" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="80" stroke="#475569" stroke-width="1.5"/>
+    <text x="-35" y="10" font-family="sans-serif" font-size="11" fill="#94a3b8">+1.0</text>
+    <text x="-35" y="45" font-family="sans-serif" font-size="11" fill="#94a3b8"> 0.0</text>
+    <text x="-35" y="80" font-family="sans-serif" font-size="11" fill="#94a3b8">-1.0</text>
+
+    <!-- Low frequency sine wave: barely finishes 1/4 cycle -->
+    <path d="M 0.0 40.0 L 5.3 39.9 L 10.7 39.8 L 16.0 39.7 L 21.3 39.7 L 26.7 39.6 L 32.0 39.5 L 37.3 39.4 L 42.7 39.3 L 48.0 39.2 L 53.3 39.2 L 58.7 39.1 L 64.0 39.0 L 69.3 38.9 L 74.7 38.8 L 80.0 38.7 L 85.3 38.6 L 90.7 38.6 L 96.0 38.5 L 101.3 38.4 L 106.7 38.3 L 112.0 38.2 L 117.3 38.1 L 122.7 38.0 L 128.0 38.0 L 133.3 37.9 L 138.7 37.8 L 144.0 37.7 L 149.3 37.6 L 154.7 37.5 L 160.0 37.5 L 165.3 37.4 L 170.7 37.3 L 176.0 37.2 L 181.3 37.1 L 186.7 37.0 L 192.0 36.9 L 197.3 36.9 L 202.7 36.8 L 208.0 36.7 L 213.3 36.6 L 218.7 36.5 L 224.0 36.4 L 229.3 36.4 L 234.7 36.3 L 240.0 36.2 L 245.3 36.1 L 250.7 36.0 L 256.0 35.9 L 261.3 35.8 L 266.7 35.8 L 272.0 35.7 L 277.3 35.6 L 282.7 35.5 L 288.0 35.4 L 293.3 35.3 L 298.7 35.3 L 304.0 35.2 L 309.3 35.1 L 314.7 35.0 L 320.0 34.9 L 325.3 34.8 L 330.7 34.8 L 336.0 34.7 L 341.3 34.6 L 346.7 34.5 L 352.0 34.4 L 357.3 34.3 L 362.7 34.2 L 368.0 34.2 L 373.3 34.1 L 378.7 34.0 L 384.0 33.9 L 389.3 33.8 L 394.7 33.7 L 400.0 33.7 L 405.3 33.6 L 410.7 33.5 L 416.0 33.4 L 421.3 33.3 L 426.7 33.2 L 432.0 33.2 L 437.3 33.1 L 442.7 33.0 L 448.0 32.9 L 453.3 32.8 L 458.7 32.7 L 464.0 32.7 L 469.3 32.6 L 474.7 32.5 L 480.0 32.4 L 485.3 32.3 L 490.7 32.2 L 496.0 32.2 L 501.3 32.1 L 506.7 32.0 L 512.0 31.9 L 517.3 31.8 L 522.7 31.8 L 528.0 31.7 L 533.3 31.6 L 538.7 31.5 L 544.0 31.4 L 549.3 31.3 L 554.7 31.3 L 560.0 31.2 L 565.3 31.1 L 570.7 31.0 L 576.0 30.9 L 581.3 30.8 L 586.7 30.8 L 592.0 30.7 L 597.3 30.6 L 602.7 30.5 L 608.0 30.4 L 613.3 30.4 L 618.7 30.3 L 624.0 30.2 L 629.3 30.1 L 634.7 30.0 L 640.0 30.0" fill="none" stroke="#f59e0b" stroke-width="2.5"/>
+
+    <text x="650" y="70" font-family="sans-serif" font-size="11" fill="#94a3b8">位置 pos ──►</text>
+  </g>
+
+  <!-- Bottom summary box -->
+  <rect x="100" y="445" width="680" height="35" rx="6" fill="#1e293b" stroke="#6366f1" stroke-width="1"/>
+  <text x="440" y="467" font-family="sans-serif" font-size="12" fill="#c7d2fe" text-anchor="middle">红点标在真实的 sin 值上。快、中、慢三根针合在一起，每个座位的读数组合才不会重复。</text>
+</svg>

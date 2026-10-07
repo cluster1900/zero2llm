@@ -14,6 +14,10 @@ import sys
 import shutil
 import subprocess
 import html
+import tempfile
+from scripts.book_diagrams import prepare_documents
+from scripts.check_book import check_book
+from scripts.epub_metadata import declare_mathml
 from datetime import date
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +42,7 @@ def require_command(command, purpose):
     """在开始编译前给出可操作的依赖提示，而不是抛出长 traceback。"""
     if shutil.which(command) is None:
         print(f"❌ 找不到 {command}（{purpose}）。")
-        print("   macOS 可用 Homebrew 安装：brew install pandoc")
+        print(f"   macOS 可用 Homebrew 安装：brew install {command}")
         print("   安装后重新运行：python3 build.py")
         return False
     return True
@@ -77,7 +81,7 @@ def merge_markdown():
     print(f"✓ 完整 Markdown 已输出至: {output_path}")
     return output_path
 
-def build_epub(merged_md_path):
+def build_epub(document_path):
     print("\n▶ 正在使用 Pandoc 编译 EPUB 电子书...")
     epub_out = os.path.join(DIST_DIR, "transformer_for_highschool.epub")
     cover_image = os.path.join(ASSETS_DIR, "cover.jpg")
@@ -85,9 +89,10 @@ def build_epub(merged_md_path):
     
     cmd = [
         "pandoc",
-        merged_md_path,
-        "-f", MD_FORMAT,
+        document_path,
+        "-f", "json",
         "--lua-filter", ALERTS_LUA,
+        "--resource-path", os.pathsep.join([DIST_DIR, BASE_DIR]),
         "-o", epub_out,
         "--toc",
         "--toc-depth=3",
@@ -108,19 +113,22 @@ def build_epub(merged_md_path):
     if res.returncode != 0:
         print(f"❌ EPUB 编译失败:\n{res.stderr}")
         return False
+    if res.stderr:
+        print(res.stderr.strip())
     
+    declare_mathml(epub_out)
     epub_size_mb = os.path.getsize(epub_out) / (1024 * 1024)
     print(f"✓ EPUB 电子书生成成功: {epub_out} ({epub_size_mb:.2f} MB)")
     return True
 
-def build_html(merged_md_path):
+def build_html(document_path):
     print("\n▶ 正在编译现代化 Web HTML 读物...")
     # 1. 先用 pandoc 将 markdown 编译为 html 片段
     temp_fragment_path = os.path.join(DIST_DIR, "_fragment.html")
     cmd = [
         "pandoc",
-        merged_md_path,
-        "-f", MD_FORMAT,
+        document_path,
+        "-f", "json",
         "--lua-filter", ALERTS_LUA,
         "-t", "html5",
         "--mathjax",
@@ -161,14 +169,6 @@ def build_html(merged_md_path):
         html_body,
     )
     html_body = html_body.replace("</table>", "</table></div>")
-    # 处理 mermaid 语法块：<pre class="mermaid"><code>...</code></pre> 变成 <div class="mermaid">...</div>
-    html_body = re.sub(
-        r'<pre[^>]*class="[^"]*mermaid[^"]*"[^>]*><code[^>]*>(.*?)</code></pre>',
-        r'<div class="mermaid">\1</div>',
-        html_body,
-        flags=re.DOTALL
-    )
-
     # 读取 html_style.css
     css_path = os.path.join(ASSETS_DIR, "html_style.css")
     with open(css_path, "r", encoding="utf-8") as f:
@@ -217,9 +217,6 @@ def build_html(merged_md_path):
   </script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
-  <!-- Mermaid.js for rendering diagrams -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-
   <!-- Highlight.js for code syntax highlighting -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -263,33 +260,13 @@ def build_html(merged_md_path):
   </div>
 
   <script>
-    // 主题切换时，流程图跟着换一套配色
+    // 图表已在构建时渲染，切换主题无需重新计算布局。
     const toggleBtn = document.getElementById('theme-toggle');
     const htmlElem = document.documentElement;
-    function renderDiagrams() {{
-      if (!window.mermaid) return;
-      const themeName = htmlElem.getAttribute('data-theme') === 'light' ? 'default' : 'dark';
-      document.querySelectorAll('.mermaid').forEach((el) => {{
-        if (!el.dataset.src) el.dataset.src = el.textContent;
-        el.removeAttribute('data-processed');
-        el.textContent = el.dataset.src;
-      }});
-      mermaid.initialize({{
-        startOnLoad: false,
-        theme: themeName,
-        themeVariables: {{
-          primaryColor: '#38bdf8',
-          lineColor: '#94a3b8'
-        }}
-      }});
-      mermaid.run({{ querySelector: '.mermaid' }});
-    }}
-    renderDiagrams();
     toggleBtn.addEventListener('click', () => {{
       const current = htmlElem.getAttribute('data-theme');
       const next = current === 'dark' ? 'light' : 'dark';
       htmlElem.setAttribute('data-theme', next);
-      renderDiagrams();
     }});
 
     // 顶部阅读进度条
@@ -334,6 +311,11 @@ def main():
     print("=" * 65)
     if not require_command("pandoc", "EPUB 和 HTML 都需要它"):
         return 1
+    if not require_command("node", "预渲染全书图表需要 Node.js；安装后先运行 npm ci"):
+        return 1
+    if not os.path.isdir(os.path.join(BASE_DIR, "node_modules", "@mermaid-js", "mermaid-cli")):
+        print("❌ 缺少图表构建依赖，请先运行 npm ci")
+        return 1
     ensure_dirs()
     # GitHub Pages 以静态文件方式发布 dist/，避免 Jekyll 改写资源路径。
     with open(os.path.join(DIST_DIR, ".nojekyll"), "w", encoding="utf-8") as f:
@@ -359,11 +341,17 @@ def main():
     # 2. 合并 Markdown
     merged_md = merge_markdown()
 
-    # 3. 编译 EPUB
-    epub_ok = build_epub(merged_md)
-
-    # 4. 编译 HTML
-    html_ok = build_html(merged_md)
+    # 3. 在临时目录准备两种输出的文档树；任何图表失败都会终止构建。
+    try:
+        with tempfile.TemporaryDirectory(prefix="zero2llm-") as temp_dir:
+            epub_doc, html_doc = prepare_documents(merged_md, temp_dir, BASE_DIR, MD_FORMAT)
+            epub_ok = build_epub(epub_doc)
+            html_ok = build_html(html_doc)
+        if epub_ok and html_ok:
+            check_book(DIST_DIR)
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+        print(f"❌ 构建或产物校验失败：{exc}")
+        return 1
 
     print("\n" + "=" * 65)
     if epub_ok and html_ok:
@@ -374,7 +362,7 @@ def main():
     else:
         print("⚠️ 编译过程中出现警告，请检查上方日志。")
     print("=" * 65)
-    return 0
+    return 0 if epub_ok and html_ok else 1
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 640" width="750" height="640">
+  <defs>
+    <linearGradient id="bgGrad5" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="100%" stop-color="#172033"/>
+    </linearGradient>
+    <linearGradient id="mhaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="ffnGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="lnGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <marker id="arr5" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrRes" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="750" height="640" rx="16" fill="url(#bgGrad5)"/>
+
+  <!-- Title -->
+  <text x="375" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="bold" fill="#f8fafc" text-anchor="middle">图 6-1：现代 Pre-LN Transformer Block 积木架构全貌</text>
+  <text x="375" y="65" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">绿色为残差信息高速公路（抄近道），保持信号无损直通深层网络</text>
+
+  <!-- Input Node -->
+  <g transform="translate(265, 85)">
+    <rect width="220" height="40" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+    <text x="110" y="25" font-family="sans-serif" font-size="14" font-weight="bold" fill="#f1f5f9" text-anchor="middle">输入特征 X [B, T, D]</text>
+  </g>
+
+  <!-- Arrow down from Input -->
+  <line x1="375" y1="125" x2="375" y2="155" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr5)"/>
+
+  <!-- Residual Highway 1 (Green Bypass) -->
+  <path d="M 375 140 L 170 140 L 170 305 L 345 305" fill="none" stroke="#34d399" stroke-width="2.5" stroke-dasharray="5,3" marker-end="url(#arrRes)"/>
+  <text x="155" y="225" font-family="sans-serif" font-size="12" font-weight="bold" fill="#34d399" transform="rotate(-90 155 225)">残差高速公路 1 (+1 梯度无损直达)</text>
+
+  <!-- LayerNorm 1 -->
+  <g transform="translate(265, 155)">
+    <rect width="220" height="42" rx="8" fill="url(#lnGrad)" stroke="#7dd3fc" stroke-width="1.5"/>
+    <text x="110" y="26" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">层归一化 (LayerNorm 1)</text>
+  </g>
+
+  <!-- Arrow to MHA -->
+  <line x1="375" y1="197" x2="375" y2="225" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr5)"/>
+
+  <!-- Multi-Head Attention -->
+  <g transform="translate(245, 225)">
+    <rect width="260" height="50" rx="8" fill="url(#mhaGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+    <text x="130" y="25" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">多头自注意力机制 (MHA)</text>
+    <text x="130" y="42" font-family="sans-serif" font-size="11" fill="#dbeafe" text-anchor="middle">词与词之间的横向交流沟通</text>
+  </g>
+
+  <!-- Arrow to Add 1 -->
+  <line x1="375" y1="275" x2="375" y2="300" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr5)"/>
+
+  <!-- Add 1 Circle -->
+  <circle cx="375" cy="305" r="18" fill="#10b981" stroke="#a7f3d0" stroke-width="2"/>
+  <text x="375" y="311" font-family="sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">+</text>
+
+  <!-- Arrow down from Add 1 -->
+  <line x1="375" y1="323" x2="375" y2="365" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr5)"/>
+
+  <!-- Residual Highway 2 (Green Bypass) -->
+  <path d="M 375 345 L 170 345 L 170 515 L 345 515" fill="none" stroke="#34d399" stroke-width="2.5" stroke-dasharray="5,3" marker-end="url(#arrRes)"/>
+  <text x="155" y="435" font-family="sans-serif" font-size="12" font-weight="bold" fill="#34d399" transform="rotate(-90 155 435)">残差高速公路 2 (+1 梯度无损直达)</text>
+
+  <!-- LayerNorm 2 -->
+  <g transform="translate(265, 365)">
+    <rect width="220" height="42" rx="8" fill="url(#lnGrad)" stroke="#7dd3fc" stroke-width="1.5"/>
+    <text x="110" y="26" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">层归一化 (LayerNorm 2)</text>
+  </g>
+
+  <!-- Arrow to FFN -->
+  <line x1="375" y1="407" x2="375" y2="435" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr5)"/>
+
+  <!-- FFN Box -->
+  <g transform="translate(245, 435)">
+    <rect width="260" height="50" rx="8" fill="url(#ffnGrad)" stroke="#c4b5fd" stroke-width="1.5"/>
+    <text x="130" y="25" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">前馈神经网络 (FFN / MLP)</text>
+    <text x="130" y="42" font-family="sans-serif" font-size="11" fill="#ede9fe" text-anchor="middle">每个词闭门深思 (升维 4 倍 -> 降维)</text>
+  </g>
+
+  <!-- Arrow to Add 2 -->
+  <line x1="375" y1="485" x2="375" y2="510" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr5)"/>
+
+  <!-- Add 2 Circle -->
+  <circle cx="375" cy="515" r="18" fill="#10b981" stroke="#a7f3d0" stroke-width="2"/>
+  <text x="375" y="521" font-family="sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">+</text>
+
+  <!-- Arrow down to Output -->
+  <line x1="375" y1="533" x2="375" y2="565" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr5)"/>
+
+  <!-- Output Node -->
+  <g transform="translate(265, 565)">
+    <rect width="220" height="42" rx="8" fill="#059669" stroke="#34d399" stroke-width="2"/>
+    <text x="110" y="26" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">输出特征 X' [B, T, D]</text>
+  </g>
+
+  <!-- Note on Shape invariance -->
+  <rect x="525" y="280" width="185" height="100" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1"/>
+  <text x="535" y="305" font-family="sans-serif" font-size="12" font-weight="bold" fill="#f59e0b">🧱 积木核心奥秘：</text>
+  <text x="535" y="325" font-family="sans-serif" font-size="11" fill="#cbd5e1">• 输入形状 == 输出形状</text>
+  <text x="535" y="345" font-family="sans-serif" font-size="11" fill="#cbd5e1">• 尺寸始终保持 [B, T, D]</text>
+  <text x="535" y="365" font-family="sans-serif" font-size="11" fill="#cbd5e1">• 像乐高一样可任意堆叠！</text>
+</svg>

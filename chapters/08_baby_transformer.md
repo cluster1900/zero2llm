@@ -35,23 +35,34 @@
 
 下图清晰展示了一个汉字序列从输入、穿过积木块、直到预测下一个字的全部旅程：
 
+为了看清每一步，把这次旅程分为“准备输入 → 提炼信息 → 训练或生成”三段。图中所有形状都对应本章的 Baby-GPT 配置。
+
 ```mermaid
 flowchart TD
-    A["输入文本: '床 前 明 月 光'"] --> B["分词器: 按 Unicode 排序后的编号 23, 10, 27, 32, 8"]
-    B --> C["词向量嵌入表 (tok_emb)"]
-    D["位置索引 [0, 1, 2, 3, 4]"] --> E["位置嵌入表 (pos_emb)"]
-    C & E --> F["相加求和: X = tok_emb + pos_emb [形状: 1, 5, 48]"]
-    
-    F --> G["Transformer 积木块 1 (Pre-LN + Causal MHA + FFN)"]
-    G --> H["Transformer 积木块 2 (Pre-LN + Causal MHA + FFN)"]
-    
-    H --> I["最终层归一化 (LayerNorm)"]
-    I --> J["线性输出头 (Linear Head): 投影回 57 维词表"]
-    J --> K["预测下一个字的未归一化打分 Logits [1, 5, 57]"]
-    
-    K --> L{"训练还是推理?"}
-    L -- "训练模式" --> M["交叉熵损失 CrossEntropyLoss: 与真实下一个字计算差距 -> 反向传播"]
-    L -- "推理模式" --> N["Softmax + 温度采样 Temperature -> 输出下一个字 '，'"]
+    accTitle: Baby-GPT 第一段：准备输入
+    accDescr: 床前明月光的编号是 23、10、27、32、8。词嵌入与五个位置的嵌入相加，得到 1 乘 5 乘 48 的张量。
+    A["床 前 明 月 光<br/>ID：23, 10, 27, 32, 8"] --> B["词嵌入 tok_emb<br/>形状 [1, 5, 48]"]
+    B --> C["加上位置 0～4 的嵌入<br/>X = tok_emb + pos_emb"]
+    C --> D["准备好的输入 X<br/>形状 [1, 5, 48]"]
+```
+
+```mermaid
+flowchart TD
+    accTitle: Baby-GPT 第二段：提炼信息并打分
+    accDescr: 输入经过两个 Pre-LN 因果 Transformer 块、最终层归一化和线性输出头，得到词表上 57 个字的分数。
+    A["X [1, 5, 48]"] --> B["两个因果 Transformer 块<br/>Pre-LN + 注意力 + FFN"]
+    B --> C["最终 LayerNorm"]
+    C --> D["Linear：48 维 → 57 维<br/>Logits [1, 5, 57]"]
+```
+
+```mermaid
+flowchart TD
+    accTitle: Baby-GPT 第三段：训练与生成的分岔
+    accDescr: 训练时对各位置的下一字目标计算交叉熵并更新参数；生成时只取最后一个位置的分数，经温度采样选出下一个字。
+    A["Logits：每个位置的打分"] --> B["训练<br/>各位置对照下一字目标"]
+    A --> C["生成<br/>只取最后一个位置"]
+    B --> D["交叉熵 → 反向传播<br/>更新模型参数"]
+    C --> E["除以温度 → Softmax<br/>采样下一字，例如：，"]
 ```
 
 ---

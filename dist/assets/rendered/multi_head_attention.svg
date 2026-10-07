@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 520" width="850" height="520">
+  <defs>
+    <linearGradient id="bgGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="head1Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="head2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="head3Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="head4Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899"/>
+      <stop offset="100%" stop-color="#f472b6"/>
+    </linearGradient>
+    <marker id="arr2" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="850" height="520" rx="16" fill="url(#bgGrad3)"/>
+
+  <!-- Title -->
+  <text x="425" y="40" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="bold" fill="#f8fafc" text-anchor="middle">图 4-1：多头注意力（Multi-Head Attention）空间切分与拼接流程</text>
+  <text x="425" y="68" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">图中画 4 个头：512 维时每头 128 维。论文常见 8 头，则每头 64 维。分工是训练出来的，不是出厂标签</text>
+
+  <!-- Input Vector Box -->
+  <g transform="translate(275, 95)">
+    <rect width="300" height="42" rx="8" fill="#1e293b" stroke="#6366f1" stroke-width="2"/>
+    <text x="150" y="26" font-family="sans-serif" font-size="14" font-weight="bold" fill="#c7d2fe" text-anchor="middle">输入词向量 X (总维度 d_model = 512)</text>
+  </g>
+
+  <!-- Splitting Arrows -->
+  <path d="M 320 137 L 150 200" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+  <path d="M 390 137 L 330 200" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+  <path d="M 460 137 L 520 200" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+  <path d="M 530 137 L 700 200" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <!-- 4 Heads Boxes -->
+  <!-- Head 1 -->
+  <g transform="translate(65, 205)">
+    <rect width="170" height="90" rx="8" fill="url(#head1Grad)" stroke="#bfdbfe" stroke-width="1.5"/>
+    <text x="85" y="28" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">专家头 1 (Head 1)</text>
+    <text x="85" y="48" font-family="sans-serif" font-size="11" fill="#eff6ff" text-anchor="middle">维度: d_k = 128</text>
+    <rect x="15" y="58" width="140" height="22" rx="4" fill="#1e3a8a"/>
+    <text x="85" y="73" font-family="sans-serif" font-size="11" fill="#93c5fd" text-anchor="middle">训练后可能更关注语法</text>
+  </g>
+
+  <!-- Head 2 -->
+  <g transform="translate(250, 205)">
+    <rect width="170" height="90" rx="8" fill="url(#head2Grad)" stroke="#a7f3d0" stroke-width="1.5"/>
+    <text x="85" y="28" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">专家头 2 (Head 2)</text>
+    <text x="85" y="48" font-family="sans-serif" font-size="11" fill="#f0fdf4" text-anchor="middle">维度: d_k = 128</text>
+    <rect x="15" y="58" width="140" height="22" rx="4" fill="#064e3b"/>
+    <text x="85" y="73" font-family="sans-serif" font-size="11" fill="#6ee7b7" text-anchor="middle">训练后可能更关注指代</text>
+  </g>
+
+  <!-- Head 3 -->
+  <g transform="translate(435, 205)">
+    <rect width="170" height="90" rx="8" fill="url(#head3Grad)" stroke="#fde68a" stroke-width="1.5"/>
+    <text x="85" y="28" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">专家头 3 (Head 3)</text>
+    <text x="85" y="48" font-family="sans-serif" font-size="11" fill="#fffbeb" text-anchor="middle">维度: d_k = 128</text>
+    <rect x="15" y="58" width="140" height="22" rx="4" fill="#78350f"/>
+    <text x="85" y="73" font-family="sans-serif" font-size="11" fill="#fcd34d" text-anchor="middle">训练后可能更关注修饰</text>
+  </g>
+
+  <!-- Head 4 -->
+  <g transform="translate(620, 205)">
+    <rect width="170" height="90" rx="8" fill="url(#head4Grad)" stroke="#fbcfe8" stroke-width="1.5"/>
+    <text x="85" y="28" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">专家头 4 (Head 4)</text>
+    <text x="85" y="48" font-family="sans-serif" font-size="11" fill="#fdf2f8" text-anchor="middle">维度: d_k = 128</text>
+    <rect x="15" y="58" width="140" height="22" rx="4" fill="#831843"/>
+    <text x="85" y="73" font-family="sans-serif" font-size="11" fill="#f472b6" text-anchor="middle">训练后可能更关注语境</text>
+  </g>
+
+  <!-- Merging Arrows -->
+  <path d="M 150 295 L 300 355" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+  <path d="M 335 295 L 375 355" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+  <path d="M 520 295 L 475 355" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+  <path d="M 705 295 L 550 355" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <!-- Concat Box -->
+  <g transform="translate(255, 360)">
+    <rect width="340" height="45" rx="8" fill="#4338ca" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="170" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">拼接还原 Concat(Head_1, ..., Head_4)</text>
+    <text x="170" y="38" font-family="sans-serif" font-size="11" fill="#c7d2fe" text-anchor="middle">重新拼回总维度 128 × 4 = 512 维</text>
+  </g>
+
+  <!-- Arrow to Linear Projection -->
+  <line x1="425" y1="405" x2="425" y2="435" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr2)"/>
+
+  <!-- Final Output Projection W_O -->
+  <g transform="translate(255, 440)">
+    <rect width="340" height="45" rx="8" fill="#059669" stroke="#34d399" stroke-width="1.5"/>
+    <text x="170" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">输出融合矩阵 W_O (多视角深度提炼)</text>
+    <text x="170" y="38" font-family="sans-serif" font-size="11" fill="#d1fae5" text-anchor="middle">最终输出张量: [Batch, Seq_Len, 512]</text>
+  </g>
+</svg>

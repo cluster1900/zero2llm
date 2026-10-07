@@ -140,3 +140,45 @@ hr {
 .important .title { color: #4338ca; }
 .tip .title { color: #047857; }
 .caution .title { color: #be123c; }
+
+/* Reflowable pages cannot rely on horizontal scrolling. */
+pre, pre code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-wrap: break-word;
+}
+
+th, td {
+    padding: 0.35em 0.4em;
+    overflow-wrap: anywhere;
+    word-wrap: break-word;
+}
+
+figure, .diagram-figure {
+    margin: 1.2em 0;
+    text-align: center;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+img.book-diagram {
+    display: block;
+    max-width: 100%;
+    max-height: 30em; /* Fallback for readers without viewport units. */
+    max-height: 70vh;
+    height: auto;
+    object-fit: contain;
+    margin: 0.7em auto;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+figcaption, .diagram-caption {
+    font-size: 0.85em;
+    line-height: 1.5;
+    color: #475569;
+    text-align: center;
+    margin: 0.5em 0 1em;
+    page-break-before: avoid;
+    break-before: avoid;
+}

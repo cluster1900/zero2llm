@@ -1,0 +1,47 @@
+name: Refresh book release downloads
+
+# Manual by default. A main-branch push opts in only with [refresh-release]
+# in its commit message, so normal edits do not silently replace a release.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag whose reading files will be replaced
+        required: true
+        default: v1.0.0
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - 'dist/**'
+      - '.github/workflows/refresh-release.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: book-release
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[refresh-release]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate and package committed artifacts
+        env:
+          RELEASE_TAG: ${{ inputs.tag || 'v1.0.0' }}
+        run: python3 scripts/package_release.py --tag "$RELEASE_TAG"
+      - name: Replace release downloads and notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || 'v1.0.0' }}
+        run: |
+          gh release view "$RELEASE_TAG"
+          gh release upload "$RELEASE_TAG" .release/transformer_for_highschool.epub .release/zero2llm-web.zip .release/SHA256SUMS.txt --clobber
+          gh release edit "$RELEASE_TAG" --notes-file .release/release-notes.md

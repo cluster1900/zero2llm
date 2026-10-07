@@ -1,0 +1,16 @@
+{
+  "name": "zero2llm-book",
+  "private": true,
+  "scripts": {
+    "build": "python3 build.py",
+    "check": "python3 scripts/check_book.py",
+    "check:layout": "node scripts/check_layout.mjs"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "11.12.0",
+    "puppeteer": "23.11.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

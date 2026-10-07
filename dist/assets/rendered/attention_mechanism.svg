@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 560" width="850" height="560">
+  <defs>
+    <linearGradient id="bgGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="qGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="kGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="vGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="850" height="560" rx="16" fill="url(#bgGrad2)"/>
+
+  <!-- Title -->
+  <text x="425" y="40" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="bold" fill="#f8fafc" text-anchor="middle">图 3-1：缩放点积注意力（Scaled Dot-Product Attention）完整计算流程</text>
+  <text x="425" y="68" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">公式：Attention(Q, K, V) = Softmax( Q · K^T / √d_k ) · V</text>
+
+  <!-- Inputs Q, K, V -->
+  <!-- Q Box -->
+  <g transform="translate(140, 100)">
+    <rect width="140" height="50" rx="8" fill="url(#qGrad)" stroke="#93c5fd" stroke-width="1.5"/>
+    <text x="70" y="26" font-family="sans-serif" font-size="15" font-weight="bold" fill="#ffffff" text-anchor="middle">查询 Q (Query)</text>
+    <text x="70" y="42" font-family="sans-serif" font-size="11" fill="#dbeafe" text-anchor="middle">“我想了解谁？”</text>
+  </g>
+
+  <!-- K Box -->
+  <g transform="translate(355, 100)">
+    <rect width="140" height="50" rx="8" fill="url(#kGrad)" stroke="#6ee7b7" stroke-width="1.5"/>
+    <text x="70" y="26" font-family="sans-serif" font-size="15" font-weight="bold" fill="#ffffff" text-anchor="middle">键 K (Key)</text>
+    <text x="70" y="42" font-family="sans-serif" font-size="11" fill="#d1fae5" text-anchor="middle">“我的身份标签”</text>
+  </g>
+
+  <!-- V Box -->
+  <g transform="translate(600, 100)">
+    <rect width="140" height="50" rx="8" fill="url(#vGrad)" stroke="#fde047" stroke-width="1.5"/>
+    <text x="70" y="26" font-family="sans-serif" font-size="15" font-weight="bold" fill="#ffffff" text-anchor="middle">值 V (Value)</text>
+    <text x="70" y="42" font-family="sans-serif" font-size="11" fill="#fef3c7" text-anchor="middle">“我的实质内容”</text>
+  </g>
+
+  <!-- Arrows from Q and K to MatMul -->
+  <line x1="210" y1="150" x2="280" y2="200" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+  <line x1="425" y1="150" x2="355" y2="200" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Step 1: MatMul Q * K^T -->
+  <g transform="translate(240, 205)">
+    <rect width="160" height="45" rx="8" fill="url(#scoreGrad)" stroke="#c4b5fd" stroke-width="1.5"/>
+    <text x="80" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">矩阵点乘 (Q · K^T)</text>
+    <text x="80" y="38" font-family="sans-serif" font-size="10" fill="#ede9fe" text-anchor="middle">高一向量点积求相似度</text>
+  </g>
+
+  <!-- Arrow to Scale -->
+  <line x1="320" y1="250" x2="320" y2="280" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Step 2: Scale Divide by sqrt(d_k) -->
+  <g transform="translate(240, 285)">
+    <rect width="160" height="45" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="80" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#38bdf8" text-anchor="middle">缩放 (除以 √d_k)</text>
+    <text x="80" y="38" font-family="sans-serif" font-size="10" fill="#94a3b8" text-anchor="middle">将方差拉回 1，防止饱和</text>
+  </g>
+
+  <!-- Arrow to Softmax -->
+  <line x1="320" y1="330" x2="320" y2="360" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Step 3: Softmax -->
+  <g transform="translate(240, 365)">
+    <rect width="160" height="45" rx="8" fill="#ec4899" stroke="#f472b6" stroke-width="1.5"/>
+    <text x="80" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">Softmax 归一化</text>
+    <text x="80" y="38" font-family="sans-serif" font-size="10" fill="#fce7f3" text-anchor="middle">变为注意力百分比 (和为 1)</text>
+  </g>
+
+  <!-- Arrow from Softmax and V to MatMul 2 -->
+  <line x1="400" y1="388" x2="490" y2="425" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+  <path d="M 670 150 L 670 380 L 590 425" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Step 4: MatMul with V (Weighted Sum) -->
+  <g transform="translate(440, 430)">
+    <rect width="180" height="50" rx="8" fill="#0284c7" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="90" y="25" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">加权求和 (Weights · V)</text>
+    <text x="90" y="42" font-family="sans-serif" font-size="11" fill="#e0f2fe" text-anchor="middle">按注意力权重融合知识</text>
+  </g>
+
+  <!-- Arrow to Final Output -->
+  <line x1="530" y1="480" x2="530" y2="510" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Final Output Box -->
+  <g transform="translate(430, 510)">
+    <rect width="200" height="35" rx="8" fill="#059669" stroke="#34d399" stroke-width="1.5"/>
+    <text x="100" y="22" font-family="sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">输出：融合上下文的新词向量</text>
+  </g>
+
+  <!-- Explanation note -->
+  <rect x="50" y="210" width="160" height="180" rx="8" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="60" y="235" font-family="sans-serif" font-size="12" font-weight="bold" fill="#f8fafc">📝 通俗生活步骤：</text>
+  <text x="60" y="260" font-family="sans-serif" font-size="11" fill="#cbd5e1">1. 拿我的需求 Q</text>
+  <text x="60" y="280" font-family="sans-serif" font-size="11" fill="#cbd5e1">2. 比对所有标签 K</text>
+  <text x="60" y="300" font-family="sans-serif" font-size="11" fill="#cbd5e1">3. 算出吻合度得分</text>
+  <text x="60" y="320" font-family="sans-serif" font-size="11" fill="#cbd5e1">4. 转化为百分比</text>
+  <text x="60" y="340" font-family="sans-serif" font-size="11" fill="#cbd5e1">5. 从实质 V 中吸取</text>
+  <text x="60" y="360" font-family="sans-serif" font-size="11" fill="#cbd5e1">   对应比例的养分！</text>
+</svg>
