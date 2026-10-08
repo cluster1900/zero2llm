@@ -43,5 +43,10 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || 'v1.0.0' }}
         run: |
           gh release view "$RELEASE_TAG"
-          gh release upload "$RELEASE_TAG" .release/transformer_for_highschool.epub .release/zero2llm-web.zip .release/SHA256SUMS.txt --clobber
+          gh release upload "$RELEASE_TAG" .release/transformer_from_scratch.epub .release/zero2llm-web.zip .release/SHA256SUMS.txt --clobber
           gh release edit "$RELEASE_TAG" --notes-file .release/release-notes.md
+          # Retire the previous filename only after the replacement and links are live.
+          legacy_asset_exists=$(gh release view "$RELEASE_TAG" --json assets --jq 'any(.assets[]; .name == "transformer_for_highschool.epub")')
+          if [ "$legacy_asset_exists" = true ]; then
+            gh release delete-asset "$RELEASE_TAG" transformer_for_highschool.epub --yes
+          fi

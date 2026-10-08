@@ -36,7 +36,7 @@ class WebDocument(HTMLParser):
 def check_book(dist_dir):
     dist = Path(dist_dir)
     errors = []
-    expected_flows = len(re.findall(r'^```mermaid\s*$', (dist / 'transformer_for_highschool.md').read_text(), re.M))
+    expected_flows = len(re.findall(r'^```mermaid\s*$', (dist / 'transformer_from_scratch.md').read_text(), re.M))
     sizes = json.loads((dist / 'assets/rendered/dimensions.json').read_text())
     if len([key for key in sizes if key.startswith('flow-')]) != expected_flows:
         errors.append('渲染图表数量与书稿不一致')
@@ -48,7 +48,7 @@ def check_book(dist_dir):
             if not (dist / f'assets/rendered/{name}.{extension}').is_file():
                 errors.append(f'缺少图像：{name}.{extension}')
 
-    with zipfile.ZipFile(dist / 'transformer_for_highschool.epub') as book:
+    with zipfile.ZipFile(dist / 'transformer_from_scratch.epub') as book:
         if book.testzip():
             errors.append('EPUB ZIP 数据损坏')
         if book.namelist()[0] != 'mimetype' or book.read('mimetype') != b'application/epub+zip':
@@ -111,7 +111,7 @@ def check_book(dist_dir):
             errors.append(f'网页资源缺失：{link}')
         elif not parsed.path and parsed.fragment and unquote(parsed.fragment) not in web.ids:
             errors.append(f'网页锚点缺失：{link}')
-    if (dist / 'index.html').read_bytes() != (dist / 'transformer_for_highschool.html').read_bytes():
+    if (dist / 'index.html').read_bytes() != (dist / 'transformer_from_scratch.html').read_bytes():
         errors.append('两个网页入口内容不一致')
     if errors:
         raise ValueError('\n'.join(errors))

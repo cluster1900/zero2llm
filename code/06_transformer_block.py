@@ -16,8 +16,8 @@ import torch.nn.functional as F
 
 class ManualLayerNorm(nn.Module):
     """
-    高中统计学版层归一化（LayerNorm）：
-    高二统计公式：标准化成绩 Z = (X - μ) / σ
+    从均值与方差实现层归一化（LayerNorm）：
+    标准化公式： Z = (X - μ) / σ
     """
     def __init__(self, d_model, eps=1e-5):
         super().__init__()
@@ -40,7 +40,7 @@ class FeedForwardNetwork(nn.Module):
     """
     前馈神经网络（FFN）：
     结构：先放大维度 4 倍（展开联想），经过激活函数，再收缩回原始维度。
-    高中函数类比：复合函数 f(x) = W2 · ReLU(W1 · x + b1) + b2
+    可以写成复合函数 f(x) = W2 · ReLU(W1 · x + b1) + b2
     """
     def __init__(self, d_model, d_ff=None):
         super().__init__()

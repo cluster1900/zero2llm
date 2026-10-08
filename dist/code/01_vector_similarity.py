@@ -1,6 +1,6 @@
 """
-01_vector_similarity.py - 词向量与空间相似度计算（纯 Python + 高中平面向量）
-适合人群：懂高一平面向量、仅懂基本 Python for 循环的初学者
+01_vector_similarity.py - 词向量与空间相似度计算（纯 Python + 向量计算）
+用到的知识：向量坐标、Python 列表与 for 循环；计算步骤见下方注释
 
 核心概念：
 1. 词向量：把文字变成特征空间里的一个坐标点（箭头）
@@ -14,7 +14,7 @@ import math
 def dot_product(vec_a, vec_b):
     """
     计算两个向量的点积（内积）
-    高一代数公式：a · b = x1*x2 + y1*y2 + ... + xn*yn
+    点积的坐标公式：a · b = x1*x2 + y1*y2 + ... + xn*yn
     """
     assert len(vec_a) == len(vec_b), "两个向量的维度必须完全相同！"
     total = 0.0
@@ -25,7 +25,7 @@ def dot_product(vec_a, vec_b):
 def vector_magnitude(vec):
     """
     计算向量的模长（也就是箭头的长度）
-    高中几何公式：|a| = √(x1² + x2² + ... + xn²)
+    模长公式：|a| = √(x1² + x2² + ... + xn²)
     """
     sum_of_squares = 0.0
     for val in vec:
@@ -35,7 +35,7 @@ def vector_magnitude(vec):
 def cosine_similarity(vec_a, vec_b):
     """
     计算余弦相似度 cos(θ)
-    高中三角函数与向量公式：cos(θ) = (a · b) / (|a| * |b|)
+    夹角余弦公式：cos(θ) = (a · b) / (|a| * |b|)
     取值范围：[-1, 1]
     - 接近 1 ：方向极其一致，含义非常相似
     - 接近 0 ：两个向量互相垂直（90度），毫无关联

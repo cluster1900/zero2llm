@@ -83,7 +83,7 @@
     <text x="35" y="168" font-family="sans-serif" font-size="11" fill="#94a3b8">强制填入 -10 亿 (-∞)。</text>
 
     <text x="20" y="200" font-family="sans-serif" font-size="12" fill="#fde047">3. 经过 Softmax 后：</text>
-    <text x="35" y="220" font-family="sans-serif" font-size="11" fill="#cbd5e1">根据高一代数指数性质：</text>
+    <text x="35" y="220" font-family="sans-serif" font-size="11" fill="#cbd5e1">根据指数函数的性质：</text>
     <text x="35" y="240" font-family="sans-serif" font-size="13" font-weight="bold" fill="#fbbf24">e^(-∞) = 0</text>
     <text x="35" y="260" font-family="sans-serif" font-size="11" fill="#6ee7b7">未来权重精准归零！</text>
   </g>

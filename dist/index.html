@@ -473,10 +473,10 @@ figcaption, .diagram-caption {
       <button class="btn-icon" id="theme-toggle" title="切换深色/浅色主题">
         🌓 <span>主题</span>
       </button>
-      <a class="btn-icon" href="transformer_for_highschool.epub" download title="下载 EPUB 电子书">
+      <a class="btn-icon" href="transformer_from_scratch.epub" download title="下载 EPUB 电子书">
         📖 <span>下载 EPUB</span>
       </a>
-      <a class="btn-icon" href="transformer_for_highschool.md" download title="下载 Markdown 原文">
+      <a class="btn-icon" href="transformer_from_scratch.md" download title="下载 Markdown 原文">
         📝 <span>下载 Markdown</span>
       </a>
     </div>
@@ -496,7 +496,7 @@ figcaption, .diagram-caption {
   <li><a href="#第7章-编码器与解码器-从文本理解到自回归生成">第7章：编码器与解码器——从文本理解到自回归生成</a></li>
   <li><a href="#第8章-实战-手搭一个微型大语言模型-Baby-GPT">第8章：实战——手搭一个微型大语言模型（Baby-GPT）</a></li>
   <li><a href="#第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典 Transformer 到 GPT-4、DeepSeek</a></li>
-  <li><a href="#附录-高中数学公式速查卡与深度学习黑话翻译词典">附录：高中数学公式速查卡与深度学习黑话翻译词典</a></li>
+  <li><a href="#附录-数学公式速查卡与深度学习黑话翻译词典">附录：数学公式速查卡与深度学习黑话翻译词典</a></li>
 </ul>
     </aside>
 
@@ -524,10 +524,10 @@ Need》（注意力就是你所需要的一切）</strong>。在这篇论文中�
 教程都充斥着大学高阶微积分、抽象代数、复杂的流形几何与令人望而生畏的张量运算符号。这让许多初学者望而却步，误以为非得读完数学系研究生才能理解。</p>
 <p><strong>这本书就是为你量身打造的解药。</strong></p>
 <hr />
-<h2 id="本书面向的读者画像">本书面向的读者画像</h2>
-<p>本书的讲解难度严格对齐以下知识储备：</p>
+<h2 id="阅读前需要哪些准备">阅读前需要哪些准备</h2>
+<p>下面列出本书会用到的知识。遇到不熟悉的概念，可以先跟着例子计算，再回看公式：</p>
 <ol type="1">
-<li><strong>数学水平</strong>：
+<li><strong>数学工具</strong>：
 <ul>
 <li><strong>基础平面向量</strong>：知道什么是向量 <span
 class="math inline">\(\vec{a} = (x,
@@ -543,15 +543,15 @@ class="math inline">\(e \approx 2.718\)</span> 的指数函数 <span
 class="math inline">\(e^x\)</span>，知道均值 <span
 class="math inline">\(\mu\)</span> 与方差 <span
 class="math inline">\(\sigma^2\)</span>。</li>
-<li><strong>完全不需要</strong>：高等微积分、泛函分析、实变函数、群论或微分几何！凡是遇到矩阵乘法等大学内容，本书都会用“初学者听得懂的批量点积”进行形象拆解。</li>
+<li><strong>完全不需要</strong>：高等微积分、泛函分析、实变函数、群论或微分几何！遇到矩阵乘法等新概念时，本书会把它拆成一组组点积，配合具体数字说明。</li>
 </ul></li>
-<li><strong>编程水平</strong>：
+<li><strong>代码阅读</strong>：
 <ul>
 <li>只要你能看懂 Python 的变量、<code>for</code> 循环、<code>if</code>
 条件判断、列表 <code>[1, 2, 3]</code> 以及定义简单函数
 <code>def func(x):</code> 即可。</li>
-<li>关键步骤先用<strong>纯 Python
-保姆级手算版</strong>建立直觉，再逐步过渡到 PyTorch
+<li>关键步骤先用<strong>纯 Python 手算版</strong>建立直觉，再逐步过渡到
+PyTorch
 张量代码。你可以先用草稿纸核对数字，再运行完整实验，不需要一开始就记住所有库函数。</li>
 </ul></li>
 </ol>
@@ -658,9 +658,9 @@ class="math inline">\(\text{梨子}(2) - \text{苹果}(1) = 1\)</span>，而
 <div class="title">
 注意
 </div>
-<p><strong>几何正交悲剧</strong>： 回顾高一的平面与空间向量点积公式：
-<span class="math display">\[\vec{a} \cdot \vec{b} = a_1 b_1 + a_2 b_2 +
-\dots + a_n b_n\]</span> 在 One-Hot
+<p><strong>几何正交悲剧</strong>： 先看向量点积的计算方式： <span
+class="math display">\[\vec{a} \cdot \vec{b} = a_1 b_1 + a_2 b_2 + \dots
++ a_n b_n\]</span> 在 One-Hot
 编码下，任何两个不同的词向量，它们每一位对应相乘的结果必然全都是 0！
 <span class="math display">\[\vec{v}_{\text{苹果}} \cdot
 \vec{v}_{\text{梨子}} = 0\]</span> <span
@@ -670,10 +670,10 @@ class="math display">\[\vec{v}_{\text{苹果}} \cdot \vec{v}_{\text{宇宙}}
 度互相垂直的（正交）</strong>。在电脑眼里，“苹果”和“梨子”的关系，居然跟“苹果”和“宇宙”一样疏远冷漠！</p>
 </div>
 <hr />
-<h2 id="高中平面向量回忆录用特征坐标系给词语画像">1.2
-高中平面向量回忆录：用“特征坐标系”给词语画像</h2>
+<h2 id="用平面向量给词语画像建立特征坐标系">1.2
+用平面向量给词语画像：建立“特征坐标系”</h2>
 <p>怎样才能让电脑既不产生大小误解，又能看懂“苹果”和“梨子”很近，而“苹果”和“汽车”很远呢？</p>
-<p>答案就在<strong>高一数学必修第二册的平面向量</strong>中！</p>
+<p>可以借助<strong>平面向量</strong>：给每种水果一组坐标，再比较它们的位置。</p>
 <p>让我们在平面上建立一个直角坐标系，但我们不叫它 <span
 class="math inline">\(X\)</span> 轴和 <span
 class="math inline">\(Y\)</span> 轴，而是给它们赋予鲜明的现实特征：</p>
@@ -701,8 +701,8 @@ class="math inline">\(Y\)</span> 轴，而是给它们赋予鲜明的现实特�
 <a href="assets/rendered/word_vector_space.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/word_vector_space.svg" class="book-diagram"
-width="720" alt="图 1-1：词嵌入特征空间与高中向量几何" /></a>
-<figcaption>图 1-1：词嵌入特征空间与高中向量几何</figcaption>
+width="720" alt="图 1-1：词嵌入特征空间与向量几何" /></a>
+<figcaption>图 1-1：词嵌入特征空间与向量几何</figcaption>
 </figure>
 <h3
 id="表-1-1one-hot-独热编码-vs-稠密词向量dense-embedding全面对比表">表
@@ -859,20 +859,20 @@ Embedding，也称词向量）</strong>：</p>
 <hr />
 <h2 id="空间向量的几何度量为什么点乘与余弦是天作之合">1.3
 空间向量的几何度量：为什么点乘与余弦是天作之合？</h2>
-<p>在高中数学中，我们学过两种衡量两个向量关系的方法：</p>
+<p>我们可以从距离和夹角两个角度，衡量向量之间的关系：</p>
 <h3 id="欧氏距离平面两点距离公式">1. 欧氏距离（平面两点距离公式）</h3>
 <p><span class="math display">\[d(\vec{a}, \vec{b}) = \sqrt{(x_1 -
 x_2)^2 + (y_1 - y_2)^2}\]</span></p>
 <p>距离越小，两点越近。但欧氏距离有一个缺点：如果一个词出现的词频极高，向量被整体拉长，点就会离原点很远，从而影响距离的判断。</p>
 <h3 id="余弦相似度夹角余弦">2. 余弦相似度（夹角余弦）</h3>
-<p>高中物理和数学都告诉我们，两个向量的点积定义为： <span
+<p>两个向量的点积可以用它们的长度和夹角表示： <span
 class="math display">\[\vec{a} \cdot \vec{b} = |\vec{a}| |\vec{b}|
 \cos\theta\]</span></p>
 <p>我们稍作变形，就能解出夹角的余弦值： <span
 class="math display">\[\cos\theta = \frac{\vec{a} \cdot
 \vec{b}}{|\vec{a}| |\vec{b}|} = \frac{x_1 x_2 + y_1 y_2}{\sqrt{x_1^2 +
 y_1^2} \sqrt{x_2^2 + y_2^2}}\]</span></p>
-<p>回顾高中三角函数性质：</p>
+<p>根据余弦函数的性质：</p>
 <ul>
 <li>当 <span class="math inline">\(\theta = 0^\circ\)</span> 时，<span
 class="math inline">\(\cos 0^\circ =
@@ -908,7 +908,7 @@ Product）</strong>！点积的本质，就是在算这两个向量“在多大�
 <li>女王 (Queen) = <span class="math inline">\([9.0, -8.0, \
 7.0]\)</span></li>
 </ul>
-<p>现在，让我们用高一的向量加减法做一个小实验： <span
+<p>现在，让我们用向量加减法做一个小实验： <span
 class="math display">\[\vec{v}_{\text{运算结果}} = \vec{v}_{\text{国王}}
 - \vec{v}_{\text{男人}} + \vec{v}_{\text{女人}}\]</span></p>
 <p>让我们逐个分量计算：</p>
@@ -934,20 +934,20 @@ class="math display">\[\vec{v}_{\text{运算结果}} = \vec{v}_{\text{国王}}
         │▼               │
   [女人]│●───────────────● [男人]
         └────────────────────────► 性别维度 (左女右男)</code></pre>
-<p>这就是高中平面几何的<strong>平行四边形定则</strong>在语义空间里的完美映射！语言中的“性别对立”、“尊卑关系”、“时态变化”，全部被投影成了空间里的几何平行线！</p>
+<p>这个例子可以用<strong>平行四边形定则</strong>理解：向量的加减对应坐标的移动。在训练得到的词向量中，一些语义关系也会表现为近似的位移方向，但并非所有关系都能这样表示。</p>
 <hr />
 <h2 id="手把手代码纯-python-验证词向量与相似度">1.5 手把手代码：纯
 Python 验证词向量与相似度</h2>
 <p>让我们打开配套代码 <a
-href="code/01_vector_similarity.py">code/01_vector_similarity.py</a>，看看不用任何外部库，只用纯粹的高中数学与
-Python 基础语法是如何实现的：</p>
+href="code/01_vector_similarity.py">code/01_vector_similarity.py</a>，把点积、模长和余弦相似度写成
+Python 函数。这个实验只需要标准库，下面逐步说明实现方法：</p>
 <div class="sourceCode" id="cb3"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dot_product(vec_a, vec_b):</span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;</span></span>
 <span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">    计算两个向量的点积（内积）</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">    高一代数公式：a · b = x1*x2 + y1*y2 + ... + xn*yn</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">    点积的坐标公式：a · b = x1*x2 + y1*y2 + ... + xn*yn</span></span>
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="bu">len</span>(vec_a) <span class="op">==</span> <span class="bu">len</span>(vec_b), <span class="st">&quot;两个向量的维度必须完全相同！&quot;</span></span>
 <span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    total <span class="op">=</span> <span class="fl">0.0</span></span>
@@ -958,7 +958,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a hr
 <span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> vector_magnitude(vec):</span>
 <span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;</span></span>
 <span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co">    计算向量的模长（也就是箭头的长度）</span></span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co">    高中几何公式：|a| = √(x1² + x2² + ... + xn²)</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co">    模长公式：|a| = √(x1² + x2² + ... + xn²)</span></span>
 <span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
 <span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    sum_of_squares <span class="op">=</span> <span class="fl">0.0</span></span>
 <span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> val <span class="kw">in</span> vec:</span>
@@ -1248,7 +1248,7 @@ GPU 并行处理；速度仍受序列长度、显存和实现影响。</li>
 </ul>
 <p>可是，电脑到底怎么给两个词之间的“相关度”打分？ 传说中像特工代号一样的
 <strong>Q (Query)、K (Key)、V (Value)</strong> 究竟是什么意思？</p>
-<p>翻开下一章，我们将用高中数学点积公式和最生动的生活案例，彻底揭开注意力计算的神秘面纱！</p>
+<p>下一章会结合向量点积和生活中的检索场景，一步步展开注意力的计算过程。</p>
 <hr />
 <h1 id="第3章-拆解注意力三剑客-Q-K-V-的生活大冒险与点积计算">第3章：拆解注意力三剑客——Q、K、V
 的生活大冒险与点积计算</h1>
@@ -1270,29 +1270,46 @@ class="math inline">\(Q\)</span></strong>：Query（查询）</li>
 </ul>
 <p>初学者往往会被这些数据库术语弄得一头雾水。别急，让我们来到日常生活中最熟悉的一个场景——<strong>去图书馆借书</strong>（或者在电商
 App 里网购）：</p>
-<pre><code> ┌─────────────────────────────────────────────────────────────────┐
- │                      生活中的 Q、K、V 映射表                    │
- ├──────────┬─────────────────────────────┬────────────────────────┤
- │ 角色     │ 图书馆借书场景              │ 大模型注意力世界       │
- ├──────────┼─────────────────────────────┼────────────────────────┤
- │ Q (Query)│ 你在检索机屏幕输入的搜索词  │ 当前词“我想找什么样的词│
- │          │ （例如：“高一物理必修一教辅”）│  来帮助我理解上下文？” │
- ├──────────┼─────────────────────────────┼────────────────────────┤
- │ K (Key)  │ 书架上每本书脊梁上的分类标签│ 候选词“我的身份名片是  │
- │          │ （例如：“高一物理”、“初中语文”│  什么？凭什么能吸引你？”│
- ├──────────┼─────────────────────────────┼────────────────────────┤
- │ V (Value)│ 翻开书本后，里面真正的印刷字│ 候选词“我能贡献给你的  │
- │          │ 体与知识实质                │  真实上下文语义内容”   │
- └──────────┴─────────────────────────────┴────────────────────────┘</code></pre>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">角色</th>
+<th style="text-align: left;">图书馆借书场景</th>
+<th style="text-align: left;">注意力机制中的作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Q（Query）</strong></td>
+<td style="text-align: left;">搜索词，例如“力学入门”</td>
+<td style="text-align: left;">当前词要寻找什么信息</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>K（Key）</strong></td>
+<td style="text-align: left;">书籍标签，例如“力学”“旅行摄影”</td>
+<td style="text-align: left;">候选词有哪些可供匹配的特征</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>V（Value）</strong></td>
+<td style="text-align: left;">书里的实际内容</td>
+<td style="text-align: left;">候选词能提供的信息</td>
+</tr>
+</tbody>
+</table></div>
 <p>当你拿着你的 <strong>Query (<span
 class="math inline">\(Q\)</span>)</strong> 走向书架时：</p>
 <ol type="1">
 <li>你会拿着 <span class="math inline">\(Q\)</span>，去和每一本书的
 <strong>Key (<span class="math inline">\(K\)</span>)</strong>
 挨个比对；</li>
-<li>如果书架标签写着“高一物理必修一”，它和你的检索词高度匹配，<strong>相关度得分（Score）极高（比如
+<li>如果书架标签写着“力学入门”，它和你的检索词高度匹配，<strong>相关度得分（Score）极高（比如
 95%）</strong>；</li>
-<li>如果标签写着“初中英语语法”，匹配度极低，<strong>得分几乎为
+<li>如果标签写着“旅行摄影”，匹配度极低，<strong>得分几乎为
 0%</strong>；</li>
 <li>最后，你根据这些匹配得分，决定重点汲取哪本书的 <strong>Value (<span
 class="math inline">\(V\)</span>)</strong>（把打分高的书里的知识装进脑海，打分低的书直接忽略）。</li>
@@ -1340,8 +1357,8 @@ W_V\]</span>
 配套代码把同一个向量竖过来，用“矩阵的每一行去点这个向量”。两种写法乘出来的数字相同，只是横竖不同。第
 3.4 节会带你用手把 0.6 和 0.5 算一遍。</p>
 <hr />
-<h2 id="注意力计算五步法高中古典算术拆解">3.3
-注意力计算五步法（高中古典算术拆解）</h2>
+<h2 id="注意力计算五步法逐步拆解公式">3.3
+注意力计算五步法：逐步拆解公式</h2>
 <p>现在，让我们把那个价值千亿美金的经典注意力公式： <span
 class="math display">\[\text{Attention}(Q, K, V) =
 \text{Softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right) V\]</span>
@@ -1450,7 +1467,7 @@ class="math inline">\(-4.31\)</span>。不缩放的权重是
 <p>将输入词向量 <span class="math inline">\(X\)</span>（假设长度为 <span
 class="math inline">\(d_{model}\)</span>）分别乘上三个可学习的权重矩阵
 <span class="math inline">\(W_Q, W_K, W_V\)</span>。
-高中几何直觉：就像在二维平面上把一个坐标系进行拉伸和旋转，把原始的通用属性，换算成专门用于“提问”、“名片”和“内容”的新属性。</p>
+从几何上看，这类似于在二维平面上把一个坐标系进行拉伸和旋转，把原始的通用属性，换算成专门用于“提问”、“名片”和“内容”的新属性。</p>
 <h3 id="step-2打分计算向量点积">Step 2：打分计算（向量点积）</h3>
 <p>计算词 <span class="math inline">\(i\)</span> 的查询向量 <span
 class="math inline">\(Q_i\)</span> 与词 <span
@@ -1458,13 +1475,14 @@ class="math inline">\(j\)</span> 的键向量 <span
 class="math inline">\(K_j\)</span> 的点乘： <span
 class="math display">\[\text{RawScore}_{i, j} = Q_i \cdot K_j =
 \sum_{m=1}^{d_k} Q_{i, m} \times K_{j, m}\]</span>
-回忆高一平面向量：方向越接近，点积越大；方向垂直，点积为
-0；方向相反，点积为负！</p>
+在向量长度固定时，方向越接近，点积越大；方向垂直时，点积为 0；夹角大于
+90° 时，点积为负。</p>
 <hr />
 <h3 id="step-3缩放因子为什么神谕般地除以-sqrtd_k">Step
 3：缩放因子——为什么神谕般地除以 <span
 class="math inline">\(\sqrt{d_k}\)</span>？</h3>
-<p>这是全书<strong>最精彩的高中数学推导</strong>之一！很多研究生都只是死记公式，今天我们用高二统计学把它彻底看透。</p>
+<p>为什么恰好除以 <span
+class="math inline">\(\sqrt{d_k}\)</span>？下面从分数的波动幅度入手，用均值、方差和标准差推导这个缩放因子的由来。</p>
 <div class="caution">
 <div class="title">
 小心
@@ -1477,7 +1495,7 @@ class="math inline">\(Q\)</span> 和 <span
 class="math inline">\(K\)</span> 里的每一个数互不相关，均值是 0，方差是
 1。训练以后数字会变，但“先除以 <span
 class="math inline">\(\sqrt{d_k}\)</span>”这个习惯被保留了下来。</p>
-<p>回忆高二统计学原理：</p>
+<p>这个推导会用到以下方差性质：</p>
 <ol type="1">
 <li>如果变量 <span class="math inline">\(X, Y\)</span> 独立，均值为
 0，方差为 1，那么乘积 <span class="math inline">\(Z = X \cdot Y\)</span>
@@ -1517,14 +1535,14 @@ e^{x_j}}\]</span> 如果输入是 <span class="math inline">\([24, 0,
 <p><strong>解药</strong>： 把点积结果除以标准差 <span
 class="math inline">\(\sqrt{d_k}\)</span>！ <span
 class="math display">\[\frac{\text{Score}}{\sqrt{d_k}}\]</span>
-根据高中的标准化公式，把一个方差为 <span
+根据方差的缩放性质，把一个方差为 <span
 class="math inline">\(d_k\)</span> 的变量除以 <span
 class="math inline">\(\sqrt{d_k}\)</span>，它的方差被稳稳地<strong>拉回了
 1</strong>！分数温和健康，Softmax 能够平滑而公正地分配注意力！</p>
 <hr />
 <h3 id="step-4softmax-归一化把分数换成百分比">Step 4：Softmax
 归一化（把分数换成百分比）</h3>
-<p>高一同学请看：Softmax 到底在干嘛？</p>
+<p>Softmax 可以分成三个步骤：</p>
 <ol type="1">
 <li><strong>第一步：消除负数</strong>。取指数 <span
 class="math inline">\(e^x\)</span>。因为对任何实数 <span
@@ -1563,13 +1581,13 @@ Q_1 &amp;= 0.1 \times 1.0 + 0.8 \times 0.5 = 0.5
 \]</span></p>
 <p>请先在草稿纸上算出这两个数，再对照程序打印的
 <code>Q=[0.600, 0.500]</code>。</p>
-<div class="sourceCode" id="cb9"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>words <span class="op">=</span> [<span class="st">&quot;我&quot;</span>, <span class="st">&quot;爱&quot;</span>, <span class="st">&quot;学&quot;</span>]</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> [</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">1.0</span>, <span class="fl">0.5</span>],  <span class="co"># “我”</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.8</span>, <span class="fl">1.2</span>],  <span class="co"># “爱”</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.2</span>, <span class="fl">1.5</span>]   <span class="co"># “学”</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>words <span class="op">=</span> [<span class="st">&quot;我&quot;</span>, <span class="st">&quot;爱&quot;</span>, <span class="st">&quot;学&quot;</span>]</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> [</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">1.0</span>, <span class="fl">0.5</span>],  <span class="co"># “我”</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.8</span>, <span class="fl">1.2</span>],  <span class="co"># “爱”</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.2</span>, <span class="fl">1.5</span>]   <span class="co"># “学”</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
 <p>代码通过矩阵乘以向量得到每一个词的 Q, K, V：</p>
 <pre class="text"><code>词 &#39;我&#39;: Q=[0.600, 0.500], K=[0.550, 0.550], V=[1.050, 0.450]
 词 &#39;爱&#39;: Q=[0.640, 1.040], K=[0.680, 1.000], V=[0.920, 1.080]
@@ -1861,45 +1879,45 @@ class="math inline">\(d_k = 4\)</span>。</p>
 <p>打开配套源码 <a
 href="code/04_multi_head_attention.py">code/04_multi_head_attention.py</a>，让我们看看
 PyTorch 类 <code>SimpleMultiHeadAttention</code> 的核心代码结构：</p>
-<div class="sourceCode" id="cb15"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> SimpleMultiHeadAttention(nn.Module):</span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads):</span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.d_model <span class="op">=</span> d_model</span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性映射层</span></span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
-<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>        batch_size, seq_len, _ <span class="op">=</span> x.shape</span>
-<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 1. 投影生成 Q, K, V</span></span>
-<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x)</span>
-<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x)</span>
-<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x)</span>
-<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 2. 切分多头并换轴: [batch, heads, seq_len, head_dim]</span></span>
-<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> Q.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> K.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> V.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 3. 批量点乘与缩放打分: Score = (Q · K^T) / √d_k</span></span>
-<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
-<span id="cb15-29"><a href="#cb15-29" aria-hidden="true" tabindex="-1"></a>        attn_weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb15-30"><a href="#cb15-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-31"><a href="#cb15-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 4. 加权求和</span></span>
-<span id="cb15-32"><a href="#cb15-32" aria-hidden="true" tabindex="-1"></a>        head_outputs <span class="op">=</span> torch.matmul(attn_weights, V)</span>
-<span id="cb15-33"><a href="#cb15-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-34"><a href="#cb15-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 5. 拼回原状 (Concat)</span></span>
-<span id="cb15-35"><a href="#cb15-35" aria-hidden="true" tabindex="-1"></a>        out_concat <span class="op">=</span> head_outputs.transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(batch_size, seq_len, <span class="va">self</span>.d_model)</span>
-<span id="cb15-36"><a href="#cb15-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb15-37"><a href="#cb15-37" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 6. 最终输出投影融合</span></span>
-<span id="cb15-38"><a href="#cb15-38" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out_concat), attn_weights</span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> SimpleMultiHeadAttention(nn.Module):</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads):</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.d_model <span class="op">=</span> d_model</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性映射层</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>        batch_size, seq_len, _ <span class="op">=</span> x.shape</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 1. 投影生成 Q, K, V</span></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x)</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x)</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x)</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 2. 切分多头并换轴: [batch, heads, seq_len, head_dim]</span></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> Q.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> K.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> V.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 3. 批量点乘与缩放打分: Score = (Q · K^T) / √d_k</span></span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>        attn_weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 4. 加权求和</span></span>
+<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a>        head_outputs <span class="op">=</span> torch.matmul(attn_weights, V)</span>
+<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 5. 拼回原状 (Concat)</span></span>
+<span id="cb14-35"><a href="#cb14-35" aria-hidden="true" tabindex="-1"></a>        out_concat <span class="op">=</span> head_outputs.transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(batch_size, seq_len, <span class="va">self</span>.d_model)</span>
+<span id="cb14-36"><a href="#cb14-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-37"><a href="#cb14-37" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 6. 最终输出投影融合</span></span>
+<span id="cb14-38"><a href="#cb14-38" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out_concat), attn_weights</span></code></pre></div>
 <p>运行代码后，让我们查看控制台打印的两个专家头的注意力分布对比：</p>
 <pre class="text"><code>--- 专家头 1 的注意力权重矩阵 ---
               机器      学习       真       酷
@@ -2005,23 +2023,21 @@ N]\)</span></h3>
 class="math inline">\(0.01\)</span>！同一个物理语意上的“紧挨着的下一个词”，在不同长度的句子中数值尺度会变化，模型需要额外学习这种长度差异。</li>
 </ul>
 <hr />
-<h2 id="神来之笔高中古典三角函数-sin-与-cos-的绝妙交响">5.3
-神来之笔：高中古典三角函数 <span class="math inline">\(\sin\)</span> 与
-<span class="math inline">\(\cos\)</span> 的绝妙交响</h2>
-<p>2017 年，Google
-科学家们搬出了高一数学课本中最经典的函数——<strong>正弦（Sine）与余弦（Cosine）</strong>，创造了震惊学术界的
+<h2 id="正弦与余弦用周期变化记录位置">5.3
+正弦与余弦：用周期变化记录位置</h2>
+<p>2017 年的 Transformer
+论文使用<strong>正弦（Sine）与余弦（Cosine）</strong>构造位置编码：让不同维度以不同的频率变化，为每个位置生成一组数值。这个方法称为
 <strong>正弦余弦位置编码（Sinusoidal Positional
-Encoding）</strong>！</p>
-<p>让我们先膜拜这两个传世公式： 对于位于句子第 <span
+Encoding）</strong>。</p>
+<p>先看这两个公式： 对于位于句子第 <span
 class="math inline">\(pos\)</span> 个座位的词，以及它的第 <span
 class="math inline">\(i\)</span> 组特征维度：</p>
 <p><span class="math display">\[PE_{(pos, 2i)} =
 \sin\left(\frac{pos}{10000^{2i / d_{model}}}\right)\]</span> <span
 class="math display">\[PE_{(pos, 2i+1)} = \cos\left(\frac{pos}{10000^{2i
 / d_{model}}}\right)\]</span></p>
-<p>很多同学第一次看到 <span
-class="math inline">\(10000^{2i/d_{model}}\)</span>
-可能会被吓倒。别怕！让我们用<strong>高一物理与石英手表</strong>的类比，瞬间把它拆得粉碎！</p>
+<p>公式里的 <span class="math inline">\(10000^{2i/d_{model}}\)</span>
+控制不同维度的变化速度。可以把它类比为<strong>手表上转速不同的指针</strong>，下面逐步说明。</p>
 <hr />
 <h3
 id="石英手表的生动类比三针定乾坤">石英手表的生动类比：三针定乾坤</h3>
@@ -2326,16 +2342,15 @@ class="math inline">\([-1, 1]\)</span>
 那根慢针。</p>
 <hr />
 <hr />
-<h2 id="为什么三角函数能表达相对距离高中的和角公式">5.4
-为什么三角函数能表达“相对距离”？高中的和角公式！</h2>
+<h2 id="用和角公式理解相对距离">5.4 用和角公式理解“相对距离”</h2>
 <p>除了独一无二的绝对位置，语言更关心的是<strong>相对距离</strong>（比如“我”和后面第
 2 个词的关系）。</p>
 <p>为什么发明者偏偏挑选了一对 <span class="math inline">\(\sin\)</span>
 和 <span class="math inline">\(\cos\)</span> 搭配，而不是只用 <span
 class="math inline">\(\sin\)</span> 呢？
-<strong>答案就是高一必修第二册最核心的三角恒等变换公式——和角公式！</strong></p>
-<p>回忆高中数学公式： <span class="math display">\[\cos(\alpha + \beta)
-= \cos\alpha\cos\beta - \sin\alpha\sin\beta\]</span> <span
+<strong>关键在于和角公式：它能把两个角度相加后的函数值，写成原来两个角度的函数值的组合。</strong></p>
+<p>具体写出来就是： <span class="math display">\[\cos(\alpha + \beta) =
+\cos\alpha\cos\beta - \sin\alpha\sin\beta\]</span> <span
 class="math display">\[\sin(\alpha + \beta) = \sin\alpha\cos\beta +
 \cos\alpha\sin\beta\]</span></p>
 <p>令 <span class="math inline">\(\alpha = pos \cdot
@@ -2382,17 +2397,17 @@ class="math inline">\(\vec{x}_{\text{最终}} = \vec{x}_{\text{词}} +
 <p>打开 <a
 href="code/05_positional_encoding.py">code/05_positional_encoding.py</a>，我们用纯
 Python 生成一个 8 位置、8 维度的位置编码矩阵并打印：</p>
-<div class="sourceCode" id="cb18"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> generate_positional_encoding(max_seq_len, d_model):</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    pe <span class="op">=</span> torch.zeros(max_seq_len, d_model)</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> pos <span class="kw">in</span> <span class="bu">range</span>(max_seq_len):</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>        <span class="co"># k 就是公式里的 i：第几对维度。不要再额外乘一次 2。</span></span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>(d_model <span class="op">//</span> <span class="dv">2</span>):</span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>            div_term <span class="op">=</span> math.<span class="bu">pow</span>(<span class="fl">10000.0</span>, (<span class="dv">2</span> <span class="op">*</span> k) <span class="op">/</span> d_model)</span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
-<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>                pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span>
-<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> pe</span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> generate_positional_encoding(max_seq_len, d_model):</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    pe <span class="op">=</span> torch.zeros(max_seq_len, d_model)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> pos <span class="kw">in</span> <span class="bu">range</span>(max_seq_len):</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>        <span class="co"># k 就是公式里的 i：第几对维度。不要再额外乘一次 2。</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>(d_model <span class="op">//</span> <span class="dv">2</span>):</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>            div_term <span class="op">=</span> math.<span class="bu">pow</span>(<span class="fl">10000.0</span>, (<span class="dv">2</span> <span class="op">*</span> k) <span class="op">/</span> d_model)</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>                pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> pe</span></code></pre></div>
 <p>运行后在控制台打印出的字符热力图如下：</p>
 <pre class="text"><code>Pos \ Dim | d0 d1 d2 d3 d4 d5 d6 d7
 Pos  0    |  =  @  =  @  =  @  =  @ 
@@ -2417,7 +2432,7 @@ Pos  7    |  %  %  %  %  +  @  +  @ </code></pre>
 <li><strong>正弦余弦位置编码</strong>用快慢不同的波浪给每个位置一组有界（<span
 class="math inline">\([-1,
 1]\)</span>）的读数。快针会周期性回头，所以余弦相似度会回升；认座位要看整列数字，不能只看一条下降的斜线。</li>
-<li>利用高一<strong>三角和角公式</strong>，位置编码天然支持相对距离的线性推导。</li>
+<li>利用<strong>三角和角公式</strong>，位置编码天然支持相对距离的线性推导。</li>
 <li><strong>直接相加</strong>在不增加参数维度的前提下，把位置与词义放进同一组特征中交给后续层处理。</li>
 </ul>
 <p>现在，我们有了词向量、多头自注意力，也有了位置编码。
@@ -2458,7 +2473,7 @@ class="math inline">\([-1,
                  ▼                ▼
                  [   相加求和: x + F(x)   ]</code></pre>
 <h3
-id="高中微积分直觉为什么它能防止信息遗忘">高中微积分直觉：为什么它能防止信息遗忘？</h3>
+id="从公式理解残差连接原始信息如何保留下来">从公式理解残差连接：原始信息如何保留下来？</h3>
 <p>数学公式极其简单： <span class="math display">\[\text{Output} = x +
 F(x)\]</span> 其中 <span class="math inline">\(x\)</span> 是输入，<span
 class="math inline">\(F(x)\)</span>
@@ -2477,9 +2492,9 @@ Normalization）：全科成绩标准化</h2>
 <span class="math inline">\(0.00001\)</span>。 这就像一次考试，语文满分
 100 分，数学突然冒出个 10,000 分，全班的总分体系将瞬间陷入崩溃。</p>
 <p>为了让数据在每一层都保持清爽、稳定，我们必须进行<strong>归一化（Normalization）</strong>。</p>
-<h3 id="高二统计学回忆录z-score-标准化">高二统计学回忆录：Z-Score
+<h3 id="用均值与方差理解-z-score-标准化">用均值与方差理解 Z-Score
 标准化</h3>
-<p>回忆高二数学选修课中的统计知识： 对于一组数据 <span
+<p>标准化分为计算均值、计算方差和调整尺度三个步骤。 对于一组数据 <span
 class="math inline">\(X = [x_1, x_2, \dots, x_d]\)</span>：</p>
 <ol type="1">
 <li><strong>计算平均数 <span
@@ -2719,8 +2734,7 @@ href="code/06_transformer_block.py">code/06_transformer_block.py</a>，运行后
 <ul>
 <li><strong>残差连接</strong>把原始输入原样加到后面。旁边的计算即使学坏了，信息也还有一条路可走。学过导数的话，这条路对应变化率里的那个
 <span class="math inline">\(+1\)</span>。</li>
-<li><strong>层归一化（LayerNorm）</strong>利用高二统计学中的 Z-Score
-标准化，平稳每个词在各维度的尺度，不需要把不同长度的句子混在一起统计。</li>
+<li><strong>层归一化（LayerNorm）</strong>先减去均值并调整尺度，再施加可学习的缩放与平移，让每个词的特征数值保持在较稳定的范围内；统计时不需要把不同长度的句子混在一起。</li>
 <li><strong>前馈网络（FFN）</strong>负责在注意力通信之后，进行“升维展开
 -&gt; 非线性激活 -&gt; 降维提炼”的独立深思。</li>
 <li><strong>Transformer
@@ -3267,19 +3281,19 @@ Baby-GPT 第三段：训练与生成的分岔
 <p>让我们逐段拆解配套脚本 <a
 href="code/07_baby_gpt.py">code/07_baby_gpt.py</a>。</p>
 <h3 id="词表与分词器tokenizer">1. 词表与分词器（Tokenizer）</h3>
-<div class="sourceCode" id="cb26"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 训练语料：三首经典唐诗</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>text_corpus <span class="op">=</span> (</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;床前明月光，疑是地上霜。举头望明月，低头思故乡。&quot;</span></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;白日依山尽，黄河入海流。欲穷千里目，更上一层楼。&quot;</span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。&quot;</span></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 提取不重复汉字构建字典</span></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">list</span>(<span class="bu">set</span>(text_corpus)))</span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="bu">len</span>(unique_chars)  <span class="co"># 57 个字符</span></span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>char2idx <span class="op">=</span> {ch: i <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span>
-<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>idx2char <span class="op">=</span> {i: ch <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 训练语料：三首经典唐诗</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>text_corpus <span class="op">=</span> (</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;床前明月光，疑是地上霜。举头望明月，低头思故乡。&quot;</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;白日依山尽，黄河入海流。欲穷千里目，更上一层楼。&quot;</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。&quot;</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 提取不重复汉字构建字典</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">list</span>(<span class="bu">set</span>(text_corpus)))</span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="bu">len</span>(unique_chars)  <span class="co"># 57 个字符</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>char2idx <span class="op">=</span> {ch: i <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>idx2char <span class="op">=</span> {i: ch <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span></code></pre></div>
 <h4 id="表-8-2部分汉字与数字-id运行脚本时的真实编号">表
 8-2：部分汉字与数字 ID（运行脚本时的真实编号）</h4>
 <p><code>sorted</code> 按 Unicode
@@ -3337,91 +3351,91 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a h
 因果自注意力模块（CausalSelfAttention）</h3>
 <p>这是模型的“灵魂中枢”，注意看我们是如何将因果掩码注册进 PyTorch
 缓冲区的：</p>
-<div class="sourceCode" id="cb27"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CausalSelfAttention(nn.Module):</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads, max_seq_len):</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性投影层</span></span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 核心：下三角掩码缓冲区（不需要计算梯度）</span></span>
-<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>        mask <span class="op">=</span> torch.tril(torch.ones(max_seq_len, max_seq_len))</span>
-<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.register_buffer(<span class="st">&quot;mask&quot;</span>, mask)</span>
-<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
-<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a>        B, T, C <span class="op">=</span> x.shape  <span class="co"># Batch(批次), Time(序列长度), Channel(维度)</span></span>
-<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 投影并切分多头: [B, num_heads, T, head_dim]</span></span>
-<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 点乘打分并缩放</span></span>
-<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
-<span id="cb27-27"><a href="#cb27-27" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb27-28"><a href="#cb27-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 施加掩码：将右上角未来位置填入 -1e9 (-∞)</span></span>
-<span id="cb27-29"><a href="#cb27-29" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> scores.masked_fill(<span class="va">self</span>.mask[:T, :T] <span class="op">==</span> <span class="dv">0</span>, <span class="op">-</span><span class="fl">1e9</span>)</span>
-<span id="cb27-30"><a href="#cb27-30" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb27-31"><a href="#cb27-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Softmax 归一化</span></span>
-<span id="cb27-32"><a href="#cb27-32" aria-hidden="true" tabindex="-1"></a>        weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb27-33"><a href="#cb27-33" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb27-34"><a href="#cb27-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 加权求和并拼回原状</span></span>
-<span id="cb27-35"><a href="#cb27-35" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> torch.matmul(weights, V).transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(B, T, C)</span>
-<span id="cb27-36"><a href="#cb27-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out)</span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CausalSelfAttention(nn.Module):</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads, max_seq_len):</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性投影层</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 核心：下三角掩码缓冲区（不需要计算梯度）</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>        mask <span class="op">=</span> torch.tril(torch.ones(max_seq_len, max_seq_len))</span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.register_buffer(<span class="st">&quot;mask&quot;</span>, mask)</span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a>        B, T, C <span class="op">=</span> x.shape  <span class="co"># Batch(批次), Time(序列长度), Channel(维度)</span></span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 投影并切分多头: [B, num_heads, T, head_dim]</span></span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 点乘打分并缩放</span></span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 施加掩码：将右上角未来位置填入 -1e9 (-∞)</span></span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> scores.masked_fill(<span class="va">self</span>.mask[:T, :T] <span class="op">==</span> <span class="dv">0</span>, <span class="op">-</span><span class="fl">1e9</span>)</span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Softmax 归一化</span></span>
+<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a>        weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb26-33"><a href="#cb26-33" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb26-34"><a href="#cb26-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 加权求和并拼回原状</span></span>
+<span id="cb26-35"><a href="#cb26-35" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> torch.matmul(weights, V).transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(B, T, C)</span>
+<span id="cb26-36"><a href="#cb26-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out)</span></code></pre></div>
 <hr />
 <h3 id="完整的-babygpt-模型组装">3. 完整的 BabyGPT 模型组装</h3>
-<div class="sourceCode" id="cb28"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> BabyGPT(nn.Module):</span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, vocab_size, d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>, max_seq_len<span class="op">=</span><span class="dv">128</span>):</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.max_seq_len <span class="op">=</span> max_seq_len</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 词嵌入，以及可学习的座位表。</span></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 这不是第 5 章的 sin/cos。每个座位一行向量，数字在训练中自己学。</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.tok_emb <span class="op">=</span> nn.Embedding(vocab_size, d_model)</span>
-<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.pos_emb <span class="op">=</span> nn.Embedding(max_seq_len, d_model)</span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 堆叠 2 层积木块</span></span>
-<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.blocks <span class="op">=</span> nn.ModuleList([</span>
-<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>            BabyBlock(d_model, num_heads, max_seq_len) <span class="cf">for</span> _ <span class="kw">in</span> <span class="bu">range</span>(num_layers)</span>
-<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>        ])</span>
-<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 输出头</span></span>
-<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.ln_f <span class="op">=</span> nn.LayerNorm(d_model)</span>
-<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head <span class="op">=</span> nn.Linear(d_model, vocab_size, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-19"><a href="#cb28-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, idx, targets<span class="op">=</span><span class="va">None</span>):</span>
-<span id="cb28-20"><a href="#cb28-20" aria-hidden="true" tabindex="-1"></a>        B, T <span class="op">=</span> idx.shape</span>
-<span id="cb28-21"><a href="#cb28-21" aria-hidden="true" tabindex="-1"></a>        pos <span class="op">=</span> torch.arange(<span class="dv">0</span>, T, dtype<span class="op">=</span>torch.<span class="bu">long</span>, device<span class="op">=</span>idx.device)</span>
-<span id="cb28-22"><a href="#cb28-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-23"><a href="#cb28-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 融合词义与位置</span></span>
-<span id="cb28-24"><a href="#cb28-24" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.tok_emb(idx) <span class="op">+</span> <span class="va">self</span>.pos_emb(pos)</span>
-<span id="cb28-25"><a href="#cb28-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-26"><a href="#cb28-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
-<span id="cb28-27"><a href="#cb28-27" aria-hidden="true" tabindex="-1"></a>            x <span class="op">=</span> block(x)</span>
-<span id="cb28-28"><a href="#cb28-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-29"><a href="#cb28-29" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.ln_f(x)</span>
-<span id="cb28-30"><a href="#cb28-30" aria-hidden="true" tabindex="-1"></a>        logits <span class="op">=</span> <span class="va">self</span>.head(x)  <span class="co"># [B, T, vocab_size]</span></span>
-<span id="cb28-31"><a href="#cb28-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-32"><a href="#cb28-32" aria-hidden="true" tabindex="-1"></a>        loss <span class="op">=</span> <span class="va">None</span></span>
-<span id="cb28-33"><a href="#cb28-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> targets <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb28-34"><a href="#cb28-34" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 高中概率交叉熵：衡量预测分布与真实字的差距</span></span>
-<span id="cb28-35"><a href="#cb28-35" aria-hidden="true" tabindex="-1"></a>            loss <span class="op">=</span> F.cross_entropy(logits.view(<span class="op">-</span><span class="dv">1</span>, logits.size(<span class="op">-</span><span class="dv">1</span>)), targets.view(<span class="op">-</span><span class="dv">1</span>))</span>
-<span id="cb28-36"><a href="#cb28-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-37"><a href="#cb28-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> logits, loss</span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> BabyGPT(nn.Module):</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, vocab_size, d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>, max_seq_len<span class="op">=</span><span class="dv">128</span>):</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.max_seq_len <span class="op">=</span> max_seq_len</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 词嵌入，以及可学习的座位表。</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 这不是第 5 章的 sin/cos。每个座位一行向量，数字在训练中自己学。</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.tok_emb <span class="op">=</span> nn.Embedding(vocab_size, d_model)</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.pos_emb <span class="op">=</span> nn.Embedding(max_seq_len, d_model)</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 堆叠 2 层积木块</span></span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.blocks <span class="op">=</span> nn.ModuleList([</span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>            BabyBlock(d_model, num_heads, max_seq_len) <span class="cf">for</span> _ <span class="kw">in</span> <span class="bu">range</span>(num_layers)</span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>        ])</span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 输出头</span></span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.ln_f <span class="op">=</span> nn.LayerNorm(d_model)</span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head <span class="op">=</span> nn.Linear(d_model, vocab_size, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, idx, targets<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>        B, T <span class="op">=</span> idx.shape</span>
+<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>        pos <span class="op">=</span> torch.arange(<span class="dv">0</span>, T, dtype<span class="op">=</span>torch.<span class="bu">long</span>, device<span class="op">=</span>idx.device)</span>
+<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 融合词义与位置</span></span>
+<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.tok_emb(idx) <span class="op">+</span> <span class="va">self</span>.pos_emb(pos)</span>
+<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
+<span id="cb27-27"><a href="#cb27-27" aria-hidden="true" tabindex="-1"></a>            x <span class="op">=</span> block(x)</span>
+<span id="cb27-28"><a href="#cb27-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-29"><a href="#cb27-29" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.ln_f(x)</span>
+<span id="cb27-30"><a href="#cb27-30" aria-hidden="true" tabindex="-1"></a>        logits <span class="op">=</span> <span class="va">self</span>.head(x)  <span class="co"># [B, T, vocab_size]</span></span>
+<span id="cb27-31"><a href="#cb27-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-32"><a href="#cb27-32" aria-hidden="true" tabindex="-1"></a>        loss <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb27-33"><a href="#cb27-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> targets <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb27-34"><a href="#cb27-34" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 交叉熵损失：衡量预测分布与真实字的差距</span></span>
+<span id="cb27-35"><a href="#cb27-35" aria-hidden="true" tabindex="-1"></a>            loss <span class="op">=</span> F.cross_entropy(logits.view(<span class="op">-</span><span class="dv">1</span>, logits.size(<span class="op">-</span><span class="dv">1</span>)), targets.view(<span class="op">-</span><span class="dv">1</span>))</span>
+<span id="cb27-36"><a href="#cb27-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-37"><a href="#cb27-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> logits, loss</span></code></pre></div>
 <p>训练循环不要把三首诗粘成一条。每一首单独算一次“猜下一个字”的损失，再取平均：</p>
-<div class="sourceCode" id="cb29"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>encoded_poems <span class="op">=</span> [torch.tensor(encode(poem), dtype<span class="op">=</span>torch.<span class="bu">long</span>) <span class="cf">for</span> poem <span class="kw">in</span> poems]</span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> []</span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> data <span class="kw">in</span> encoded_poems:</span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    _, loss <span class="op">=</span> model(data[:<span class="op">-</span><span class="dv">1</span>].unsqueeze(<span class="dv">0</span>), data[<span class="dv">1</span>:].unsqueeze(<span class="dv">0</span>))</span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    losses.append(loss)</span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.stack(losses).mean()</span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>encoded_poems <span class="op">=</span> [torch.tensor(encode(poem), dtype<span class="op">=</span>torch.<span class="bu">long</span>) <span class="cf">for</span> poem <span class="kw">in</span> poems]</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> []</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> data <span class="kw">in</span> encoded_poems:</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    _, loss <span class="op">=</span> model(data[:<span class="op">-</span><span class="dv">1</span>].unsqueeze(<span class="dv">0</span>), data[<span class="dv">1</span>:].unsqueeze(<span class="dv">0</span>))</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    losses.append(loss)</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.stack(losses).mean()</span></code></pre></div>
 <p><code>data[:-1]</code> 是输入，<code>data[1:]</code>
 是紧挨着的下一个字。例如“床前明”，输入是“床前”，目标是“前明”。</p>
 <hr />
@@ -3623,8 +3637,8 @@ style="text-align: left;">训练目标和开放式续写天然一致，结构简
 </tbody>
 </table></div>
 <hr />
-<h2 id="现代工业级大模型的五大进化杀手锏高中数学通俗版">9.2
-现代工业级大模型的五大进化杀手锏（高中数学通俗版）</h2>
+<h2 id="现代大模型的五种关键改进原理与直觉">9.2
+现代大模型的五种关键改进：原理与直觉</h2>
 <p>从我们刚才手搓的
 Baby-GPT，到今天掌控世界算力的千亿大模型，工业界在以下 5
 个关键构件上进行了脱胎换骨的升级：</p>
@@ -3649,8 +3663,8 @@ alt="现代 LLM：计算与缓存。MoE 对每个词只激活部分专家；KV C
 个路由专家中选择 8 个，并另有共享专家。RoPE
 并不自动保证任意长度的外推，KV Cache 的加速倍数也不是固定常数。</p>
 <hr />
-<h3 id="杀手锏-1旋转位置编码rope高一复数平面的几何旋转">杀手锏
-1：旋转位置编码（RoPE）——高一复数平面的几何旋转</h3>
+<h3 id="杀手锏-1旋转位置编码rope复数平面上的几何旋转">杀手锏
+1：旋转位置编码（RoPE）——复数平面上的几何旋转</h3>
 <p>在第 5 章中，我们学习了绝对正弦位置编码。但在处理长达 10 万字甚至 100
 万字的长文本时，原版正弦编码的外推能力有限。</p>
 <p>研究者苏剑林等人在 2021 年的论文 RoFormer 里提出了
@@ -3858,14 +3872,15 @@ Size）</strong>、<strong>训练数据量（Dataset Size）</strong> 和
 <li><strong>尺度定律与涌现现象</strong>揭示了大自然最底层的数学美感：极其纯粹简单的“预测下一个词”，在海量算力与优雅架构的催化下，绽放出了璀璨的通用人工智能火花！</li>
 </ul>
 <hr />
-<h1 id="附录-高中数学公式速查卡与深度学习黑话翻译词典">附录：高中数学公式速查卡与深度学习黑话翻译词典</h1>
+<h1 id="附录-数学公式速查卡与深度学习黑话翻译词典">附录：数学公式速查卡与深度学习黑话翻译词典</h1>
 <hr />
-<h2 id="附录-a大模型核心高中数学公式速查卡">附录
-A：大模型核心高中数学公式速查卡</h2>
-<p>恭喜你！读到这里，你已经发现：支撑当今天下所有大模型的底层数学工具，几乎全部来自你在高一、高二课堂上学过的知识点。
-下表整理了全书涉及的核心高中数学公式与在大模型中的对应映射：</p>
-<h3 id="表-a-1高中数学知识点与大模型机制对应速查表">表
-A-1：高中数学知识点与大模型机制对应速查表</h3>
+<h2 id="附录-a大模型核心数学公式速查卡">附录
+A：大模型核心数学公式速查卡</h2>
+<p>本书从向量、指数函数、均值与方差出发，逐步搭建起理解 Transformer
+的数学工具。附录把这些公式集中整理，便于在阅读和运行代码时查阅。
+下表整理了全书涉及的核心数学公式与在大模型中的对应映射：</p>
+<h3 id="表-a-1数学知识点与大模型机制对应速查表">表
+A-1：数学知识点与大模型机制对应速查表</h3>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 23%" />
@@ -3875,7 +3890,7 @@ A-1：高中数学知识点与大模型机制对应速查表</h3>
 </colgroup>
 <thead>
 <tr>
-<th style="text-align: left;">高中知识点</th>
+<th style="text-align: left;">数学概念</th>
 <th style="text-align: left;">数学教材公式</th>
 <th style="text-align: left;">大模型应用场景</th>
 <th style="text-align: center;">对应章节</th>
@@ -4073,8 +4088,9 @@ style="text-align: left;"><strong>后续训练立规矩</strong>。常见做法�
 <hr />
 <h2 id="附录-c后记与初学者进阶书单推荐">附录
 C：后记与初学者进阶书单推荐</h2>
-<p>亲爱的同学：</p>
-<p>当你读完这本小书时，你已经跨越了绝大多数成年人终其一生都未能跨过的认知鸿沟。你不再是一个只能把大模型当做魔法盲盒的普通使用者，而是一位亲手拆解过发条、洞悉其每一个齿轮咬合与数学法则的探索者。</p>
+<p>感谢你读到这里。</p>
+<p>读到这里，你已经沿着词向量、注意力和 Transformer
+积木块，走到了一个可以训练和生成文本的小模型。接下来可以反复运行实验、调整参数，把观察到的变化与公式对应起来；尚未理解的部分，也可以带着新的问题回头阅读。</p>
 <p>人工智能的浪潮正在以惊人的速度重塑人类社会的一切。但请永远记住：
 <strong>再复杂的万亿大模型，其基石也不过是一次次纯粹的向量点积、一次次严谨的概率归一化，以及一行行充满敬畏的代码。</strong></p>
 <h3 id="进阶推荐阅读清单">进阶推荐阅读清单：</h3>

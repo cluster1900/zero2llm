@@ -23,7 +23,7 @@ def experiment_why_scale():
     random.seed(42)
 
     # 随机生成两个符合标准正态分布（均值 0，方差 1）的 64 维向量
-    # 在高中统计学里，两个独立同分布变量 X*Y 的方差是 Var(X)*Var(Y) = 1*1 = 1
+    # 当 X、Y 独立、均值为 0 且方差为 1 时，Var(X*Y) = Var(X)*Var(Y) = 1
     # 64 个这样的数相加，总方差就会累加成 64！标准差就会变成 √64 = 8！
     vec_q = [random.gauss(0, 1) for _ in range(d_k)]
     vec_k1 = [random.gauss(0, 1) for _ in range(d_k)]
@@ -72,7 +72,7 @@ def experiment_causal_mask():
     print("=" * 65)
     print("生活比喻：闭卷做题。你正在写第 2 个字，绝对不能偷看第 3 个字！")
     print("操作秘籍：在 Softmax 之前，把未来所有不能看的位置填上 -∞ (负无穷大)！")
-    print("因为高中的指数性质：e^(-∞) = 0，做完 Softmax 后权重精准变成 0%！\n")
+    print("根据指数函数的性质：e^(-∞) = 0，做完 Softmax 后权重精准变成 0%！\n")
 
     seq_len = 3
     # 模拟 3 个词之间的注意力得分矩阵（3x3）

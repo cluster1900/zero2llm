@@ -10,7 +10,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const reportDir = process.argv[2] || await fs.mkdtemp(path.join(os.tmpdir(), 'zero2llm-layout-'));
 await fs.mkdir(reportDir, { recursive: true });
 const unpacked = path.join(reportDir, 'epub');
-execFileSync('python3', ['-m', 'zipfile', '-e', path.join(root, 'dist/transformer_for_highschool.epub'), unpacked]);
+execFileSync('python3', ['-m', 'zipfile', '-e', path.join(root, 'dist/transformer_from_scratch.epub'), unpacked]);
 const browser = await puppeteer.launch({ headless: true });
 try {
   const page = await browser.newPage();

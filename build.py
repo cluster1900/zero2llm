@@ -2,9 +2,9 @@
 """
 build.py - Transformer 初学者启蒙书自动化编译流水线
 任务：
-1. 合并 chapters/ 下所有章节 Markdown 为 dist/transformer_for_highschool.md
-2. 调用 Pandoc 编译生成标准 EPUB 电子书：dist/transformer_for_highschool.epub
-3. 编译生成现代化响应式单页 Web 读物：dist/transformer_for_highschool.html
+1. 合并 chapters/ 下所有章节 Markdown 为 dist/transformer_from_scratch.md
+2. 调用 Pandoc 编译生成标准 EPUB 电子书：dist/transformer_from_scratch.epub
+3. 编译生成现代化响应式单页 Web 读物：dist/transformer_from_scratch.html
 4. 验证与生成质量审计报告
 """
 
@@ -61,7 +61,7 @@ def slugify(text):
 def merge_markdown():
     print("▶ 正在合并 Markdown 章节文件...")
     chapter_files = get_sorted_chapters()
-    output_path = os.path.join(DIST_DIR, "transformer_for_highschool.md")
+    output_path = os.path.join(DIST_DIR, "transformer_from_scratch.md")
     
     with open(output_path, "w", encoding="utf-8") as outfile:
         # 写入元数据前言
@@ -83,7 +83,7 @@ def merge_markdown():
 
 def build_epub(document_path):
     print("\n▶ 正在使用 Pandoc 编译 EPUB 电子书...")
-    epub_out = os.path.join(DIST_DIR, "transformer_for_highschool.epub")
+    epub_out = os.path.join(DIST_DIR, "transformer_from_scratch.epub")
     cover_image = os.path.join(ASSETS_DIR, "cover.jpg")
     epub_css = os.path.join(ASSETS_DIR, "epub.css")
     
@@ -239,10 +239,10 @@ def build_html(document_path):
       <button class="btn-icon" id="theme-toggle" title="切换深色/浅色主题">
         🌓 <span>主题</span>
       </button>
-      <a class="btn-icon" href="transformer_for_highschool.epub" download title="下载 EPUB 电子书">
+      <a class="btn-icon" href="transformer_from_scratch.epub" download title="下载 EPUB 电子书">
         📖 <span>下载 EPUB</span>
       </a>
-      <a class="btn-icon" href="transformer_for_highschool.md" download title="下载 Markdown 原文">
+      <a class="btn-icon" href="transformer_from_scratch.md" download title="下载 Markdown 原文">
         📝 <span>下载 Markdown</span>
       </a>
     </div>
@@ -288,7 +288,7 @@ def build_html(document_path):
 </html>
 """
 
-    html_out = os.path.join(DIST_DIR, "transformer_for_highschool.html")
+    html_out = os.path.join(DIST_DIR, "transformer_from_scratch.html")
     with open(html_out, "w", encoding="utf-8") as f:
         f.write(html_template)
 
@@ -356,9 +356,9 @@ def main():
     print("\n" + "=" * 65)
     if epub_ok and html_ok:
         print("🎉 恭喜！全流程编译已 100% 成功完成！")
-        print(f"  - Markdown 原文: dist/transformer_for_highschool.md")
-        print(f"  - EPUB 电子书  : dist/transformer_for_highschool.epub")
-        print(f"  - 交互 Web HTML: dist/transformer_for_highschool.html")
+        print(f"  - Markdown 原文: dist/transformer_from_scratch.md")
+        print(f"  - EPUB 电子书  : dist/transformer_from_scratch.epub")
+        print(f"  - 交互 Web HTML: dist/transformer_from_scratch.html")
     else:
         print("⚠️ 编译过程中出现警告，请检查上方日志。")
     print("=" * 65)

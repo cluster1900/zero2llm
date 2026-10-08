@@ -30,7 +30,7 @@ class SimpleMultiHeadAttention(nn.Module):
         self.head_dim = d_model // num_heads
 
         # 线性投影矩阵：将输入分别投影为 Q, K, V
-        # 相当于高中函数：y = x * W
+        # 对应线性变换：y = x * W
         self.W_q = nn.Linear(d_model, d_model, bias=False)
         self.W_k = nn.Linear(d_model, d_model, bias=False)
         self.W_v = nn.Linear(d_model, d_model, bias=False)

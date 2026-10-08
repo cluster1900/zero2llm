@@ -1,6 +1,6 @@
 """
 02_manual_attention.py - 纯 Python 纯手工算一遍自注意力机制（Self-Attention）
-适合人群：仅懂高中数学（向量点积、e 的指数、百分比求和为 1）、懂基本 Python 循环
+用到的知识：向量点积、指数函数、权重归一化和 Python 循环；下文逐步计算
 
 我们将完全不用任何深度学习黑盒库，只用普通的 Python 列表和 math 库，
 把一个 3 词句子（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化打印出来！
@@ -9,7 +9,7 @@
 import math
 
 def dot_product(vec_a, vec_b):
-    """高中平面/空间向量点积：两个向量对应元素相乘再相加"""
+    """向量点积：两个向量对应元素相乘再相加"""
     return sum(a * b for a, b in zip(vec_a, vec_b))
 
 def matmul_vec(matrix, vec):
@@ -18,12 +18,12 @@ def matmul_vec(matrix, vec):
 
 def softmax(scores):
     """
-    高中概率思维版 Softmax 归一化：
+    Softmax 归一化的计算步骤：
     1. 取 e^x：保证所有分数都变成正数（e 的任意实数次方恒大于 0）
     2. 计算总和：作为分母
     3. 每个数字除以总和：变成百分比（所有人加起来等于 100%）
     """
-    # 为了防止数值溢出，减去最大值（这是高中的技巧：上下同除以 e^max 不改变分数值）
+    # 为了防止数值溢出，减去最大值（分子、分母同时除以 e^max，归一化结果不变）
     max_val = max(scores)
     exp_scores = [math.exp(s - max_val) for s in scores]
     sum_exp = sum(exp_scores)
@@ -102,7 +102,7 @@ def main():
     for i in range(len(words)):
         row_scores = []
         for j in range(len(words)):
-            # 高中点积：Q 的第 i 个向量与 K 的第 j 个向量做点积
+            # 点积计算：Q 的第 i 个向量与 K 的第 j 个向量做点积
             dot = dot_product(Q[i], K[j])
             scaled = dot / scale_factor
             row_scores.append(scaled)

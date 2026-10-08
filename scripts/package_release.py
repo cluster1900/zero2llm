@@ -16,7 +16,7 @@ dist = root / 'dist'
 check_book(dist)
 out = root / '.release'
 out.mkdir(exist_ok=True)
-shutil.copyfile(dist / 'transformer_for_highschool.epub', out / 'transformer_for_highschool.epub')
+shutil.copyfile(dist / 'transformer_from_scratch.epub', out / 'transformer_from_scratch.epub')
 # Stable file order and timestamps make a downloaded ZIP verifiable across CI/local packaging.
 with zipfile.ZipFile(out / 'zero2llm-web.zip', 'w', compression=zipfile.ZIP_DEFLATED) as archive:
     for file in sorted(dist.rglob('*')):
@@ -25,7 +25,7 @@ with zipfile.ZipFile(out / 'zero2llm-web.zip', 'w', compression=zipfile.ZIP_DEFL
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o100644 << 16
             archive.writestr(info, file.read_bytes())
-assets = ['transformer_for_highschool.epub', 'zero2llm-web.zip']
+assets = ['transformer_from_scratch.epub', 'zero2llm-web.zip']
 (out / 'SHA256SUMS.txt').write_text(''.join(
     f'{hashlib.sha256((out / name).read_bytes()).hexdigest()}  {name}\n' for name in assets
 ))
@@ -33,7 +33,13 @@ commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=Tr
 base = f'https://github.com/cluster1900/zero2llm/releases/download/{args.tag}'
 notes = f'''## Transformer 从零到一学习包
 
-面向高中数学水平、具备少量 Python 阅读经验的学习者：11 章讲解、7 个代码实验与 Baby-GPT 实战。
+通过生活类比、图解与逐行代码讲解学习 Transformer：11 章内容、7 个代码实验与 Baby-GPT 实战。
+
+## 本次文字修订
+
+- 去掉学段标签与反复强调读者基础的措辞，直接说明知识与计算步骤。
+- 同步更新正文、图中文字、代码注释和阅读版本，保留循序渐进的讲解。
+- 阅读文件统一命名为 `transformer_from_scratch`，网站包与下载链接同步更新。
 
 ## 图表与 EPUB 修订
 
@@ -45,7 +51,7 @@ notes = f'''## Transformer 从零到一学习包
 ## 阅读与下载
 
 - [在线阅读](https://cluster1900.github.io/zero2llm/)
-- [下载 EPUB 电子书]({base}/transformer_for_highschool.epub)
+- [下载 EPUB 电子书]({base}/transformer_from_scratch.epub)
 - [下载 Web ZIP]({base}/zero2llm-web.zip)：解压后打开 `index.html`。
 - [下载 SHA-256 校验文件]({base}/SHA256SUMS.txt)
 

@@ -1,11 +1,12 @@
 # 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 
-[![Deploy to GitHub Pages](https://github.com/cluster1900/zero2llm/actions/workflows/pages.yml/badge.svg)](https://github.com/cluster1900/zero2llm/actions/workflows/pages.yml) [在线阅读](https://cluster1900.github.io/zero2llm/) · [下载最新 EPUB](https://github.com/cluster1900/zero2llm/releases/latest/download/transformer_for_highschool.epub)
+[![Deploy to GitHub Pages](https://github.com/cluster1900/zero2llm/actions/workflows/pages.yml/badge.svg)](https://github.com/cluster1900/zero2llm/actions/workflows/pages.yml) [在线阅读](https://cluster1900.github.io/zero2llm/) · [下载最新 EPUB](https://github.com/cluster1900/zero2llm/releases/latest/download/transformer_from_scratch.epub)
 
-这是一本面向高中数学水平学习者的 Transformer 入门教程：用生活类比、图解、逐行 Python/PyTorch 代码和 Baby-GPT 实验，把词向量、QKV 注意力、位置编码、Transformer Block 与现代大模型串成一条从 0 到 1 的学习路线。
+这是一本循序渐进的 Transformer 入门教程：用生活类比、图解、逐行 Python/PyTorch 代码和 Baby-GPT 实验，把词向量、QKV 注意力、位置编码、Transformer Block 与现代大模型串成一条从 0 到 1 的学习路线。
 
-> **面向人群**：零基础或基础薄弱的初学者（仅需掌握初等代数、基础平面向量点积与三角函数，仅能看懂基础 Python 循环与列表）。  
-> **核心宗旨**：用生活实例、几何直觉、保姆级逐行代码与全彩图解，带你看懂当今大模型（ChatGPT、Claude、DeepSeek）共同使用的核心架构——**Transformer**。这里的“小模型”是教学实验，不等于真实聊天模型。
+> **阅读准备**：能够阅读 Python 变量、循环和列表即可开始；用到的代数、向量与三角函数知识会结合例子说明。
+>
+> **核心宗旨**：用生活实例、几何直觉、逐行代码讲解与全彩图解，带你看懂当今大模型（ChatGPT、Claude、DeepSeek）共同使用的核心架构——**Transformer**。这里的“小模型”是教学实验，不等于真实聊天模型。
 
 ![图书封面](assets/cover.jpg)
 
@@ -15,7 +16,7 @@
 
 全书共分为 11 个章节。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
 
-| 章节与标题 | 核心生活类比 / 几何直觉 | 对应高中数学知识点 | 配套可运行代码 |
+| 章节与标题 | 核心生活类比 / 几何直觉 | 用到的数学知识 | 配套可运行代码 |
 | :--- | :--- | :--- | :---: |
 | [**00. 前言与阅读指南**](chapters/00_preface.md) | 大模型的黑盒魔法与探索路线图 | 初等代数与逻辑 | - |
 | [**01. 从词语到空间向量**](chapters/01_word_embedding.md) | 水果特征打分坐标系、“国王 - 男人 + 女人 = 女王” | 平面向量、模长、点积、夹角余弦 | [`code/01_vector_similarity.py`](code/01_vector_similarity.py) |
@@ -27,11 +28,11 @@
 | [**07. 编码器与解码器**](chapters/07_encoder_decoder.md) | 阅卷老师 vs 考场作家、因果掩码闭卷考试、贪吃蛇生成 | 下三角掩码矩阵、自回归循环 | - |
 | [**08. 实战：手搭 Baby-GPT**](chapters/08_baby_transformer.md) | 从第一行代码训练一个能背三首短诗的微型模型 | 交叉熵损失、温度采样、梯度下降 | [`code/07_baby_gpt.py`](code/07_baby_gpt.py) |
 | [**09. 走向现代大模型 (LLMs)**](chapters/09_modern_llms.md) | RoPE 旋转位置编码、RMSNorm、SwiGLU、DeepSeek MoE | 复数平面旋转、均方根、尺度定律与涌现 | - |
-| [**10. 附录与黑话词典**](chapters/10_appendix.md) | 高中数学公式速查卡、深度学习黑话翻译大白话词典 | 全书数理汇总 | - |
+| [**10. 附录与黑话词典**](chapters/10_appendix.md) | 数学公式速查卡、深度学习黑话翻译大白话词典 | 全书数理汇总 | - |
 
 ---
 
-## 💻 7 个精选保姆级代码实验
+## 💻 7 个配有详细讲解的代码实验
 
 代码在 Python 3.12 与 PyTorch 2.14.1 环境中验证过，并带有中文注释与可视化输出。第 1、2 个实验只依赖 Python 标准库；第 3～7 个实验需要 PyTorch：
 
@@ -57,7 +58,7 @@ source .venv/bin/activate
 python code/07_baby_gpt.py
 ```
 
-如果只想先体验高中数学版的两个实验，可以直接运行 `python3 code/01_vector_similarity.py` 和
+如果想先从手算和纯 Python 实验入手，可以直接运行 `python3 code/01_vector_similarity.py` 和
 `python3 code/02_manual_attention.py`，它们不需要安装 PyTorch。重新编译 EPUB/HTML 还需要系统中的
 `pandoc` 和 Node.js 22 或更高版本（macOS 可运行 `brew install pandoc node`），并先运行 `npm ci` 安装锁定版本的图表构建工具。阅读成品不需要这些依赖。
 
@@ -69,16 +70,16 @@ python code/07_baby_gpt.py
 
 ```
 dist/
-├── transformer_for_highschool.html  # 🌟 现代化响应式 Web 阅读器（图表可离线阅读，公式排版需网络）
+├── transformer_from_scratch.html  # 🌟 现代化响应式 Web 阅读器（图表可离线阅读，公式排版需网络）
 ├── index.html                       # 🌟 对应 Web 站点入口文件
-├── transformer_for_highschool.epub  # 📚 标准 EPUB 电子书 (支持 iPad/Apple Books/Kindle)
-├── transformer_for_highschool.md    # 📝 完整合并版 Master Markdown 文档
+├── transformer_from_scratch.epub  # 📚 标准 EPUB 电子书 (支持 iPad/Apple Books/Kindle)
+├── transformer_from_scratch.md    # 📝 完整合并版 Master Markdown 文档
 ├── code/                            # 🧪 网页中“打开配套源码”所需的 Python 示例
 └── assets/                          # 🎨 高清封面图与矢量架构图 (SVG)
 ```
 
 ### 1. 网页端观看（最佳排版体验）：
-- **直接双击打开** [`dist/index.html`](dist/index.html) 或 [`dist/transformer_for_highschool.html`](dist/transformer_for_highschool.html) 即可在任何浏览器（Safari, Chrome, Edge）中畅读！
+- **直接双击打开** [`dist/index.html`](dist/index.html) 或 [`dist/transformer_from_scratch.html`](dist/transformer_from_scratch.html) 即可在任何浏览器（Safari, Chrome, Edge）中畅读！
 - 特性：
   - 支持 **深色 (Dark) / 浅色 (Light)** 主题一键切换；
   - 集成 **MathJax 3** 高清数学公式渲染；
@@ -89,7 +90,7 @@ dist/
   公式排版和代码高亮通过 CDN 加载，需要网络；正文、全部图表和代码可离线阅读。
 
 ### 2. 电子书阅读器观看（EPUB）：
-- 文件路径：[`dist/transformer_for_highschool.epub`](dist/transformer_for_highschool.epub)
+- 文件路径：[`dist/transformer_from_scratch.epub`](dist/transformer_from_scratch.epub)
 - 将文件导入 Apple Books 或其他支持 EPUB 的阅读器；Kindle 可通过 Send to Kindle 转换导入，具体支持以阅读器为准。
 - 图表在构建时转为 2 倍分辨率 PNG 并打包，离线无需脚本；长流程拆成小图，保持比例并限制宽高。
 - 如果阅读器缓存了旧版，移除旧书后重新导入。配套完整代码链接指向 GitHub，打开链接需要网络。

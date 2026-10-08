@@ -184,7 +184,7 @@ class BabyGPT(nn.Module):
 
         loss = None
         if targets is not None:
-            # 高中概率交叉熵：衡量预测分布与真实字的差距
+            # 交叉熵损失：衡量预测分布与真实字的差距
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
 
         return logits, loss
