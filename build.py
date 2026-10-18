@@ -305,15 +305,15 @@ def build_html(document_path):
     print(f"✓ 同步生成入口: {index_out}")
     return True
 
-def main():
+def main(renderer=None):
     print("=" * 65)
     print("【Transformer 初学者启蒙书：全自动编译交付流水线】")
     print("=" * 65)
     if not require_command("pandoc", "EPUB 和 HTML 都需要它"):
         return 1
-    if not require_command("node", "预渲染全书图表需要 Node.js；安装后先运行 npm ci"):
+    if renderer is None and not require_command("node", "预渲染全书图表需要 Node.js；安装后先运行 npm ci"):
         return 1
-    if not os.path.isdir(os.path.join(BASE_DIR, "node_modules", "@mermaid-js", "mermaid-cli")):
+    if renderer is None and not os.path.isdir(os.path.join(BASE_DIR, "node_modules", "@mermaid-js", "mermaid-cli")):
         print("❌ 缺少图表构建依赖，请先运行 npm ci")
         return 1
     ensure_dirs()
@@ -344,7 +344,7 @@ def main():
     # 3. 在临时目录准备两种输出的文档树；任何图表失败都会终止构建。
     try:
         with tempfile.TemporaryDirectory(prefix="zero2llm-") as temp_dir:
-            epub_doc, html_doc = prepare_documents(merged_md, temp_dir, BASE_DIR, MD_FORMAT)
+            epub_doc, html_doc = prepare_documents(merged_md, temp_dir, BASE_DIR, MD_FORMAT, renderer=renderer)
             epub_ok = build_epub(epub_doc)
             html_ok = build_html(html_doc)
         if epub_ok and html_ok:

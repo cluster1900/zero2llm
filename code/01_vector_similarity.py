@@ -16,7 +16,8 @@ def dot_product(vec_a, vec_b):
     计算两个向量的点积（内积）
     点积的坐标公式：a · b = x1*x2 + y1*y2 + ... + xn*yn
     """
-    assert len(vec_a) == len(vec_b), "两个向量的维度必须完全相同！"
+    if len(vec_a) != len(vec_b):
+        raise ValueError("两个向量的维度必须完全相同！")
     total = 0.0
     for i in range(len(vec_a)):
         total += vec_a[i] * vec_b[i]
@@ -37,16 +38,16 @@ def cosine_similarity(vec_a, vec_b):
     计算余弦相似度 cos(θ)
     夹角余弦公式：cos(θ) = (a · b) / (|a| * |b|)
     取值范围：[-1, 1]
-    - 接近 1 ：方向极其一致，含义非常相似
-    - 接近 0 ：两个向量互相垂直（90度），毫无关联
-    - 接近 -1：方向完全相反，反义词
+    - 接近 1 ：方向接近一致，语义仍取决于向量如何获得
+    - 接近 0 ：方向接近垂直，不自动代表语义无关
+    - 接近 -1：方向接近相反，不自动代表反义词
     """
     dot = dot_product(vec_a, vec_b)
     mag_a = vector_magnitude(vec_a)
     mag_b = vector_magnitude(vec_b)
     
     if mag_a == 0 or mag_b == 0:
-        return 0.0
+        raise ValueError("零向量的余弦相似度未定义")
     
     return dot / (mag_a * mag_b)
 
@@ -55,6 +56,8 @@ def euclidean_distance(vec_a, vec_b):
     计算欧氏距离（平面两点间距离公式的扩展）
     距离公式：d = √((x1-x2)² + (y1-y2)² + ...)
     """
+    if len(vec_a) != len(vec_b):
+        raise ValueError("两个向量的维度必须完全相同！")
     sum_sq = 0.0
     for i in range(len(vec_a)):
         sum_sq += (vec_a[i] - vec_b[i]) ** 2

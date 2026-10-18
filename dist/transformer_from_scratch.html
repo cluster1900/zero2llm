@@ -486,8 +486,9 @@ figcaption, .diagram-caption {
     <aside class="sidebar">
       <h3>📚 章节快速导航</h3>
       <ul>
-  <li><a href="#前言与阅读指南-写给初学者的大模型极简数学与代码之旅">前言与阅读指南：写给初学者的大模型极简数学与代码之旅</a></li>
-  <li><a href="#第1章-从词语到数学世界-词嵌入-Word-Embedding-与空间向量">第1章：从词语到数学世界——词嵌入（Word Embedding）与空间向量</a></li>
+  <li><a href="#前言与阅读指南-先看懂一小步-再搭起一个模型">前言与阅读指南：先看懂一小步，再搭起一个模型</a></li>
+  <li><a href="#第1章-从编号到空间向量-词嵌入与几何直觉">第1章：从编号到空间向量——词嵌入与几何直觉</a></li>
+  <li><a href="#第1A章-Tokenizer-从字符-字节到-BPE">第1A章：Tokenizer——从字符、字节到 BPE</a></li>
   <li><a href="#第2章-注意力机制的直觉-为什么我们需要-注意力">第2章：注意力机制的直觉——为什么我们需要“注意力”？</a></li>
   <li><a href="#第3章-拆解注意力三剑客-Q-K-V-的生活大冒险与点积计算">第3章：拆解注意力三剑客——Q、K、V 的生活大冒险与点积计算</a></li>
   <li><a href="#第4章-多头注意力-Multi-Head-Attention-三个臭皮匠-顶个诸葛亮">第4章：多头注意力（Multi-Head Attention）——三个臭皮匠，顶个诸葛亮</a></li>
@@ -501,212 +502,19 @@ figcaption, .diagram-caption {
     </aside>
 
     <main class="content">
-      <h1 id="前言与阅读指南-写给初学者的大模型极简数学与代码之旅">前言与阅读指南：写给初学者的大模型极简数学与代码之旅</h1>
-<blockquote>
-<p>“任何足够先进的技术，初看都与魔法无异。” —— 亚瑟·C·克拉克</p>
-</blockquote>
-<hr />
-<h2 id="为什么写这本书">为什么写这本书？</h2>
-<p>你可能每天都在使用 ChatGPT、Claude 或
-DeepSeek。你可以让它帮你写代码、构思作文、翻译古文，甚至推导一道物理大题。当你看着屏幕上的光标像打字机一样，一个字一个字、行云流水地“吐”出深刻而富有逻辑的回答时，你是否曾产生过强烈的好奇：</p>
-<ul>
-<li><strong>这个黑盒子的肚子里到底在发生什么？</strong></li>
-<li><strong>它是真的“拥有人类的思想”，还是在进行某种精妙绝伦的数学魔术？</strong></li>
-<li><strong>我只是一个编程与数学初学者，只懂一点平面向量、三角函数和基础
-Python，我能彻底搞懂大模型的底层原理吗？</strong></li>
-</ul>
-<p>答案是：<strong>完全可以，而且远比你想象的更直观、更优美！</strong></p>
-<p>今天大模型世界所有奇迹的基石，源于 2017 年 Google
-团队发表的一篇划时代论文——<strong>《Attention Is All You
-Need》（注意力就是你所需要的一切）</strong>。在这篇论文中，作者们提出了一种名为
-<strong>Transformer</strong> 的全新架构。</p>
-<p>然而，市面上绝大多数 Transformer
-教程都充斥着大学高阶微积分、抽象代数、复杂的流形几何与令人望而生畏的张量运算符号。这让许多初学者望而却步，误以为非得读完数学系研究生才能理解。</p>
-<p><strong>这本书就是为你量身打造的解药。</strong></p>
-<hr />
-<h2 id="阅读前需要哪些准备">阅读前需要哪些准备</h2>
-<p>下面列出本书会用到的知识。遇到不熟悉的概念，可以先跟着例子计算，再回看公式：</p>
-<ol type="1">
-<li><strong>数学工具</strong>：
-<ul>
-<li><strong>基础平面向量</strong>：知道什么是向量 <span
-class="math inline">\(\vec{a} = (x,
-y)\)</span>，知道向量相加是平行四边形法则，知道什么是模长 <span
-class="math inline">\(|\vec{a}|\)</span>，以及两个向量的<strong>点乘（数量积）</strong>
-<span class="math inline">\(\vec{a} \cdot \vec{b} = x_1 x_2 + y_1 y_2 =
-|\vec{a}| |\vec{b}| \cos\theta\)</span>。</li>
-<li><strong>基础三角函数</strong>：知道正弦波 <span
-class="math inline">\(\sin(x)\)</span> 和余弦波 <span
-class="math inline">\(\cos(x)\)</span> 的周期与图像。</li>
-<li><strong>初等代数与统计</strong>：知道自然底数 <span
-class="math inline">\(e \approx 2.718\)</span> 的指数函数 <span
-class="math inline">\(e^x\)</span>，知道均值 <span
-class="math inline">\(\mu\)</span> 与方差 <span
-class="math inline">\(\sigma^2\)</span>。</li>
-<li><strong>完全不需要</strong>：高等微积分、泛函分析、实变函数、群论或微分几何！遇到矩阵乘法等新概念时，本书会把它拆成一组组点积，配合具体数字说明。</li>
-</ul></li>
-<li><strong>代码阅读</strong>：
-<ul>
-<li>只要你能看懂 Python 的变量、<code>for</code> 循环、<code>if</code>
-条件判断、列表 <code>[1, 2, 3]</code> 以及定义简单函数
-<code>def func(x):</code> 即可。</li>
-<li>关键步骤先用<strong>纯 Python 手算版</strong>建立直觉，再逐步过渡到
-PyTorch
-张量代码。你可以先用草稿纸核对数字，再运行完整实验，不需要一开始就记住所有库函数。</li>
-</ul></li>
-</ol>
-<hr />
-<h2 id="本书的学习法则">本书的学习法则</h2>
-<p>在阅读本书时，请牢记三个学习原则：</p>
-<blockquote>
-<p><strong>三大认知原则</strong>：先建立直觉，再看懂几何，最后亲手运行代码。</p>
-</blockquote>
-<ol type="1">
-<li><strong>直觉大于公式</strong>： 当看到 <span
-class="math inline">\(\text{Softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V\)</span>
-时，不要慌张。在本书中，它会变成“你在图书馆借书、拿着检索词在书库贴标签卡、最后把借出的书本知识综合起来”的故事。</li>
-<li><strong>几何优于抽象</strong>：
-词语不是冰冷的字符串，而是高维空间里自由飞翔的“箭头”。“国王 - 男人 +
-女人 = 女王”不是修辞手法，而是向量平移的真实几何奇迹。</li>
-<li><strong>动手胜过死记</strong>： 第 1、3、4、5、6、8
-章配有可以在电脑上运行的脚本。其余章节用生活例子、图和手算把道理讲完。请亲手跑一遍第
-8
-章：你会看到模型把三首短诗背下来，也会看到换一个没学过的开头时它立刻露馅。</li>
-</ol>
-<hr />
-<h2 id="全书路线图">全书路线图</h2>
-<p>我们将带你像拼乐高积木一样，从最小的零件开始，一步步搭建出整座大模型城堡：</p>
-<p>先走完三个小阶段。每张路线图只保留三章，读完一张，再进入下一张。</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-01.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-01.svg" class="book-diagram" width="234"
-alt="学习路线一：建立直觉（第 1～3 章）。从词向量出发，理解注意力，再手算 Q、K、V。" /></a>
-<div class="diagram-caption">
-学习路线一：建立直觉（第 1～3 章）
-</div>
-</div>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-02.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-02.svg" class="book-diagram" width="248"
-alt="学习路线二：拼好积木（第 4～6 章）。学习多头注意力、位置编码，以及残差、层归一化和前馈网络。" /></a>
-<div class="diagram-caption">
-学习路线二：拼好积木（第 4～6 章）
-</div>
-</div>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-03.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-03.svg" class="book-diagram" width="244"
-alt="学习路线三：搭建模型（第 7～9 章）。认识编码器和解码器，训练 Baby-GPT，最后了解现代大模型。" /></a>
-<div class="diagram-caption">
-学习路线三：搭建模型（第 7～9 章）
-</div>
-</div>
-<p>准备好你的好奇心与草稿纸，让我们正式开启这段激动人心的探索之旅！</p>
-<hr />
-<h1 id="第1章-从词语到数学世界-词嵌入-Word-Embedding-与空间向量">第1章：从词语到数学世界——词嵌入（Word
-Embedding）与空间向量</h1>
-<blockquote>
-<p>“世间万物皆有其空间位置，人类的语言亦不例外。”</p>
-</blockquote>
-<hr />
-<h2 id="计算机如何读懂文字从查字典到特征打分">1.1
-计算机如何读懂文字？从“查字典”到“特征打分”</h2>
-<p>想象一下，你必须教会一台只能做四则运算（加减乘除）的计算器去阅读《西游记》。</p>
-<p>计算机的芯片是硅晶片构成的电路，它天然只认识电位的高和低——也就是
-<strong>0 和
-1</strong>。它根本不知道什么是“苹果”，什么是“孙悟空”，更读不懂李白的“床前明月光”。</p>
-<p>要让计算机处理语言，第一步必须是：<strong>把字词翻译成数字</strong>。</p>
-<h3 id="方案-1给字典里的每个字编个号码朴素标号法">方案
-1：给字典里的每个字编个号码？（朴素标号法）</h3>
-<p>很多初学编程的朋友第一反应是：这还不简单？买一本《新华字典》，按页码给每个字排个座次：</p>
-<ul>
-<li>苹果 <span class="math inline">\(\to 1\)</span></li>
-<li>梨子 <span class="math inline">\(\to 2\)</span></li>
-<li>飞机 <span class="math inline">\(\to 3\)</span></li>
-<li>导弹 <span class="math inline">\(\to 4\)</span></li>
-</ul>
-<p>这种方法看似聪明，却会导致荒谬的数学灾难：</p>
-<ol type="1">
-<li><strong>强加的大小关系</strong>：在数学里，<span
-class="math inline">\(2 &gt;
-1\)</span>。难道“梨子”比“苹果”更“大”？难道“导弹”的大小是“飞机”加上“梨子”？</li>
-<li><strong>扭曲的距离关系</strong>：根据标号，<span
-class="math inline">\(\text{梨子}(2) - \text{苹果}(1) = 1\)</span>，而
-<span class="math inline">\(\text{导弹}(4) - \text{飞机}(3) =
-1\)</span>。这岂不是意味着在电脑眼里，“梨子和苹果的亲密程度”竟然与“导弹和飞机的亲密程度”完全一模一样？</li>
-</ol>
-<p>显然，一个单一的标量（单数）根本承载不了人类语言中千丝万缕的复杂语义。</p>
-<hr />
-<h3 id="方案-2全班点名册的窘境one-hot-独热编码">方案
-2：全班点名册的窘境（One-Hot 独热编码）</h3>
-<p>后来，计算机科学家想到了另一种方法：假设我们的词表里一共有 10,000
-个不同的词。我们准备一个长为 10,000
-的长条数组，谁出场，谁对应的那个位置就写 1，其他人全部写 0：</p>
-<ul>
-<li>苹果：<span class="math inline">\([1, 0, 0, 0, 0, \dots,
-0]\)</span></li>
-<li>梨子：<span class="math inline">\([0, 1, 0, 0, 0, \dots,
-0]\)</span></li>
-<li>香蕉：<span class="math inline">\([0, 0, 1, 0, 0, \dots,
-0]\)</span></li>
-<li>宇宙：<span class="math inline">\([0, 0, 0, 0, 0, \dots,
-1]\)</span></li>
-</ul>
-<p>这种编码方式被称为
-<strong>One-Hot（独热）编码</strong>。它虽然解决了“谁大谁小”的乱序问题，却带来了更致命的缺陷：</p>
-<div class="warning">
+      <h1 id="前言与阅读指南-先看懂一小步-再搭起一个模型">前言与阅读指南：先看懂一小步，再搭起一个模型</h1>
+<p>你在聊天窗口输入一句话，模型便接着写出一句话。屏幕上发生的事很简单，背后却同时牵涉文本编码、矩阵计算、训练目标和推理程序。本书不要求你一次吃透这些内容，而是把它们拆成能画出来、算出来、运行出来的小步骤。</p>
+<p>读完基础部分，你应该能够回答：文本怎样变成数字？注意力怎样混合信息？模型怎样学习预测下一个
+token？为什么训练时可以并行处理序列，生成时却通常要一步一步进行？之后，我们再从同一个小模型出发，逐步认识缓存、现代网络组件和推理系统。</p>
+<div class="note">
 <div class="title">
-注意
+提示
 </div>
-<p><strong>几何正交悲剧</strong>： 先看向量点积的计算方式： <span
-class="math display">\[\vec{a} \cdot \vec{b} = a_1 b_1 + a_2 b_2 + \dots
-+ a_n b_n\]</span> 在 One-Hot
-编码下，任何两个不同的词向量，它们每一位对应相乘的结果必然全都是 0！
-<span class="math display">\[\vec{v}_{\text{苹果}} \cdot
-\vec{v}_{\text{梨子}} = 0\]</span> <span
-class="math display">\[\vec{v}_{\text{苹果}} \cdot \vec{v}_{\text{宇宙}}
-= 0\]</span></p>
-<p>在几何上，这意味着<strong>所有词与词之间都是 90
-度互相垂直的（正交）</strong>。在电脑眼里，“苹果”和“梨子”的关系，居然跟“苹果”和“宇宙”一样疏远冷漠！</p>
+<p><strong>本书的承诺与边界</strong>：我们解释可公开核实的机制，并用小实验检验它们。我们不承诺通过几百行代码复现商业模型的能力，也不根据某个产品的名字猜测它的内部架构。三首诗上的低训练损失，只能说明小模型学会了这个训练任务，不能证明它会可靠地回答任意问题。</p>
 </div>
-<hr />
-<h2 id="用平面向量给词语画像建立特征坐标系">1.2
-用平面向量给词语画像：建立“特征坐标系”</h2>
-<p>怎样才能让电脑既不产生大小误解，又能看懂“苹果”和“梨子”很近，而“苹果”和“汽车”很远呢？</p>
-<p>可以借助<strong>平面向量</strong>：给每种水果一组坐标，再比较它们的位置。</p>
-<p>让我们在平面上建立一个直角坐标系，但我们不叫它 <span
-class="math inline">\(X\)</span> 轴和 <span
-class="math inline">\(Y\)</span> 轴，而是给它们赋予鲜明的现实特征：</p>
-<ul>
-<li><strong>横坐标（维度 0）</strong>：表示水果的
-<strong>“甜度”</strong>（打分范围 0 到 10）</li>
-<li><strong>纵坐标（维度 1）</strong>：表示水果的
-<strong>“脆度”</strong>（打分范围 0 到 10）</li>
-</ul>
-<p>现在，我们把各种水果放到这个坐标系中：</p>
-<pre><code>脆度 (Y轴)
-  10 ▲
-   9 ┼                 ● 苹果 (8, 9)
-   8 ┼                   ● 梨子 (7.8, 8.5)
-   7 ┼
-   6 ┼
-   5 ┼
-   4 ┼
-   3 ┼            ● 西瓜 (9, 3)
-   2 ┼
-   1 ┼   ● 香蕉 (8.5, 1)
-   0 ┼─────────────────────────────────► 甜度 (X轴)
-     0   1   2   3   4   5   6   7   8   9   10</code></pre>
-<figure>
-<a href="assets/rendered/word_vector_space.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/word_vector_space.svg" class="book-diagram"
-width="720" alt="图 1-1：词嵌入特征空间与向量几何" /></a>
-<figcaption>图 1-1：词嵌入特征空间与向量几何</figcaption>
-</figure>
-<h3
-id="表-1-1one-hot-独热编码-vs-稠密词向量dense-embedding全面对比表">表
-1-1：One-Hot 独热编码 vs 稠密词向量（Dense Embedding）全面对比表</h3>
+<h2 id="四层地图不要把不同问题搅在一起">0.1
+四层地图：不要把不同问题搅在一起</h2>
+<p>把学习大模型比作学习做面包。先知道原料怎样混合，再亲手烤一小块，然后才研究工厂生产线。下面四层分别回答不同的问题：</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -715,294 +523,748 @@ id="表-1-1one-hot-独热编码-vs-稠密词向量dense-embedding全面对比表
 </colgroup>
 <thead>
 <tr>
-<th style="text-align: left;">对比维度</th>
-<th style="text-align: left;">One-Hot 独热编码</th>
-<th style="text-align: left;">稠密词向量 (Embedding)</th>
+<th>层次</th>
+<th>要回答的问题</th>
+<th>本书怎样检验</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>向量形式</strong></td>
-<td style="text-align: left;">绝大多数是 0，只有一个 1（稀疏长条）</td>
-<td style="text-align: left;">全是连续实数，如
-<code>[0.25, -1.34, 0.88]</code></td>
+<td>基础机制</td>
+<td>token、向量、注意力是什么？</td>
+<td>手算小例子，核对数字与形状</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>典型向量长度</strong></td>
-<td style="text-align: left;">词表有多大就多长（如 100,000 维）</td>
-<td style="text-align: left;">紧凑精炼（通常 512 或 4096 维）</td>
+<td>模型实现</td>
+<td>组件怎样连成可训练的模型？</td>
+<td>CPU 小模型、单元测试、训练日志</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>两两点积结果</strong></td>
-<td style="text-align: left;"><strong>恒等于
-0</strong>（所有词互相正交垂直）</td>
-<td
-style="text-align: left;"><strong>反映真实语义</strong>（近义词点积大，反义词点积负）</td>
+<td>系统工程</td>
+<td>为什么相同模型的速度和显存不同？</td>
+<td>固定设备与负载，分开测正确性和性能</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>内存与算力开销</strong></td>
-<td style="text-align: left;">巨大浪费（全是在乘无意义的 0）</td>
-<td style="text-align: left;">极致紧凑高效，GPU 矩阵加速顺畅</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>表达未知新词</strong></td>
-<td style="text-align: left;">毫无泛化能力</td>
-<td style="text-align: left;">可通过空间插值获得合理的近似语义</td>
+<td>前沿案例</td>
+<td>新模型究竟改了哪里？</td>
+<td>对照官方论文、配置和版本，不只看名称</td>
 </tr>
 </tbody>
 </table></div>
-<hr />
-<h3 id="表-1-25-种水果的三维特征评分与空间几何度量数据表">表 1-2：5
-种水果的三维特征评分与空间几何度量数据表</h3>
-<p>以基准词 <strong>“苹果 (8.0, 9.0, 5.0)”</strong>
-为例进行距离与相似度计算：</p>
-<div class="table-wrapper"><table style="width:100%;">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 13%" />
-<col style="width: 10%" />
-</colgroup>
-<thead>
-<tr>
-<th style="text-align: left;">水果名称</th>
-<th style="text-align: center;">甜度 (X)</th>
-<th style="text-align: center;">脆度 (Y)</th>
-<th style="text-align: center;">价格 (Z)</th>
-<th style="text-align: center;">模长 |v|</th>
-<th style="text-align: center;">与苹果的欧氏距离</th>
-<th style="text-align: center;">与苹果的余弦相似度 cos(θ)</th>
-<th style="text-align: left;">语义判定</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><strong>苹果 (Apple)</strong></td>
-<td style="text-align: center;"><strong>8.0</strong></td>
-<td style="text-align: center;"><strong>9.0</strong></td>
-<td style="text-align: center;"><strong>5.0</strong></td>
-<td style="text-align: center;"><strong>13.04</strong></td>
-<td style="text-align: center;"><strong>0.0000</strong></td>
-<td style="text-align: center;"><strong>1.0000 (100%)</strong></td>
-<td style="text-align: left;"><strong>基准完全重合</strong></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>梨子 (Pear)</strong></td>
-<td style="text-align: center;">7.8</td>
-<td style="text-align: center;">8.5</td>
-<td style="text-align: center;">4.8</td>
-<td style="text-align: center;">12.51</td>
-<td style="text-align: center;">0.5745</td>
-<td style="text-align: center;"><strong>0.9999 (99.9%)</strong></td>
-<td style="text-align: left;"><strong>高度亲缘近义词</strong></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>西瓜 (Watermelon)</strong></td>
-<td style="text-align: center;">9.0</td>
-<td style="text-align: center;">3.0</td>
-<td style="text-align: center;">1.5</td>
-<td style="text-align: center;">9.60</td>
-<td style="text-align: center;">7.0178</td>
-<td style="text-align: center;"><strong>0.8504 (85.0%)</strong></td>
-<td style="text-align: left;">甜度相似但脆度有别</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>黄瓜 (Cucumber)</strong></td>
-<td style="text-align: center;">1.0</td>
-<td style="text-align: center;">8.0</td>
-<td style="text-align: center;">2.0</td>
-<td style="text-align: center;">8.31</td>
-<td style="text-align: center;">7.6811</td>
-<td style="text-align: center;"><strong>0.8310 (83.1%)</strong></td>
-<td style="text-align: left;">脆度相似但完全不甜</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>香蕉 (Banana)</strong></td>
-<td style="text-align: center;">8.5</td>
-<td style="text-align: center;">1.0</td>
-<td style="text-align: center;">3.5</td>
-<td style="text-align: center;">9.25</td>
-<td style="text-align: center;">8.1548</td>
-<td style="text-align: center;"><strong>0.7838 (78.4%)</strong></td>
-<td style="text-align: left;">软糯无脆度，距离最远</td>
-</tr>
-</tbody>
-</table></div>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-04.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-04.svg" class="book-diagram" width="241"
-alt="一个词怎样变成向量。文本苹果先查到词表编号 18，再取嵌入表第 18 行，送入注意力模块。" /></a>
-<div class="diagram-caption">
-一个词怎样变成向量
+<figure>
+<a href="assets/rendered/learning_layers.svg"
+title="点击查看原尺寸图"><img src="assets/rendered/learning_layers.svg"
+class="book-diagram" width="520" alt="四层学习地图" /></a>
+<figcaption>四层学习地图</figcaption>
+</figure>
+<p>生活类比是一张路标，不是证明。例如，“图书馆检索”帮助理解 Q、K、V
+的分工，但模型并没有真的翻阅书架；“专家”帮助理解 MoE
+路由，但每个专家并不天然对应一个人类职业。每到关键处，我们都会回到公式、代码或可验证的输出。</p>
+<h2 id="需要准备什么">0.2 需要准备什么？</h2>
+<p>先会读 Python
+的变量、列表、循环和函数即可。向量是“一列数字”，矩阵可以先看成“多行数字排成的表”。张量则是有更多轴的数组：一批句子里的每个
+token 都有一个向量，就需要“句子编号、位置编号、向量分量”三条轴。</p>
+<p>例如，两句话，每句三个 token，每个向量四个数，形状可以记成
+<code>(2, 3, 4)</code>。这不是 24 维空间里的一个神秘对象，而是 2×3
+个长度为 4 的向量。在后面看到 <code>B、T、D</code>
+时，分别对照“批大小、序列长度、向量宽度”，先把每条轴写清楚。</p>
+<p>数学也分步补齐：词向量章使用加减、点积和平方根；注意力章引入矩阵乘法与
+Softmax；位置编码章使用三角函数；训练章再讲损失和梯度。你可以先按数字算一遍，再理解一般公式。不需要先修完一套高等数学，但理解训练和优化仍需要逐步建立导数与概率的基本概念。</p>
+<h2 id="两条实验路线没有-gpu-也能开始">0.3 两条实验路线：没有 GPU
+也能开始</h2>
+<p><strong>必修：CPU 与小数据。</strong> 本批次的向量和字节级 BPE
+实验只用 Python 标准库，不下载模型、不访问外部 API。后面的基础 PyTorch
+实验也以小模型为主。</p>
+<p>从仓库根目录运行：</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">--version</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/01_vector_similarity.py</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/08_byte_bpe.py</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-v</span></span></code></pre></div>
+<p>第一条确认你使用的是哪个
+Python；接下来两条运行例子；最后一条运行回归测试。本批在 Python 3.12
+上验证。找不到文件时先确认终端当前目录是仓库根目录，而不是
+<code>chapters/</code>。</p>
+<div class="tip">
+<div class="title">
+直觉
 </div>
+<p><strong>选修：Hugging Face 对照实验。</strong>
+只想理解算法，可以跳过。想比较真实分词库时，新建虚拟环境，再安装
+<code>requirements-tokenizer.txt</code> 中固定的
+<code>tokenizers==0.21.4</code>，运行
+<code>code/09_hf_tokenizer.py</code>。它仍只用 CPU
+和本地合成语料，不下载语言模型。安装依赖需要网络，安装完成后的实验不需要网络。</p>
 </div>
-<p>观察这个图与数据表，奇迹出现了：</p>
-<ol type="1">
-<li><strong>苹果</strong> 的坐标是 <span class="math inline">\((8,
-9)\)</span>，<strong>梨子</strong> 的坐标是 <span
-class="math inline">\((7.8,
-8.5)\)</span>。它们在空间中几乎挨在一起！</li>
-<li><strong>香蕉</strong> 虽然也很甜 <span
-class="math inline">\((8.5)\)</span>，但它软糯不脆 <span
-class="math inline">\((1.0)\)</span>，所以它落在了右下角。</li>
-<li>只要计算它们在坐标系里的相对位置，电脑就能通过简单的加减乘除，立刻“心领神会”谁是谁的亲戚！</li>
-</ol>
-<p>这就是现代大模型的基石——<strong>词嵌入（Word
-Embedding，也称词向量）</strong>：</p>
-<blockquote>
-<p><strong>词向量</strong>：将大千世界里的每一个词，映射为一个高维空间里的多维坐标点（一个有方向的箭头）。每个维度，都暗中代表着这个词在某种特征上的测量值！</p>
-</blockquote>
-<hr />
-<h2 id="空间向量的几何度量为什么点乘与余弦是天作之合">1.3
-空间向量的几何度量：为什么点乘与余弦是天作之合？</h2>
-<p>我们可以从距离和夹角两个角度，衡量向量之间的关系：</p>
-<h3 id="欧氏距离平面两点距离公式">1. 欧氏距离（平面两点距离公式）</h3>
-<p><span class="math display">\[d(\vec{a}, \vec{b}) = \sqrt{(x_1 -
-x_2)^2 + (y_1 - y_2)^2}\]</span></p>
-<p>距离越小，两点越近。但欧氏距离有一个缺点：如果一个词出现的词频极高，向量被整体拉长，点就会离原点很远，从而影响距离的判断。</p>
-<h3 id="余弦相似度夹角余弦">2. 余弦相似度（夹角余弦）</h3>
-<p>两个向量的点积可以用它们的长度和夹角表示： <span
-class="math display">\[\vec{a} \cdot \vec{b} = |\vec{a}| |\vec{b}|
-\cos\theta\]</span></p>
-<p>我们稍作变形，就能解出夹角的余弦值： <span
-class="math display">\[\cos\theta = \frac{\vec{a} \cdot
-\vec{b}}{|\vec{a}| |\vec{b}|} = \frac{x_1 x_2 + y_1 y_2}{\sqrt{x_1^2 +
-y_1^2} \sqrt{x_2^2 + y_2^2}}\]</span></p>
-<p>根据余弦函数的性质：</p>
-<ul>
-<li>当 <span class="math inline">\(\theta = 0^\circ\)</span> 时，<span
-class="math inline">\(\cos 0^\circ =
-1\)</span>：两个箭头<strong>完全同向</strong>，代表两个词的含义高度一致！</li>
-<li>当 <span class="math inline">\(\theta = 90^\circ\)</span> 时，<span
-class="math inline">\(\cos 90^\circ =
-0\)</span>：两个箭头<strong>相互垂直</strong>，代表两个词风马牛不相及！</li>
-<li>当 <span class="math inline">\(\theta = 180^\circ\)</span> 时，<span
-class="math inline">\(\cos 180^\circ =
--1\)</span>：两个箭头<strong>方向完全相反</strong>，代表它们在语义上几乎互为反义词！</li>
-</ul>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> venv .venv</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements-tokenizer.txt</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> code/09_hf_tokenizer.py</span></code></pre></div>
+<p>以上是 macOS/Linux 写法；Windows 可用
+<code>.venv\Scripts\python.exe</code> 替代
+<code>.venv/bin/python</code>。后续需要 PyTorch 时，再按 README
+安装主依赖，不必为前两项实验提前安装全部工具。</p>
 <div class="note">
 <div class="title">
 提示
 </div>
-<p><strong>敲黑板</strong>： 在 Transformer
-和大语言模型中，几乎所有注意力打分、向量检索，核心都是在算<strong>向量点积（Dot
-Product）</strong>！点积的本质，就是在算这两个向量“在多大程度上心有灵犀（同向发力）”。</p>
+<p><strong>GPU / 多卡选修边界</strong>：后续的 kernel
+性能、框架服务和分布式训练实验会单独说明硬件与版本条件。没有相应设备可以读数据流图、运行
+CPU 参考实现；跳过 GPU
+实验不等于已经验证其性能。本书不会要求初学者购买硬件或下载数百 GB
+权重才能读懂机制。</p>
 </div>
-<hr />
-<h2 id="神奇的向量加减法国王---男人-女人-女王">1.4
-神奇的向量加减法：国王 - 男人 + 女人 = 女王</h2>
-<p>如果词向量仅仅能用来算相似度，那还不足以被称为“大模型的魔法”。词向量最震撼科学界的一幕，是它支持<strong>几何平移与逻辑运算</strong>！</p>
-<p>假设我们有以下四个词向量，每个向量有 3 个特征维度：
-<code>[权力地位 (0~10), 男性特征 (-10~+10), 年龄成熟度 (0~10)]</code></p>
-<ul>
-<li>国王 (King) = <span class="math inline">\([9.0, \ \ 8.0, \
-7.0]\)</span></li>
-<li>男人 (Man) = <span class="math inline">\([1.0, \ \ 8.0, \
-5.0]\)</span></li>
-<li>女人 (Woman) = <span class="math inline">\([1.0, -8.0, \
-5.0]\)</span></li>
-<li>女王 (Queen) = <span class="math inline">\([9.0, -8.0, \
-7.0]\)</span></li>
-</ul>
-<p>现在，让我们用向量加减法做一个小实验： <span
-class="math display">\[\vec{v}_{\text{运算结果}} = \vec{v}_{\text{国王}}
-- \vec{v}_{\text{男人}} + \vec{v}_{\text{女人}}\]</span></p>
-<p>让我们逐个分量计算：</p>
-<ul>
-<li>维度 0（权力）：<span class="math inline">\(9.0 - 1.0 + 1.0 =
-9.0\)</span> （依然拥有至高无上的权力！）</li>
-<li>维度 1（性别）：<span class="math inline">\(8.0 - 8.0 + (-8.0) =
--8.0\)</span> （脱去了男性特征，换成了女性特征！）</li>
-<li>维度 2（年龄）：<span class="math inline">\(7.0 - 5.0 + 5.0 =
-7.0\)</span> （依然保持成熟的君主仪态！）</li>
-</ul>
-<p>运算结果向量为：<span class="math inline">\([9.0, -8.0,
-7.0]\)</span>。 上面的女王坐标是按这个结果写好的，所以相似度会精确等于
-1。 这是一个玩具例子，用来看清著名的 Word2Vec
-现象：真实语料里学出来的向量只能<strong>近似</strong>满足“国王 - 男人 +
-女人 ≈ 女王”，不会每个小数都对上。</p>
-<pre><code>        ▲ 权力维度
-        │
-  [女王]│●───────────────● [国王]
-        ││               │
-        ││-男人 +女人    │
-        ││               │
-        │▼               │
-  [女人]│●───────────────● [男人]
-        └────────────────────────► 性别维度 (左女右男)</code></pre>
-<p>这个例子可以用<strong>平行四边形定则</strong>理解：向量的加减对应坐标的移动。在训练得到的词向量中，一些语义关系也会表现为近似的位移方向，但并非所有关系都能这样表示。</p>
-<hr />
-<h2 id="手把手代码纯-python-验证词向量与相似度">1.5 手把手代码：纯
-Python 验证词向量与相似度</h2>
-<p>让我们打开配套代码 <a
-href="code/01_vector_similarity.py">code/01_vector_similarity.py</a>，把点积、模长和余弦相似度写成
-Python 函数。这个实验只需要标准库，下面逐步说明实现方法：</p>
-<div class="sourceCode" id="cb3"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dot_product(vec_a, vec_b):</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">    计算两个向量的点积（内积）</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">    点积的坐标公式：a · b = x1*x2 + y1*y2 + ... + xn*yn</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="bu">len</span>(vec_a) <span class="op">==</span> <span class="bu">len</span>(vec_b), <span class="st">&quot;两个向量的维度必须完全相同！&quot;</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    total <span class="op">=</span> <span class="fl">0.0</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="bu">len</span>(vec_a)):</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>        total <span class="op">+=</span> vec_a[i] <span class="op">*</span> vec_b[i]</span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> total</span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> vector_magnitude(vec):</span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;</span></span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="co">    计算向量的模长（也就是箭头的长度）</span></span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co">    模长公式：|a| = √(x1² + x2² + ... + xn²)</span></span>
-<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
-<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    sum_of_squares <span class="op">=</span> <span class="fl">0.0</span></span>
-<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> val <span class="kw">in</span> vec:</span>
-<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>        sum_of_squares <span class="op">+=</span> val <span class="op">**</span> <span class="dv">2</span></span>
-<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> math.sqrt(sum_of_squares)</span>
-<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cosine_similarity(vec_a, vec_b):</span>
-<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;</span></span>
-<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a><span class="co">    计算余弦相似度 cos(θ) = (a · b) / (|a| * |b|)</span></span>
-<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a><span class="co">    &quot;&quot;&quot;</span></span>
-<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>    dot <span class="op">=</span> dot_product(vec_a, vec_b)</span>
-<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>    mag_a <span class="op">=</span> vector_magnitude(vec_a)</span>
-<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>    mag_b <span class="op">=</span> vector_magnitude(vec_b)</span>
-<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> mag_a <span class="op">==</span> <span class="dv">0</span> <span class="kw">or</span> mag_b <span class="op">==</span> <span class="dv">0</span>:</span>
-<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="fl">0.0</span></span>
-<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> dot <span class="op">/</span> (mag_a <span class="op">*</span> mag_b)</span></code></pre></div>
-<p>运行该脚本后，控制台会输出：</p>
-<pre class="text"><code>基准词：苹果 (Apple)，坐标向量为：[8.0, 9.0, 5.0]
-
-目标词语           | 余弦相似度 (越高越近)  | 欧氏距离 (越小越近)
-------------------------------------------------------------
-梨子 (Pear)      |        0.9999        |     0.5745     
-西瓜 (Watermelon)|        0.8504        |     7.0178     
-黄瓜 (Cucumber)  |        0.8310        |     7.6811     
-香蕉 (Banana)    |        0.7838        |     8.1548     </code></pre>
-<p>同时，运算结果和事先写好的女王向量，余弦相似度是
-<strong>1.0000</strong>。脚本会直接告诉你：这是配出来的例子，不是词典查询的巧合。按余弦相似度排序，和苹果差得最远的是香蕉，不是黄瓜。</p>
-<hr />
-<h2 id="本章小结与思考题">1.6 本章小结与思考题</h2>
+<h2 id="怎样记录一次可信的实验">0.4 怎样记录一次可信的实验</h2>
+<p>“我跑过了”和“别人可以复现”之间，还差一份记录。用下面这个最小模板即可：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>例子或写法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码版本</td>
+<td>本次 Git commit；若有未提交修改，写明</td>
+</tr>
+<tr>
+<td>环境</td>
+<td>Python 版本、依赖版本、操作系统、CPU/GPU</td>
+</tr>
+<tr>
+<td>输入</td>
+<td>文本全文或数据集版本；训练集与验证集分开</td>
+</tr>
+<tr>
+<td>随机性</td>
+<td>种子；若算法没有随机步骤则写“确定性”</td>
+</tr>
+<tr>
+<td>命令</td>
+<td>从哪个目录运行、完整参数</td>
+</tr>
+<tr>
+<td>结果</td>
+<td>实际输出、测试通过或失败、错误信息</td>
+</tr>
+<tr>
+<td>结论边界</td>
+<td>证明了什么，以及没有证明什么</td>
+</tr>
+</tbody>
+</table></div>
+<p>本批 BPE
+的合并规则由语料、合并次数和并列时的排序决定，不含随机步骤。后面的神经网络会有初始化与采样随机性；固定种子能减少变化，却不保证所有硬件、版本都逐位相同。测试数值结果时还要说明容差。</p>
+<p>性能要另外记：同一模型、相同输入输出长度、相同 batch
+和设备，才适合比较；首 token 延迟和后续 token
+速度也不能混成一个数字。本书后续会专章展开，此时先记住：<strong>结果正确，不代表速度快；速度快，也不代表结果正确。</strong></p>
+<h2 id="当前阅读顺序与尚未完成的扩展">0.5
+当前阅读顺序与尚未完成的扩展</h2>
+<p>本书正在按审核通过的扩展大纲分批更新。当前批次完成的是 P00
+阅读指南、P01 词嵌入、P02 Tokenizer；这些 P
+编号是扩展计划的编号，不会立即替换旧版全部章号。</p>
+<p>为了保留已有链接，Tokenizer 暂放在“第 1A 章”，紧跟第 1 章；旧第 2～10
+章仍可阅读，但尚未全部按新大纲改写。当前 HTML/EPUB
+会按这个顺序包含新单元，不是已完成全部 29 个单元的新书。</p>
+<figure>
+<a href="assets/rendered/batch1_route.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/batch1_route.svg" class="book-diagram" width="520"
+alt="本批次阅读顺序" /></a>
+<figcaption>本批次阅读顺序</figcaption>
+</figure>
+<p>读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer
+章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是
+Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA →
+MoE。现在它们仍是逐批落地的计划，不能把路线图当作已实现功能清单。</p>
+<h2 id="开始前的三个自测">0.6 开始前的三个自测</h2>
 <ol type="1">
-<li><strong>本章核心收获</strong>：
-<ul>
-<li>计算机读懂文字的第一步，是将词语映射为多维特征空间里的向量（箭头）。</li>
-<li>两个词语越相似，它们在空间里的夹角越小，点积和余弦相似度越接近
-1。</li>
-<li>语言中蕴含的复杂逻辑，可以通过几何空间的加减法（向量平移）实现。</li>
-</ul></li>
-<li><strong>课后思考题</strong>：
-<ul>
-<li>如果一个词在不同语境下有完全不同的含义，比如“我买了一斤苹果（水果）”和“我买了一台苹果（电脑）”，静态的词向量能区分它们吗？</li>
-<li>如果不能，我们该如何让词向量根据周围的同伴，动态地“改变自己的形状”呢？</li>
-</ul></li>
+<li>一个数组形状是
+<code>(2, 3, 4)</code>，共有多少个数？为什么不能直接说它代表 24 个
+token？</li>
+<li>某实验在三首诗上训练损失很低，能否说明模型理解任何中文？</li>
+<li>同一个脚本在两台电脑上速度不同，首先需要记录哪些条件？</li>
 </ol>
-<p>带着这个问题，让我们迈向下一章：<strong>注意力机制的直觉与诞生</strong>！</p>
+<p>参考答案：共有 24 个数，但 token 数通常是前两轴相乘得到的
+6；训练集表现不能代替未见数据评估；至少记录设备、依赖版本、输入规模和测量方法。带着这些边界意识，下一步从一个最简单的问题开始：<strong>编号不是意义，向量又能帮我们做什么？</strong></p>
+<p>资料说明：Transformer 基础来源为 <a
+href="https://arxiv.org/abs/1706.03762v7">Attention Is All You
+Need</a>。软件接口以本批固定版本和实际实验为准，核验日期为
+2026-10-18。</p>
+<hr />
+<h1 id="第1章-从编号到空间向量-词嵌入与几何直觉">第1章：从编号到空间向量——词嵌入与几何直觉</h1>
+<p>假设你要给水果做一个小型检索器：输入“苹果”，希望它找到口感相近的水果。计算机能比较数字，却不能直接拿两个汉字相减。我们需要一种数字表示，但“有数字”不等于“有意义”。</p>
+<p>本章目标是区分三件事：<strong>token ID 是编号，one-hot
+是编号的另一种写法，embedding
+是查表得到的可训练向量</strong>。我们先暂时把“苹果”当成一个
+token；下一章再解释真实分词器为什么可能把一个词拆成多个 token。</p>
+<h2 id="编号像书架号不是相似度">1.1 编号像书架号，不是相似度</h2>
+<p>给“苹果、梨子、飞机”分别分配 ID
+0、1、2，本身没有错。错误是直接把编号当成语义坐标：ID 2
+不代表“飞机比苹果大两倍”，编号差 1
+也不代表它们比别的词更亲近。给词表重新排个顺序，编号就会改变。</p>
+<p>可以把 ID
+想成图书馆书架上的索引。它告诉程序去哪里取资料，不告诉程序两本书内容有多像。现代模型仍然使用整数
+ID，只是不会直接把 ID 的大小当成词义。</p>
+<p>另一种表示是 one-hot：词表有三个条目，就用长度为三的向量表示：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>token</th>
+<th>ID</th>
+<th>one-hot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>苹果</td>
+<td>0</td>
+<td><code>[1, 0, 0]</code></td>
+</tr>
+<tr>
+<td>梨子</td>
+<td>1</td>
+<td><code>[0, 1, 0]</code></td>
+</tr>
+<tr>
+<td>飞机</td>
+<td>2</td>
+<td><code>[0, 0, 1]</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>不同 one-hot 的点积为 0，同一个 one-hot 与自身的点积为
+1。这很好地表达了“是不是同一个编号”，却还没有表达“苹果与梨子更像”。问题不在于
+one-hot
+永远没用，而在于<strong>它单独提供的是身份，不是学到的相似性</strong>。</p>
+<h2 id="embedding把编号换成一行数字">1.2
+Embedding：把编号换成一行数字</h2>
+<p>准备一张表 <span class="math inline">\(E\)</span>，有 <span
+class="math inline">\(V\)</span> 行、<span
+class="math inline">\(D\)</span> 列。<span
+class="math inline">\(V\)</span> 是词表大小，<span
+class="math inline">\(D\)</span> 是向量宽度。第 <span
+class="math inline">\(i\)</span> 个 token 的向量就是第 <span
+class="math inline">\(i\)</span> 行：</p>
+<p><span class="math display">\[\mathrm{embedding}(i)=E_i\]</span></p>
+<p>一个教学例子：</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>embedding_table <span class="op">=</span> [[<span class="fl">0.2</span>, <span class="op">-</span><span class="fl">0.1</span>], [<span class="fl">0.3</span>, <span class="fl">0.4</span>], [<span class="op">-</span><span class="fl">0.5</span>, <span class="fl">0.8</span>]]</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>token_ids <span class="op">=</span> [<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">0</span>]</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>vectors <span class="op">=</span> [embedding_table[i] <span class="cf">for</span> i <span class="kw">in</span> token_ids]</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># [[0.2, -0.1], [-0.5, 0.8], [0.2, -0.1]]</span></span></code></pre></div>
+<p>第一行定义三行两列的表。第二行是三个位置的编号。第三行逐个编号查表，所以相同编号
+0
+在两个位置会取到同一行。这里还没有利用上下文，“苹果水果”和“苹果电脑”的差别不会因为查了一次表就自动出现；后面的注意力层才会让表示随上下文变化。</p>
+<figure>
+<a href="assets/rendered/embedding_lookup.svg"
+title="点击查看原尺寸图"><img src="assets/rendered/embedding_lookup.svg"
+class="book-diagram" width="520" alt="从 token ID 查到 embedding" /></a>
+<figcaption>从 token ID 查到 embedding</figcaption>
+</figure>
+<p>用 one-hot 行向量乘 <span
+class="math inline">\(E\)</span>，也会选中同一行。实际程序通常直接按 ID
+查表，避免创建一个很长、几乎全为 0 的数组。稠密 embedding
+的存储也不是“免费”的：整张表依然有 <span class="math inline">\(V\times
+D\)</span> 个数。</p>
+<p><strong>这张表是谁写的？</strong>
+在神经网络里，它通常和其他权重一样初始化，然后通过训练损失的梯度更新。当前预测错了，训练过程就调整相关参数；反复见到数据后，向量可能编码有用的语言规律。维度并不天然叫“甜度”“性别”或“情绪”，也不能保证某一维单独对应一个人类概念。</p>
+<h2 id="用水果坐标建立直觉但不把类比当模型">1.3
+用水果坐标建立直觉，但不把类比当模型</h2>
+<p>为了看懂几何，我们暂时手工指定三个维度：甜度、脆度、价格。这不是训练得到的
+embedding，只是一张便于计算的玩具表。</p>
+<figure>
+<a href="assets/rendered/word_vector_space.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/word_vector_space.svg" class="book-diagram"
+width="720" alt="图 1-1：水果特征空间与向量几何示意" /></a>
+<figcaption>图 1-1：水果特征空间与向量几何示意</figcaption>
+</figure>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>水果</th>
+<th style="text-align: right;">甜度</th>
+<th style="text-align: right;">脆度</th>
+<th style="text-align: right;">价格</th>
+<th style="text-align: right;">与苹果的欧氏距离</th>
+<th style="text-align: right;">与苹果的余弦相似度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>苹果</td>
+<td style="text-align: right;">8.0</td>
+<td style="text-align: right;">9.0</td>
+<td style="text-align: right;">5.0</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right;">1.0000</td>
+</tr>
+<tr>
+<td>梨子</td>
+<td style="text-align: right;">7.8</td>
+<td style="text-align: right;">8.5</td>
+<td style="text-align: right;">4.8</td>
+<td style="text-align: right;">0.5745</td>
+<td style="text-align: right;">0.9999</td>
+</tr>
+<tr>
+<td>西瓜</td>
+<td style="text-align: right;">9.0</td>
+<td style="text-align: right;">3.0</td>
+<td style="text-align: right;">1.5</td>
+<td style="text-align: right;">7.0178</td>
+<td style="text-align: right;">0.8504</td>
+</tr>
+<tr>
+<td>黄瓜</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">8.0</td>
+<td style="text-align: right;">2.0</td>
+<td style="text-align: right;">7.6811</td>
+<td style="text-align: right;">0.8310</td>
+</tr>
+<tr>
+<td>香蕉</td>
+<td style="text-align: right;">8.5</td>
+<td style="text-align: right;">1.0</td>
+<td style="text-align: right;">3.5</td>
+<td style="text-align: right;">8.1548</td>
+<td style="text-align: right;">0.7838</td>
+</tr>
+</tbody>
+</table></div>
+<p>这些数说明：在我们选定的特征和尺度下，苹果与梨子的方向很接近。它们不是“模型认为梨子有
+99.99% 概率是苹果”，也不是水果之间真实语义关系的测量。</p>
+<div class="warning">
+<div class="title">
+注意
+</div>
+<p><strong>坐标选择会改变结果。</strong>
+价格单位从“元”改成“分”，第三维就放大 100 倍，距离和夹角都可能变化。真实
+embedding
+的几何性质也受模型、数据和训练目标影响。生活类比用来理解计算，不能反过来替模型解释每个坐标。</p>
+</div>
+<h2 id="点积长度距离和余弦到底差在哪里">1.4
+点积、长度、距离和余弦到底差在哪里？</h2>
+<p>对于 <span class="math inline">\(a=(3,4)\)</span>、<span
+class="math inline">\(b=(6,8)\)</span>：</p>
+<ul>
+<li>点积：<span class="math inline">\(a\cdot
+b=3\times6+4\times8=50\)</span>。</li>
+<li>长度：<span
+class="math inline">\(\|a\|=\sqrt{3^2+4^2}=5\)</span>，<span
+class="math inline">\(\|b\|=10\)</span>。</li>
+<li>欧氏距离：<span
+class="math inline">\(\|a-b\|=\sqrt{(-3)^2+(-4)^2}=5\)</span>。</li>
+<li>余弦相似度：<span class="math inline">\(\cos\theta=(a\cdot
+b)/(\|a\|\|b\|)=50/(5\times10)=1\)</span>。</li>
+</ul>
+<p>它们方向完全相同，但长度不同，所以距离不是 0。点积是
+50，也没有被限制在 -1 到 1
+之间。<strong>只有把两个向量都归一化成单位长度后，点积才等于余弦相似度。</strong></p>
+<p>一般地：</p>
+<p><span class="math display">\[a\cdot b=\sum_{j=1}^{D}a_j b_j,\qquad
+\|a\|=\sqrt{\sum_{j=1}^{D}a_j^2},\qquad
+\cos\theta=\frac{a\cdot b}{\|a\|\|b\|}\]</span></p>
+<p>余弦为
+1、0、-1，分别对应同向、正交、反向。这是几何事实，不是“同义词、无关词、反义词”的万能判定规则。反义词可能出现在相似上下文里，因此也可能具有较高的相似度。</p>
+<p>零向量没有方向，分母也为
+0，所以它与另一个向量的余弦在数学上未定义。本书代码选择抛出异常，而不是悄悄返回
+0，避免把“无法计算”误读成“正交”。后面注意力通常用缩放点积打分，也不意味着它直接计算词语之间的余弦。</p>
+<h2 id="逐行实现把几何写成-python">1.5 逐行实现：把几何写成 Python</h2>
+<p>完整实验位于 <a
+href="code/01_vector_similarity.py">code/01_vector_similarity.py</a>。核心代码如下：</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dot_product(vec_a, vec_b):</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span>(vec_a) <span class="op">!=</span> <span class="bu">len</span>(vec_b):</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&quot;两个向量的维度必须完全相同！&quot;</span>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    total <span class="op">=</span> <span class="fl">0.0</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="bu">len</span>(vec_a)):</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>        total <span class="op">+=</span> vec_a[i] <span class="op">*</span> vec_b[i]</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> total</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> vector_magnitude(vec):</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> math.sqrt(<span class="bu">sum</span>(value <span class="op">**</span> <span class="dv">2</span> <span class="cf">for</span> value <span class="kw">in</span> vec))</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cosine_similarity(vec_a, vec_b):</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    dot <span class="op">=</span> dot_product(vec_a, vec_b)</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    mag_a <span class="op">=</span> vector_magnitude(vec_a)</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    mag_b <span class="op">=</span> vector_magnitude(vec_b)</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> mag_a <span class="op">==</span> <span class="dv">0</span> <span class="kw">or</span> mag_b <span class="op">==</span> <span class="dv">0</span>:</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&quot;零向量的余弦相似度未定义&quot;</span>)</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> dot <span class="op">/</span> (mag_a <span class="op">*</span> mag_b)</span></code></pre></div>
+<p><code>len</code> 检查两条向量能否逐项配对；<code>total</code> 从 0
+开始，循环累加各分量的乘积；模长函数先平方求和，再开方；余弦函数最后才除以两个长度的乘积。完整脚本把模长和距离的累加也展开成循环，方便初学者逐步打印观察。</p>
+<p>从仓库根目录运行：</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/01_vector_similarity.py</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-v</span></span></code></pre></div>
+<p>脚本会打印上面的水果数值，并按余弦排序给出结论。测试同时覆盖
+<code>[3,4]</code> 与 <code>[6,8]</code>
+的尺度例子、零向量和维度不一致。如果你把一个向量放大两倍，余弦应保持不变，但点积不会保持不变。</p>
+<h2 id="向量加减能做什么不能做什么">1.6
+向量加减能做什么，不能做什么？</h2>
+<p>“国王 − 男人 + 女人 ≈
+女王”是经常用来解释词向量的例子。为了手算，我们可以专门配一组数：</p>
+<p><span
+class="math display">\[[9,8,7]-[1,8,5]+[1,-8,5]=[9,-8,7]\]</span></p>
+<p>再把右侧定义成“女王”的向量，当然会精确相等。脚本保留这个演示，并明确说明数值是人工构造的。真实训练所得的向量有时会出现近似的关系方向，但效果依赖数据、模型和评估方法，不保证任何类比都成立。这里人为设置的“性别轴”也不是对人或社会属性的客观量化。</p>
+<p>向量相加减是确定的数学运算，却不因此变成通用逻辑推理器。不要由一个漂亮的平行四边形跳到“语言的一切推理都能靠加减实现”。</p>
+<h2 id="自测把三个层次分清楚">1.7 自测：把三个层次分清楚</h2>
+<ol type="1">
+<li>把词表所有 ID 重新编号，同时以同样方式重排 embedding
+表，会必然改变每个 token 取得的向量吗？</li>
+<li><code>[3,4]</code> 和 <code>[6,8]</code> 的余弦为
+1，它们的点积和欧氏距离各是多少？</li>
+<li>零向量与任何向量的余弦都应该设成 0 吗？</li>
+<li>遇到词表中没有的整词，能靠 embedding
+在空间里“插值”自动生成正确向量吗？</li>
+</ol>
+<p>参考答案：不会，只要映射一致，仍能查到原来那行；点积 50、距离
+5；不能，数学上没有定义，本书抛出
+<code>ValueError</code>；不能这样保证。现实系统通常由 tokenizer
+把未知整词拆成已知子词或字节等单位，然后查它们的向量。<strong>这就是下一章要补上的环节：文本怎样变成那些
+ID？</strong></p>
+<p>本章核验日期：2026-10-18。查表接口可参阅 <a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html">PyTorch
+2.14 的 Embedding 文档</a>；本章必修代码不依赖
+PyTorch。关于向量关系的原始研究，可读 <a
+href="https://arxiv.org/abs/1310.4546">Distributed Representations of
+Words and Phrases and their Compositionality</a>。</p>
+<hr />
+<h1 id="第1A章-Tokenizer-从字符-字节到-BPE">第1A章：Tokenizer——从字符、字节到
+BPE</h1>
+<p>上一章把“苹果”当成一个编号，再从 embedding
+表中取出一行。现在我们打开这个暂时封住的盒子：谁决定“苹果”是一个
+token，还是“苹”“果”两个 token？一串 emoji 又该怎样处理？</p>
+<p><strong>Tokenizer（分词器）的工作是把文本变成 token ID
+序列，并提供对应的解码方式。</strong> Token
+不一定是词，也不一定是字。它可能是子词、一个标点、带空格的片段，甚至一个字符的部分字节。训练语言模型之前，我们需要先知道预测的单位是什么。</p>
+<p>本章属于扩展计划 P02，暂以“1A”插在词嵌入与旧第 2
+章之间，保留旧章节链接。本章的两个实验都使用 CPU
+和小型合成语料，不下载任何语言模型。</p>
+<h2 id="a.1-三种切法整词字符与字节">1A.1 三种切法：整词、字符与字节</h2>
+<p>想象要用积木拼一句话。整词积木大，拼起来步数少，但新词可能不在盒子里；字符积木小，组合灵活，但词表仍要考虑哪些字符；字节积木更基础，UTF-8
+文本可以拆成 0～255 的字节值，不过同一句话通常需要更多块。</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>单位</th>
+<th>直观好处</th>
+<th>需要留意</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>整词</td>
+<td>常见词可用一个 ID 表示</td>
+<td>新词、拼写变化和中文边界；词表可能很大</td>
+</tr>
+<tr>
+<td>Unicode 字符</td>
+<td>实现简单，便于教学</td>
+<td>“字符”不等于视觉上的一个字形；未收录字符仍要处理</td>
+</tr>
+<tr>
+<td>UTF-8 字节</td>
+<td>256 个基础字节覆盖合法 UTF-8 文本</td>
+<td>一个汉字、emoji 可能跨多个字节，序列更长</td>
+</tr>
+<tr>
+<td>子词 / 字节 BPE</td>
+<td>把频繁小片段合成较大单位</td>
+<td>结果依赖训练语料、预处理、词表与合并规则</td>
+</tr>
+</tbody>
+</table></div>
+<p>先用标准 Python 观察：</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>text <span class="op">=</span> <span class="st">&quot;你🙂&quot;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">len</span>(text))                <span class="co"># 2 个 Unicode 码点</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">list</span>(text.encode(<span class="st">&quot;utf-8&quot;</span>)))</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># [228, 189, 160, 240, 159, 153, 130]</span></span></code></pre></div>
+<p>这段文本有两个码点，却有七个 UTF-8 字节。<code>len(text)</code>
+也不总等于你肉眼数出的字形数：<code>e</code>
+加组合重音可以显示成一个字形，却是两个码点。后面测试会特意保留这种情况。</p>
+<div class="note">
+<div class="title">
+提示
+</div>
+<p><strong>“覆盖文本”不等于“理解文本”。</strong>
+字节词表能表示没见过的文字，并不意味着模型学会了这门语言。Tokenizer
+解决的是编码问题，语言能力仍取决于数据、模型和训练。</p>
+</div>
+<h2 id="a.2-bpe把常一起出现的两块积木粘起来">1A.2
+BPE：把常一起出现的两块积木粘起来</h2>
+<p>BPE 是 Byte Pair Encoding
+的缩写。用于文本时，其核心思想是反复找出常见的相邻符号对，为合并结果分配一个新符号。最初的符号可以是字符，也可以是字节；本章选择字节，便于让未见过的中文和
+emoji 仍能往返。</p>
+<p>先用 ASCII 字符 <code>banana</code> 看直觉，ASCII
+字母的字节值正好容易读：</p>
+<ol type="1">
+<li>从 <code>b a n a n a</code> 开始，统计所有相邻对。</li>
+<li><code>a n</code> 出现两次，<code>n a</code>
+也出现两次。出现并列时必须规定规则，本书按 ID 对排序，所以先选
+<code>a n</code>。</li>
+<li>把不重叠的 <code>a n</code> 合并成新 token，得到
+<code>b an an a</code>。</li>
+<li>再统计当前序列，继续选择并合并，直到达到指定次数或没有相邻对。</li>
+</ol>
+<p>单个字符串上不同并列规则可能产生不同路线，算法不是在寻找唯一正确的“英语词根”。我们的完整实验同时训练三篇短文，前四条规则实际为：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>相邻 ID 对</th>
+<th style="text-align: right;">新 ID</th>
+<th>对应字节片段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>(97, 110)</code></td>
+<td style="text-align: right;">256</td>
+<td><code>an</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>(98, 256)</code></td>
+<td style="text-align: right;">257</td>
+<td><code>ban</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>(256, 97)</code></td>
+<td style="text-align: right;">258</td>
+<td><code>ana</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>(257, 258)</code></td>
+<td style="text-align: right;">259</td>
+<td><code>banana</code></td>
+</tr>
+</tbody>
+</table></div>
+<figure>
+<a href="assets/rendered/bpe_pipeline.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/bpe_pipeline.svg" class="book-diagram" width="435"
+alt="BPE 训练与使用" /></a>
+<figcaption>BPE 训练与使用</figcaption>
+</figure>
+<p>语料中的空格也有字节值。本章没有按空格预切分，所以某个 token
+可以包含空格，甚至覆盖一整句训练文本。这是为了看清最小机制而做的简化，不代表所有生产分词器都这样处理边界。每篇训练文档则独立统计，绝不把前一篇的结尾和后一篇的开头粘起来。</p>
+<h2 id="a.3-先分清-trainencodedecode">1A.3 先分清
+train、encode、decode</h2>
+<ul>
+<li><code>train</code>：从语料得到词表与合并规则。此后不要为了每个新问题都重新训练。</li>
+<li><code>encode</code>：把新文本转成初始字节
+ID，再按已学到的优先顺序合并。</li>
+<li><code>decode</code>：查出各个 ID 对应的
+bytes，拼接完整字节串，然后进行 UTF-8 解码。</li>
+</ul>
+<p>为什么不能逐 token 解码成字符再拼接？因为一个 token
+可能只有汉字的第一个字节，单独看不是合法 UTF-8。先拼
+bytes，才能恢复完整字符。</p>
+<p>同一个模型必须配套使用它训练时的 tokenizer。换了词表顺序却不调整
+embedding
+和输出层，就像把图书馆的索引卡全部换位：程序仍会取到一行数字，但取的不是原来的那行。增加特殊
+token、改模板或改归一化规则也可能影响模型输入，不能把所有 tokenizer
+当成可随意互换的插件。</p>
+<h2 id="a.4-逐行代码最小字节-bpe">1A.4 逐行代码：最小字节 BPE</h2>
+<p>完整实现是 <a
+href="code/08_byte_bpe.py">code/08_byte_bpe.py</a>，只有标准库依赖。先看基础字典：</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.vocab <span class="op">=</span> {i: <span class="bu">bytes</span>([i]) <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">256</span>)}</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.merges <span class="op">=</span> {}</span></code></pre></div>
+<p><code>vocab[97]</code> 是字节
+<code>b'a'</code>，不是某个语言模型里通用的“a 的
+ID”。编号规则只属于这个教学实现。新合并 token 从 ID 256
+开始追加；<code>merges</code> 按插入顺序记录优先级。</p>
+<p>训练的关键几行是：</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>counts <span class="op">=</span> Counter()</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> ids <span class="kw">in</span> sequences:</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    counts.update(<span class="bu">zip</span>(ids, ids[<span class="dv">1</span>:]))</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>pair <span class="op">=</span> <span class="bu">min</span>(counts, key<span class="op">=</span><span class="kw">lambda</span> item: (<span class="op">-</span>counts[item], item))</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>new_id <span class="op">=</span> <span class="bu">len</span>(<span class="va">self</span>.vocab)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.merges[pair] <span class="op">=</span> new_id</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.vocab[new_id] <span class="op">=</span> <span class="va">self</span>.vocab[pair[<span class="dv">0</span>]] <span class="op">+</span> <span class="va">self</span>.vocab[pair[<span class="dv">1</span>]]</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>sequences <span class="op">=</span> [merge_pair(ids, pair, new_id) <span class="cf">for</span> ids <span class="kw">in</span> sequences]</span></code></pre></div>
+<p><code>zip(ids, ids[1:])</code>
+把每个位置和紧跟它的位置配对；<code>Counter</code>
+累加出现次数；<code>min</code>
+的排序键先比较负频数，所以频数最高的优先，再用 ID
+对解决并列。随后给合并结果分配 ID、拼接其
+bytes，并更新每篇文档。完整代码在 <code>counts</code>
+为空时停止，避免对空集合求最小值。</p>
+<p><code>merge_pair</code> 必须处理重叠。例如把 <code>aaa</code> 里的
+<code>aa</code> 合并，结果应是 <code>[aa, a]</code>，不能同时把中间的
+<code>a</code> 用两次：</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="cf">while</span> i <span class="op">&lt;</span> <span class="bu">len</span>(ids):</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> i <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> <span class="bu">len</span>(ids) <span class="kw">and</span> (ids[i], ids[i <span class="op">+</span> <span class="dv">1</span>]) <span class="op">==</span> pair:</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>        result.append(new_id)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>        i <span class="op">+=</span> <span class="dv">2</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span>:</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>        result.append(ids[i])</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>        i <span class="op">+=</span> <span class="dv">1</span></span></code></pre></div>
+<p>匹配成功时向前走两格，否则只走一格。频数统计可以数到重叠候选，真正替换时只合并不重叠对。</p>
+<p>编码阶段不重新找“新文本里最常见的一对”，而是按训练好的规则顺序应用合并。解码的核心则是：</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>raw <span class="op">=</span> <span class="st">b&#39;&#39;</span>.join(<span class="va">self</span>.vocab[token_id] <span class="cf">for</span> token_id <span class="kw">in</span> ids)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>text <span class="op">=</span> raw.decode(<span class="st">&#39;utf-8&#39;</span>)</span></code></pre></div>
+<p>完整脚本会先检查 ID 是否存在。对
+<code>decode(encode(text))</code>，合法 UTF-8
+文本可以原样恢复；任意乱写的 ID 序列则不一定构成合法 UTF-8，例如单个字节
+255。代码保留解码异常，不用替换字符掩盖错误。</p>
+<h2 id="a.5-跑一次短序列不等于好语言模型">1A.5
+跑一次：短序列不等于好语言模型</h2>
+<p>在仓库根目录执行：</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/08_byte_bpe.py</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-v</span></span></code></pre></div>
+<p>训练语料是 <code>banana banana</code>、<code>banana bandana</code> 和
+<code>你好，你好！</code>。请求最多 20
+次合并，但语料提前没有相邻对可合并，因此实际词表大小为 275，即 256
+个基础字节加 19 个新 token。实测输出中的计数如下：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>文本</th>
+<th style="text-align: right;">Python 字符数</th>
+<th style="text-align: right;">UTF-8 字节数</th>
+<th style="text-align: right;">教学 BPE token 数</th>
+<th>往返</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>banana banana</code></td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">1</td>
+<td>原样恢复</td>
+</tr>
+<tr>
+<td><code>你好，你好！</code></td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">1</td>
+<td>原样恢复</td>
+</tr>
+<tr>
+<td><code>新词🙂 café</code></td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">16</td>
+<td>原样恢复</td>
+</tr>
+<tr>
+<td>空字符串</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td>原样恢复</td>
+</tr>
+<tr>
+<td><code>e</code> 加组合重音</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+<td>原样恢复</td>
+</tr>
+</tbody>
+</table></div>
+<p>把整句训练文本合成一个
+token，可以让训练集看起来非常短，却没有证明它对新文本也有效。第三行从未出现在训练语料中，仍然可编码和恢复，但几乎没有合并收益。这正好提醒我们：<strong>能编码、token
+少、模型理解得好，是三个不同的问题。</strong></p>
+<p>测试不只检查几个好看的输出，还检查空字符串、换行空格、带修饰符的
+emoji、组合字符、非法
+ID、确定性并列规则、重叠合并，以及文档边界。实现优先让你能读懂，反复扫描语料会很慢，不能拿它直接训练大规模词表。</p>
+<h2 id="a.6-对照真实库hugging-face-tokenizers">1A.6 对照真实库：Hugging
+Face Tokenizers</h2>
+<p>可选实验 <a
+href="code/09_hf_tokenizer.py">code/09_hf_tokenizer.py</a> 固定使用
+<code>tokenizers==0.21.4</code>。核验和运行日期为
+2026-10-18，官方接口来源锁定到 <a
+href="https://github.com/huggingface/tokenizers/tree/v0.21.4">v0.21.4
+代码与文档目录</a>。这不是要求你使用最新版本，而是把本章实验条件固定下来。</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> venv .venv</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements-tokenizer.txt</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> code/09_hf_tokenizer.py</span></code></pre></div>
+<p>关键配置如下：</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>tokenizer <span class="op">=</span> Tokenizer(models.BPE())</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>tokenizer.pre_tokenizer <span class="op">=</span> pre_tokenizers.ByteLevel(</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    add_prefix_space<span class="op">=</span><span class="va">False</span>, use_regex<span class="op">=</span><span class="va">False</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>tokenizer.decoder <span class="op">=</span> decoders.ByteLevel()</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>trainer <span class="op">=</span> trainers.BpeTrainer(</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    vocab_size<span class="op">=</span><span class="dv">276</span>,</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    initial_alphabet<span class="op">=</span>pre_tokenizers.ByteLevel.alphabet(),</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    show_progress<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<p><code>ByteLevel</code>
+提供字节层面的表示；完整的初始字节字母表让未见过的 UTF-8
+文本仍有表示；不自动补前缀空格，是为了保留原输入；禁用正则预切分，是为了更接近上面的教学设置。我们没有设置会改变大小写或
+Unicode 的 normalizer，也没有添加特殊 token。</p>
+<p>随后用同样三篇短文训练，用相同样例检验
+round-trip。比较的是“是否原样恢复”和“词表与序列长度”，<strong>不要求
+token ID 相同</strong>：真实库对字节的内部表示、初始 ID
+和并列合并规则可能不同。这个实验也不是某个现成聊天模型的 tokenizer。</p>
+<h2 id="a.7-生产环境还多了哪些步骤">1A.7 生产环境还多了哪些步骤？</h2>
+<p>真实流水线常包含归一化、预切分、子词编码、特殊 token 插入、padding /
+truncation 和解码。逐项检查，比只问“用了 BPE 吗”更有用。</p>
+<ul>
+<li><strong>归一化</strong>可能把大写变小写或统一 Unicode
+表示。这有时有帮助，却可能让解码无法恢复原文；本章刻意不做。</li>
+<li><strong>特殊
+token</strong>可表示序列结束、角色边界或填充。它们是明确约定，不是看到字符串
+<code>&lt;eos&gt;</code>
+就一定自动成为控制符。本章教学实现把这样的字符串当普通文字。</li>
+<li><strong>Chat
+template</strong>把角色与消息内容组织成模型期望的输入。通常应使用模型配套模板，不要自行把“用户：”等字样当成所有模型通用的格式。</li>
+<li><strong>截断</strong>会丢掉内容；<strong>填充</strong>需要配合
+mask；这两件事不等于改变原文本的 token 含义。</li>
+</ul>
+<p>Token 数会影响上下文容量、部分 API
+的计费和计算开销；但不能用“一个中文字就是一个
+token”来估算所有模型。序列长度变化会影响后面的 attention 和 KV cache
+成本，词表变大又会增加 embedding /
+输出层的规模，选择词表是折中而不是越大越好。</p>
+<h2 id="a.8-自测与下一站">1A.8 自测与下一站</h2>
+<ol type="1">
+<li>一个 emoji 是一个 token 吗？</li>
+<li><code>train</code> 和 <code>encode</code> 为什么不能混成一步？</li>
+<li>把一段训练文本合成一个 token，是否证明 tokenizer
+在任何新文本上都更好？</li>
+<li>为什么解码时先拼 bytes，再转成字符串？</li>
+<li>只用语料里出现过的字符建立词表，与从 256 个字节起步有什么区别？</li>
+</ol>
+<p>参考答案：取决于具体
+tokenizer；训练生成规则，编码使用已有规则；不能，需要在代表性的未见数据上评估；单个
+token 可能不是完整 UTF-8
+字符；字符词表可能遇到未收录字符，而完整字节表可表示合法
+UTF-8，但并不赋予模型理解能力。</p>
+<p>现在可以把前两章连起来：<strong>文本 → tokenizer → token ID →
+embedding →
+后续网络</strong>。查表得到的初始向量还不知道当前“苹果”指水果还是电脑，接下来回到注意力章节，看模型如何结合周围内容。</p>
+<p>原始资料：<a href="https://arxiv.org/abs/1508.07909v5">Neural Machine
+Translation of Rare Words with Subword Units（v5）</a> 解释子词 BPE
+的语言建模背景；本章字节实现是教学变体，不是该论文实验的复现。库接口依据上述
+Hugging Face 固定标签；本文没有以可变的 <code>main</code>
+文档作为未锁定的版本承诺。</p>
 <hr />
 <h1 id="第2章-注意力机制的直觉-为什么我们需要-注意力">第2章：注意力机制的直觉——为什么我们需要“注意力”？</h1>
 <blockquote>
@@ -1120,16 +1382,16 @@ style="text-align: left;">更容易扩展到大参数模型，但成本和工程
 </tbody>
 </table></div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-05.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-05.svg" class="book-diagram" width="226"
+<a href="assets/rendered/flow-01.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-01.svg" class="book-diagram" width="226"
 alt="RNN：信息沿序列逐步传递。早期词语的信息需要经过许多步才能到达后面的词；长距离信息可能衰减。" /></a>
 <div class="diagram-caption">
 RNN：信息沿序列逐步传递
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-06.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-06.svg" class="book-diagram" width="310"
+<a href="assets/rendered/flow-02.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-02.svg" class="book-diagram" width="310"
 alt="自注意力：直接比较相关的词。它可以直接与小明、在、草地计算相关性，不必逐词传话；生成时仍受因果掩码限制。" /></a>
 <div class="diagram-caption">
 自注意力：直接比较相关的词
@@ -1373,16 +1635,16 @@ width="720" alt="图 3-1：缩放点积注意力计算流程" /></a>
 <p>把计算链分成两张图：先做出“相关性分数”，再把分数变成“收集信息的比例”。两张图里的
 Score 是同一张表。</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-07.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-07.svg" class="book-diagram" width="275"
+<a href="assets/rendered/flow-03.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-03.svg" class="book-diagram" width="275"
 alt="注意力上半程：从输入算出分数。输入 X 的形状为 3 乘 2，经过三个投影得到 Q、K、V，再计算 3 乘 3 的点积分数。" /></a>
 <div class="diagram-caption">
 注意力上半程：从输入算出分数
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-08.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-08.svg" class="book-diagram" width="218"
+<a href="assets/rendered/flow-04.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-04.svg" class="book-diagram" width="218"
 alt="注意力下半程：按比例收集信息。分数除以根号 2，每行经 Softmax 得到权重，再与 V 相乘得到 3 乘 2 的输出。" /></a>
 <div class="diagram-caption">
 注意力下半程：按比例收集信息
@@ -1581,13 +1843,13 @@ Q_1 &amp;= 0.1 \times 1.0 + 0.8 \times 0.5 = 0.5
 \]</span></p>
 <p>请先在草稿纸上算出这两个数，再对照程序打印的
 <code>Q=[0.600, 0.500]</code>。</p>
-<div class="sourceCode" id="cb8"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>words <span class="op">=</span> [<span class="st">&quot;我&quot;</span>, <span class="st">&quot;爱&quot;</span>, <span class="st">&quot;学&quot;</span>]</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> [</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">1.0</span>, <span class="fl">0.5</span>],  <span class="co"># “我”</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.8</span>, <span class="fl">1.2</span>],  <span class="co"># “爱”</span></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.2</span>, <span class="fl">1.5</span>]   <span class="co"># “学”</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>words <span class="op">=</span> [<span class="st">&quot;我&quot;</span>, <span class="st">&quot;爱&quot;</span>, <span class="st">&quot;学&quot;</span>]</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> [</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">1.0</span>, <span class="fl">0.5</span>],  <span class="co"># “我”</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.8</span>, <span class="fl">1.2</span>],  <span class="co"># “爱”</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    [<span class="fl">0.2</span>, <span class="fl">1.5</span>]   <span class="co"># “学”</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
 <p>代码通过矩阵乘以向量得到每一个词的 Q, K, V：</p>
 <pre class="text"><code>词 &#39;我&#39;: Q=[0.600, 0.500], K=[0.550, 0.550], V=[1.050, 0.450]
 词 &#39;爱&#39;: Q=[0.640, 1.040], K=[0.680, 1.000], V=[0.920, 1.080]
@@ -1879,45 +2141,45 @@ class="math inline">\(d_k = 4\)</span>。</p>
 <p>打开配套源码 <a
 href="code/04_multi_head_attention.py">code/04_multi_head_attention.py</a>，让我们看看
 PyTorch 类 <code>SimpleMultiHeadAttention</code> 的核心代码结构：</p>
-<div class="sourceCode" id="cb14"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> SimpleMultiHeadAttention(nn.Module):</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads):</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.d_model <span class="op">=</span> d_model</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性映射层</span></span>
-<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
-<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>        batch_size, seq_len, _ <span class="op">=</span> x.shape</span>
-<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 1. 投影生成 Q, K, V</span></span>
-<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x)</span>
-<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x)</span>
-<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x)</span>
-<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 2. 切分多头并换轴: [batch, heads, seq_len, head_dim]</span></span>
-<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> Q.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> K.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> V.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 3. 批量点乘与缩放打分: Score = (Q · K^T) / √d_k</span></span>
-<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
-<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>        attn_weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 4. 加权求和</span></span>
-<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a>        head_outputs <span class="op">=</span> torch.matmul(attn_weights, V)</span>
-<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 5. 拼回原状 (Concat)</span></span>
-<span id="cb14-35"><a href="#cb14-35" aria-hidden="true" tabindex="-1"></a>        out_concat <span class="op">=</span> head_outputs.transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(batch_size, seq_len, <span class="va">self</span>.d_model)</span>
-<span id="cb14-36"><a href="#cb14-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-37"><a href="#cb14-37" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 6. 最终输出投影融合</span></span>
-<span id="cb14-38"><a href="#cb14-38" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out_concat), attn_weights</span></code></pre></div>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> SimpleMultiHeadAttention(nn.Module):</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads):</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.d_model <span class="op">=</span> d_model</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性映射层</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>        batch_size, seq_len, _ <span class="op">=</span> x.shape</span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 1. 投影生成 Q, K, V</span></span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x)</span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x)</span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x)</span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 2. 切分多头并换轴: [batch, heads, seq_len, head_dim]</span></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> Q.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> K.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> V.view(batch_size, seq_len, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 3. 批量点乘与缩放打分: Score = (Q · K^T) / √d_k</span></span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a>        attn_weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb23-30"><a href="#cb23-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-31"><a href="#cb23-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 4. 加权求和</span></span>
+<span id="cb23-32"><a href="#cb23-32" aria-hidden="true" tabindex="-1"></a>        head_outputs <span class="op">=</span> torch.matmul(attn_weights, V)</span>
+<span id="cb23-33"><a href="#cb23-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-34"><a href="#cb23-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 5. 拼回原状 (Concat)</span></span>
+<span id="cb23-35"><a href="#cb23-35" aria-hidden="true" tabindex="-1"></a>        out_concat <span class="op">=</span> head_outputs.transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(batch_size, seq_len, <span class="va">self</span>.d_model)</span>
+<span id="cb23-36"><a href="#cb23-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-37"><a href="#cb23-37" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 6. 最终输出投影融合</span></span>
+<span id="cb23-38"><a href="#cb23-38" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out_concat), attn_weights</span></code></pre></div>
 <p>运行代码后，让我们查看控制台打印的两个专家头的注意力分布对比：</p>
 <pre class="text"><code>--- 专家头 1 的注意力权重矩阵 ---
               机器      学习       真       酷
@@ -2397,17 +2659,17 @@ class="math inline">\(\vec{x}_{\text{最终}} = \vec{x}_{\text{词}} +
 <p>打开 <a
 href="code/05_positional_encoding.py">code/05_positional_encoding.py</a>，我们用纯
 Python 生成一个 8 位置、8 维度的位置编码矩阵并打印：</p>
-<div class="sourceCode" id="cb17"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> generate_positional_encoding(max_seq_len, d_model):</span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    pe <span class="op">=</span> torch.zeros(max_seq_len, d_model)</span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> pos <span class="kw">in</span> <span class="bu">range</span>(max_seq_len):</span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>        <span class="co"># k 就是公式里的 i：第几对维度。不要再额外乘一次 2。</span></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>(d_model <span class="op">//</span> <span class="dv">2</span>):</span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>            div_term <span class="op">=</span> math.<span class="bu">pow</span>(<span class="fl">10000.0</span>, (<span class="dv">2</span> <span class="op">*</span> k) <span class="op">/</span> d_model)</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>                pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> pe</span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> generate_positional_encoding(max_seq_len, d_model):</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    pe <span class="op">=</span> torch.zeros(max_seq_len, d_model)</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> pos <span class="kw">in</span> <span class="bu">range</span>(max_seq_len):</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>        <span class="co"># k 就是公式里的 i：第几对维度。不要再额外乘一次 2。</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>(d_model <span class="op">//</span> <span class="dv">2</span>):</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>            div_term <span class="op">=</span> math.<span class="bu">pow</span>(<span class="fl">10000.0</span>, (<span class="dv">2</span> <span class="op">*</span> k) <span class="op">/</span> d_model)</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>                pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> pe</span></code></pre></div>
 <p>运行后在控制台打印出的字符热力图如下：</p>
 <pre class="text"><code>Pos \ Dim | d0 d1 d2 d3 d4 d5 d6 d7
 Pos  0    |  =  @  =  @  =  @  =  @ 
@@ -2838,16 +3100,16 @@ alt="经典 Transformer 完整宏观架构" /></a>
 <p>先分别读两条信息流，再看它们的连接点：编码器的输出会送到解码器的交叉注意力中，投影成
 K 和 V。</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-09.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-09.svg" class="book-diagram" width="256"
+<a href="assets/rendered/flow-05.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-05.svg" class="book-diagram" width="256"
 alt="编码器：读懂整段输入。输入经嵌入、自注意力、前馈网络得到上下文表征；图中省略归一化和残差，模块可重复堆叠。" /></a>
 <div class="diagram-caption">
 编码器：读懂整段输入
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-10.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-10.svg" class="book-diagram" width="240"
+<a href="assets/rendered/flow-06.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-06.svg" class="book-diagram" width="240"
 alt="解码器：利用前缀与原文预测下一个字。前缀经过因果自注意力，再用自身的 Q 查询编码器提供的 K、V，经过前馈网络和输出层得到预测。" /></a>
 <div class="diagram-caption">
 解码器：利用前缀与原文预测下一个字
@@ -3085,8 +3347,8 @@ class="math display">\[\mathbf{K, V \ 来自 \
 <p>这种生成方式叫做 <strong>自回归（Autoregressive）</strong>。
 它的运行模式就像一盘<strong>“贪吃蛇游戏”</strong>：蛇每吃掉一颗豆子（生成一个新词），蛇的身体就变长一节，然后整条变长的蛇又作为新的输入，去寻找下一颗豆子！</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-11.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-11.svg" class="book-diagram" width="385"
+<a href="assets/rendered/flow-07.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-07.svg" class="book-diagram" width="385"
 alt="自回归生成：每次多接一个字。输入床前，依次生成明、月、光，每轮都把新增文字放回前缀。" /></a>
 <div class="diagram-caption">
 自回归生成：每次多接一个字
@@ -3252,24 +3514,24 @@ style="text-align: left;">运行脚本时会打印这个整数。聊天模型的
 <p>为了看清每一步，把这次旅程分为“准备输入 → 提炼信息 →
 训练或生成”三段。图中所有形状都对应本章的 Baby-GPT 配置。</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-12.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-12.svg" class="book-diagram" width="268"
+<a href="assets/rendered/flow-08.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-08.svg" class="book-diagram" width="268"
 alt="Baby-GPT 第一段：准备输入。床前明月光的编号是 23、10、27、32、8。词嵌入与五个位置的嵌入相加，得到 1 乘 5 乘 48 的张量。" /></a>
 <div class="diagram-caption">
 Baby-GPT 第一段：准备输入
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-13.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-13.svg" class="book-diagram" width="269"
+<a href="assets/rendered/flow-09.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-09.svg" class="book-diagram" width="269"
 alt="Baby-GPT 第二段：提炼信息并打分。输入经过两个 Pre-LN 因果 Transformer 块、最终层归一化和线性输出头，得到词表上 57 个字的分数。" /></a>
 <div class="diagram-caption">
 Baby-GPT 第二段：提炼信息并打分
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-14.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-14.svg" class="book-diagram" width="474"
+<a href="assets/rendered/flow-10.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-10.svg" class="book-diagram" width="474"
 alt="Baby-GPT 第三段：训练与生成的分岔。训练时对各位置的下一字目标计算交叉熵并更新参数；生成时只取最后一个位置的分数，经温度采样选出下一个字。" /></a>
 <div class="diagram-caption">
 Baby-GPT 第三段：训练与生成的分岔
@@ -3281,19 +3543,19 @@ Baby-GPT 第三段：训练与生成的分岔
 <p>让我们逐段拆解配套脚本 <a
 href="code/07_baby_gpt.py">code/07_baby_gpt.py</a>。</p>
 <h3 id="词表与分词器tokenizer">1. 词表与分词器（Tokenizer）</h3>
-<div class="sourceCode" id="cb25"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 训练语料：三首经典唐诗</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>text_corpus <span class="op">=</span> (</span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;床前明月光，疑是地上霜。举头望明月，低头思故乡。&quot;</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;白日依山尽，黄河入海流。欲穷千里目，更上一层楼。&quot;</span></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。&quot;</span></span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 提取不重复汉字构建字典</span></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">list</span>(<span class="bu">set</span>(text_corpus)))</span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="bu">len</span>(unique_chars)  <span class="co"># 57 个字符</span></span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>char2idx <span class="op">=</span> {ch: i <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>idx2char <span class="op">=</span> {i: ch <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span></code></pre></div>
+<div class="sourceCode" id="cb34"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 训练语料：三首经典唐诗</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>text_corpus <span class="op">=</span> (</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;床前明月光，疑是地上霜。举头望明月，低头思故乡。&quot;</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;白日依山尽，黄河入海流。欲穷千里目，更上一层楼。&quot;</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。&quot;</span></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 提取不重复汉字构建字典</span></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">list</span>(<span class="bu">set</span>(text_corpus)))</span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="bu">len</span>(unique_chars)  <span class="co"># 57 个字符</span></span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>char2idx <span class="op">=</span> {ch: i <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>idx2char <span class="op">=</span> {i: ch <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span></code></pre></div>
 <h4 id="表-8-2部分汉字与数字-id运行脚本时的真实编号">表
 8-2：部分汉字与数字 ID（运行脚本时的真实编号）</h4>
 <p><code>sorted</code> 按 Unicode
@@ -3351,91 +3613,91 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a h
 因果自注意力模块（CausalSelfAttention）</h3>
 <p>这是模型的“灵魂中枢”，注意看我们是如何将因果掩码注册进 PyTorch
 缓冲区的：</p>
-<div class="sourceCode" id="cb26"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CausalSelfAttention(nn.Module):</span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads, max_seq_len):</span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性投影层</span></span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 核心：下三角掩码缓冲区（不需要计算梯度）</span></span>
-<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>        mask <span class="op">=</span> torch.tril(torch.ones(max_seq_len, max_seq_len))</span>
-<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.register_buffer(<span class="st">&quot;mask&quot;</span>, mask)</span>
-<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
-<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a>        B, T, C <span class="op">=</span> x.shape  <span class="co"># Batch(批次), Time(序列长度), Channel(维度)</span></span>
-<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 投影并切分多头: [B, num_heads, T, head_dim]</span></span>
-<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 点乘打分并缩放</span></span>
-<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
-<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 施加掩码：将右上角未来位置填入 -1e9 (-∞)</span></span>
-<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> scores.masked_fill(<span class="va">self</span>.mask[:T, :T] <span class="op">==</span> <span class="dv">0</span>, <span class="op">-</span><span class="fl">1e9</span>)</span>
-<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Softmax 归一化</span></span>
-<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a>        weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb26-33"><a href="#cb26-33" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb26-34"><a href="#cb26-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 加权求和并拼回原状</span></span>
-<span id="cb26-35"><a href="#cb26-35" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> torch.matmul(weights, V).transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(B, T, C)</span>
-<span id="cb26-36"><a href="#cb26-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out)</span></code></pre></div>
+<div class="sourceCode" id="cb35"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CausalSelfAttention(nn.Module):</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads, max_seq_len):</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性投影层</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 核心：下三角掩码缓冲区（不需要计算梯度）</span></span>
+<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a>        mask <span class="op">=</span> torch.tril(torch.ones(max_seq_len, max_seq_len))</span>
+<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.register_buffer(<span class="st">&quot;mask&quot;</span>, mask)</span>
+<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
+<span id="cb35-18"><a href="#cb35-18" aria-hidden="true" tabindex="-1"></a>        B, T, C <span class="op">=</span> x.shape  <span class="co"># Batch(批次), Time(序列长度), Channel(维度)</span></span>
+<span id="cb35-19"><a href="#cb35-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-20"><a href="#cb35-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 投影并切分多头: [B, num_heads, T, head_dim]</span></span>
+<span id="cb35-21"><a href="#cb35-21" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb35-22"><a href="#cb35-22" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb35-23"><a href="#cb35-23" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb35-24"><a href="#cb35-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-25"><a href="#cb35-25" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 点乘打分并缩放</span></span>
+<span id="cb35-26"><a href="#cb35-26" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
+<span id="cb35-27"><a href="#cb35-27" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb35-28"><a href="#cb35-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 施加掩码：将右上角未来位置填入 -1e9 (-∞)</span></span>
+<span id="cb35-29"><a href="#cb35-29" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> scores.masked_fill(<span class="va">self</span>.mask[:T, :T] <span class="op">==</span> <span class="dv">0</span>, <span class="op">-</span><span class="fl">1e9</span>)</span>
+<span id="cb35-30"><a href="#cb35-30" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb35-31"><a href="#cb35-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Softmax 归一化</span></span>
+<span id="cb35-32"><a href="#cb35-32" aria-hidden="true" tabindex="-1"></a>        weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb35-33"><a href="#cb35-33" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb35-34"><a href="#cb35-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 加权求和并拼回原状</span></span>
+<span id="cb35-35"><a href="#cb35-35" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> torch.matmul(weights, V).transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(B, T, C)</span>
+<span id="cb35-36"><a href="#cb35-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out)</span></code></pre></div>
 <hr />
 <h3 id="完整的-babygpt-模型组装">3. 完整的 BabyGPT 模型组装</h3>
-<div class="sourceCode" id="cb27"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> BabyGPT(nn.Module):</span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, vocab_size, d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>, max_seq_len<span class="op">=</span><span class="dv">128</span>):</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.max_seq_len <span class="op">=</span> max_seq_len</span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 词嵌入，以及可学习的座位表。</span></span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 这不是第 5 章的 sin/cos。每个座位一行向量，数字在训练中自己学。</span></span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.tok_emb <span class="op">=</span> nn.Embedding(vocab_size, d_model)</span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.pos_emb <span class="op">=</span> nn.Embedding(max_seq_len, d_model)</span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 堆叠 2 层积木块</span></span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.blocks <span class="op">=</span> nn.ModuleList([</span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>            BabyBlock(d_model, num_heads, max_seq_len) <span class="cf">for</span> _ <span class="kw">in</span> <span class="bu">range</span>(num_layers)</span>
-<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>        ])</span>
-<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 输出头</span></span>
-<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.ln_f <span class="op">=</span> nn.LayerNorm(d_model)</span>
-<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head <span class="op">=</span> nn.Linear(d_model, vocab_size, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, idx, targets<span class="op">=</span><span class="va">None</span>):</span>
-<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>        B, T <span class="op">=</span> idx.shape</span>
-<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>        pos <span class="op">=</span> torch.arange(<span class="dv">0</span>, T, dtype<span class="op">=</span>torch.<span class="bu">long</span>, device<span class="op">=</span>idx.device)</span>
-<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 融合词义与位置</span></span>
-<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.tok_emb(idx) <span class="op">+</span> <span class="va">self</span>.pos_emb(pos)</span>
-<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
-<span id="cb27-27"><a href="#cb27-27" aria-hidden="true" tabindex="-1"></a>            x <span class="op">=</span> block(x)</span>
-<span id="cb27-28"><a href="#cb27-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-29"><a href="#cb27-29" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.ln_f(x)</span>
-<span id="cb27-30"><a href="#cb27-30" aria-hidden="true" tabindex="-1"></a>        logits <span class="op">=</span> <span class="va">self</span>.head(x)  <span class="co"># [B, T, vocab_size]</span></span>
-<span id="cb27-31"><a href="#cb27-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-32"><a href="#cb27-32" aria-hidden="true" tabindex="-1"></a>        loss <span class="op">=</span> <span class="va">None</span></span>
-<span id="cb27-33"><a href="#cb27-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> targets <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb27-34"><a href="#cb27-34" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 交叉熵损失：衡量预测分布与真实字的差距</span></span>
-<span id="cb27-35"><a href="#cb27-35" aria-hidden="true" tabindex="-1"></a>            loss <span class="op">=</span> F.cross_entropy(logits.view(<span class="op">-</span><span class="dv">1</span>, logits.size(<span class="op">-</span><span class="dv">1</span>)), targets.view(<span class="op">-</span><span class="dv">1</span>))</span>
-<span id="cb27-36"><a href="#cb27-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-37"><a href="#cb27-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> logits, loss</span></code></pre></div>
+<div class="sourceCode" id="cb36"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> BabyGPT(nn.Module):</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, vocab_size, d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>, max_seq_len<span class="op">=</span><span class="dv">128</span>):</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.max_seq_len <span class="op">=</span> max_seq_len</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 词嵌入，以及可学习的座位表。</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 这不是第 5 章的 sin/cos。每个座位一行向量，数字在训练中自己学。</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.tok_emb <span class="op">=</span> nn.Embedding(vocab_size, d_model)</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.pos_emb <span class="op">=</span> nn.Embedding(max_seq_len, d_model)</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 堆叠 2 层积木块</span></span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.blocks <span class="op">=</span> nn.ModuleList([</span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>            BabyBlock(d_model, num_heads, max_seq_len) <span class="cf">for</span> _ <span class="kw">in</span> <span class="bu">range</span>(num_layers)</span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>        ])</span>
+<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 输出头</span></span>
+<span id="cb36-16"><a href="#cb36-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.ln_f <span class="op">=</span> nn.LayerNorm(d_model)</span>
+<span id="cb36-17"><a href="#cb36-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head <span class="op">=</span> nn.Linear(d_model, vocab_size, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb36-18"><a href="#cb36-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-19"><a href="#cb36-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, idx, targets<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb36-20"><a href="#cb36-20" aria-hidden="true" tabindex="-1"></a>        B, T <span class="op">=</span> idx.shape</span>
+<span id="cb36-21"><a href="#cb36-21" aria-hidden="true" tabindex="-1"></a>        pos <span class="op">=</span> torch.arange(<span class="dv">0</span>, T, dtype<span class="op">=</span>torch.<span class="bu">long</span>, device<span class="op">=</span>idx.device)</span>
+<span id="cb36-22"><a href="#cb36-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-23"><a href="#cb36-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 融合词义与位置</span></span>
+<span id="cb36-24"><a href="#cb36-24" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.tok_emb(idx) <span class="op">+</span> <span class="va">self</span>.pos_emb(pos)</span>
+<span id="cb36-25"><a href="#cb36-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-26"><a href="#cb36-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
+<span id="cb36-27"><a href="#cb36-27" aria-hidden="true" tabindex="-1"></a>            x <span class="op">=</span> block(x)</span>
+<span id="cb36-28"><a href="#cb36-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-29"><a href="#cb36-29" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.ln_f(x)</span>
+<span id="cb36-30"><a href="#cb36-30" aria-hidden="true" tabindex="-1"></a>        logits <span class="op">=</span> <span class="va">self</span>.head(x)  <span class="co"># [B, T, vocab_size]</span></span>
+<span id="cb36-31"><a href="#cb36-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-32"><a href="#cb36-32" aria-hidden="true" tabindex="-1"></a>        loss <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb36-33"><a href="#cb36-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> targets <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb36-34"><a href="#cb36-34" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 交叉熵损失：衡量预测分布与真实字的差距</span></span>
+<span id="cb36-35"><a href="#cb36-35" aria-hidden="true" tabindex="-1"></a>            loss <span class="op">=</span> F.cross_entropy(logits.view(<span class="op">-</span><span class="dv">1</span>, logits.size(<span class="op">-</span><span class="dv">1</span>)), targets.view(<span class="op">-</span><span class="dv">1</span>))</span>
+<span id="cb36-36"><a href="#cb36-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-37"><a href="#cb36-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> logits, loss</span></code></pre></div>
 <p>训练循环不要把三首诗粘成一条。每一首单独算一次“猜下一个字”的损失，再取平均：</p>
-<div class="sourceCode" id="cb28"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>encoded_poems <span class="op">=</span> [torch.tensor(encode(poem), dtype<span class="op">=</span>torch.<span class="bu">long</span>) <span class="cf">for</span> poem <span class="kw">in</span> poems]</span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> []</span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> data <span class="kw">in</span> encoded_poems:</span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    _, loss <span class="op">=</span> model(data[:<span class="op">-</span><span class="dv">1</span>].unsqueeze(<span class="dv">0</span>), data[<span class="dv">1</span>:].unsqueeze(<span class="dv">0</span>))</span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    losses.append(loss)</span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.stack(losses).mean()</span></code></pre></div>
+<div class="sourceCode" id="cb37"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>encoded_poems <span class="op">=</span> [torch.tensor(encode(poem), dtype<span class="op">=</span>torch.<span class="bu">long</span>) <span class="cf">for</span> poem <span class="kw">in</span> poems]</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> []</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> data <span class="kw">in</span> encoded_poems:</span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>    _, loss <span class="op">=</span> model(data[:<span class="op">-</span><span class="dv">1</span>].unsqueeze(<span class="dv">0</span>), data[<span class="dv">1</span>:].unsqueeze(<span class="dv">0</span>))</span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>    losses.append(loss)</span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.stack(losses).mean()</span></code></pre></div>
 <p><code>data[:-1]</code> 是输入，<code>data[1:]</code>
 是紧挨着的下一个字。例如“床前明”，输入是“床前”，目标是“前明”。</p>
 <hr />
@@ -3644,16 +3906,16 @@ Baby-GPT，到今天掌控世界算力的千亿大模型，工业界在以下 5
 个关键构件上进行了脱胎换骨的升级：</p>
 <p>下面按用途把五种改进分成两张图。图中只概括它们的作用，实际收益还取决于模型、训练数据和硬件。</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-15.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-15.svg" class="book-diagram" width="460"
+<a href="assets/rendered/flow-11.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-11.svg" class="book-diagram" width="460"
 alt="现代 LLM：位置与信息处理。RoPE 让注意力分数包含相对位置信息；RMSNorm 用均方根控制尺度；SwiGLU 用门控选择信息。" /></a>
 <div class="diagram-caption">
 现代 LLM：位置与信息处理
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-16.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-16.svg" class="book-diagram" width="464"
+<a href="assets/rendered/flow-12.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/flow-12.svg" class="book-diagram" width="464"
 alt="现代 LLM：计算与缓存。MoE 对每个词只激活部分专家；KV Cache 缓存过去位置的键和值，减少生成时的重复计算。" /></a>
 <div class="diagram-caption">
 现代 LLM：计算与缓存
