@@ -1,6 +1,6 @@
-# 从基础 Transformer 到现代大模型：扩展大纲（待审核）
+# 从基础 Transformer 到现代大模型：扩展大纲（已审核）
 
-状态：**大纲已审核；P00–P02 首批实现进入独立 PR 审核，P03–P28 尚未按本大纲实现**。原大纲日期 2026-10-18，基于 `72c39df`。
+状态：**大纲已审核；P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)），P03–P28 尚未按本大纲实现**。原大纲日期 2026-10-18，基于 `72c39df`。
 任务：[bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14)；对照[原目录快照](https://github.com/cluster1900/bot-hub/blob/main/materials/14/current-toc.md)。
 Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1#issuecomment-6246985285)通过大纲。按每批 2–3 章撰写并逐批审核；本文保留设计方案，实际进度以 [README](../README.md) 为准。
 

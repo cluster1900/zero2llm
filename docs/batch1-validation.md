@@ -1,6 +1,6 @@
 # P00–P02 首批实验与产物记录
 
-日期：2026-10-18。基于大纲合并后的 main `b946ef1`，独立主题分支 `dot/issue14-batch1-p00-p02`。本批交付完整阅读指南、词嵌入正文、Tokenizer/BPE 插入单元，待批次 PR 审核；不继续下一批、不合并、不发布 Release。
+日期：2026-10-18。基于大纲合并后的 main `b946ef1`，独立主题分支 `dot/issue14-batch1-p00-p02`。本批交付完整阅读指南、词嵌入正文、Tokenizer/BPE 插入单元，正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）；各轮审核与验证记录见下文。后续批次仍须经过审核门槛。
 
 ## 实现范围
 
@@ -19,8 +19,8 @@ Linux CPU；Python 3.12.14；选修 `tokenizers==0.21.4`；静态图构建 `Cair
 | `python3 code/01_vector_similarity.py` | 通过，水果值与正文一致 |
 | `python3 code/08_byte_bpe.py` | 通过，实际 19 次合并、词表 275，所有示例原样往返 |
 | `.venv/bin/python code/09_hf_tokenizer.py` | 通过，tokenizers 0.21.4，词表 275，所有示例原样往返 |
-| `.venv/bin/python -m unittest discover -s tests -v` | 19 项通过：向量 5、BPE 11、HF 1、静态缓存安全边界 2 |
-| `python3 -m unittest discover -s tests -v` | 标准库路线运行核心 16 项；HF / Cairo 未安装时 3 项明确跳过 |
+| `.venv/bin/python -m unittest discover -s tests -v` | 20 项通过：向量 5、BPE 11、HF 1、静态缓存安全边界 2、可选版本门槛 1 |
+| `python3 -m unittest discover -s tests -v` | 本环境核心 17 项通过、3 项跳过；HF 缺失或版本不是 0.21.4 时跳过 HF 1 项，Cairo 缺失时跳过静态缓存 2 项 |
 | `python3 scripts/check_book.py` | 通过：12 张 Mermaid 流程图、共 23 张图，EPUB/Web 资源、内部链接、目录锚点完整 |
 | `git diff --check` | 通过 |
 
@@ -54,3 +54,18 @@ python3 -m venv .venv
 ## 来源版本与审核门槛
 
 本批正文指向 HF Tokenizers 的 v0.21.4 标签、PyTorch 2.14 Embedding 文档与版本化基础论文；核验日期 2026-10-18。下批继续前须完成 Normal Work 对本批 PR 的审核。后续 P17 的 8B prefill / 16B decode 数字只作为官方报告引用，P20 已在大纲明确点名 TRL 与 Transformers 的关系，本批未提前撰写这些章节。
+
+## 2026-10-18 审核返修
+
+依据 [Normal Work review](https://github.com/cluster1900/zero2llm/pull/2#pullrequestreview-5563143527) 修正：
+
+- 布局检查不再假设首章存在 Mermaid。390px 下选择第一个有 `.diagram-figure` 或普通 `figure` 的章节截图，无图章节继续执行原有逐图检查，不因截图选择器报错。
+- HF 测试同时检查安装与版本；缺失或非 0.21.4 明确跳过。新增回归模拟未安装和 0.23.3 两种情况，均确认 skip 而非 fail。
+- 第 1A 章补入 Baby-GPT 字符基线、57 字符训练词表、未知字符 `KeyError` 与字节 BPE 对照；通过解析原脚本诗句验证 57 和“你”未收录，不导入模型、不触发训练。
+- README 和大纲改为“正文与示例已实现（PR #2）”，不把实现、审核、合并和发布混为一谈；移除重复 import。
+
+截图辅助逻辑另有 3 项不启动浏览器的 Node 回归：无图前言后续有图、静态图前言、真实截图错误继续上抛。命令为 `node --test tests/layout_screenshot.test.mjs`，3 项通过；它们不替代真实浏览器布局检查。
+
+返修环境重新运行 20 项 unittest、三个本批代码示例、JS 语法检查、静态构建和 EPUB/Web 产物检查。正常布局命令仍有环境阻塞：默认 Puppeteer 缺少 Chrome 131.0.6778.204；指定已安装的 `/usr/bin/chromium` 后启动失败，报 `socket() failed: Operation not permitted`。未修改浏览器安全设置。**修正版响应式布局未验证，请审核者在新 head 重跑 `npm run check:layout`。**
+
+Normal Work 在旧 head `6ac632b` 上验证了正常 Chromium 构建、全部九个脚本和固定版本 19 项测试，并发现首章截图错误；这不算修正版的布局 PASS。本轮未重新运行未改动的旧训练实验。

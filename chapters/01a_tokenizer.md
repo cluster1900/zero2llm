@@ -31,6 +31,25 @@ print(list(text.encode("utf-8")))
 > [!NOTE]
 > **“覆盖文本”不等于“理解文本”。** 字节词表能表示没见过的文字，并不意味着模型学会了这门语言。Tokenizer 解决的是编码问题，语言能力仍取决于数据、模型和训练。
 
+### 对照旧第 8 章：保留 Baby-GPT 的字符基线
+
+旧第 8 章和配套的 `code/07_baby_gpt.py` 刻意采用更简单的字符级分词器：
+
+```python
+unique_chars = sorted(set(text_corpus))
+vocab_size = len(unique_chars)
+char2idx = {ch: i for i, ch in enumerate(unique_chars)}
+idx2char = {i: ch for i, ch in enumerate(unique_chars)}
+encode = lambda text: [char2idx[ch] for ch in text]
+decode = lambda ids: "".join(idx2char[i] for i in ids)
+```
+
+这里的 `text_corpus` 是源码中的三首训练诗句拼接，词表恰好有 **57 个不同字符**，包括汉字和标点；57 不是汉语字符总数，也不是模型的固定常数。换训练语料，词表和编号就可能改变。每个已收录字符对应一个 token，例如“床前”编码为两个 ID，解码还原为“床前”。
+
+它没有未知字符 token，也没有字节回退：训练诗句没有“你”，所以 `encode("你")` 会在字典查找时抛出 `KeyError`，不能编码任意中文或 emoji。相比之下，本章字节 BPE 从全部 256 个字节开始，能编码任意合法 UTF-8 文本；之后才按训练语料中学到的规则把常见字节片段合并成较长 token。能编码未见字符，不等于语言模型理解它。
+
+**本书保留 Baby-GPT 的字符分词器作为基线，不在本章偷偷替换其训练输入。** 字符基线让初学者直接观察“一字接一字”；字节 BPE 展示开放字符覆盖与序列长度的取舍。若未来替换 tokenizer，就要同时重建词表、embedding 和输出层，并重新训练，不能让新 ID 直接查旧模型的表。
+
 ## 1A.2 BPE：把常一起出现的两块积木粘起来
 
 BPE 是 Byte Pair Encoding 的缩写。用于文本时，其核心思想是反复找出常见的相邻符号对，为合并结果分配一个新符号。最初的符号可以是字符，也可以是字节；本章选择字节，便于让未见过的中文和 emoji 仍能往返。

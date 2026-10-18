@@ -2,7 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
-import importlib.util
+from importlib.metadata import version, PackageNotFoundError
 import random
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -117,11 +117,18 @@ class BPETests(unittest.TestCase):
         self.assertLess(len(self.model.encode('banana banana')), len('banana banana'))
 
 
-@unittest.skipUnless(importlib.util.find_spec('tokenizers'), '选修：未安装 tokenizers')
+try:
+    HF_VERSION = version('tokenizers')
+except PackageNotFoundError:
+    HF_VERSION = '未安装'
+
+
+@unittest.skipUnless(
+    importlib.util.find_spec('tokenizers') and HF_VERSION == '0.21.4',
+    f'选修：需要 tokenizers==0.21.4，当前 {HF_VERSION}',
+)
 class HFTests(unittest.TestCase):
     def test_round_trip(self):
-        from importlib.metadata import version
-        self.assertEqual(version('tokenizers'), '0.21.4')
         tokenizer = load('09_hf_tokenizer').build_tokenizer()
         for text in ['', '新词🙂 café', 'e\u0301', '👩🏽\u200d💻', '\n\t  ']:
             with self.subTest(text=text):

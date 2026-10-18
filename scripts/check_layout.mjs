@@ -5,6 +5,7 @@ import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer';
+import { capturePhoneFigure } from './layout_screenshot.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const reportDir = process.argv[2] || await fs.mkdtemp(path.join(os.tmpdir(), 'zero2llm-layout-'));
@@ -18,6 +19,7 @@ try {
   page.on('request', req => req.url().startsWith('file:') || req.url().startsWith('data:') ? req.continue() : req.abort());
   const chapters = (await fs.readdir(path.join(unpacked, 'EPUB/text'))).filter(n => /^ch\d+\.xhtml$/.test(n));
   let count = 0;
+  let phoneScreenshotTaken = false;
   for (const viewport of [{width: 390, height: 844}, {width: 768, height: 1024}, {width: 844, height: 390}]) {
     await page.setViewport(viewport);
     for (const chapter of chapters) {
@@ -35,9 +37,10 @@ try {
       }));
       if (errors.length) throw new Error(`${chapter} ${JSON.stringify(viewport)}: ${errors.join('; ')}`);
       count++;
-      if (chapter === 'ch001.xhtml' && viewport.width === 390) {
-        await page.$eval('.diagram-figure', el => el.scrollIntoView({block:'start'}));
-        await page.screenshot({ path: path.join(reportDir, 'epub-phone.png') });
+      if (!phoneScreenshotTaken && viewport.width === 390) {
+        // Chapters may contain static figures, Mermaid figures, or no figures.
+        phoneScreenshotTaken = await capturePhoneFigure(
+          page, path.join(reportDir, 'epub-phone.png'));
       }
     }
     await page.goto(pathToFileURL(path.join(root, 'dist/index.html')).href);
