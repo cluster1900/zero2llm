@@ -88,8 +88,8 @@ def experiment_causal_mask():
     print("掩码矩阵 (1 表示允许看，0 表示未来禁止看):")
     print(mask.numpy())
 
-    # 把 0 的位置替换为 -1e9 (-10亿，相当于负无穷)
-    masked_scores = scores.masked_fill(mask == 0, -1e9)
+    # 把 0 的位置替换为负无穷，避免 -1e9 在 float16 中溢出
+    masked_scores = scores.masked_fill(mask == 0, float("-inf"))
     print("\n加上掩码后的打分矩阵 (未来的位置被极小负数封印):")
     for row in masked_scores.numpy():
         print(["%.1f" % v if v > -100 else "-inf" for v in row])
@@ -130,7 +130,8 @@ def compare_with_pytorch():
     print(official_output[0])
 
     diff = (output - official_output).abs().max().item()
-    print(f"\n两者最大误差: {diff:.8e} (完全一致！)")
+    torch.testing.assert_close(output, official_output, rtol=1e-5, atol=1e-6)
+    print(f"\n两者最大误差: {diff:.8e} (在浮点误差容限内一致)")
 
 if __name__ == "__main__":
     experiment_why_scale()

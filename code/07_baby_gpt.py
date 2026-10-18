@@ -71,7 +71,7 @@ class CausalSelfAttention(nn.Module):
         scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
         
         # 施加下三角因果掩码：把未来看不到的位置遮挡为负无穷大
-        scores = scores.masked_fill(self.mask[:T, :T] == 0, -1e9)
+        scores = scores.masked_fill(self.mask[:T, :T] == 0, float("-inf"))
         
         # Softmax 归一化
         weights = F.softmax(scores, dim=-1)
@@ -149,7 +149,9 @@ class BabyGPT(nn.Module):
         一个字一个字往后预测，把新生成的字再追加到输入末尾！
         """
         self.eval()
-        idx = torch.tensor([encode(prompt_text)], dtype=torch.long)
+        if not prompt_text:
+            raise ValueError("提示词不能为空")
+        idx = torch.tensor([encode(prompt_text)], dtype=torch.long, device=self.tok_emb.weight.device)
 
         for _ in range(max_new_tokens):
             # 截断不能超过最大序列长度
@@ -235,7 +237,7 @@ def main():
     print("3. 前馈网络、残差连接和层归一化")
     print("4. 用交叉熵量出“下一个字猜得有多差”，再小步调整参数")
     print("聊天模型和这个小脚本用的是同类下一步预测。")
-    print("差别在于数据量和参数量：这里只有三首诗，模型把它们背下来了。")
+    print("差别还包括数据质量、后训练和推理系统；这里只有三首诗，主要是在背课文。")
 
 if __name__ == "__main__":
     main()

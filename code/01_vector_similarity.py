@@ -38,15 +38,15 @@ def cosine_similarity(vec_a, vec_b):
     夹角余弦公式：cos(θ) = (a · b) / (|a| * |b|)
     取值范围：[-1, 1]
     - 接近 1 ：方向极其一致，含义非常相似
-    - 接近 0 ：两个向量互相垂直（90度），毫无关联
-    - 接近 -1：方向完全相反，反义词
+    - 接近 0 ：方向接近垂直，不自动等于语义无关
+    - 接近 -1：方向接近相反，不自动等于反义词
     """
     dot = dot_product(vec_a, vec_b)
     mag_a = vector_magnitude(vec_a)
     mag_b = vector_magnitude(vec_b)
     
     if mag_a == 0 or mag_b == 0:
-        return 0.0
+        raise ValueError("零向量的余弦相似度未定义")
     
     return dot / (mag_a * mag_b)
 

@@ -77,7 +77,7 @@ class SimpleMultiHeadAttention(nn.Module):
 
         if mask is not None:
             # 加上掩码（比如因果掩码）
-            scores = scores.masked_fill(mask == 0, -1e9)
+            scores = scores.masked_fill(mask == 0, float("-inf"))
 
         # Softmax 归一化
         attn_weights = F.softmax(scores, dim=-1)

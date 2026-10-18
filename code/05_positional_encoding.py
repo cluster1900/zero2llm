@@ -31,7 +31,7 @@ def generate_positional_encoding(max_seq_len, d_model):
 
     for pos in range(max_seq_len):
         # k 就是公式中的 i。这里必须用“第几对”，不能再乘一次 2。
-        for k in range(d_model // 2):
+        for k in range((d_model + 1) // 2):
             div_term = math.pow(10000.0, (2 * k) / d_model)
             pe[pos, 2 * k] = math.sin(pos / div_term)
             if 2 * k + 1 < d_model:

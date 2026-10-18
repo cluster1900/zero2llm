@@ -56,7 +56,7 @@ class FeedForwardNetwork(nn.Module):
 
 class TransformerBlock(nn.Module):
     """
-    一个完整的 Transformer 编码器积木块（现代 Pre-LN 架构，GPT / LLaMA 同款）
+    一个完整的 Transformer 编码器积木块（教学版 Pre-LN；不等于 GPT / LLaMA 的完整配置）
     """
     def __init__(self, d_model, num_heads):
         super().__init__()
@@ -71,7 +71,7 @@ class TransformerBlock(nn.Module):
         norm_x1 = self.ln1(x)
         # 2. 计算自注意力。
         # mask 与本书其他代码约定相同：1 表示允许看，0 表示禁止看。
-        # PyTorch 官方的布尔掩码相反：True 表示“这个位置不准看”。
+        # nn.MultiheadAttention 的布尔掩码相反（不是所有 PyTorch API 都如此）：True 表示“这个位置不准看”。
         attn_mask = None if mask is None else (mask == 0)
         attn_out, _ = self.attn(
             norm_x1, norm_x1, norm_x1, attn_mask=attn_mask, need_weights=False
