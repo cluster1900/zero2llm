@@ -1,6 +1,7 @@
 """CPU P03–P05 regression: no GPU, downloads, or model training."""
 import importlib.util
 from pathlib import Path
+from importlib.metadata import version, PackageNotFoundError
 import sys
 import math
 import io
@@ -19,7 +20,11 @@ def load(name):
 
 
 manual = load('02_manual_attention')
-HAS_TORCH = importlib.util.find_spec('torch') is not None
+try:
+    TORCH_VERSION = version('torch')
+except PackageNotFoundError:
+    TORCH_VERSION = 'not installed'
+HAS_TORCH = importlib.util.find_spec('torch') is not None and TORCH_VERSION.startswith('2.14.')
 if HAS_TORCH:
     import torch
     import torch.nn.functional as F
@@ -69,7 +74,7 @@ class StableSoftmaxTests(unittest.TestCase):
                 manual.softmax(xs)
 
 
-@unittest.skipUnless(HAS_TORCH, 'CPU experiments require torch; install requirements.txt')
+@unittest.skipUnless(HAS_TORCH, f'CPU experiments verified with torch 2.14.x; found {TORCH_VERSION}')
 class AttentionTests(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(19)

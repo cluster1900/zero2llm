@@ -1891,7 +1891,8 @@ class="math display">\[(0.600\times0.680+0.500\times1.000)/\sqrt2
 <p><span class="math display">\[o_{我}\approx
 0.290776[1.05,0.45]+0.360253[0.92,1.08]+0.348971[0.35,1.35]
 \approx[0.7589,0.9910].\]</span></p>
-<p>脚本先创建 <code>new_vec = [0.0, 0.0]</code>，再依次执行“将某个 V
+<p>脚本先创建
+<code>new_vec = [0.0] * len(V[0])</code>，再依次执行“将某个 V
 乘权重”和“累加到
 new_vec”。这里写出的六位小数权重仍是便于手算的近似；代码用全精度权重，输出另外两行约为“爱”
 <span class="math inline">\([0.7402,1.0213]\)</span>、“学” <span
@@ -1944,7 +1945,7 @@ K。下面是该脚本实际输出，不是手工挑选的分数：</p>
 </table></div>
 <p>四步代码分别对应：<code>sum(q*k for ...)</code>
 算原始点积，<code>stable_softmax(raw_scores)</code>
-算不缩放的分布，<code>[s/8 for s in raw_scores]</code>
+算不缩放的分布，<code>[s / scale for s in raw_scores]</code>
 改变尺度，再调用一次稳定
 Softmax。计算用未舍入值，因此只用表格的两位分数重算时，最后百分数会略有差别。</p>
 <p>第三把键的原始分数虽然也是负数，却比另外两项大；指数比较的是差距，不是“正分才有权重”。缩放后分差变小，本例的分布没那么集中。它和下一节的“减去最大值”不同：<strong>除以
@@ -2672,109 +2673,209 @@ Encoding）</strong>。</p>
 <h1 id="第5章-位置编码-Positional-Encoding-给词语发-座位号">第5章：位置编码（Positional
 Encoding）——给词语发“座位号”</h1>
 <blockquote>
-<p>“在时间的河流里，前后有序是文明与逻辑的前提。”</p>
+<p>注意力擅长比较内容；要理解句子，还得知道内容出现在什么位置。</p>
 </blockquote>
-<hr />
-<h2 id="自注意力机制的致命死穴词袋效应bag-of-words">5.1
-自注意力机制的致命死穴：词袋效应（Bag of Words）</h2>
-<p>在前两章中，我们沉浸在自注意力机制能够“全员瞬间并行打招呼”的自豪之中。
-然而，一位细心的初学者很快就能指出一个惊天漏洞：</p>
-<p>请对比以下两句话：</p>
+<p>上一章把注意力拆成多个头，本章暂时不增加头数，而是补上输入里的顺序信息。学完后，你应该能手算一个位置编码，追踪它怎样与词向量相加，并分清“能算出更长的编码”和“模型能理解更长的文本”。</p>
+<p>配套实验：<a
+href="code/05_positional_encoding.py">code/05_positional_encoding.py</a>。只需
+CPU 和项目锁定的
+PyTorch；不下载模型，不训练语言模型。先读公式和数值表，再运行代码也可以。</p>
+<h2 id="换了座位为什么注意力还可能认不出来">5.1
+换了座位，为什么注意力还可能认不出来？</h2>
+<p>把“小猫 / 吃 / 小鱼”看成三个 token。交换首尾后变成“小鱼 / 吃 /
+小猫”：内容集合相同，谁吃谁却变了。</p>
+<p>先限定实验条件：<strong>双向、没有位置编码或位置偏置、没有
+mask、没有随机
+dropout，所有位置共用同一组投影矩阵</strong>。只靠这样的自注意力，交换输入的行，输出也只是按同样顺序交换。</p>
+<p>这叫<strong>置换等变性（permutation
+equivariance）</strong>，不是“所有输出完全不变”。用 <span
+class="math inline">\(P\)</span> 表示重新排列表格行的操作：</p>
+<p><span
+class="math display">\[\operatorname{Attention}(PX)=P\operatorname{Attention}(X).\]</span></p>
+<p>跟着形状走一遍：</p>
 <ol type="1">
-<li><strong>“小猫 吃 小鱼”</strong></li>
-<li><strong>“小鱼 吃 小猫”</strong></li>
+<li><span class="math inline">\(X\)</span> 的形状是 <span
+class="math inline">\([T,D]\)</span>，换序后仍是 <span
+class="math inline">\([T,D]\)</span>。</li>
+<li>共用投影使 <span class="math inline">\(Q,K,V\)</span>
+的行也一起换序。</li>
+<li><span class="math inline">\(QK^T\)</span>
+的查询行、键列同步换序；Softmax 只是在每行内重新排列同一批分数。</li>
+<li>加权时，权重列和 <span class="math inline">\(V\)</span>
+的行同步换序，因此各 token 收集的内容并没改变；输出只跟着输入换行。</li>
 </ol>
-<p>这两句话使用的三个汉字完全相同，但意思却是一个温馨可爱、一个惊悚恐怖！</p>
-<p>然而，让我们回想一下自注意力的计算过程：</p>
+<p>于是“吃”仍然面对同一个邻居集合，它不知道小猫在自己前面还是后面。若最后再对所有行求和或平均，这种不依赖顺序的汇总才是<strong>置换不变</strong>。</p>
+<h3 id="一次能运行的换词实验">一次能运行的换词实验</h3>
+<p>为了不被投影参数干扰，令 <span
+class="math inline">\(Q=K=V=X\)</span>，三行分别表示小猫、吃、小鱼：</p>
+<pre class="text"><code>X = [[1, 0],
+     [0, 1],
+     [1, 1]]        形状 [3, 2]
+换序 order = [2, 1, 0]</code></pre>
+<p>脚本的 <code>permutation_example()</code> 计算 <span
+class="math inline">\(\operatorname{softmax}(XX^T/\sqrt{2})X\)</span>。“吃”的输出在换序前后都是约
+<code>[0.5989, 0.8022]</code>。然后给各座位加入本章的正弦编码，只换词、保持座位号不动：</p>
+<pre class="text"><code>不加位置，换序误差=0.000000
+固定座位编码，只换词，换序误差=0.971712</code></pre>
+<p>这里的误差是“换词后的输出”与“原输出按同样顺序重排”的最大绝对差。第二行说明位置可以改变计算，<strong>并不说明这个没有训练的玩具模型已经懂了语法</strong>。如果连词和座位号一起搬走，那只是重新排列同一组输入，不是本实验要比较的情况。</p>
+<p><strong>边界很重要：因果 mask 本身也携带顺序结构。</strong>
+固定下三角 mask
+时随意换词，各位置可见的前缀会改变，上面的等式一般不再成立。不能据此说“一切没有位置编码的因果模型都完全不懂顺序”。反过来，加了位置编码也不能代替因果
+mask：一个告诉模型位置，一个限制哪些内容可见。</p>
+<h2 id="座位号有三种常见表达">5.2 座位号有三种常见表达</h2>
+<h3 id="表-5-1可学习绝对位置固定正弦位置与相对位置">表
+5-1：可学习绝对位置、固定正弦位置与相对位置</h3>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">类型</th>
+<th style="text-align: left;">告诉模型什么</th>
+<th style="text-align: left;">常见实现</th>
+<th style="text-align: left;">必须记住的边界</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">可学习绝对位置</td>
+<td style="text-align: left;">“我坐在第 <span
+class="math inline">\(pos\)</span> 个座位”</td>
+<td style="text-align: left;">一张 <span
+class="math inline">\([L_{max},D]\)</span>
+参数表，按位置查行，再与词向量相加</td>
+<td
+style="text-align: left;">表有固定行数；未训练过的行也不会自动具有有用含义</td>
+</tr>
+<tr>
+<td style="text-align: left;">固定正弦位置</td>
+<td style="text-align: left;">同样是绝对位置，但座位向量由公式给定</td>
+<td style="text-align: left;">不同频率的 sin/cos，生成 <span
+class="math inline">\([T,D]\)</span> 后相加</td>
+<td
+style="text-align: left;">没有可学习的位置参数；能算新位置不保证长文本效果</td>
+</tr>
+<tr>
+<td style="text-align: left;">相对位置信息</td>
+<td style="text-align: left;">“你在我前面或后面几格”</td>
+<td style="text-align: left;">根据键位置 <span
+class="math inline">\(j\)</span> 与查询位置 <span
+class="math inline">\(i\)</span> 的差 <span
+class="math inline">\(j-i\)</span>，影响注意力计算</td>
+<td
+style="text-align: left;">有不同实现；距离可被分桶或截断，不一定给每个位置加一行向量</td>
+</tr>
+</tbody>
+</table></div>
+<p>原版 Transformer
+对固定正弦与可学习绝对位置都做过实验；论文报告二者在所测翻译设置下效果接近，不能把正弦写成唯一正确答案。[来源
+1，§3.5、表 3(E)]</p>
+<p>可学习表与词表类似，但索引不同：词向量用 token ID
+查表，位置向量用位置索引查表。例如 <span
+class="math inline">\(L_{max}=8,D=8\)</span> 时，位置表有 <span
+class="math inline">\(8\times8=64\)</span>
+个可训练参数。固定正弦表没有这 64
+个可训练参数，但把它预先存成矩阵仍然占内存。</p>
+<p>相对位置可以先用一句话理解：“不在乎你坐第 100
+排，只在乎你在我右边两格。”例如查询在 <span
+class="math inline">\(i=2\)</span>、键在 <span
+class="math inline">\(j=5\)</span> 时，按本章约定距离为 <span
+class="math inline">\(j-i=3\)</span>；二者同时右移一格，差仍是 3。Shaw
+等人的方法把相对位置表示用于注意力的键项，也可用于值项，并将超过范围的距离截断。[来源
+2，§3.1–3.2] 这只是一个具体方案，不是所有相对位置方法的统一公式。</p>
+<h3 id="为什么不直接写一个整数">为什么不直接写一个整数？</h3>
+<p>当然可以把位置写成一个标量特征，不是数学上禁止。只是需要处理两个问题：</p>
 <ul>
-<li>句子里的所有词，是在同一瞬间被一股脑扔进计算机里的；</li>
-<li>算注意力打分时，只是两两之间拿向量做点乘；</li>
-<li>点乘只取决于两个词本身的坐标属性，<strong>完全与它们出现在句子的第 1
-个位置还是第 3 个位置无关</strong>！</li>
+<li>直接用 <span class="math inline">\(pos\)</span>
+时，较大位置可能与词向量分量处于不同尺度；还要决定如何把一个数送进 <span
+class="math inline">\(D\)</span>
+维网络。这是尺度与建模设计问题，不是“整数必然让网络爆炸”。</li>
+<li>若改成 <span
+class="math inline">\(pos/T\)</span>，相邻位置的步长随句长变化：<span
+class="math inline">\(T=3\)</span> 时是 <span
+class="math inline">\(1/3\)</span>，<span
+class="math inline">\(T=100\)</span> 时是 <span
+class="math inline">\(1/100\)</span>。同样的“隔一个
+token”，数值差却不同。</li>
 </ul>
-<div class="warning">
-<div class="title">
-注意
-</div>
-<p><strong>对调词语之后，输出只是跟着对调</strong>：
-不加位置信息时，自注意力有一个性质：词语对调，输出也按同样的方式对调。</p>
-<ul>
-<li>“吃”看到的邻居集合还是 {小猫, 小鱼,
-吃}，所以“吃”的新向量在两句话里一样。</li>
-<li>“小猫”和“小鱼”两个位置上的结果会对换。
-整张表并不是每个格子都原封不动。问题在于：模型没有信号区分“谁在动词前面”。主语和宾语因此分不清。</li>
-</ul>
-</div>
-<p>为了拯救模型，我们必须为每个词配备一份“位置说明书”——告诉它，你到底坐在第几号座位上！</p>
-<hr />
-<h2 id="失败的探索为什么不能简单排号-1-2-3">5.2
-失败的探索：为什么不能简单排号 1, 2, 3…？</h2>
-<p>如何给词语发座位号？让我们看看工程师们走过的弯路：</p>
-<h3 id="方案-1直接给每个词贴上序号-1-2-3-dots-n">方案
-1：直接给每个词贴上序号 <span class="math inline">\([1, 2, 3, \dots,
-N]\)</span></h3>
-<ul>
-<li>比如把位置当成一个数字加在词向量后面。</li>
-<li><strong>主要问题</strong>：如果一篇文章有 1000
-个字，最后一个词的座位号就是
-1000！这个数值尺度可能压过词向量本身只有小数值（如
-0.5、-1.2）的语义信息；如果训练时只见过 500
-个字，遇到更长文本时也需要额外的外推设计。</li>
-</ul>
-<h3 id="方案-2归一化到-0-到-1-之间例如-pos-n">方案 2：归一化到 0 到 1
-之间（例如 <span class="math inline">\(pos / N\)</span>）</h3>
-<ul>
-<li>把整句话等分为 1，第 <span class="math inline">\(i\)</span>
-个词的位置标为 <span class="math inline">\(i / N\)</span>。</li>
-<li><strong>一个明显问题</strong>：在只有 3
-个字的短句里，相邻两个字的距离是 <span class="math inline">\(1/3 \approx
-0.33\)</span>；而在 100 个字的长句里，相邻两个字的距离变成了 <span
-class="math inline">\(0.01\)</span>！同一个物理语意上的“紧挨着的下一个词”，在不同长度的句子中数值尺度会变化，模型需要额外学习这种长度差异。</li>
-</ul>
-<hr />
-<h2 id="正弦与余弦用周期变化记录位置">5.3
-正弦与余弦：用周期变化记录位置</h2>
-<p>2017 年的 Transformer
-论文使用<strong>正弦（Sine）与余弦（Cosine）</strong>构造位置编码：让不同维度以不同的频率变化，为每个位置生成一组数值。这个方法称为
-<strong>正弦余弦位置编码（Sinusoidal Positional
-Encoding）</strong>。</p>
-<p>先看这两个公式： 对于位于句子第 <span
-class="math inline">\(pos\)</span> 个座位的词，以及它的第 <span
-class="math inline">\(i\)</span> 组特征维度：</p>
-<p><span class="math display">\[PE_{(pos, 2i)} =
-\sin\left(\frac{pos}{10000^{2i / d_{model}}}\right)\]</span> <span
-class="math display">\[PE_{(pos, 2i+1)} = \cos\left(\frac{pos}{10000^{2i
-/ d_{model}}}\right)\]</span></p>
-<p>公式里的 <span class="math inline">\(10000^{2i/d_{model}}\)</span>
-控制不同维度的变化速度。可以把它类比为<strong>手表上转速不同的指针</strong>，下面逐步说明。</p>
-<hr />
-<h3
-id="石英手表的生动类比三针定乾坤">石英手表的生动类比：三针定乾坤</h3>
-<p>请看你手腕上的石英表：它是怎么记录时间流逝（位置变化）的？</p>
-<pre><code>  秒针 (对应低维度 2i=0):
-  滴答滴答，转得飞快！(高频正弦波，周期极短)
-  
-  分针 (对应中间维度 2i=d/2):
-  转得不紧不慢。(中频正弦波，周期适中)
-  
-  时针 (对应高维度 2i=d-2):
-  转得极慢极慢！(低频正弦波，周期长达上万步)</code></pre>
-<p>每个时间点（位置 <span
-class="math inline">\(pos\)</span>），几根指针的<strong>读数组合</strong>应当独一无二。
-最快那根针对应 <span
-class="math inline">\(\sin(pos)\)</span>，它的周期是 <span
-class="math inline">\(2\pi \approx 6.28\)</span>
-个座位，不是“一个座位就走完大半圈”：</p>
-<ul>
-<li><span class="math inline">\(pos=0\)</span>：<span
-class="math inline">\(\sin 0 = 0\)</span>，指针在起点；</li>
-<li><span class="math inline">\(pos=1\)</span>：<span
-class="math inline">\(\sin 1 \approx 0.84\)</span>，大约转到 57
-度，靠近第一座波峰，只走了约六分之一圈；</li>
-<li>最慢的那几根针在前几个座位里几乎还停着。图 5-1
-把三条真实的正弦画在同一段位置 0 到 24
-上，红点落在算出的高度上，而不是落在横轴上。</li>
-</ul>
+<p>接下来学习的正弦方案给每个位置一组有界、且不依赖当前句长 <span
+class="math inline">\(T\)</span> 的数字，便于观察这些取舍。</p>
+<h2 id="不同频率把一根指针变成一组指针">5.3
+不同频率：把一根指针变成一组指针</h2>
+<p>本章位置从 0 开始，<span
+class="math inline">\(D=d_{model}\)</span>。公式中的 <span
+class="math inline">\(i\)</span>
+是<strong>第几对维度</strong>，不是已经乘过 2 的列号：</p>
+<p><span
+class="math display">\[PE_{(pos,2i)}=\sin\left(\frac{pos}{10000^{2i/D}}\right),\]</span></p>
+<p><span
+class="math display">\[PE_{(pos,2i+1)}=\cos\left(\frac{pos}{10000^{2i/D}}\right).\]</span></p>
+<p>两式来自原版 Transformer 的 §3.5。[来源 1]
+这里的角度单位是<strong>弧度</strong>。一个整圆是 <span
+class="math inline">\(2\pi\)</span> 弧度；<span
+class="math inline">\(pos=1\)</span>、分母为 1 时走了 1 弧度，约 57
+度，不是一整圈。</p>
+<p>把 <span class="math inline">\(\omega_i=10000^{-2i/D}\)</span>
+叫作角频率，就可以写成 <span
+class="math inline">\(\sin(pos\,\omega_i)\)</span>、<span
+class="math inline">\(\cos(pos\,\omega_i)\)</span>。同一对 sin/cos
+使用同一个频率；分母越大，每前进一个位置转过的角度越小。每圈所需的位置间隔，也就是周期，为
+<span class="math inline">\(2\pi/\omega_i\)</span>。</p>
+<p>令 <span class="math inline">\(D=8\)</span>，逐对代入：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th style="text-align: left;">维度对</th>
+<th style="text-align: center;"><span
+class="math inline">\(i\)</span></th>
+<th style="text-align: center;">分母 <span
+class="math inline">\(10000^{2i/8}\)</span></th>
+<th style="text-align: center;">角频率</th>
+<th style="text-align: center;">周期，约多少个位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">d0、d1</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">6.28</td>
+</tr>
+<tr>
+<td style="text-align: left;">d2、d3</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">10</td>
+<td style="text-align: center;">0.1</td>
+<td style="text-align: center;">62.83</td>
+</tr>
+<tr>
+<td style="text-align: left;">d4、d5</td>
+<td style="text-align: center;">2</td>
+<td style="text-align: center;">100</td>
+<td style="text-align: center;">0.01</td>
+<td style="text-align: center;">628.32</td>
+</tr>
+<tr>
+<td style="text-align: left;">d6、d7</td>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;">1000</td>
+<td style="text-align: center;">0.001</td>
+<td style="text-align: center;">6283.19</td>
+</tr>
+</tbody>
+</table></div>
+<p>不要机械地把最慢周期写成 <span
+class="math inline">\(10000\times2\pi\)</span>：对这个有限的 8
+维例子，最后的分母是 1000。频率取决于<strong>完整宽度 <span
+class="math inline">\(D\)</span></strong>；8 维编码也不等于 512
+维编码的前 8 列。</p>
+<h3 id="手表类比的用途与边界">手表类比的用途与边界</h3>
+<p>快针在几个位置里就来回摆动，慢针在短句里几乎不动。它们合起来提供多种尺度的变化信息。</p>
 <figure>
 <a href="assets/rendered/positional_encoding_waves.svg"
 title="点击查看原尺寸图"><img
@@ -2782,55 +2883,16 @@ src="assets/rendered/positional_encoding_waves.svg" class="book-diagram"
 width="720" alt="图 5-1：正弦余弦位置编码的波形频率谱" /></a>
 <figcaption>图 5-1：正弦余弦位置编码的波形频率谱</figcaption>
 </figure>
-<h3 id="表-5-1三大位置编码方案全景对比评测表">表
-5-1：三大位置编码方案全景对比评测表</h3>
-<div class="table-wrapper"><table>
-<colgroup>
-<col style="width: 23%" />
-<col style="width: 23%" />
-<col style="width: 23%" />
-<col style="width: 29%" />
-</colgroup>
-<thead>
-<tr>
-<th style="text-align: left;">方案模式</th>
-<th style="text-align: left;">具体做法</th>
-<th style="text-align: left;">致命缺陷</th>
-<th style="text-align: center;">最终评级</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><strong>方案 1：整数序号递增</strong></td>
-<td style="text-align: left;">填入
-<code>[1, 2, 3, ..., 1000]</code></td>
-<td
-style="text-align: left;"><strong>数值爆炸</strong>！后面的词数值太大，淹没语义特征；长句无法泛化。</td>
-<td style="text-align: center;">❌ 淘汰</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>方案
-2：归一化线性比例</strong></td>
-<td style="text-align: left;">填入 <code>pos / 总字数</code></td>
-<td
-style="text-align: left;"><strong>步长飘忽不定</strong>！3个字的句子步长0.33，100个字的句子步长0.01。</td>
-<td style="text-align: center;">❌ 淘汰</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>方案
-3：正弦余弦周期波</strong></td>
-<td style="text-align: left;">双波交替 <span
-class="math inline">\(\sin(\omega t), \cos(\omega t)\)</span></td>
-<td style="text-align: left;">有界在 <span class="math inline">\([-1,
-1]\)</span> 内，高低频兼备；和角公式提供了表达相对距离的一条路径</td>
-<td style="text-align: center;">原版 Transformer 的选择</td>
-</tr>
-</tbody>
-</table></div>
-<hr />
-<h3
-id="表-5-2前-8-个位置与前-8-个维度的真实位置编码数值表-保留两位小数">表
-5-2：前 8 个位置与前 8 个维度的真实位置编码数值表 (保留两位小数)</h3>
+<p>图 5-1 为了在位置 0 到 24 的同一画布上看清变化，使用 <span
+class="math inline">\(\sin(pos)\)</span>、<span
+class="math inline">\(\sin(pos/8)\)</span>、<span
+class="math inline">\(\sin(pos/80)\)</span>
+三条示意曲线；<strong>不是下方 <span class="math inline">\(D=8\)</span>
+表格中的三个实际列</strong>。图中红点表示算出的函数值。</p>
+<p>这个类比不保证“无限多个座位都有永不重复、容易识别的指纹”。周期分量会回头，组合也可能很接近；浮点精度有限，模型还需要学习如何利用它。我们能核验的是指定长度内的具体数值与关系，而不是任意长上下文的唯一性或可辨识性。</p>
+<h3 id="表-5-2前-8-个位置与全部-8-个维度d8保留两位小数">表 5-2：前 8
+个位置与全部 8 个维度，<span
+class="math inline">\(D=8\)</span>（保留两位小数）</h3>
 <div class="table-wrapper"><table style="width:100%;">
 <colgroup>
 <col style="width: 11%" />
@@ -2847,29 +2909,29 @@ id="表-5-2前-8-个位置与前-8-个维度的真实位置编码数值表-保�
 <tr>
 <th style="text-align: center;">位置序号 <span
 class="math inline">\(pos\)</span></th>
-<th style="text-align: center;">维度 d0 (<span
+<th style="text-align: center;">d0 (<span
 class="math inline">\(\sin\)</span>)</th>
-<th style="text-align: center;">维度 d1 (<span
+<th style="text-align: center;">d1 (<span
 class="math inline">\(\cos\)</span>)</th>
-<th style="text-align: center;">维度 d2 (<span
+<th style="text-align: center;">d2 (<span
 class="math inline">\(\sin\)</span>)</th>
-<th style="text-align: center;">维度 d3 (<span
+<th style="text-align: center;">d3 (<span
 class="math inline">\(\cos\)</span>)</th>
-<th style="text-align: center;">维度 d4 (<span
+<th style="text-align: center;">d4 (<span
 class="math inline">\(\sin\)</span>)</th>
-<th style="text-align: center;">维度 d5 (<span
+<th style="text-align: center;">d5 (<span
 class="math inline">\(\cos\)</span>)</th>
-<th style="text-align: center;">维度 d6 (<span
+<th style="text-align: center;">d6 (<span
 class="math inline">\(\sin\)</span>)</th>
-<th style="text-align: center;">维度 d7 (<span
+<th style="text-align: center;">d7 (<span
 class="math inline">\(\cos\)</span>)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td style="text-align: center;"><strong>位置 0</strong></td>
-<td style="text-align: center;"><strong>0.00</strong></td>
-<td style="text-align: center;"><strong>1.00</strong></td>
+<td style="text-align: center;">0.00</td>
+<td style="text-align: center;">1.00</td>
 <td style="text-align: center;">0.00</td>
 <td style="text-align: center;">1.00</td>
 <td style="text-align: center;">0.00</td>
@@ -2879,8 +2941,8 @@ class="math inline">\(\cos\)</span>)</th>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 1</strong></td>
-<td style="text-align: center;"><strong>0.84</strong></td>
-<td style="text-align: center;"><strong>0.54</strong></td>
+<td style="text-align: center;">0.84</td>
+<td style="text-align: center;">0.54</td>
 <td style="text-align: center;">0.10</td>
 <td style="text-align: center;">1.00</td>
 <td style="text-align: center;">0.01</td>
@@ -2890,8 +2952,8 @@ class="math inline">\(\cos\)</span>)</th>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 2</strong></td>
-<td style="text-align: center;"><strong>0.91</strong></td>
-<td style="text-align: center;"><strong>-0.42</strong></td>
+<td style="text-align: center;">0.91</td>
+<td style="text-align: center;">-0.42</td>
 <td style="text-align: center;">0.20</td>
 <td style="text-align: center;">0.98</td>
 <td style="text-align: center;">0.02</td>
@@ -2901,8 +2963,8 @@ class="math inline">\(\cos\)</span>)</th>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 3</strong></td>
-<td style="text-align: center;"><strong>0.14</strong></td>
-<td style="text-align: center;"><strong>-0.99</strong></td>
+<td style="text-align: center;">0.14</td>
+<td style="text-align: center;">-0.99</td>
 <td style="text-align: center;">0.30</td>
 <td style="text-align: center;">0.96</td>
 <td style="text-align: center;">0.03</td>
@@ -2912,8 +2974,8 @@ class="math inline">\(\cos\)</span>)</th>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 4</strong></td>
-<td style="text-align: center;"><strong>-0.76</strong></td>
-<td style="text-align: center;"><strong>-0.65</strong></td>
+<td style="text-align: center;">-0.76</td>
+<td style="text-align: center;">-0.65</td>
 <td style="text-align: center;">0.39</td>
 <td style="text-align: center;">0.92</td>
 <td style="text-align: center;">0.04</td>
@@ -2923,8 +2985,8 @@ class="math inline">\(\cos\)</span>)</th>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 5</strong></td>
-<td style="text-align: center;"><strong>-0.96</strong></td>
-<td style="text-align: center;"><strong>0.28</strong></td>
+<td style="text-align: center;">-0.96</td>
+<td style="text-align: center;">0.28</td>
 <td style="text-align: center;">0.48</td>
 <td style="text-align: center;">0.88</td>
 <td style="text-align: center;">0.05</td>
@@ -2934,8 +2996,8 @@ class="math inline">\(\cos\)</span>)</th>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 6</strong></td>
-<td style="text-align: center;"><strong>-0.28</strong></td>
-<td style="text-align: center;"><strong>0.96</strong></td>
+<td style="text-align: center;">-0.28</td>
+<td style="text-align: center;">0.96</td>
 <td style="text-align: center;">0.56</td>
 <td style="text-align: center;">0.83</td>
 <td style="text-align: center;">0.06</td>
@@ -2945,8 +3007,8 @@ class="math inline">\(\cos\)</span>)</th>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 7</strong></td>
-<td style="text-align: center;"><strong>0.66</strong></td>
-<td style="text-align: center;"><strong>0.75</strong></td>
+<td style="text-align: center;">0.66</td>
+<td style="text-align: center;">0.75</td>
 <td style="text-align: center;">0.64</td>
 <td style="text-align: center;">0.76</td>
 <td style="text-align: center;">0.07</td>
@@ -2956,24 +3018,40 @@ class="math inline">\(\cos\)</span>)</th>
 </tr>
 </tbody>
 </table></div>
-<p>可以用计算器核对位置 1 的三根针（<span
-class="math inline">\(d_{model}=8\)</span>）：</p>
+<p>用位置 1 跟算：</p>
 <ul>
-<li>维度 0，<span class="math inline">\(i=0\)</span>：<span
-class="math inline">\(\sin(1 / 10000^{0}) = \sin 1 \approx
-0.84\)</span></li>
-<li>维度 2，<span class="math inline">\(i=1\)</span>：<span
-class="math inline">\(\sin(1 / 10000^{2/8}) = \sin(0.1) \approx
-0.10\)</span></li>
-<li>维度 4，<span class="math inline">\(i=2\)</span>：<span
-class="math inline">\(\sin(1 / 100) \approx 0.01\)</span></li>
+<li>d0：<span class="math inline">\(i=0\)</span>，<span
+class="math inline">\(\sin(1/1)\approx0.84\)</span>。</li>
+<li>d2：<span class="math inline">\(i=1\)</span>，<span
+class="math inline">\(\sin(1/10)\approx0.10\)</span>。</li>
+<li>d4：<span class="math inline">\(i=2\)</span>，<span
+class="math inline">\(\sin(1/100)\approx0.01\)</span>。</li>
+<li>d6：<span class="math inline">\(i=3\)</span>，<span
+class="math inline">\(\sin(1/1000)\approx0.001\)</span>，保留两位小数显示为
+0.00，<strong>不是真正的零</strong>。</li>
 </ul>
-<p>d0、d1 正负跳得很快。d2 像分针，大约每个座位增加 0.10。d6、d7 在这 8
-个座位里几乎不动。表中的 1.00 有时是四舍五入，例如位置 1 的 d3 实际约是
-0.995。</p>
-<hr />
-<h3 id="表-5-3位置-0-与后面各座位的余弦相似度会回升不是一条斜线">表
-5-3：位置 0 与后面各座位的余弦相似度（会回升，不是一条斜线）</h3>
+<p>同理，位置 1 的 d3 是 <span
+class="math inline">\(\cos(0.1)\approx0.995004\)</span>，表中显示
+1.00。读表时别把舍入后的重复数字当成整行重复。全表由脚本生成，测试会核对全部
+64 个显示值，不只是第一行。</p>
+<h2 id="余弦相似度会回升不是距离尺">5.4
+余弦相似度会回升，不是距离尺</h2>
+<p>上一节看单个分量，这一节看两个位置向量整体有多像。对偶数 <span
+class="math inline">\(D\)</span>，每对满足 <span
+class="math inline">\(\sin^2\theta+\cos^2\theta=1\)</span>，所以每行的平方范数为
+<span class="math inline">\(D/2\)</span>。当 <span
+class="math inline">\(D=8\)</span>，每行范数都是 2。</p>
+<p>两行的点积可以按维度对拆开：</p>
+<p><span
+class="math display">\[\sin(p\omega_i)\sin(q\omega_i)+\cos(p\omega_i)\cos(q\omega_i)
+=\cos((p-q)\omega_i).\]</span></p>
+<p>因此对完整的 sin/cos 对：</p>
+<p><span class="math display">\[\operatorname{cosine}(PE_p,PE_q)
+=\frac{1}{D/2}\sum_{i=0}^{D/2-1}\cos((p-q)\omega_i).\]</span></p>
+<p>右边是一组不同频率余弦的平均，<strong>不是必然随距离下降的函数</strong>。分数与距离有关，并不等于它能直接充当距离。</p>
+<h3 id="表-5-3位置-0-与后面各位置的余弦相似度d8">表 5-3：位置 0
+与后面各位置的余弦相似度（<span
+class="math inline">\(D=8\)</span>）</h3>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 27%" />
@@ -2985,8 +3063,8 @@ class="math inline">\(\sin(1 / 100) \approx 0.01\)</span></li>
 <tr>
 <th style="text-align: center;">比较对象</th>
 <th style="text-align: center;">余弦相似度</th>
-<th style="text-align: left;">相似度直方图可视化</th>
-<th style="text-align: left;">语言几何学含义解读</th>
+<th style="text-align: left;">相似度条形图</th>
+<th style="text-align: left;">如何读数</th>
 </tr>
 </thead>
 <tbody>
@@ -3001,19 +3079,19 @@ style="text-align: left;"><code>████████████████
 <td style="text-align: center;"><strong>位置 0 与 位置 1</strong></td>
 <td style="text-align: center;"><strong>0.884</strong></td>
 <td style="text-align: left;"><code>██████████████████████</code></td>
-<td style="text-align: left;">邻居，仍然很像</td>
+<td style="text-align: left;">相邻位置仍很像</td>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 0 与 位置 2</strong></td>
 <td style="text-align: center;"><strong>0.641</strong></td>
 <td style="text-align: left;"><code>████████████████</code></td>
-<td style="text-align: left;">继续拉开</td>
+<td style="text-align: left;">相似度下降</td>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 0 与 位置 3</strong></td>
 <td style="text-align: center;"><strong>0.491</strong></td>
 <td style="text-align: left;"><code>████████████</code></td>
-<td style="text-align: left;">这 8 个座位里的低谷</td>
+<td style="text-align: left;">这 8 个位置里的低谷</td>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 0 与 位置 4</strong></td>
@@ -3025,7 +3103,7 @@ style="text-align: left;"><code>████████████████
 <td style="text-align: center;"><strong>位置 0 与 位置 5</strong></td>
 <td style="text-align: center;"><strong>0.790</strong></td>
 <td style="text-align: left;"><code>███████████████████</code></td>
-<td style="text-align: left;">相似度回升</td>
+<td style="text-align: left;">相似度继续回升</td>
 </tr>
 <tr>
 <td style="text-align: center;"><strong>位置 0 与 位置 6</strong></td>
@@ -3037,140 +3115,286 @@ style="text-align: left;"><code>████████████████
 <td style="text-align: center;"><strong>位置 0 与 位置 7</strong></td>
 <td style="text-align: center;"><strong>0.879</strong></td>
 <td style="text-align: left;"><code>█████████████████████</code></td>
-<td style="text-align: left;">仍然很高，但 d2 已经是
-0.64，指纹并不相同</td>
+<td style="text-align: left;">仍较高，但与位置 0 不同</td>
 </tr>
 </tbody>
 </table></div>
-<p><span class="math inline">\(\sin\)</span> 和 <span
-class="math inline">\(\cos\)</span> 被锁在 <span
-class="math inline">\([-1, 1]\)</span>
-里，座位号再大，这组数字也不会像直接写 1000 那样把词向量淹没。
-只看余弦不够：位置 0 和位置 6 的相似度高达
-0.946，因为快针差不多转完一圈。要分辨它们，得看整列数字，尤其是 d2
-那根慢针。</p>
-<hr />
-<hr />
-<h2 id="用和角公式理解相对距离">5.4 用和角公式理解“相对距离”</h2>
-<p>除了独一无二的绝对位置，语言更关心的是<strong>相对距离</strong>（比如“我”和后面第
-2 个词的关系）。</p>
-<p>为什么发明者偏偏挑选了一对 <span class="math inline">\(\sin\)</span>
-和 <span class="math inline">\(\cos\)</span> 搭配，而不是只用 <span
-class="math inline">\(\sin\)</span> 呢？
-<strong>关键在于和角公式：它能把两个角度相加后的函数值，写成原来两个角度的函数值的组合。</strong></p>
-<p>具体写出来就是： <span class="math display">\[\cos(\alpha + \beta) =
-\cos\alpha\cos\beta - \sin\alpha\sin\beta\]</span> <span
-class="math display">\[\sin(\alpha + \beta) = \sin\alpha\cos\beta +
-\cos\alpha\sin\beta\]</span></p>
-<p>令 <span class="math inline">\(\alpha = pos \cdot
-\omega\)</span>，<span class="math inline">\(\beta = k \cdot
-\omega\)</span>（其中 <span class="math inline">\(k\)</span>
-代表两个词之间的相对距离，<span class="math inline">\(k\)</span>
-步偏移）： <span class="math display">\[\sin((pos + k)\omega) = \sin(pos
-\cdot \omega)\cos(k\omega) + \cos(pos \cdot
-\omega)\sin(k\omega)\]</span></p>
-<p>注意看等式右边： 对于任何固定的相对距离 <span
-class="math inline">\(k\)</span>，<span
-class="math inline">\(\cos(k\omega)\)</span> 和 <span
-class="math inline">\(\sin(k\omega)\)</span>
-都是<strong>固定的常数</strong>！ 这意味着：<strong>位置 <span
-class="math inline">\((pos + k)\)</span> 的位置编码，完全可以通过位置
-<span class="math inline">\(pos\)</span>
-的编码进行一次简单的线性组合（矩阵乘法）直接推导出来！</strong></p>
-<p>模型在学习“修饰词通常在名词前面 1 到 2
-个位置”这种相对规律时，可以利用这个恒定关系，减少对每个绝对位置单独死记硬背的需要。</p>
-<hr />
-<h2 id="为什么是直接相加add而不是拼接concat">5.5
-为什么是直接相加（Add），而不是拼接（Concat）？</h2>
-<p>还有一个困扰无数初学者的疑问：</p>
-<blockquote>
-<p>“把词向量和位置编码结合时，论文里居然写的是：<span
-class="math inline">\(\vec{x}_{\text{最终}} = \vec{x}_{\text{词}} +
-\vec{x}_{\text{位置}}\)</span>。
-直接做加法，难道不会把词语原本包含的‘苹果’、‘香蕉’等语义信息弄脏、污染了吗？为什么不拼成更长的向量？”</p>
-</blockquote>
-<p>高维线性空间的几何直觉给出了令人惊叹的解释：</p>
-<p>在现代大模型动辄 512 甚至 4096
-维的高维空间中，<strong>随机两个向量几乎是天生正交（垂直）的</strong>。
-这就像在一个浩瀚的立体三维房间里：</p>
+<p>表中数值保留三位小数，条形长度由脚本按 <span
+class="math inline">\(\lfloor25\times\text{相似度}\rfloor\)</span>
+生成。位置 3 的相似度约 0.491，距离更远的位置 6 却约
+0.946，已经给出一个明确反例。</p>
+<p>为什么？最快的一对在 6
+附近快转完一圈，较慢的几对又还比较接近起点。相似度很高不等于编码相同：d2
+在位置 0 为 0，在位置 6 约为 0.565。更不能由此推出模型一定会更关注位置
+6；实际注意力还包含 token 内容、学习到的投影与 mask。</p>
+<p><strong>奇数宽度的边界：</strong> 本章代码也允许 <span
+class="math inline">\(D=5\)</span>，填完整的 d0/d1、d2/d3，再填 d4 的
+sine，没有 d5 的
+cosine。这个选择保留公式的每个合法列，但最后一列没有配对，所以恒定范数与上面的成对余弦平均公式不能直接套用。本章两个数值表都使用偶数宽度
+8。</p>
+<h2 id="用和角公式看相隔几格">5.5 用和角公式看“相隔几格”</h2>
+<p>正弦编码按绝对位置生成，却含有便于表达相对偏移的结构。固定一个维度对、一个偏移量
+<span class="math inline">\(k\)</span>，令 <span
+class="math inline">\(\alpha=p\omega_i\)</span>、<span
+class="math inline">\(\beta=k\omega_i\)</span>：</p>
+<p><span
+class="math display">\[\sin((p+k)\omega_i)=\sin(p\omega_i)\cos(k\omega_i)+\cos(p\omega_i)\sin(k\omega_i),\]</span></p>
+<p><span
+class="math display">\[\cos((p+k)\omega_i)=\cos(p\omega_i)\cos(k\omega_i)-\sin(p\omega_i)\sin(k\omega_i).\]</span></p>
+<p>当 <span class="math inline">\(k\)</span> 固定时，右边的两个系数
+<span class="math inline">\(\sin(k\omega_i)\)</span>、<span
+class="math inline">\(\cos(k\omega_i)\)</span> 不依赖 <span
+class="math inline">\(p\)</span>。所以每一个完整维度对都可以通过<strong>相同的线性变换</strong>，从位置
+<span class="math inline">\(p\)</span> 推到位置 <span
+class="math inline">\(p+k\)</span>。例如最快的那一对，从位置 0 的
+<code>[0, 1]</code> 走一步，得到 <code>[sin(1), cos(1)]</code>，约
+<code>[0.841, 0.540]</code>。</p>
+<p>这是“模型有机会利用相对关系”的数学依据，不是“训练一定会学会距离”的证明，也不是“加法位置编码的整个注意力分数只取决于距离”。加入内容并经过不同的
+<span class="math inline">\(W_Q,W_K\)</span>
+后，还会出现内容与位置的交叉项。</p>
+<p>路线图中的 <strong>P12：RoPE 与 YaRN</strong>
+会研究另一条路线：把位置信息用于 Q/K
+的旋转，并检查相对关系与缓存位置偏移。这里先认识名字，不提前把正弦相加改写成
+RoPE，更不把旋转当成长上下文效果的保证。[来源 3，§3.1–3.2]</p>
+<h2 id="为什么相加而不是拼接先算一遍">5.6
+为什么相加，而不是拼接？先算一遍</h2>
+<p>把“词”和“座位号”想成两张宽度相同的表。加法是对应格子相加，拼接是把两张表左右并排放置。</p>
+<p>设 <span
+class="math inline">\(B=1,T=2,D=4\)</span>。本例直接给出词向量 <span
+class="math inline">\(X\)</span>，不再额外乘缩放系数：</p>
+<pre class="text"><code>X[0] = [[ 0.2, -0.1,  0.4, 0.0],
+        [ 0.5,  0.3, -0.2, 0.1]]        X: [1, 2, 4]
+
+PE[0] = [0, 1, 0, 1]
+PE[1] = [sin(1), cos(1), sin(0.01), cos(0.01)]
+                                         PE: [2, 4]</code></pre>
+<p>先为 PE 加一个 batch 轴，变成 <span
+class="math inline">\([1,T,D]\)</span>。若 <span
+class="math inline">\(B&gt;1\)</span>，加法广播会把同一张位置表应用到每个样本，本身不新增训练参数。这里假设每个样本的有效序列都从位置
+0 开始；左侧 padding 或已有前缀的场景，需要另外检查有效位置编号。</p>
+<p>对位置 0，逐项算：</p>
+<p><span
+class="math display">\[[0.2,-0.1,0.4,0.0]+[0,1,0,1]=[0.2,0.9,0.4,1.0].\]</span></p>
+<p>两个位置的结果由 <code>addition_concat_example()</code> 打印为：</p>
+<pre class="text"><code>Add 位置 0: [0.200, 0.900, 0.400, 1.000]
+Add 位置 1: [1.341, 0.840, -0.190, 1.100]
+Add=(1, 2, 4)；Concat=(1, 2, 8)</code></pre>
+<p>若拼接，位置 0 会是
+<code>[0.2, -0.1, 0.4, 0.0, 0, 1, 0, 1]</code>。词向量与位置向量各占自己的
+4 格，宽度从 4 变成 8。</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 23%" />
+<col style="width: 23%" />
+<col style="width: 23%" />
+<col style="width: 29%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">操作</th>
+<th style="text-align: left;">一般形状</th>
+<th style="text-align: left;">若后续 Q 投影输出宽度仍为 <span
+class="math inline">\(D\)</span>，且无 bias</th>
+<th style="text-align: center;"><span class="math inline">\(D=4\)</span>
+的投影参数量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">相加 <span
+class="math inline">\(X+PE\)</span></td>
+<td style="text-align: left;"><span
+class="math inline">\([B,T,D]\)</span></td>
+<td style="text-align: left;"><span
+class="math inline">\(W_Q:[D,D]\)</span></td>
+<td style="text-align: center;">16</td>
+</tr>
+<tr>
+<td style="text-align: left;">拼接 <span
+class="math inline">\([X;PE]\)</span></td>
+<td style="text-align: left;"><span
+class="math inline">\([B,T,2D]\)</span></td>
+<td style="text-align: left;"><span
+class="math inline">\(W_Q:[2D,D]\)</span></td>
+<td style="text-align: center;">32</td>
+</tr>
+</tbody>
+</table></div>
+<p>这里仅比较<strong>同样保持 Q 输出宽度为 <span
+class="math inline">\(D\)</span>
+的一张投影矩阵</strong>，不是宣称整个模型参数、显存、运行时间都翻倍。也可以用较窄的两部分再拼成
+<span
+class="math inline">\(D\)</span>，但那已经改变了本例的维度分配。</p>
+<p>加法的代价是什么？<span class="math inline">\([1,0]+[0,1]\)</span> 与
+<span class="math inline">\([0,1]+[1,0]\)</span> 都是
+<code>[1,1]</code>，因此只给一个和，不能一般性地恢复两个任意输入。不要用“高维向量天生正交”来保证词义与位置能无损拆开；学习到的词向量和固定
+PE 并没有这种自动保证。</p>
+<p>它仍然是一个可训练的设计选择：加法保持输入宽度，词向量与后续层共同适应这种混合。对一个线性投影，<span
+class="math inline">\((X+PE)W=XW+PEW\)</span>；拼接则允许使用分别作用于内容和位置的
+<span
+class="math inline">\(W_x,W_p\)</span>。二者约束不同，是否更好需要实验。原论文采用相加，并在输入词嵌入处使用
+<span class="math inline">\(\sqrt{D}\)</span> 缩放；本例为便于手算，把
+<span class="math inline">\(X\)</span> 直接当作待相加的输入。[来源
+1，§3.4–3.5]</p>
+<h2 id="长度要分三本账">5.7 长度要分三本账</h2>
+<p>假设训练样本最长为 8 个 token，位置都从 0 开始；现在想测试 12 个
+token。</p>
+<ol type="1">
+<li><strong>编码能否生成？</strong> 正弦公式可以生成位置 8 到
+11；<code>generate_positional_encoding(12, 8)</code> 返回 <span
+class="math inline">\([12,8]\)</span>，且前 8
+行与原来的表相同。公式不依赖当前句长。</li>
+<li><strong>实现是否允许？</strong> 如果模型只预存了 8 行位置表、8 格
+mask 或有限缓存，即使采用正弦，也可能先在实现处越界。可学习表若只有 8
+行，直接查第 8 行就超出索引范围；预分配 12
+行可以避免越界，却不代表新行已经训练好。</li>
+<li><strong>任务质量是否保持？</strong> 训练只见过 8-token
+的依赖模式，12-token
+输入改变了分布。能跑完前向不等于预测正确；仍需在更长长度上测 loss
+或具体任务表现，并检查资源成本。</li>
+</ol>
+<p>代码的 <code>length_example()</code> 只做前两项的微型检查，打印：</p>
+<pre class="text"><code>可学习表参数=64；位置 8 越界=True
+正弦扩展形状=(12, 8)；前 8 行不变=True</code></pre>
+<p>这里<strong>没有训练，也没有长上下文质量测评</strong>。扩展编码表、修改长度配置、改善长文本能力是不同的工作。原论文把长度外推作为选用正弦的动机；本章不把这个动机改写成无限外推保证。[来源
+1，§3.5]</p>
+<h2 id="把公式写成代码">5.8 把公式写成代码</h2>
+<p>下面是生成器的核心循环；完整文件还检查维度是否合法。<code>torch.zeros</code>
+创建 <span class="math inline">\([T,D]\)</span> 的 CPU float32
+矩阵，<code>math.sin/cos</code> 按弧度计算，逐格填入：</p>
+<div class="sourceCode" id="cb41"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>pe <span class="op">=</span> torch.zeros(max_seq_len, d_model, dtype<span class="op">=</span>torch.float32, device<span class="op">=</span><span class="st">&#39;cpu&#39;</span>)</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> pos <span class="kw">in</span> <span class="bu">range</span>(max_seq_len):</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>((d_model <span class="op">+</span> <span class="dv">1</span>) <span class="op">//</span> <span class="dv">2</span>):</span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>        div_term <span class="op">=</span> math.<span class="bu">pow</span>(<span class="fl">10000.0</span>, (<span class="dv">2</span> <span class="op">*</span> k) <span class="op">/</span> d_model)</span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>        pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span></code></pre></div>
+<p>逐行核对：</p>
 <ul>
-<li>词语义信息主要分布在某些子空间维度上；</li>
-<li>正弦余弦波浪主要分布在另一些方向上。</li>
+<li>外层遍历位置 0 到 <span
+class="math inline">\(T-1\)</span>，内层遍历“第几对”。<code>2*k</code>
+已经是偶数列索引，不要在指数里再多乘一次 2。</li>
+<li><code>(d_model + 1) // 2</code> 向上取整。<span
+class="math inline">\(D=5\)</span> 时需要三次循环，最后一次填 d4 的
+sine；若写 <code>d_model // 2</code>，d4 会被错误地留成零。</li>
+<li><code>if</code> 只决定有没有合法的 cosine 列，不应把最后一个 sine
+也跳过。</li>
+<li>支持空序列 <span
+class="math inline">\([0,D]\)</span>；拒绝负长度、非正宽度，以及浮点数或布尔值维度。这是教学函数的明确契约。</li>
 </ul>
-<p>直接将它们相加，就像在平静的湖水表面激起了一圈微小的涟漪：
-<strong>鱼儿依然是鱼儿（词义保持），涟漪的方向则清晰地记录了水波的源头位置（位置保持）！</strong>
-模型内部的投影矩阵 <span class="math inline">\(W_Q, W_K\)</span>
-可以学习如何区分两类信息；直接相加则避免把模型输入维度直接翻倍，通常能节省一部分参数和显存。</p>
-<hr />
-<h2 id="动手看代码与字符波浪热力图">5.6 动手看代码与字符波浪热力图</h2>
-<p>打开 <a
-href="code/05_positional_encoding.py">code/05_positional_encoding.py</a>，我们用纯
-Python 生成一个 8 位置、8 维度的位置编码矩阵并打印：</p>
-<div class="sourceCode" id="cb37"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> generate_positional_encoding(max_seq_len, d_model):</span>
-<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>    pe <span class="op">=</span> torch.zeros(max_seq_len, d_model)</span>
-<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> pos <span class="kw">in</span> <span class="bu">range</span>(max_seq_len):</span>
-<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>        <span class="co"># k 就是公式里的 i：第几对维度。不要再额外乘一次 2。</span></span>
-<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>(d_model <span class="op">//</span> <span class="dv">2</span>):</span>
-<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>            div_term <span class="op">=</span> math.<span class="bu">pow</span>(<span class="fl">10000.0</span>, (<span class="dv">2</span> <span class="op">*</span> k) <span class="op">/</span> d_model)</span>
-<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
-<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
-<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>                pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span>
-<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> pe</span></code></pre></div>
-<p>运行后在控制台打印出的字符热力图如下：</p>
-<pre class="text"><code>Pos \ Dim | d0 d1 d2 d3 d4 d5 d6 d7
-Pos  0    |  =  @  =  @  =  @  =  @ 
-Pos  1    |  @  #  +  @  +  @  =  @ 
-Pos  2    |  @  :  +  @  +  @  +  @ 
-Pos  3    |  +     *  @  +  @  +  @ 
-Pos  4    |  .  .  *  @  +  @  +  @ 
-Pos  5    |     *  #  @  +  @  +  @ 
-Pos  6    |  -  @  #  @  +  @  +  @ 
-Pos  7    |  %  %  %  %  +  @  +  @ </code></pre>
-<p>字符从左到右代表数值从 -1 到 +1。d0、d1 跳得厉害；d2 从
-<code>=</code> 慢慢走到 <code>%</code>，这就是分针；d6、d7
-几乎不动。</p>
-<p>余弦相似度也不是一条笔直下降的斜线。位置 3 降到 0.491 之后，位置 6
-又回到 0.946，因为最快的针周期约是 6.28，转到那里差不多绕回一圈。位置 0
-和位置 6 仍然不是同一个指纹：d2 一个约是 0.00，另一个约是 0.56。</p>
-<hr />
-<h2 id="本章小结">5.7 本章小结</h2>
+<p>运行方式，在已安装项目依赖的 Python 环境中执行：</p>
+<div class="sourceCode" id="cb42"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/05_positional_encoding.py</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_positions.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>脚本固定 seed=6，打印设备与 PyTorch
+版本、两张完整数值表、字符热力图、换词实验、相加与拼接、长度检查。字符梯度为
+<code>.:-=+*#%@</code>，从空格到 <code>@</code> 表示从 -1 到
++1；它将连续数值量化成 10 档，细节请看数值表。</p>
+<p>例如同为 d6 的小正数，字符图里可能显示为 <code>=</code> 或
+<code>+</code>，不必与四舍五入到两位的小数表一一对应。两种显示方式都不应替代原始数值。</p>
+<p>回归测试只有在<strong>已安装且版本为 PyTorch 2.14.x</strong>
+时才运行张量实验；未安装或版本不匹配会明确跳过并给出原因。跳过不是实验通过。与版本判断有关的标准库测试仍可执行。本批验证环境为
+PyTorch 2.14.1+cpu，CPU；测试不需要 GPU。</p>
+<h2 id="自测先预测再运行">5.9 自测：先预测，再运行</h2>
+<ol type="1">
+<li>无 mask、无位置的双向注意力，把三个 token 按 <code>[2,1,0]</code>
+换序后，输出是完全不变，还是跟着换行？固定因果 mask
+后还可以直接套同一结论吗？</li>
+<li><span class="math inline">\(D=8,pos=1\)</span> 时，d2 的分母是 10
+还是 100？这个分量保留三位小数是多少？</li>
+<li>表 5-3 中，哪个更像位置 0：位置 3 还是位置
+6？能否由此判断模型更关注谁？</li>
+<li>用 §5.6 的输入算位置 0 的加法结果。Add 与 Concat
+分别是什么形状？输出宽度都保持为 4 的无 bias Q 投影各有多少个参数？</li>
+<li>如果 <span class="math inline">\(D=5,pos=1\)</span>，最后的 d4
+是什么？为什么不能直接套“每行范数为 <span
+class="math inline">\(\sqrt{D/2}\)</span>”？</li>
+<li>8 行的可学习位置表有多少参数（<span
+class="math inline">\(D=8\)</span>）？正弦编码能生成 12
+行，是否已经证明模型能处理更长文章？</li>
+</ol>
+<h3 id="参考答案-1">参考答案</h3>
+<ol type="1">
+<li>输出跟着换行，这是置换等变，不是每个格子不变。固定因果 mask
+的可见前缀与顺序有关，不能直接套用。</li>
+<li>分母是 <span class="math inline">\(10000^{2/8}=10\)</span>；<span
+class="math inline">\(\sin(0.1)\approx\mathbf{0.100}\)</span>。不要把“第二个偶数列”误写成指数里的
+<span class="math inline">\(4/8\)</span>。</li>
+<li>位置 6 更像：约 <strong>0.946 &gt;
+0.491</strong>。这是位置向量的相似度，不是经过内容与投影之后的注意力权重。</li>
+<li><strong>[0.200, 0.900, 0.400, 1.000]</strong>；形状为
+<strong>[1,2,4]</strong> 与 <strong>[1,2,8]</strong>；Q 投影分别有
+<strong>16</strong> 与 <strong>32</strong> 个参数。</li>
+<li><span
+class="math inline">\(\sin(1/10000^{4/5})\approx\mathbf{0.000631}\)</span>，不是零。最后的
+sine 没有 cosine 配对，不能用每对平方和为 1 来计算整行范数。</li>
+<li><strong>64</strong> 个可训练参数。生成 12
+行只说明公式能延长；实现限制与更长输入的任务质量仍需分别验证。</li>
+</ol>
+<p>这些数值答案、两张表、公式的每个元素和相对位移关系，都由
+<code>tests/test_positions.py</code>
+核对。测试也包含“余弦先降后升”的反例，避免把漂亮的波形误读成单调距离。</p>
+<h2 id="本章小结">5.10 本章小结</h2>
 <ul>
-<li><strong>置换不变性</strong>是纯自注意力机制的天然缺陷，导致模型无法区分“小猫吃小鱼”与“小鱼吃小猫”。</li>
-<li><strong>直接编号</strong>会导致数值爆炸，<strong>归一化比例</strong>会导致相对步长不一致。</li>
-<li><strong>正弦余弦位置编码</strong>用快慢不同的波浪给每个位置一组有界（<span
-class="math inline">\([-1,
-1]\)</span>）的读数。快针会周期性回头，所以余弦相似度会回升；认座位要看整列数字，不能只看一条下降的斜线。</li>
-<li>利用<strong>三角和角公式</strong>，位置编码天然支持相对距离的线性推导。</li>
-<li><strong>直接相加</strong>在不增加参数维度的前提下，把位置与词义放进同一组特征中交给后续层处理。</li>
+<li>没有位置或顺序结构的双向自注意力对换序是<strong>等变</strong>的；因果
+mask 的条件不同。</li>
+<li>可学习绝对位置、固定正弦位置与相对位置信息是不同设计，不是谁把谁简单“淘汰”。</li>
+<li>sin/cos
+的不同频率提供多尺度变化；高相似度不等于同一位置，相似度也不随距离单调下降。</li>
+<li>加法保持宽度，但没有自动无损分离的保证；拼接的形状与后续参数要重新计算。</li>
+<li>编码可生成、实现可运行、长文本任务有效，是三件需要分别检查的事。</li>
 </ul>
-<p>现在，我们有了词向量、多头自注意力，也有了位置编码。
-我们该如何把它们封装成高耸入云的深度神经网络？
-请看下一章：<strong>积木组件——残差连接、层归一化与前馈神经网络</strong>！</p>
+<p>下一章把注意力放入完整 Block：残差怎样提供信息路径，LayerNorm
+怎样处理数值尺度，FFN 又增加了什么能力。</p>
+<h2 id="来源与版本-1">来源与版本</h2>
+<p>核验日期：2026-10-19。下列是原作者的一手论文；本章数值表和微型实验是教学计算，不是论文的翻译质量复现。</p>
+<ol type="1">
+<li>Vaswani et al., <a
+href="https://arxiv.org/html/1706.03762v7">Attention Is All You
+Need，arXiv:1706.03762v7</a>，版本日期 2023-08-02，初稿
+2017-06-12。§3.4：输入嵌入缩放；§3.5：正弦公式、相加、相对偏移动机与长度外推动机；§6.2
+表 3(E)：可学习位置对照。</li>
+<li>Shaw, Uszkoreit &amp; Vaswani, <a
+href="https://arxiv.org/html/1803.02155v2">Self-Attention with Relative
+Position Representations，arXiv:1803.02155v2</a>，版本日期
+2018-04-12。§3.1：相对关系进入键和值；§3.2：按相对距离查表与截断。仅作类型比较，不在本章实现该模型。</li>
+<li>Su et al., <a
+href="https://arxiv.org/html/2104.09864v5">RoFormer，arXiv:2104.09864v5</a>，版本日期
+2023-11-08。§3.1–3.2：用 Q/K
+旋转表达位置关系。本章只给路线提示，详细实现留给大纲 P12。</li>
+</ol>
 <hr />
 <h1 id="第6章-积木组件-残差连接-层归一化与前馈神经网络">第6章：积木组件——残差连接、层归一化与前馈神经网络</h1>
 <blockquote>
-<p>“一座巍峨的摩天大厦，不是一整块雕刻出来的巨石，而是由无数坚固标准、易于拼装的预制积木严密堆叠而成。”</p>
+<p>注意力负责交换信息，但交换之后，还需要保留原有表示、调整数值尺度，并在每个位置上加工特征。</p>
 </blockquote>
+<p>上一章给 token
+加上了位置信息。现在，我们把已经学过的多头自注意力，和本章的三个组件装成一个
+<strong>Transformer
+Block</strong>。本章的目标不是记住模型名，而是能回答：“这条支路算了什么？为什么要加回输入？归一化发生在哪一步？参数花在了哪里？”</p>
+<p>配套代码：<a
+href="code/06_transformer_block.py">code/06_transformer_block.py</a>。先读数值例子，再运行脚本逐项核对。本章采用普通
+LayerNorm、带偏置的两层 ReLU FFN，以及没有 dropout 的多头自注意力；默认
+Pre-LN，也提供 Post-LN 对照。它是教学积木，不是某个 GPT、LLaMA 或
+DeepSeek checkpoint 的完整复刻。RMSNorm 与 SwiGLU
+只在章末留路标，系统推导放到规划 P13。</p>
 <hr />
-<h2 id="残差连接residual-connection信息的高速公路">6.1
-残差连接（Residual Connection）：信息的高速公路</h2>
-<p>在深度学习的早期，研究人员发现了一个反常识的诡异现象：
-<strong>当一个神经网络越叠越深（比如叠到 50 层、100
-层）时，模型的性能不但没有变聪明，反而变得越来越笨，甚至连最简单的训练题都做不对了！</strong></p>
-<p>这是为什么呢？</p>
-<h3 id="生活比喻传话游戏附带录音笔">生活比喻：传话游戏附带“录音笔”</h3>
-<p>想象一下，教导主任向 100 个学生依次传达一段紧急通知：</p>
-<ul>
-<li><p>如果每个学生都凭借自己的嘴巴复述（经过复杂的神经网络层），经过
-100 轮“加工”，最初的指令早就被曲解、稀释、忘得一干二净；</p></li>
-<li><p>但如果教导主任给第一个学生发了一支<strong>高清录音笔</strong>，并规定一条铁律：</p>
-<blockquote>
-<p>“每个学生在复述自己理解的同时，<strong>必须把原始的录音笔原封不动地递给下一个人</strong>！”</p>
-</blockquote></li>
-</ul>
-<p>这就是 2015 年何恺明等学者提出的、获得计算机视觉最高荣誉的
-<strong>残差连接（Residual Connection）</strong>！</p>
+<h2 id="残差连接不是重新抄一份而是学习改多少">6.1
+残差连接：不是重新抄一份，而是学习“改多少”</h2>
+<h3 id="传话游戏里的原稿与批注">传话游戏里的原稿与批注</h3>
+<p>想象一份通知依次交给许多人修改。如果每个人都只能交出自己重写的版本，原稿里已有的内容也要重新表达一次。另一种办法是：保留当前原稿，旁边写上本轮的修改量，再把两者相加。</p>
+<p>在网络里，输入向量是 <span
+class="math inline">\(x\)</span>，支路算出的修改量是 <span
+class="math inline">\(F(x)\)</span>：</p>
+<p><span class="math display">\[y=x+F(x)\]</span></p>
+<p>这里的“残差”不是考试剩下的误差，而是相对于当前表示的<strong>增量</strong>。如果想得到的映射是
+<span class="math inline">\(H(x)\)</span>，支路可以学习 <span
+class="math inline">\(H(x)-x\)</span>，加回 <span
+class="math inline">\(x\)</span> 后就得到 <span
+class="math inline">\(H(x)\)</span>。这也是残差学习论文的基本出发点。<a
+href="https://arxiv.org/pdf/1512.03385">来源：Deep Residual
+Learning，§3.1–3.2</a></p>
 <pre><code>              输入 x ─────────────┐ (原始录音笔: 抄近道)
                  │                │
                  ▼                │
@@ -3181,56 +3405,214 @@ class="math inline">\([-1,
                  │                │
                  ▼                ▼
                  [   相加求和: x + F(x)   ]</code></pre>
-<h3
-id="从公式理解残差连接原始信息如何保留下来">从公式理解残差连接：原始信息如何保留下来？</h3>
-<p>数学公式极其简单： <span class="math display">\[\text{Output} = x +
-F(x)\]</span> 其中 <span class="math inline">\(x\)</span> 是输入，<span
-class="math inline">\(F(x)\)</span>
-是注意力层或神经网络层的处理增量。</p>
-<p>还没学过导数也可以读完这一段。你只要记住输出是“原样的 <span
-class="math inline">\(x\)</span>”加上“旁边算出来的增量”。旁边那条路即使什么都没学会，原始信息也原封不动地送到了下一层。最差的情况是
-<span class="math inline">\(F(x)=0\)</span>，输出就等于输入。</p>
-<p>学过导数的同学可以再看一行：输出对输入的变化率是 <span
-class="math display">\[\frac{d(\text{Output})}{dx} = 1 +
-\frac{dF(x)}{dx}\]</span> 就算后面那一项接近 0，前面仍有一个
-1。这就是那条抄近道在变化率里留下的记号。它帮助误差信号穿过很多层，但不是说信号在任何情况下都丝毫不改。</p>
+<h3 id="先加四个数字再谈深层网络">先加四个数字，再谈深层网络</h3>
+<p>以下是一个位置的四个特征。每列对应同一个特征，做的是<strong>逐元素相加</strong>，不是拼接；相加前后都还是四维。</p>
+<h3 id="表-6-1输入加增量">表 6-1：输入加增量</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>量</th>
+<th>四个特征</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输入 x</td>
+<td>[1.0000, 2.0000, 3.0000, 4.0000]</td>
+</tr>
+<tr>
+<td>增量 F(x)</td>
+<td>[0.5000, -0.5000, 0.0000, 1.0000]</td>
+</tr>
+<tr>
+<td>x + F(x)</td>
+<td>[1.5000, 1.5000, 3.0000, 5.0000]</td>
+</tr>
+<tr>
+<td>F(x)=0 时的输出</td>
+<td>[1.0000, 2.0000, 3.0000, 4.0000]</td>
+</tr>
+</tbody>
+</table></div>
+<p>第一维从 1 变成 1.5，第二维从 2 变成 1.5，第三维保持
+3。它不是只会“增强”输入：增量也可以是负数。最后一行很重要：当支路输出全零时，<span
+class="math inline">\(y=x\)</span>。这种“不做改变”的映射叫<strong>恒等映射</strong>，不要求网络先学会复制每一个数。</p>
+<p>在本章的 Block 中，两条支路的输入、输出都保持
+<code>[B,T,D]</code>，所以可以直接相加。如果支路改变了宽度，就不能直接做这条恒等捷径，必须先解决尺寸对齐问题。形状相同也不等于内容相同。</p>
+<p>学过导数的读者可以多看一行。标量情况下，<span
+class="math inline">\(dy/dx=1+F&#39;(x)\)</span>；向量情况下，相应的是单位矩阵
+<span class="math inline">\(I\)</span>
+加上支路的雅可比矩阵。还没学过也没关系：<strong>输入有一条不用穿过支路内部运算的直接路径</strong>，这就是后面
+Pre-LN 布局要保留的结构。</p>
+<p><strong>类比边界：</strong>“录音笔原封不动传过去”只形容那条加法支路，不代表整个输出无损、所有梯度永远不衰减。比如
+<span class="math inline">\(F(x)=-x\)</span>
+就会把输出抵消为零，变化率也可以抵消。残差有利于优化，不是“加了就绝不会训练失败”。</p>
 <hr />
-<h2 id="层归一化layer-normalization全科成绩标准化">6.2 层归一化（Layer
-Normalization）：全科成绩标准化</h2>
-<p>在神经网络一层层向上传递的过程中，成千上万个数字不断相乘、相加，很容易导致数值有的变成几千、有的变成
-<span class="math inline">\(0.00001\)</span>。 这就像一次考试，语文满分
-100 分，数学突然冒出个 10,000 分，全班的总分体系将瞬间陷入崩溃。</p>
-<p>为了让数据在每一层都保持清爽、稳定，我们必须进行<strong>归一化（Normalization）</strong>。</p>
-<h3 id="用均值与方差理解-z-score-标准化">用均值与方差理解 Z-Score
-标准化</h3>
-<p>标准化分为计算均值、计算方差和调整尺度三个步骤。 对于一组数据 <span
-class="math inline">\(X = [x_1, x_2, \dots, x_d]\)</span>：</p>
-<ol type="1">
-<li><strong>计算平均数 <span
-class="math inline">\(\mu\)</span></strong>： <span
-class="math display">\[\mu = \frac{1}{d} \sum_{i=1}^d x_i\]</span></li>
-<li><strong>计算方差 <span
-class="math inline">\(\sigma^2\)</span></strong>： <span
-class="math display">\[\sigma^2 = \frac{1}{d} \sum_{i=1}^d (x_i -
-\mu)^2\]</span></li>
-<li><strong>标准化转换（Z-Score）</strong>： <span
-class="math display">\[\hat{x}_i = \frac{x_i - \mu}{\sqrt{\sigma^2 +
-\epsilon}}\]</span> （其中 <span class="math inline">\(\epsilon\)</span>
-是一个极小的数，如 <span
-class="math inline">\(10^{-5}\)</span>，防止分母除以 0）</li>
-</ol>
-<p>在 <span class="math inline">\(\gamma=1\)</span>、<span
-class="math inline">\(\beta=0\)</span> 时，新数据的平均值会变成
-0，方差会非常接近 1。分母里加了极小的 <span
-class="math inline">\(\epsilon\)</span>，方差比 1
-略小一点，打印到小数点后四位通常已经看不出来。这<strong>不是</strong>把数据变成正态分布：标准化只改均值和方差，原来歪的形状还是歪的。</p>
-<ol start="4" type="1">
-<li><strong>赋予自适应调整权（可学习参数）</strong>： <span
-class="math display">\[y_i = \gamma \cdot \hat{x}_i + \beta\]</span>
-模型可以通过学习参数 <span
-class="math inline">\(\gamma\)</span>（缩放）和 <span
-class="math inline">\(\beta\)</span>（平移），自主决定是否把某些特征稍微放大或微调。</li>
-</ol>
+<h2 id="layernorm沿一个-token-的特征做-z-score-三步计算">6.2
+LayerNorm：沿一个 token 的特征做 Z-Score 三步计算</h2>
+<h3
+id="成绩标准化的类比先说清谁和谁比较">成绩标准化的类比，先说清谁和谁比较</h3>
+<p>同一组数字可能整体偏大，也可能差异特别大。我们想先看各项相对于这组数字平均水平的偏离，再把偏离调到合适尺度。这有点像把一张成绩单换成“比平均水平高或低多少个标准差”。</p>
+<p>不过，向量的维度不是语文、数学那样由人命名的科目；LayerNorm
+也不是分别为每个维度收集全班成绩。在本章输入 <code>[B,T,D]</code>
+中，<strong>固定某个样本和某个 token，只沿最后的 D
+个特征计算统计量</strong>。换一个
+token，就单独重新算。它不把不同句子、不同 token
+的数据混到同一个均值里。</p>
+<p>下面坚持用同一个向量 <span
+class="math inline">\(x=[1,2,3,4]\)</span>，完整走过三个步骤。</p>
+<h3 id="第一步算均值找到中心">第一步：算均值，找到中心</h3>
+<p><span class="math display">\[\mu=\frac{1}{D}\sum_{i=1}^D x_i
+=\frac{1+2+3+4}{4}=2.5\]</span></p>
+<p>从每一项减去 2.5，得到 <span
+class="math inline">\([-1.5,-0.5,0.5,1.5]\)</span>。这些偏离有正有负，求和为零，所以中心已经移动到零。</p>
+<h3 id="第二步算方差衡量偏离的尺度">第二步：算方差，衡量偏离的尺度</h3>
+<p>直接把偏离相加会正负抵消，所以先逐项平方，再取平均：</p>
+<p><span
+class="math display">\[\sigma^2=\frac{1}{D}\sum_{i=1}^D(x_i-\mu)^2
+=\frac{2.25+0.25+0.25+2.25}{4}=1.25\]</span></p>
+<p>这里除以 <strong>D，而不是
+D−1</strong>。我们正在描述当前这一个向量，不是在用样本估计一个未知总体的方差。对应代码是
+<code>x.var(dim=-1, keepdim=True, unbiased=False)</code>；PyTorch
+LayerNorm 使用相同的方差口径。<a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html">来源：PyTorch
+2.14 LayerNorm</a></p>
+<h3 id="第三步除以标准差调整尺度">第三步：除以标准差，调整尺度</h3>
+<p>方差是“偏离的平方”的平均，开平方才回到原来的量纲。实际计算再加入
+<span class="math inline">\(\epsilon=10^{-5}\)</span>：</p>
+<p><span
+class="math display">\[\hat{x}_i=\frac{x_i-\mu}{\sqrt{\sigma^2+\epsilon}},\qquad
+\sqrt{1.25+0.00001}\approx1.118038\]</span></p>
+<p>于是第一维为 <span
+class="math inline">\(-1.5/1.118038\approx-1.341635\)</span>，第二维为
+<span
+class="math inline">\(-0.5/1.118038\approx-0.447212\)</span>。其余两维按同样的方法算，不需要猜。</p>
+<h3 id="表-6-2从原数到标准化后的每一步">表
+6-2：从原数到标准化后的每一步</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>特征 i</th>
+<th>x_i</th>
+<th>x_i − μ</th>
+<th>(x_i − μ)²</th>
+<th>标准化后 x̂_i</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>1.0</td>
+<td>-1.5</td>
+<td>2.25</td>
+<td>-1.341635</td>
+</tr>
+<tr>
+<td>2</td>
+<td>2.0</td>
+<td>-0.5</td>
+<td>0.25</td>
+<td>-0.447212</td>
+</tr>
+<tr>
+<td>3</td>
+<td>3.0</td>
+<td>0.5</td>
+<td>0.25</td>
+<td>0.447212</td>
+</tr>
+<tr>
+<td>4</td>
+<td>4.0</td>
+<td>1.5</td>
+<td>2.25</td>
+<td>1.341635</td>
+</tr>
+</tbody>
+</table></div>
+<p>表中数字由脚本的 <code>layer_norm_walkthrough()</code> 以 float64
+计算，再舍入显示。<strong>Z-Score 三步的顺序就是：均值 → 方差 →
+减均值并除以标准差。</strong>均值、方差本身是从当前输入算出的统计量，不是训练得到的参数。</p>
+<h3 id="epsilon-不只是防止报错的小配角">epsilon
+不只是“防止报错”的小配角</h3>
+<p>如果四个数全一样，方差就是零。不加 epsilon，会出现 <span
+class="math inline">\(0/0\)</span>；加入正 epsilon
+后，分母是正数，标准化结果就是零向量。</p>
+<p>但 epsilon 也会改变尺度。忽略浮点舍入，标准化后有：</p>
+<p><span class="math display">\[\operatorname{mean}(\hat{x})=0,\qquad
+\operatorname{var}(\hat{x})=\frac{\sigma^2}{\sigma^2+\epsilon}\]</span></p>
+<p>因此只有在方差明显大于 epsilon 时，输出方差才接近
+1。对刚才的例子，它是 <span
+class="math inline">\(1.25/1.25001\approx0.999992\)</span>，并非严格等于
+1。下面只改变 epsilon 或输入的波动大小，保持其他条件相同。</p>
+<h3 id="表-6-3epsilon-与小方差的影响gamma1beta0">表 6-3：epsilon
+与小方差的影响（gamma=1，beta=0）</h3>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>输入</th>
+<th>输入方差</th>
+<th>epsilon</th>
+<th>输出方差</th>
+<th>标准化后向量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>[1,2,3,4]</td>
+<td>1.250000</td>
+<td>1e-05</td>
+<td>0.999992</td>
+<td>[-1.3416, -0.4472, 0.4472, 1.3416]</td>
+</tr>
+<tr>
+<td>[1,2,3,4]</td>
+<td>1.250000</td>
+<td>1</td>
+<td>0.555556</td>
+<td>[-1.0000, -0.3333, 0.3333, 1.0000]</td>
+</tr>
+<tr>
+<td>[1,1.002,1.004,1.006]</td>
+<td>0.000005</td>
+<td>1e-05</td>
+<td>0.333333</td>
+<td>[-0.7746, -0.2582, 0.2582, 0.7746]</td>
+</tr>
+<tr>
+<td>[3,3,3,3]</td>
+<td>0.000000</td>
+<td>1e-05</td>
+<td>0.000000</td>
+<td>[0.0000, 0.0000, 0.0000, 0.0000]</td>
+</tr>
+</tbody>
+</table></div>
+<p>第二行故意把 epsilon 放大到
+1，只是为了看清机制，不是推荐训练配置。第三行的输入几乎一样，方差只有
+<span class="math inline">\(0.000005\)</span>，比 epsilon
+还小，输出方差就只有约三分之一。第四行说明：<strong>常量向量不会被“变出”单位方差。</strong></p>
+<h3
+id="三步之后再加可学习的缩放和平移">三步之后，再加可学习的缩放和平移</h3>
+<p>完整 LayerNorm 还会计算：</p>
+<p><span
+class="math display">\[y_i=\gamma_i\hat{x}_i+\beta_i\]</span></p>
+<p><span class="math inline">\(\gamma\)</span> 与 <span
+class="math inline">\(\beta\)</span> 各有 D
+个参数，不是整个向量共用一个标量。本章初始化为每维 <span
+class="math inline">\(\gamma_i=1\)</span>、<span
+class="math inline">\(\beta_i=0\)</span>；训练后它们可以改变各维的尺度与偏移。举例说，若所有维度改成
+<span class="math inline">\(\gamma_i=2\)</span>、<span
+class="math inline">\(\beta_i=1\)</span>，刚才的输出均值会变成
+1，方差约为 <span
+class="math inline">\(4\times0.999992=3.999968\)</span>。不能再把完整输出一律称作“零均值、单位方差”。</p>
 <pre><code>原始特征分布: 散乱无章 (均值可能=-3.5, 方差可能=42.0)
      │
      ▼  经过 (X - μ) / σ
@@ -3238,80 +3620,50 @@ class="math inline">\(\beta\)</span>（平移），自主决定是否把某些�
      │
      ▼  经过 γ * x + β
 最佳表达形态: 模型自适应微调</code></pre>
+<p><strong>读图边界：</strong>中间箭头省略了
+epsilon，精确公式以上文为准；“方差约 1”有输入方差远大于 epsilon
+的前提。“最佳”表示可以学习调整，不保证找到最优值。标准化也<strong>不会自动把任意一组数变成正态分布</strong>，不能由“中心为零”推出“服从高斯分布”。</p>
+<h3
+id="对照代码每一行对应刚才哪一步">对照代码：每一行对应刚才哪一步</h3>
+<div class="sourceCode" id="cb45"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> x.mean(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>variance <span class="op">=</span> x.var(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>, unbiased<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>x_norm <span class="op">=</span> (x <span class="op">-</span> mean) <span class="op">/</span> torch.sqrt(variance <span class="op">+</span> <span class="va">self</span>.eps)</span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">self</span>.gamma <span class="op">*</span> x_norm <span class="op">+</span> <span class="va">self</span>.beta</span></code></pre></div>
+<p><code>dim=-1</code> 指最后的特征轴，<code>keepdim=True</code>
+把均值与方差保留成 <code>[B,T,1]</code>，以便广播回
+<code>[B,T,D]</code>。这里只广播同一 token 的统计量，不是在 token
+之间传播信息。</p>
+<p>与 BatchNorm 依靠批次统计的思路不同，LayerNorm
+不需要另一个样本来凑均值，batch size 为 1 也能计算。改变 batch
+里的另一句话，不会改变当前 token 的 LayerNorm
+结果。训练和推理都使用当前输入的统计量。<a
+href="https://arxiv.org/pdf/1607.06450">来源：Layer
+Normalization，§3、§3.1</a></p>
+<p><strong>数值范围边界：</strong>本章用正常范围的 float64
+输入检查公式；这不是对任意半精度、大幅值输入都不溢出的承诺。实际工程还需考虑数据类型和归一化实现的累加精度。</p>
 <hr />
-<h3 id="表-6-1batchnorm-vs-layernorm-vs-rmsnorm-三大归一化全面对比表">表
-6-1：BatchNorm vs LayerNorm vs RMSNorm 三大归一化全面对比表</h3>
-<div class="table-wrapper"><table>
-<colgroup>
-<col style="width: 25%" />
-<col style="width: 25%" />
-<col style="width: 25%" />
-<col style="width: 25%" />
-</colgroup>
-<thead>
-<tr>
-<th style="text-align: left;">对比维度</th>
-<th style="text-align: left;">BatchNorm (批归一化)</th>
-<th style="text-align: left;">LayerNorm (层归一化)</th>
-<th style="text-align: left;">RMSNorm (均方根归一化)</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><strong>归一化计算轴</strong></td>
-<td style="text-align: left;">跨 Batch 样本在单通道上算</td>
-<td
-style="text-align: left;"><strong>单样本跨所有特征维度</strong>算</td>
-<td style="text-align: left;">单样本跨所有特征维度算</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>是否依赖 Batch 大小</strong></td>
-<td style="text-align: left;">训练时依赖批次统计，Batch
-很小时统计会不稳定</td>
-<td style="text-align: left;"><strong>不依赖 Batch
-统计</strong>（Batch=1 也能计算）</td>
-<td style="text-align: left;"><strong>不依赖 Batch 统计</strong></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>是否计算平均值 <span
-class="math inline">\(\mu\)</span></strong></td>
-<td style="text-align: left;">是（算 <span
-class="math inline">\(\mu\)</span> 和 <span
-class="math inline">\(\sigma^2\)</span>）</td>
-<td style="text-align: left;">是（算 <span
-class="math inline">\(\mu\)</span> 和 <span
-class="math inline">\(\sigma^2\)</span>）</td>
-<td style="text-align: left;"><strong>否！直接砍掉 <span
-class="math inline">\(\mu\)</span>，只算均方根</strong></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>相对计算加速比</strong></td>
-<td style="text-align: left;">基准</td>
-<td style="text-align: left;">基准</td>
-<td style="text-align: left;"><strong>提速 10% ~ 50%（现代
-LLaMA/DeepSeek 标配）</strong></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>最契合的应用领域</strong></td>
-<td style="text-align: left;">计算机视觉（CNN）</td>
-<td style="text-align: left;">经典 NLP / Transformer</td>
-<td
-style="text-align: left;"><strong>现代万亿超大规模大模型</strong></td>
-</tr>
-</tbody>
-</table></div>
-<hr />
-<figure>
-<a href="assets/rendered/transformer_block.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/transformer_block.svg" class="book-diagram"
-width="656"
-alt="图 6-1：现代 Pre-LN Transformer Block 积木架构全貌" /></a>
-<figcaption>图 6-1：现代 Pre-LN Transformer Block
-积木架构全貌</figcaption>
-</figure>
-<h3 id="表-6-2pre-ln-vs-post-ln-架构决战评测表">表 6-2：Pre-LN vs
-Post-LN 架构决战评测表</h3>
+<h2 id="pre-ln-与-post-ln同样的零件换顺序就换了函数">6.3 Pre-LN 与
+Post-LN：同样的零件，换顺序就换了函数</h2>
+<p>先只看一条支路 <span class="math inline">\(F\)</span>，省略
+dropout。两种顺序分别是：</p>
+<p><span class="math display">\[\text{Pre-LN:}\quad
+y=x+F(\operatorname{LN}(x))\]</span></p>
+<p><span class="math display">\[\text{Post-LN:}\quad
+y=\operatorname{LN}(x+F(x))\]</span></p>
+<p>Pre 的意思是“<strong>在 F
+之前</strong>”：支路拿到的是归一化后的输入，但捷径传来的仍然是原始 <span
+class="math inline">\(x\)</span>。Post
+的意思是“<strong>在相加之后</strong>”：原输入和增量先相加，整个和再经过
+LN。不要把 Pre-LN 错写成 <span
+class="math inline">\(\operatorname{LN}(x)+F(\operatorname{LN}(x))\)</span>，那样原始输入也被改掉了。</p>
+<h3 id="把同一个小函数放进两种顺序">把同一个小函数放进两种顺序</h3>
+<p>继续使用 <span class="math inline">\(x=[1,2,3,4]\)</span>，设 <span
+class="math inline">\(F(z)=2z\)</span>，LayerNorm 仍用 epsilon=<span
+class="math inline">\(10^{-5}\)</span>、gamma=1、beta=0。这个 <span
+class="math inline">\(F\)</span>
+是为了隔离顺序差异而选的小函数，<strong>不是实际注意力层</strong>。</p>
+<h3 id="表-6-4逐步并排计算">表 6-4：逐步并排计算</h3>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -3320,56 +3672,84 @@ Post-LN 架构决战评测表</h3>
 </colgroup>
 <thead>
 <tr>
-<th style="text-align: left;">对比特性</th>
-<th style="text-align: left;">经典 Post-LN (2017 原论文)</th>
-<th style="text-align: left;">现代 Pre-LN (GPT-3 / LLaMA / DeepSeek
-标配)</th>
+<th>步骤</th>
+<th>Pre-LN</th>
+<th>Post-LN</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>归一化摆放位置</strong></td>
-<td style="text-align: left;">放在注意力与 FFN
-<strong>相加之后</strong></td>
-<td style="text-align: left;">放在注意力与 FFN
-<strong>相加之前</strong>（保护残差主干）</td>
+<td>进入 F 的向量</td>
+<td>[-1.3416, -0.4472, 0.4472, 1.3416]</td>
+<td>[1.0000, 2.0000, 3.0000, 4.0000]</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>梯度高速公路</strong></td>
-<td
-style="text-align: left;">残差主干中间经过归一化，深层训练通常更需要仔细调参</td>
-<td
-style="text-align: left;">残差主干更直接，通常更容易优化；仍然需要合适的初始化、学习率和正则化</td>
+<td>F 输出的增量</td>
+<td>[-2.6833, -0.8944, 0.8944, 2.6833]</td>
+<td>[2.0000, 4.0000, 6.0000, 8.0000]</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>训练稳定性</strong></td>
-<td
-style="text-align: left;">常配合学习率预热等技巧；具体难度取决于深度和实现</td>
-<td
-style="text-align: left;">往往更易训练，但不是“自动稳定”，超深网络仍需工程调参</td>
+<td>与原输入相加</td>
+<td>[-1.6833, 1.1056, 3.8944, 6.6833]</td>
+<td>[3.0000, 6.0000, 9.0000, 12.0000]</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>深层模型扩展能力</strong></td>
-<td
-style="text-align: left;">经典架构仍然可以工作，只是深度增加时优化更敏感</td>
-<td
-style="text-align: left;">常用于现代大模型，但“能堆多深”取决于整体设计，不是一个固定层数结论</td>
+<td>子层最终输出</td>
+<td>[-1.6833, 1.1056, 3.8944, 6.6833]</td>
+<td>[-1.3416, -0.4472, 0.4472, 1.3416]</td>
 </tr>
 </tbody>
 </table></div>
+<p>例如 Pre-LN 的第一维是 <span
+class="math inline">\(1+2\times(-1.341635)\approx-1.6833\)</span>。Post-LN
+则先得到 <code>[3,6,9,12]</code>，重新计算这组数的均值 7.5、方差
+11.25，再标准化。两边都使用相同的 <span
+class="math inline">\(F\)</span>，结果仍不同。</p>
+<p>Post-LN 最后一行四位小数恰好与 <span
+class="math inline">\(\operatorname{LN}(x)\)</span> 一样，但加入 epsilon
+后，两者并不严格相等。不要从显示舍入相同推出计算恒等。</p>
+<h3 id="零支路是最容易做的结构体检">零支路是最容易做的结构体检</h3>
+<ul>
+<li>Pre-LN：若 <span class="math inline">\(F\)</span>
+对所有输入都输出零，<span
+class="math inline">\(y=x\)</span>，直接通过。</li>
+<li>Post-LN：若 <span class="math inline">\(F\)</span> 输出零，<span
+class="math inline">\(y=\operatorname{LN}(x)\)</span>，一般不等于 <span
+class="math inline">\(x\)</span>。</li>
+</ul>
+<p>所以“把支路清零，输出应等于输入”的测试有适用对象：<strong>本章没有额外输出归一化的
+Pre-LN Block</strong>。它不是所有残差网络都必须满足的完整输出性质。</p>
+<p>2017 年原始 Transformer 的残差加法后接 LayerNorm，即 Post-LN。Pre-LN
+把归一化移进支路；Xiong 等人在指定初始化和实验设置下分析了两者梯度尺度与
+warm-up 的差别。这支持“位置会影响优化”的结论，不支持“Pre-LN 永不需要
+warm-up”或“Post-LN 一定训练失败”。<a
+href="https://arxiv.org/html/1706.03762v7#S3.SS1">来源：Transformer
+§3.1</a>、<a href="https://arxiv.org/pdf/2002.04745">On Layer
+Normalization，图1、表1、§3</a></p>
 <hr />
-<h2 id="前馈神经网络ffn-mlp每个词的闭门深思">6.3 前馈神经网络（FFN /
-MLP）：每个词的“闭门深思”</h2>
-<p>如果说<strong>多头自注意力（Multi-Head
-Attention）</strong>是让全班同学在走廊里“大声讨论、相互交流信息”，
-那么交流完毕之后，每个同学都需要回到自己的座位上，<strong>关起门来，独立消化思考</strong>。</p>
-<p>这个负责“闭门消化深思”的组件，就是 <strong>前馈神经网络（Feed-Forward
-Network，简称 FFN）</strong>。</p>
-<h3 id="ffn-的内部构造两层线性变换与非线性激活">FFN
-的内部构造：两层线性变换与非线性激活</h3>
-<p>FFN 的结构非常单纯直接，由两个全连接层和一个非线性激活函数（如 ReLU
-或 GELU）组成： <span class="math display">\[\text{FFN}(x) =
-\text{Linear}_2(\text{Activation}(\text{Linear}_1(x)))\]</span></p>
+<h2 id="ffn每个位置独立加工但共用一套工具">6.4
+FFN：每个位置独立加工，但共用一套工具</h2>
+<p>注意力让不同 token 交换信息，FFN
+则把<strong>每个位置当前已有的向量</strong>送进同一个小网络。这就像大家讨论完后各自整理笔记，但使用同一套整理规则。</p>
+<p>“独立”指这一步不会读另一个位置的向量，不是说每个 token
+都拥有一套不同的权重。它的输入已含注意力汇集的上下文，所以 FFN
+也不是“完全不知道上下文”。原始 Transformer 将这种结构称作 position-wise
+feed-forward network。<a
+href="https://arxiv.org/html/1706.03762v7#S3.SS3">来源：Attention Is All
+You Need，§3.3</a></p>
+<h3
+id="两层仿射变换中间必须有非线性">两层仿射变换，中间必须有非线性</h3>
+<p>采用行向量记法：</p>
+<p><span class="math display">\[h=xW_1+b_1,\qquad
+a=\operatorname{ReLU}(h),\qquad
+\operatorname{FFN}(x)=aW_2+b_2\]</span></p>
+<p>其中 <span class="math inline">\(W_1\)</span> 的数学形状是
+<code>[D,d_ff]</code>，<span class="math inline">\(W_2\)</span> 是
+<code>[d_ff,D]</code>。PyTorch 把 <code>nn.Linear</code> 权重存成
+<code>[out_features,in_features]</code>，所以存储形状转置过来，计算相当于
+<code>x @ weight.T + bias</code>。</p>
+<p>ReLU 的规则是 <span
+class="math inline">\(\max(0,z)\)</span>：正数保留，负数变零。它会随着输入改变哪些通道参与后续计算，不是模型真的在做人的逻辑判断。</p>
 <pre><code>     输入词特征 (维度 d_model, 如 512)
            │
            ▼  Linear 1: 展开联想 (膨胀 4 倍!)
@@ -3380,24 +3760,127 @@ Network，简称 FFN）</strong>。</p>
            │
            ▼  Linear 2: 降维总结 (浓缩回原状)
      输出新特征 (维度 d_model, 恢复 512)</code></pre>
-<h3 id="为什么先放大-4-倍再缩回">为什么先放大 4 倍再缩回？</h3>
-<ol type="1">
-<li><strong>升维思考（Expand）</strong>：把 512 个维度的特征投影到 2048
-维的大空间里，就像把一张折叠的藏宝图完全摊开，让各种细微的概念特征有足够的空间施展；</li>
-<li><strong>非线性激活（Activation）</strong>：如果只做加减乘除（线性运算），一百层网络等价于一层网络。非线性函数（比如只保留正数的
-ReLU）让模型具备了逻辑判断能力（“如果条件成立则激活，否则置零”）；</li>
-<li><strong>降维提炼（Contract）</strong>：把膨胀的特征重新压榨、凝练回
-512 维，沉淀出最核心的深层思想。</li>
-</ol>
+<p>图里的四倍宽是一个常见配置，不是数学定律。本章代码默认
+<code>d_ff=4*d_model</code>，也允许显式指定；下面为了方便手算，选择
+<code>D=2,d_ff=4</code>。扩大中间层可以提供更多可学习通道，同时也增加参数、运算和中间激活存储。<strong>类比的边界：</strong>“展开联想”“过滤杂念”帮助记住结构，不代表每个通道都对应可命名的思想，也不保证更宽就更好。</p>
+<h3 id="一个可以手算到底的-ffn">一个可以手算到底的 FFN</h3>
+<p>输入是 <code>[1,-2]</code>。第一层四个输出分别规定为：<span
+class="math inline">\(x_1\)</span>、<span
+class="math inline">\(x_2+1\)</span>、<span
+class="math inline">\(x_1+x_2\)</span>、<span
+class="math inline">\(-x_1+x_2\)</span>。因此第一层权重按 PyTorch
+存储为：</p>
+<pre class="text"><code>linear1.weight = [[ 1, 0], [0, 1], [1, 1], [-1, 1]]
+linear1.bias   = [0, 1, 0, 0]
+linear2.weight = [[ 1, 2, 1, -1], [0, 1, -1, 2]]
+linear2.bias   = [0.5, -0.5]</code></pre>
+<p>第一层得到 <code>[1,-1,-1,-3]</code>，ReLU 后只留下
+<code>[1,0,0,0]</code>。最后第一维是 <span
+class="math inline">\(1\times1+0\times2+0\times1+0\times(-1)+0.5=1.5\)</span>；第二维是
+<span
+class="math inline">\(1\times0+0\times1+0\times(-1)+0\times2-0.5=-0.5\)</span>。</p>
+<h3 id="表-6-5ffn-逐层追踪">表 6-5：FFN 逐层追踪</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输入 x</td>
+<td>[1.0, -2.0]</td>
+</tr>
+<tr>
+<td>第一层 xW₁+b₁</td>
+<td>[1.0, -1.0, -1.0, -3.0]</td>
+</tr>
+<tr>
+<td>ReLU 后</td>
+<td>[1.0, 0.0, 0.0, 0.0]</td>
+</tr>
+<tr>
+<td>第二层输出</td>
+<td>[1.5, -0.5]</td>
+</tr>
+<tr>
+<td>去掉 ReLU 的输出（反例）</td>
+<td>[1.5, -6.5]</td>
+</tr>
+</tbody>
+</table></div>
+<p>如果没有中间激活，把两层展开就得到：</p>
+<p><span
+class="math display">\[(xW_1+b_1)W_2+b_2=x(W_1W_2)+(b_1W_2+b_2)\]</span></p>
+<p>右边仍然是“一次乘矩阵，再加一个偏置”，即一个仿射变换。光堆这样的层不能得到新的非线性表达；增加
+ReLU
+后，通常不能再把它们合并成一个固定的仿射变换。表中的反例也显示，删掉
+ReLU 会改变第二维的结果。</p>
+<h3 id="参数预算不要漏掉偏置">参数预算：不要漏掉偏置</h3>
+<p>本章普通、稠密、带偏置 FFN 的参数量是：</p>
+<p><span
+class="math display">\[N_{\mathrm{FFN}}=D\,d_{ff}+d_{ff}+d_{ff}D+D
+=2D\,d_{ff}+d_{ff}+D\]</span></p>
+<p>其中两大项是矩阵里的数，两小项是两个偏置向量。ReLU 自身没有参数。取
+<code>D=16,d_ff=64</code>，直接枚举代码中的参数：</p>
+<h3 id="表-6-6ffn-参数账本">表 6-6：FFN 参数账本</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>PyTorch 存储形状</th>
+<th>个数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>linear1.weight</td>
+<td>[64, 16]</td>
+<td>1024</td>
+</tr>
+<tr>
+<td>linear1.bias</td>
+<td>[64]</td>
+<td>64</td>
+</tr>
+<tr>
+<td>linear2.weight</td>
+<td>[16, 64]</td>
+<td>1024</td>
+</tr>
+<tr>
+<td>linear2.bias</td>
+<td>[16]</td>
+<td>16</td>
+</tr>
+<tr>
+<td>FFN 合计</td>
+<td>两个权重和两个偏置</td>
+<td>2128</td>
+</tr>
+</tbody>
+</table></div>
+<p>如果使用 <code>d_ff=4D</code>，公式就是 <span
+class="math inline">\(8D^2+5D\)</span>。参数主要按宽度的平方增长；只有两个权重矩阵的近似数才是
+<span
+class="math inline">\(8D^2\)</span>，不能把它说成包含偏置的精确总数。</p>
+<p>序列从 5 个 token 变成 50 个 token，FFN
+<strong>参数数目不变</strong>，因为各位置共用权重，但运算次数和中间激活会增加。矩阵乘法的主要乘加次数约为
+<span
+class="math inline">\(2BTD\,d_{ff}\)</span>，这是运算量，不是实际耗时；硬件、精度与实现都会影响速度。</p>
 <hr />
-<h2 id="组装积木块transformer-blockpre-ln-现代架构">6.4
-组装积木块：Transformer Block（Pre-LN 现代架构）</h2>
-<p>现在，让我们把所有的零件装配在一起，构成一个标准通用的
-<strong>Transformer 积木块（Block）</strong>！</p>
-<p>在 2017 年的原版论文中，归一化是放在加法之后的（Post-LN）；
-但在现代顶尖大模型（如
-GPT-3/4、LLaMA、DeepSeek）中，普遍采用了更稳定、更容易训练的
-<strong>Pre-LN（前置归一化）</strong> 架构：</p>
+<h2 id="装成完整-block对齐张量也对齐顺序">6.5 装成完整
+Block：对齐张量，也对齐顺序</h2>
+<p>默认的 Pre-LN Block 含两条支路。用 <span
+class="math inline">\(A\)</span> 表示自注意力，用 <span
+class="math inline">\(F\)</span> 表示 FFN：</p>
+<p><span class="math display">\[u=x+A(\operatorname{LN}_1(x)),\qquad
+y=u+F(\operatorname{LN}_2(u))\]</span></p>
+<p>注意第二次残差加回的是<strong>注意力之后的 <span
+class="math inline">\(u\)</span></strong>，不是最初的 <span
+class="math inline">\(x\)</span>。两个 LayerNorm 也有各自的
+gamma/beta，不共享参数。</p>
 <pre><code>                    输入特征 x
                         │
          ┌──────────────┴──────────────┐
@@ -3419,123 +3902,252 @@ GPT-3/4、LLaMA、DeepSeek）中，普遍采用了更稳定、更容易训练的
       [ 相加求和 + (第二阶段残差) ] ◄─────┘
                         │
                     输出特征 x&#39;</code></pre>
-<h3 id="观察积木块的绝妙对称性">观察积木块的绝妙对称性：</h3>
+<figure>
+<a href="assets/rendered/transformer_block.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/transformer_block.svg" class="book-diagram"
+width="656"
+alt="图 6-1：Pre-LN Block 的注意力、FFN 与两条残差路径" /></a>
+<figcaption>图 6-1：Pre-LN Block 的注意力、FFN
+与两条残差路径</figcaption>
+</figure>
+<p><strong>读图提醒：</strong>绿色路径表示加法中的恒等项；图中的“无损直达”“任意堆叠”不是总梯度或训练效果的保证。接口形状相同让多块可以连接，深度、数值范围、训练预算仍有限制。图是一个
+Block，不包括完整语言模型的嵌入、位置处理、输出词表投影。Pre-LN
+堆栈通常还会在所有 Block 后加最终归一化，本章这个单块没有那一步。</p>
+<h3 id="沿着形状读代码">沿着形状读代码</h3>
 <ul>
-<li><strong>输入形状</strong>：<code>[Batch, Seq_Len, d_model]</code></li>
-<li><strong>输出形状</strong>：<code>[Batch, Seq_Len, d_model]</code></li>
-<li><strong>毫无变化！</strong></li>
+<li>输入、LayerNorm、注意力输出、第一次相加结果都是
+<code>[B,T,D]</code>。</li>
+<li>FFN 第一层临时变成 <code>[B,T,d_ff]</code>，ReLU 不改形状。</li>
+<li>FFN 第二层缩回 <code>[B,T,D]</code>，才可以做第二次残差相加。</li>
 </ul>
-<p>因为它的输入和输出形状完全一模一样，我们就可以像搭乐高积木一样： 叠
-12 层（就是 GPT-2 Base）、叠 32 层（就是 LLaMA-7B）、叠 96 层（就是
-GPT-3 175B）！</p>
-<hr />
-<h2 id="运行验证代码">6.5 运行验证代码</h2>
-<p>打开 <a
-href="code/06_transformer_block.py">code/06_transformer_block.py</a>，运行后可以看到：</p>
-<pre class="text"><code>LayerNorm 测试（检查第一个词的均值与方差）：
-标准化前：均值=-0.1367, 方差=1.4284
-标准化后：均值=0.0000 (≈0), 方差=1.0000 (≈1)
-
-整块 Transformer Block 输出形状: torch.Size([2, 5, 16])
-输入与输出的形状完全一模一样！这就是为什么我们可以像拼乐高积木一样，把它们堆叠几十层、几百层！</code></pre>
-<hr />
-<h2 id="本章小结-1">6.6 本章小结</h2>
-<ul>
-<li><strong>残差连接</strong>把原始输入原样加到后面。旁边的计算即使学坏了，信息也还有一条路可走。学过导数的话，这条路对应变化率里的那个
-<span class="math inline">\(+1\)</span>。</li>
-<li><strong>层归一化（LayerNorm）</strong>先减去均值并调整尺度，再施加可学习的缩放与平移，让每个词的特征数值保持在较稳定的范围内；统计时不需要把不同长度的句子混在一起。</li>
-<li><strong>前馈网络（FFN）</strong>负责在注意力通信之后，进行“升维展开
--&gt; 非线性激活 -&gt; 降维提炼”的独立深思。</li>
-<li><strong>Transformer
-Block</strong>将上述模块严密组装，实现了输入与输出形状恒定的标准化单元。</li>
-</ul>
-<p>拥有了这块坚固的标准化积木，我们该如何用它来组装一个完整的“机器翻译”或“聊天生成”系统呢？
-请看下一章：<strong>编码器与解码器——从文本理解到自回归生成</strong>！</p>
-<hr />
-<h1 id="第7章-编码器与解码器-从文本理解到自回归生成">第7章：编码器与解码器——从文本理解到自回归生成</h1>
-<blockquote>
-<p>“一个负责深谋远虑地洞察全文，一个负责字斟句酌地构想未来。”</p>
-</blockquote>
-<hr />
-<h2 id="双雄对决编码器encoder与解码器decoder">7.1
-双雄对决：编码器（Encoder）与解码器（Decoder）</h2>
-<p>在经典的 Transformer 论文《Attention Is All You
-Need》中，模型被设计成一个由两座巨塔并立组成的庞大系统：</p>
-<ul>
-<li><strong>左塔：编码器（Encoder）</strong></li>
-<li><strong>右塔：解码器（Decoder）</strong></li>
-</ul>
-<p>它们各自扮演什么角色？请看下表的全方位深度对比：</p>
-<h3 id="表-7-1编码器-vs-解码器核心特性全景对比表">表 7-1：编码器 vs
-解码器核心特性全景对比表</h3>
+<div class="sourceCode" id="cb49"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Pre-LN，默认 norm_first=True</span></span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>._attention(<span class="va">self</span>.ln1(x), mask)</span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>.ffn(<span class="va">self</span>.ln2(x))</span></code></pre></div>
+<p>第一行右边先求值，再把新的结果赋给 <code>x</code>；第二行拿到的已经是
+<span class="math inline">\(u\)</span>。<code>_attention</code>
+将同一个归一化后的向量作为 Q/K/V 的来源，它内部仍会做可学习投影。FFN
+则只沿最后的特征维加工。</p>
+<p>切换 <code>norm_first=False</code> 后，代码改为：</p>
+<div class="sourceCode" id="cb50"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Post-LN</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> <span class="va">self</span>.ln1(x <span class="op">+</span> <span class="va">self</span>._attention(x, mask))</span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> <span class="va">self</span>.ln2(x <span class="op">+</span> <span class="va">self</span>.ffn(x))</span></code></pre></div>
+<p>这和 §6.3 的单支路公式一致，只是连续做了注意力、FFN
+两轮。它不是仅仅把一个模块的名字改成 Post-LN。</p>
+<h3 id="mask-不会因为有了-block-就自动出现">mask 不会因为有了 Block
+就自动出现</h3>
+<p><code>TransformerBlock(16,4)</code> 保持原调用方式，默认仍为
+Pre-LN。传入 <code>[T,T]</code> 的 <code>mask</code> 时，本书约定
+<code>1/True=可见</code>；在调用 PyTorch
+<code>nn.MultiheadAttention</code> 前转成 <code>mask==0</code>，因为该
+API 的布尔 mask 使用 <code>True=禁止</code>。</p>
+<p>不传 mask
+就是双向注意力；需要因果约束时，要传入包含对角线的下三角可见矩阵。本章只演示有可见键的普通序列，不把它冒充上一批
+<code>attention_core.py</code> 的完整 padding/全禁用行契约，也没有实现
+encoder-decoder 的 cross-attention。三种架构的差别留到下一章。</p>
+<h3 id="表-6-7这个教学-block-的完整参数量">表 6-7：这个教学 Block
+的完整参数量</h3>
 <div class="table-wrapper"><table>
-<colgroup>
-<col style="width: 33%" />
-<col style="width: 33%" />
-<col style="width: 33%" />
-</colgroup>
 <thead>
 <tr>
-<th style="text-align: left;">维度</th>
-<th style="text-align: left;">编码器 (Encoder)</th>
-<th style="text-align: left;">解码器 (Decoder)</th>
+<th>组件（D=16，d_ff=64）</th>
+<th>计数公式</th>
+<th>个数</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>形象比喻</strong></td>
-<td
-style="text-align: left;"><strong>试卷阅卷老师</strong>（全面通读整篇文章）</td>
-<td
-style="text-align: left;"><strong>高考考场作家</strong>（逐字构思写作文）</td>
+<td>MHA（含 Q/K/V/O bias）</td>
+<td>4D² + 4D</td>
+<td>1088</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>核心使命</strong></td>
-<td style="text-align: left;"><strong>文本理解与特征提取</strong></td>
-<td style="text-align: left;"><strong>文本生成与自回归续写</strong></td>
+<td>两个 LayerNorm</td>
+<td>4D</td>
+<td>64</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>注意力机制</strong></td>
-<td
-style="text-align: left;"><strong>双向自由自注意力</strong>（每个词能看前后所有词）</td>
-<td
-style="text-align: left;"><strong>因果掩码注意力</strong>（只能看自己和之前的词）</td>
+<td>FFN（含 b₁、b₂）</td>
+<td>2D·d_ff + d_ff + D</td>
+<td>2128</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>是否有掩码</strong></td>
-<td style="text-align: left;">无因果掩码（全员 100% 畅通互联）</td>
-<td
-style="text-align: left;"><strong>严格施加下三角因果掩码</strong>（严禁偷看未来）</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>交叉注意力</strong></td>
-<td style="text-align: left;">无（只关心输入句子内部的交互）</td>
-<td style="text-align: left;"><strong>有
-Cross-Attention</strong>（作为桥梁汲取编码器知识）</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>输入方式</strong></td>
-<td style="text-align: left;">一次性整句打包输入（全部词瞬间并行）</td>
-<td
-style="text-align: left;">生成时逐步自回归输入（生成一个词，塞回输入一个词）</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>典型代表模型</strong></td>
-<td style="text-align: left;">BERT、RoBERTa（擅长做分类、情感判断）</td>
-<td style="text-align: left;"><strong>GPT
-系列、LLaMA、DeepSeek</strong>（擅长对话聊天、写代码）</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>双塔结合代表</strong></td>
-<td style="text-align: left;">经典机器翻译 Transformer、Google
-T5、BART</td>
-<td style="text-align: left;">-</td>
+<td>本块合计</td>
+<td>以上相加</td>
+<td>3280</td>
 </tr>
 </tbody>
 </table></div>
+<p>上一章手写 MHA 使用无 bias 的投影，计数是 <span
+class="math inline">\(4D^2\)</span>；这里 PyTorch MHA
+启用了偏置，所以多出 <span
+class="math inline">\(4D\)</span>。比较参数量必须先统一这些条件。本块的
+3280 个参数不包括 embedding、词表输出层、位置参数或其他
+Block，也不是整个语言模型的规模。</p>
 <hr />
-<h2 id="宏观架构流程图">7.2 宏观架构流程图</h2>
-<p>让我们通过宏观架构图，直观审视这两座巨塔是如何默契联动的：</p>
+<h2 id="cpu-实验不仅看形状还检查性质">6.6 CPU
+实验：不仅看形状，还检查性质</h2>
+<p>在已安装本书依赖的环境里，从仓库根目录运行：</p>
+<div class="sourceCode" id="cb51"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/06_transformer_block.py</span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_blocks.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>本章核验环境是 CPU、PyTorch 2.14.1+cpu；测试只在安装了兼容的 2.14.x
+正式版时执行张量实验，缺失或版本不符会明确跳过，不能把跳过算成数值验收通过。无需
+GPU、模型权重、联网训练或付费 API。</p>
+<p>脚本会打印本章全部七张数值表，以及以下关键行。手算部分固定输入、使用
+float64；随机 Block 冒烟部分固定种子 42。</p>
+<pre class="text"><code>Z-score: mean=2.500000, variance=1.250000, denominator=1.118038
+normalized variance=0.999992
+Pre-LN: shape=[2, 5, 16], forward/backward finite=True
+Post-LN: shape=[2, 5, 16], forward/backward finite=True
+Pre-LN zero-sublayer identity max error=0.000000</code></pre>
+<p>建议按三个实验读，而不是只看脚本有没有报错：</p>
+<ol type="1">
+<li><strong>恒等路径实验。</strong>只把 attention 与 FFN
+的参数置零，保留 LayerNorm 的 gamma=1、beta=0。Pre-LN
+输出必须等于输入；Post-LN
+输出则应等于连续两次归一化，一般不是恒等。这里连支路的 bias
+也要清零，否则支路未必输出零。</li>
+<li><strong>统计实验。</strong>核对标准化前后的均值、方差，尤其注意
+epsilon 主导的小方差例子。再把 gamma/beta 改为
+2/1，检查“不再零均值”的结果。测试还与 PyTorch 官方 LayerNorm 对照。</li>
+<li><strong>有限性与顺序实验。</strong>对两种顺序各做一次因果前向和反向，检查输出、输入梯度、参数梯度都没有
+NaN 或无穷；再用独立参考公式核对整个 Block，而不是仅断言输出形状。</li>
+</ol>
+<p>测试也会逐字核对脚本生成的表格是否出现在正文中，防止只改代码或只改数字。有限性冒烟不等于已经训练出模型，更不是深层模型的稳定性评测。</p>
+<hr />
+<h2 id="自测先遮住答案再打开代码">6.7 自测：先遮住答案，再打开代码</h2>
+<ol type="1">
+<li>对 <span
+class="math inline">\(x=[1,2,3,4]\)</span>，归一化的均值、方差和分母分别是什么？如果误用
+D−1，方差会是多少？</li>
+<li>epsilon 为正、gamma=1、beta=0 时，<code>[3,3,3,3]</code> 的
+LayerNorm 输出是什么？为什么不是“方差约 1”？</li>
+<li>一个没有额外输出归一化的 Pre-LN Block，attention 和 FFN
+都恒为零，输出是什么？相同设置的 Post-LN 呢？</li>
+<li><code>D=16,d_ff=64</code> 的带偏置 FFN 有多少参数？把 token
+数量翻倍，参数会翻倍吗？</li>
+<li>删除 FFN 中间的 ReLU
+后，两层为何可以合并？本章小例子的输出哪一维发生改变？</li>
+<li>本章 Block 不传 mask 时，能否直接当成只能看过去的自回归模型？</li>
+</ol>
+<h3 id="参考答案-2">参考答案</h3>
+<ol type="1">
+<li>均值 2.5，方差 1.25，分母 <span
+class="math inline">\(\sqrt{1.25001}\approx1.118038\)</span>。误用 D−1
+会得到 <span class="math inline">\(5/3\approx1.666667\)</span>，与本章
+LayerNorm 的定义不符。</li>
+<li>零向量；减均值后每项为零，除以 <span
+class="math inline">\(\sqrt{\epsilon}\)</span>
+仍是零。输出方差为零，不会凭空增加差异。</li>
+<li>Pre-LN 输出原输入；Post-LN 为 <span
+class="math inline">\(\operatorname{LN}_2(\operatorname{LN}_1(x))\)</span>，一般不等于原输入。若堆栈末尾另加一个归一化，不能把整个堆栈也叫恒等。</li>
+<li><span
+class="math inline">\(1024+64+1024+16=2128\)</span>。不会翻倍，因为每个位置共用参数；计算量和激活存储会增加。</li>
+<li>用矩阵乘法结合律展开后仍是单个仿射变换。小例子的第二维由 −0.5 变成
+−6.5；第一维碰巧保持 1.5，不能只看一维就判断激活无效。</li>
+<li>不能。不传 mask 默认双向；因果 mask
+只是自回归模型所需条件之一，还缺语言模型输入输出层和训练、生成过程。</li>
+</ol>
+<hr />
+<h2 id="小结与后续路标">6.8 小结与后续路标</h2>
+<ul>
+<li>残差学习增量，让恒等映射有直接实现；它不承诺总输出或梯度永远不变。</li>
+<li>LayerNorm 对每个 token 的特征做“均值 → 方差 → 标准化”，epsilon
+影响实际输出方差，随后 gamma/beta 还会改变尺度与中心。</li>
+<li>Pre-LN 与 Post-LN
+的区别是计算顺序，不是标签；前者保留未归一化的残差主干，后者对相加结果归一化。</li>
+<li>普通 FFN
+用共享的两层仿射变换和中间非线性逐位置加工；算参数时记得偏置，算成本时区分参数与运算。</li>
+</ul>
+<p>后续规划 P13 会单独讲 RMSNorm 与
+SwiGLU，并在相近参数预算下做对比。本章不实现它们，也不预先承诺某个通用加速比例。先把基础
+Block 的路径读准，再逐个替换组件。<a
+href="https://arxiv.org/abs/1910.07467">路标：RMSNorm 原始论文</a>、<a
+href="https://arxiv.org/abs/2002.05202">GLU Variants Improve
+Transformer</a></p>
+<p>接下来读第7章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention
+和训练目标，组成不同的系统。</p>
+<h3 id="来源与核验范围">来源与核验范围</h3>
+<p>以下为论文原文与官方 API 文档；访问核验日期为
+<strong>2026-10-19</strong>。本章表格是配套脚本的教学计算，不是原论文
+benchmark 的复现。</p>
+<ul>
+<li>He 等，2015：<a href="https://arxiv.org/pdf/1512.03385">Deep
+Residual Learning for Image
+Recognition</a>，§3.1–3.2：残差函数与恒等捷径。</li>
+<li>Ba 等，2016：<a href="https://arxiv.org/pdf/1607.06450">Layer
+Normalization</a>，§3、§3.1：单样本统计、每维增益与偏置。</li>
+<li>Vaswani 等，2017：<a
+href="https://arxiv.org/html/1706.03762v7">Attention Is All You
+Need</a>，§3.1、§3.3：Post-LN 与逐位置 ReLU FFN。</li>
+<li>Xiong 等，2020：<a href="https://arxiv.org/pdf/2002.04745">On Layer
+Normalization in the Transformer
+Architecture</a>，图1、表1、§3：两种布局及有条件的初始化/优化分析。</li>
+<li><a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html">PyTorch
+2.14 LayerNorm</a>：epsilon、方差口径、参数形状；<a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html">MultiheadAttention</a>：布尔
+mask 语义和参数接口。</li>
+</ul>
+<hr />
+<h1 id="第7章-编码器与解码器-从文本理解到自回归生成">第7章：编码器与解码器——从文本理解到自回归生成</h1>
+<p>前面已经有了词向量、位置编码、注意力和完整积木。现在把它们接成系统：哪些位置可以互相读信息？一张预测分数表，怎样变成逐步写出的句子？</p>
+<p>本章的数值演示来自 <a
+href="code/10_generation_loop.py">code/10_generation_loop.py</a>，只依赖
+Python 标准库。它用<strong>事先写好的
+logits</strong>讲解循环和停止，不是假装已经训练出语言模型。下一章的
+Baby-GPT 才把预测器换成真正的小网络。</p>
+<h2 id="不是读者和作家二选一而是三种常见结构">7.1
+不是“读者”和“作家”二选一，而是三种常见结构</h2>
+<p>经典 Transformer 论文采用
+encoder-decoder：编码器先整理原文，解码器一边看已写的译文，一边查询原文表示。把编码器想成“整理资料的人”，解码器想成“拿着资料逐步写作的人”，有助于理解信息流，但模块没有人类的理解意图，也不保证内容正确。</p>
+<h3 id="表-7-1三种结构分别能看哪里">表 7-1：三种结构分别能看哪里？</h3>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>结构</th>
+<th>自注意力可见范围（典型设置）</th>
+<th>跨序列查询</th>
+<th>常见用途与边界</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>encoder-only</td>
+<td>同一输入中允许的前后位置；仍需屏蔽 padding</td>
+<td>通常没有生成端 cross-attention</td>
+<td>BERT 类表征、分类或掩码填空；不能据此断言任何编码器都只能分类</td>
+</tr>
+<tr>
+<td>decoder-only</td>
+<td>当前及过去的 token，禁止未来</td>
+<td>通常没有独立编码器供查询</td>
+<td>GPT 类下一词建模；生成时每次补一个 token，训练时已知输入可并行</td>
+</tr>
+<tr>
+<td>encoder-decoder</td>
+<td>编码端通常双向，解码端因果</td>
+<td>解码端 Q 查询编码端 K/V</td>
+<td>原始 Transformer 翻译；输入和输出长度可以不同</td>
+</tr>
+</tbody>
+</table></div>
+<p>“decoder-only”不是把双塔中的编码器删除，却保留一条不知道该读谁的
+cross-attention。常见实现也去掉这条跨塔子层。反过来，编码器没有 causal
+mask 不等于没有任何 mask，padding 和其他任务约束依然可能存在。</p>
+<p>编码器可读取的完整源句子，与解码器不可偷看的未来<strong>目标词</strong>，是两条不同序列。翻译时源句子已经给定，读取它不是泄漏未来译文。原始结构参见
+Transformer 论文 §3.1、§3.2.3；BERT 的 encoder-only 设置见其论文
+§3。</p>
+<h2 id="沿着图读一遍双塔系统">7.2 沿着图读一遍双塔系统</h2>
 <figure>
 <a href="assets/rendered/transformer_full_architecture.svg"
 title="点击查看原尺寸图"><img
@@ -3544,8 +4156,8 @@ class="book-diagram" width="646"
 alt="经典 Transformer 完整宏观架构" /></a>
 <figcaption>经典 Transformer 完整宏观架构</figcaption>
 </figure>
-<p>先分别读两条信息流，再看它们的连接点：编码器的输出会送到解码器的交叉注意力中，投影成
-K 和 V。</p>
+<p>下图只描述经典
+encoder-decoder，不是所有聊天模型共有的完整结构。归一化与残差在简图中省略，不表示它们消失了。</p>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-05.svg" title="点击查看原尺寸图"><img
 src="assets/rendered/flow-05.svg" class="book-diagram" width="256"
@@ -3562,31 +4174,22 @@ alt="解码器：利用前缀与原文预测下一个字。前缀经过因果自
 解码器：利用前缀与原文预测下一个字
 </div>
 </div>
-<p>这是经典编码器—解码器结构的简化信息流，省略了残差与归一化；它们仍然存在。GPT
-类模型通常没有这里的编码器和交叉注意力。</p>
-<hr />
-<h2 id="为什么解码器必须施加因果掩码causal-mask">7.3
-为什么解码器必须施加“因果掩码（Causal Mask）”？</h2>
-<p>许多初学者在自学大模型时都会问：</p>
-<blockquote>
-<p>“既然自注意力能让所有词互相交流，为什么解码器非要把未来的词遮挡住？这不是自废武功吗？”</p>
-</blockquote>
-<h3 id="闭卷考试与作弊警示">闭卷考试与作弊警示</h3>
-<p>想象一下，如果在语文考试中，老师让你做“名句默写”：</p>
-<ul>
-<li>题目写着：“春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知______。”</li>
-<li>如果在考试过程中，系统允许你<strong>直接转头看向句末的‘少’字</strong>；</li>
-<li>那么在计算注意力时，空缺处的词向量就会直接拿‘少’字的特征交差！</li>
-<li><strong>后果</strong>：模型在训练阶段“抄近道作弊”，一旦到了没有参考答案的真实应用场景中，它连一个字都生不出来！</li>
-</ul>
-<p>为了杜绝这种“未来信息泄露”，解码器引入了 <strong>因果掩码（Causal
-Mask / 下三角掩码）</strong>！</p>
+<p>原文编码结果在本轮生成过程中可重复使用。译文前缀则每次增长。前缀中的字只是易读标签，实际序列由
+tokenizer 的 token ID 组成，不保证每个字恰好一个 token。</p>
+<h2 id="闭卷考试保留四词掩码的三步手算">7.3
+闭卷考试：保留四词掩码的三步手算</h2>
+<p>假设当前位置的任务是预测<strong>下一个</strong>词。如果它能读取那个正确目标词的输入表示，训练就可能依赖生成时根本没有的答案。因果
+mask
+阻断这种路径；它不能单独解决数据泄漏、重复训练样本等其他问题，也不保证学到好模型。</p>
 <figure>
 <a href="assets/rendered/causal_mask.svg" title="点击查看原尺寸图"><img
 src="assets/rendered/causal_mask.svg" class="book-diagram" width="720"
 alt="因果掩码矩阵原理" /></a>
 <figcaption>因果掩码矩阵原理</figcaption>
 </figure>
+<p>下面完整保留原来的分数表与手算链。原始分数是人为设定；脚本的
+<code>mask_walkthrough()</code>
+用这些数生成三张表并验证结果，不声称它们是某个模型的测量值。本例每行至少能看见自己，没有全禁用行；全禁用行的处理约定见第3章。</p>
 <h3 id="表-7-24-词序列的掩码矩阵数值演变推导表">表 7-2：4
 词序列的掩码矩阵数值演变推导表</h3>
 <p>假设输入序列为四个字：“我”、“爱”、“学”、“习”。</p>
@@ -3640,8 +4243,8 @@ alt="因果掩码矩阵原理" /></a>
 </tr>
 </tbody>
 </table></div>
-<h4 id="施加因果掩码后未来位置强制填入--1e9">2.
-施加因果掩码后（未来位置强制填入 -1e9）：</h4>
+<h4 id="施加因果掩码后未来位置实际填入负无穷">2.
+施加因果掩码后（未来位置实际填入负无穷）：</h4>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -3759,40 +4362,108 @@ class="math inline">\(e^{-\infty} =
 0\)</span>，所以未来的字不会分到百分比。 第 3、4
 行用的是同一套算法。上面的原始分数是为了演示而写的，不是某个训练好的模型量出来的。</p>
 </div>
-<hr />
-<h2 id="交叉注意力cross-attention解码器与编码器的秘密对话">7.4
-交叉注意力（Cross-Attention）：解码器与编码器的秘密对话</h2>
-<p>在双塔架构中，解码器不仅要审视自己已经写出的字，更要时刻对照编码器送过来的“原文参考资料”。
-负责打通两座巨塔的枢纽，就是
-<strong>交叉注意力（Cross-Attention）</strong>！</p>
-<h3 id="qkv-的跨界组装法则">Q、K、V 的跨界组装法则：</h3>
-<p>回忆我们在第 3 章学过的图书检索类比：</p>
+<p>对应的计算顺序不能颠倒：先确定第 i 行可见的 <span
+class="math inline">\(j\le
+i\)</span>，再只对这些分数归一化，最后给未来位置补精确的
+0。脚本把可见前缀送入稳定 Softmax；表中的禁止分数实际写成负无穷，不使用
+<code>-1e9</code>
+冒充。打印到两位的百分数可能有舍入误差，测试用未舍入值检查行和。</p>
+<h2 id="cross-attention查询来自目标资料来自源句">7.4
+Cross-attention：查询来自目标，资料来自源句</h2>
+<p>图书馆类比里，写作者提出问题，原文资料提供标签和内容。在经典
+cross-attention 中：</p>
 <ul>
-<li><strong>谁在发问？（Query 来自哪里？）</strong>
-解码器正在写译文，它心里最清楚当前写到哪儿了、卡在哪个词上。因此： <span
-class="math display">\[\mathbf{Q \ 来自 \
-解码器自身（Decoder）}\]</span></li>
-<li><strong>上哪儿去查参考答案？（Key 和 Value 来自哪里？）</strong>
-原文的所有背景知识都在编码器肚子里。因此： <span
-class="math display">\[\mathbf{K, V \ 来自 \
-编码器的最终输出（Encoder）}\]</span></li>
+<li>Q 由解码器当前层的目标侧表示投影得到；</li>
+<li>K/V 由编码器输出投影得到；</li>
+<li>权重沿源序列位置归一化，而不是沿译文词表归一化。</li>
 </ul>
-<pre><code>   解码器 (Decoder) ──生成提问──► Q: &quot;我接下来要翻译宾语了，原文的宾语是什么？&quot;
-                                  │
-                                  ▼ (点积比对)
-   编码器 (Encoder) ──提供标签──► K: [&quot;主语:张三&quot;, &quot;谓语:吃&quot;, &quot;宾语:红富士苹果&quot;]
-                    ──提供实质──► V: [张三的特征, 吃的特征, 苹果的特征]
-                                  │
-                                  ▼ (加权提炼)
-   解码器获得精准上下文 ───────► &quot;抓取到了！宾语是&#39;苹果&#39;，英文应该输出 &#39;apple&#39;！&quot;</code></pre>
-<p>这种机制让译文在生成时可以反复查询原文表示，通常比只依赖解码器自己的历史更容易保持与原文的对应；最终效果仍取决于训练数据和模型能力。</p>
-<hr />
-<h2 id="自回归生成机制autoregressive-decoding贪吃蛇的自循环">7.5
-自回归生成机制（Autoregressive Decoding）：贪吃蛇的自循环</h2>
-<p>现在，我们来看 ChatGPT
-和各种大模型在聊天时，那个“一闪一闪逐字打印”的打字机特效到底是怎么实现的。</p>
-<p>这种生成方式叫做 <strong>自回归（Autoregressive）</strong>。
-它的运行模式就像一盘<strong>“贪吃蛇游戏”</strong>：蛇每吃掉一颗豆子（生成一个新词），蛇的身体就变长一节，然后整条变长的蛇又作为新的输入，去寻找下一颗豆子！</p>
+<p>例如
+batch=1，译文当前有2个位置、原文有3个位置，每头宽度4。省略头轴后，Q=[1,2,4]，K=[1,3,4]，V=[1,3,4]；分数为
+[1,2,3]，聚合结果为
+[1,2,4]。输入输出长度不必相同，也不需要把它们硬凑成方阵。另取一个 <span
+class="math inline">\(d_v=2\)</span> 的手算例子：给第一行三份资料权重
+[0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是
+[0.7,0.8]，不是机械复制某一个词。</p>
+<p>有源端 padding 时也要屏蔽对应 K/V
+位置。这个“跨序列”的连接方式，不应和后续 P17 的 Causal
+Encoder-Decoder（CED）名称混为一谈；本章没有实现
+CED，只学习传统翻译双塔与生成循环。</p>
+<h2 id="teacher-forcing谁向右移预测谁">7.5 Teacher
+forcing：谁向右移，预测谁？</h2>
+<p>训练时可以把正确的前缀交给模型，这叫 teacher
+forcing；它不是在当前输出位置直接喂入当前标签。以一个完整训练序列为例：</p>
+<pre class="text"><code>完整序列：&lt;BOS&gt;  我  爱  学  习  &lt;EOS&gt;
+模型输入：&lt;BOS&gt;  我  爱  学  习
+监督标签： 我     爱  学  习  &lt;EOS&gt;</code></pre>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>计算位置</th>
+<th>当前输入 token</th>
+<th>该位置应预测的标签</th>
+<th>因果 mask 下可见的输入</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>&lt;BOS&gt;</code></td>
+<td>我</td>
+<td><code>&lt;BOS&gt;</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td>我</td>
+<td>爱</td>
+<td><code>&lt;BOS&gt;</code>，我</td>
+</tr>
+<tr>
+<td>2</td>
+<td>爱</td>
+<td>学</td>
+<td><code>&lt;BOS&gt;</code>，我，爱</td>
+</tr>
+<tr>
+<td>3</td>
+<td>学</td>
+<td>习</td>
+<td><code>&lt;BOS&gt;</code>，我，爱，学</td>
+</tr>
+<tr>
+<td>4</td>
+<td>习</td>
+<td><code>&lt;EOS&gt;</code></td>
+<td><code>&lt;BOS&gt;</code>，我，爱，学，习</td>
+</tr>
+</tbody>
+</table></div>
+<p>常说的“把目标右移一位作为 decoder 输入”，是指在目标“我 爱 学 习
+EOS”前放 BOS，去掉最后的 EOS，得到输入。若从完整序列切片，代码则是：</p>
+<div class="sourceCode" id="cb54"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="bu">list</span>(tokens[:<span class="op">-</span><span class="dv">1</span>]), <span class="bu">list</span>(tokens[<span class="dv">1</span>:])</span></code></pre></div>
+<p>第一项是输入，第二项是向后错一位的 next-token
+标签。不要把“输入右移”误写成“把标签与输入对齐不动”。BOS/EOS
+是否显式存在取决于 tokenizer 与任务，这里用可读字符串代替它们的 ID。</p>
+<p>全部输入已知，所以五个查询行可以并行计算各自的下一词损失；每行仍只能看允许的前缀。若有
+padding，目标端还需 loss
+mask。训练时走正确前缀，推理时走自己生成的前缀，两者可能不同；一个早期错误会影响后续条件，teacher
+forcing 不自动保证推理质量。</p>
+<h2 id="prefill-与-decode不是每一轮都重新读完一切">7.6 Prefill 与
+decode：不是每一轮都重新读完一切</h2>
+<p>收到提示“床前”时，可以一次处理已知提示的所有位置，这个阶段常称
+<strong>prefill</strong>。最后一个位置的输出 logits 已可用来选出第一个新
+token“明”，不需要先等一个不存在的“明”的输出。</p>
+<p>之后把新 token 接入序列，继续预测，这通常称 <strong>decode</strong>
+阶段。有 KV cache 的实现复用历史 K/V，只计算新增 token
+所需部分；本章为了可读性，每次把完整前缀交给一个简化预测函数，<strong>没有实现缓存，也不能用它评估推理性能</strong>。P11
+再实现缓存并做等价性检验。</p>
+<p>“打字机特效”是界面如何流式展示文本，不能用来判断底层每步是不是一个汉字、是否有缓冲或其他生成优化。我们先学普通自回归的逻辑依赖：</p>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-07.svg" title="点击查看原尺寸图"><img
 src="assets/rendered/flow-07.svg" class="book-diagram" width="385"
@@ -3801,76 +4472,185 @@ alt="自回归生成：每次多接一个字。输入床前，依次生成明、
 自回归生成：每次多接一个字
 </div>
 </div>
-<p>图中每次回复前，模型都要完成一次预测；“新前缀”包含上一轮生成的字，循环并没有跳过。</p>
-<h3 id="表-7-3自回归生成每一步的数据流追踪表">表
-7-3：自回归生成每一步的数据流追踪表</h3>
-<div class="table-wrapper"><table>
+<h2 id="greedy-与-temperature同一组-logits如何选-token">7.7 Greedy 与
+temperature：同一组 logits，如何选 token？</h2>
+<p>Logits 是词表上未归一化的分数，不是已经生成的 token。设三名候选 A/B/C
+的 logits=[2,1,0]：</p>
+<p><span
+class="math display">\[p_i(T)=\frac{\exp(z_i/T)}{\sum_j\exp(z_j/T)},\qquad
+T&gt;0.\]</span></p>
+<p>脚本的 <code>probabilities</code>
+先减最大值再除以温度，避免对大正数直接取指数。以下百分数由脚本计算：</p>
+<div class="table-wrapper"><table style="width:100%;">
 <colgroup>
+<col style="width: 16%" />
 <col style="width: 22%" />
-<col style="width: 18%" />
-<col style="width: 18%" />
 <col style="width: 22%" />
-<col style="width: 18%" />
+<col style="width: 22%" />
+<col style="width: 16%" />
 </colgroup>
 <thead>
 <tr>
-<th style="text-align: center;">步数 (Step)</th>
-<th style="text-align: left;">模型输入序列 (Input Sequence)</th>
-<th style="text-align: left;">预测下一个字的候选概率分布 (Top-3)</th>
-<th style="text-align: center;">采样选中的新字</th>
-<th style="text-align: left;">拼接后的新序列</th>
+<th>方式</th>
+<th style="text-align: right;">A</th>
+<th style="text-align: right;">B</th>
+<th style="text-align: right;">C</th>
+<th>选择规则</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: center;"><strong>第 1 步</strong></td>
-<td style="text-align: left;"><code>["床", "前"]</code></td>
-<td style="text-align: left;">明: 92%, 地: 5%, 月: 3%</td>
-<td style="text-align: center;"><strong>明</strong></td>
-<td style="text-align: left;"><code>["床", "前", "明"]</code></td>
+<td>greedy</td>
+<td style="text-align: right;">不需要算概率</td>
+<td style="text-align: right;">不需要算概率</td>
+<td style="text-align: right;">不需要算概率</td>
+<td>直接选最大 logit，所以是 A</td>
 </tr>
 <tr>
-<td style="text-align: center;"><strong>第 2 步</strong></td>
-<td style="text-align: left;"><code>["床", "前", "明"]</code></td>
-<td style="text-align: left;">月: 96%, 日: 2%, 星: 2%</td>
-<td style="text-align: center;"><strong>月</strong></td>
-<td style="text-align: left;"><code>["床", "前", "明", "月"]</code></td>
+<td>temperature=0.5</td>
+<td style="text-align: right;">86.68%</td>
+<td style="text-align: right;">11.73%</td>
+<td style="text-align: right;">1.59%</td>
+<td>按这组分布随机抽样</td>
 </tr>
 <tr>
-<td style="text-align: center;"><strong>第 3 步</strong></td>
-<td style="text-align: left;"><code>["床", "前", "明", "月"]</code></td>
-<td style="text-align: left;">光: 98%, 照: 1%, 亮: 1%</td>
-<td style="text-align: center;"><strong>光</strong></td>
-<td
-style="text-align: left;"><code>["床", "前", "明", "月", "光"]</code></td>
+<td>temperature=1.0</td>
+<td style="text-align: right;">66.52%</td>
+<td style="text-align: right;">24.47%</td>
+<td style="text-align: right;">9.00%</td>
+<td>同上</td>
 </tr>
 <tr>
-<td style="text-align: center;"><strong>第 4 步</strong></td>
-<td
-style="text-align: left;"><code>["床", "前", "明", "月", "光"]</code></td>
-<td style="text-align: left;">，: 99%, 。: 1%</td>
-<td style="text-align: center;"><strong>，</strong></td>
-<td
-style="text-align: left;"><code>["床", "前", "明", "月", "光", "，"]</code></td>
+<td>temperature=2.0</td>
+<td style="text-align: right;">50.65%</td>
+<td style="text-align: right;">30.72%</td>
+<td style="text-align: right;">18.63%</td>
+<td>同上</td>
 </tr>
 </tbody>
 </table></div>
-<p>当模型预测出特殊的终止符（如 <code>&lt;EOS&gt;</code>，End of
-Sequence）或达到最大字数限制时，循环停止，一次流畅的人机对话就此圆满结束！</p>
-<hr />
-<h2 id="本章小结-2">7.6 本章小结</h2>
+<p>低温使本例更集中，高温更平坦；随机抽样仍可能选择非最大项，不是“有51%就必选它”。若仍用
+argmax 而不抽样，任意正温度都不会改变最大项的顺序。</p>
+<p>数学公式不能直接除以0。教学函数的 <code>temperature=0</code>
+<strong>另走greedy分支</strong>，同分时选词表中第一个最大项。只有最大项唯一时，<span
+class="math inline">\(T\to0^+\)</span>
+的分布才趋向该项；并列最大项的极限仍共享权重，不等于我们的“选第一个”约定。</p>
+<h2 id="表-7-3从真实脚本输出逐步追踪停止">7.8 表
+7-3：从真实脚本输出逐步追踪停止</h2>
+<p>为了让每个数都可核对，原先的示意概率换成脚本的固定四词输出词表：[明，月，光，<code>&lt;EOS&gt;</code>]。提示中的“床前”由示例直接给定。预测器按前缀长度选用写好的
+logits 行，<strong>没有学习诗歌</strong>；固定行不需要随机种子，下面使用
+greedy。显示的概率统一是温度1的参考分布，并非greedy必须先算的东西。</p>
+<div class="table-wrapper"><table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>步数</th>
+<th>本轮前缀</th>
+<th>logits（按四词顺序）</th>
+<th>温度1概率（同序，%）</th>
+<th>greedy新增</th>
+<th>累计新增数 / 是否停止</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>床前</td>
+<td>[4,1,0,-2]</td>
+<td>[93.41,4.65,1.71,0.23]</td>
+<td>明</td>
+<td>1 / 继续</td>
+</tr>
+<tr>
+<td>2</td>
+<td>床前明</td>
+<td>[0,4,1,-2]</td>
+<td>[1.71,93.41,4.65,0.23]</td>
+<td>月</td>
+<td>2 / 继续</td>
+</tr>
+<tr>
+<td>3</td>
+<td>床前明月</td>
+<td>[0,1,4,-2]</td>
+<td>[1.71,4.65,93.41,0.23]</td>
+<td>光</td>
+<td>3 / 继续</td>
+</tr>
+<tr>
+<td>4</td>
+<td>床前明月光</td>
+<td>[0,0,0,4]</td>
+<td>[1.74,1.74,1.74,94.79]</td>
+<td><code>&lt;EOS&gt;</code></td>
+<td>4 / EOS停止</td>
+</tr>
+</tbody>
+</table></div>
+<p>两种上限分别运行，不要混在一条追踪里：</p>
 <ul>
-<li><strong>编码器</strong>拥有无拘无束的双向视界，专精于全文深刻理解；</li>
-<li><strong>解码器</strong>受制于因果掩码，只能向左看，专精于自回归续写；</li>
-<li><strong>交叉注意力</strong>让解码器用自己的 <span
-class="math inline">\(Q\)</span> 去匹配编码器的 <span
-class="math inline">\(K\)</span> 和 <span
-class="math inline">\(V\)</span>，搭建起跨语言、跨模态的理解之桥；</li>
-<li><strong>自回归生成</strong>通过“预测新词 -&gt; 塞回输入 -&gt;
-预测下一个词”的贪吃蛇循环，实现了大模型灵动自然的创作输出。</li>
+<li><code>max_new_tokens=8</code>：第4步生成
+EOS，立即停止，不用等到8步。返回列表保留
+EOS，界面可另行隐藏特殊符号。</li>
+<li><code>max_new_tokens=2</code>：第2步后就达到新增上限，返回“床前明月”，没有生成
+EOS，停止原因是长度预算。</li>
+<li><code>max_new_tokens=0</code>：不调用预测函数、无新增
+token。若前缀本来已以 EOS 结尾，本教学函数立即按 EOS 停止。</li>
 </ul>
-<p>现在，理论的拼图已经全部集齐！
-在下一章中，我们将不再空谈理论，而是<strong>手把手从第一行代码开始，亲自训练一个可以吟诵古诗的微型大模型（Baby-GPT）</strong>！</p>
+<p>这里的上限计<strong>新增token</strong>，不把2个提示token算进去；实际框架里的
+<code>max_length</code> 与 <code>max_new_tokens</code>
+含义可能不同，调用时需查版本文档。长度停止可能截断一句话；模型预测 EOS
+也不代表内容必然完整或正确。</p>
+<p>把循环逐行拆开看：</p>
+<div class="sourceCode" id="cb55"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>logits <span class="op">=</span> <span class="bu">list</span>(logits_fn(<span class="bu">list</span>(tokens)))</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>chosen <span class="op">=</span> vocab[choose_token(logits, temperature, rng)]</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>tokens.append(chosen)</span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> chosen <span class="op">==</span> eos:</span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> tokens, trace, <span class="st">&quot;eos&quot;</span></span></code></pre></div>
+<p>外层 <code>for step in range(max_new_tokens)</code>
+保证有限次数；每轮取得词表分数、选择一个token、追加前缀，再检查EOS。源码在追加前记录
+<code>trace</code>，以便显示本轮旧前缀。EOS检查不能等到下一轮才做，否则会多调用一次模型。输出格式检查保证每个词表项恰好一个logit。若启用抽样，固定seed便于复查本例，但不承诺跨框架和版本逐位一致。</p>
+<h2 id="自测运行与下一步">7.9 自测、运行与下一步</h2>
+<div class="sourceCode" id="cb56"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/10_generation_loop.py</span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-v</span></span></code></pre></div>
+<p>本章无 PyTorch/GPU
+依赖。回归覆盖三步mask数值、标签错位、温度数表、低温唯一最大项、EOS、最大新增数、零预算、固定seed及非法输入。</p>
+<ol type="1">
+<li>原文3个位置、目标2个位置，cross-attention分数该为几行几列？2×3；两行目标query，各查询三份源资料。若三份二维V及权重如§7.4，输出是[0.7,0.8]。</li>
+<li>输入“BOS 我 爱”，标签是“BOS 我 爱”吗？不是。若完整样本是“BOS 我 爱
+EOS”，输入是“BOS 我 爱”，标签是“我 爱
+EOS”，最后一个位置预测停止符。</li>
+<li>logits=[2,1,0]，温度0.5一定选A吗？抽样不一定，A约86.68%；greedy才确定选A。T趋0的结论还要检查是否唯一最大。</li>
+<li>表7-3在新增上限2时何时停止？第2步，得到4个总token（2提示+2新增），不是等EOS出现才停。</li>
+<li>encoder-only没有因果mask，所以可以不处理padding吗？不可以；允许前后文不代表补位是有用内容。</li>
+<li>第一次生成“明”之前有没有decode输出“明”的表示？不需要。prefill的最后位置logits已可选出“明”；再将“明”作为下一次条件输入。我们的示例是全前缀重算，不是KV缓存实现。</li>
+</ol>
+<p>下一章保留现有 Baby-GPT
+训练实践。扩展大纲的训练闭环与评估章节将另批完成，本章不把固定logits演示当成它们已经落地。</p>
+<h2 id="原始来源与版本">原始来源与版本</h2>
+<ul>
+<li><a href="https://arxiv.org/html/1706.03762v7">Attention Is All You
+Need，v7，§3.1、§3.2.3、§3.4</a>：双塔结构、因果约束、目标右移和输出层。</li>
+<li><a href="https://arxiv.org/abs/1810.04805">BERT
+原始论文，§3</a>：双向编码器预训练；“双向”不是任何任务都可看未来答案。</li>
+<li><a
+href="https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation">Transformers
+4.57.1
+生成参数文档</a>：temperature、EOS及长度参数的接口语义；本章不用这个库执行实验。</li>
+<li><a
+href="https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation">Transformers
+4.57.1
+缓存说明</a>：理解历史K/V复用的概念路标。文档核验日期：2026-10-19。</li>
+</ul>
 <hr />
 <h1 id="第8章-实战-手搭一个微型大语言模型-Baby-GPT">第8章：实战——手搭一个微型大语言模型（Baby-GPT）</h1>
 <blockquote>
@@ -3990,19 +4770,19 @@ Baby-GPT 第三段：训练与生成的分岔
 <p>让我们逐段拆解配套脚本 <a
 href="code/07_baby_gpt.py">code/07_baby_gpt.py</a>。</p>
 <h3 id="词表与分词器tokenizer">1. 词表与分词器（Tokenizer）</h3>
-<div class="sourceCode" id="cb45"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 训练语料：三首经典唐诗</span></span>
-<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>text_corpus <span class="op">=</span> (</span>
-<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;床前明月光，疑是地上霜。举头望明月，低头思故乡。&quot;</span></span>
-<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;白日依山尽，黄河入海流。欲穷千里目，更上一层楼。&quot;</span></span>
-<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。&quot;</span></span>
-<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 提取不重复汉字构建字典</span></span>
-<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">list</span>(<span class="bu">set</span>(text_corpus)))</span>
-<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="bu">len</span>(unique_chars)  <span class="co"># 57 个字符</span></span>
-<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a>char2idx <span class="op">=</span> {ch: i <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span>
-<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a>idx2char <span class="op">=</span> {i: ch <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span></code></pre></div>
+<div class="sourceCode" id="cb57"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 训练语料：三首经典唐诗</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>text_corpus <span class="op">=</span> (</span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;床前明月光，疑是地上霜。举头望明月，低头思故乡。&quot;</span></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;白日依山尽，黄河入海流。欲穷千里目，更上一层楼。&quot;</span></span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。&quot;</span></span>
+<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 提取不重复汉字构建字典</span></span>
+<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">list</span>(<span class="bu">set</span>(text_corpus)))</span>
+<span id="cb57-10"><a href="#cb57-10" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="bu">len</span>(unique_chars)  <span class="co"># 57 个字符</span></span>
+<span id="cb57-11"><a href="#cb57-11" aria-hidden="true" tabindex="-1"></a>char2idx <span class="op">=</span> {ch: i <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span>
+<span id="cb57-12"><a href="#cb57-12" aria-hidden="true" tabindex="-1"></a>idx2char <span class="op">=</span> {i: ch <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span></code></pre></div>
 <h4 id="表-8-2部分汉字与数字-id运行脚本时的真实编号">表
 8-2：部分汉字与数字 ID（运行脚本时的真实编号）</h4>
 <p><code>sorted</code> 按 Unicode
@@ -4060,91 +4840,91 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb45-1"><a h
 因果自注意力模块（CausalSelfAttention）</h3>
 <p>这是模型的“灵魂中枢”，注意看我们是如何将因果掩码注册进 PyTorch
 缓冲区的：</p>
-<div class="sourceCode" id="cb46"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CausalSelfAttention(nn.Module):</span>
-<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads, max_seq_len):</span>
-<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
-<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
-<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性投影层</span></span>
-<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb46-11"><a href="#cb46-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb46-12"><a href="#cb46-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb46-13"><a href="#cb46-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 核心：下三角掩码缓冲区（不需要计算梯度）</span></span>
-<span id="cb46-14"><a href="#cb46-14" aria-hidden="true" tabindex="-1"></a>        mask <span class="op">=</span> torch.tril(torch.ones(max_seq_len, max_seq_len))</span>
-<span id="cb46-15"><a href="#cb46-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.register_buffer(<span class="st">&quot;mask&quot;</span>, mask)</span>
-<span id="cb46-16"><a href="#cb46-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb46-17"><a href="#cb46-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
-<span id="cb46-18"><a href="#cb46-18" aria-hidden="true" tabindex="-1"></a>        B, T, C <span class="op">=</span> x.shape  <span class="co"># Batch(批次), Time(序列长度), Channel(维度)</span></span>
-<span id="cb46-19"><a href="#cb46-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb46-20"><a href="#cb46-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 投影并切分多头: [B, num_heads, T, head_dim]</span></span>
-<span id="cb46-21"><a href="#cb46-21" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb46-22"><a href="#cb46-22" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb46-23"><a href="#cb46-23" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb46-24"><a href="#cb46-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb46-25"><a href="#cb46-25" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 点乘打分并缩放</span></span>
-<span id="cb46-26"><a href="#cb46-26" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
-<span id="cb46-27"><a href="#cb46-27" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb46-28"><a href="#cb46-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 施加掩码：将右上角未来位置填入 -1e9 (-∞)</span></span>
-<span id="cb46-29"><a href="#cb46-29" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> scores.masked_fill(<span class="va">self</span>.mask[:T, :T] <span class="op">==</span> <span class="dv">0</span>, <span class="op">-</span><span class="fl">1e9</span>)</span>
-<span id="cb46-30"><a href="#cb46-30" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb46-31"><a href="#cb46-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Softmax 归一化</span></span>
-<span id="cb46-32"><a href="#cb46-32" aria-hidden="true" tabindex="-1"></a>        weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb46-33"><a href="#cb46-33" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb46-34"><a href="#cb46-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 加权求和并拼回原状</span></span>
-<span id="cb46-35"><a href="#cb46-35" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> torch.matmul(weights, V).transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(B, T, C)</span>
-<span id="cb46-36"><a href="#cb46-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out)</span></code></pre></div>
+<div class="sourceCode" id="cb58"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CausalSelfAttention(nn.Module):</span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads, max_seq_len):</span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性投影层</span></span>
+<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb58-9"><a href="#cb58-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb58-10"><a href="#cb58-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb58-11"><a href="#cb58-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb58-12"><a href="#cb58-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-13"><a href="#cb58-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 核心：下三角掩码缓冲区（不需要计算梯度）</span></span>
+<span id="cb58-14"><a href="#cb58-14" aria-hidden="true" tabindex="-1"></a>        mask <span class="op">=</span> torch.tril(torch.ones(max_seq_len, max_seq_len))</span>
+<span id="cb58-15"><a href="#cb58-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.register_buffer(<span class="st">&quot;mask&quot;</span>, mask)</span>
+<span id="cb58-16"><a href="#cb58-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-17"><a href="#cb58-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
+<span id="cb58-18"><a href="#cb58-18" aria-hidden="true" tabindex="-1"></a>        B, T, C <span class="op">=</span> x.shape  <span class="co"># Batch(批次), Time(序列长度), Channel(维度)</span></span>
+<span id="cb58-19"><a href="#cb58-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-20"><a href="#cb58-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 投影并切分多头: [B, num_heads, T, head_dim]</span></span>
+<span id="cb58-21"><a href="#cb58-21" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb58-22"><a href="#cb58-22" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb58-23"><a href="#cb58-23" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb58-24"><a href="#cb58-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-25"><a href="#cb58-25" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 点乘打分并缩放</span></span>
+<span id="cb58-26"><a href="#cb58-26" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
+<span id="cb58-27"><a href="#cb58-27" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb58-28"><a href="#cb58-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 施加掩码：将右上角未来位置填入 -1e9 (-∞)</span></span>
+<span id="cb58-29"><a href="#cb58-29" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> scores.masked_fill(<span class="va">self</span>.mask[:T, :T] <span class="op">==</span> <span class="dv">0</span>, <span class="op">-</span><span class="fl">1e9</span>)</span>
+<span id="cb58-30"><a href="#cb58-30" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb58-31"><a href="#cb58-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Softmax 归一化</span></span>
+<span id="cb58-32"><a href="#cb58-32" aria-hidden="true" tabindex="-1"></a>        weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb58-33"><a href="#cb58-33" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb58-34"><a href="#cb58-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 加权求和并拼回原状</span></span>
+<span id="cb58-35"><a href="#cb58-35" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> torch.matmul(weights, V).transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(B, T, C)</span>
+<span id="cb58-36"><a href="#cb58-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out)</span></code></pre></div>
 <hr />
 <h3 id="完整的-babygpt-模型组装">3. 完整的 BabyGPT 模型组装</h3>
-<div class="sourceCode" id="cb47"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> BabyGPT(nn.Module):</span>
-<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, vocab_size, d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>, max_seq_len<span class="op">=</span><span class="dv">128</span>):</span>
-<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.max_seq_len <span class="op">=</span> max_seq_len</span>
-<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 词嵌入，以及可学习的座位表。</span></span>
-<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 这不是第 5 章的 sin/cos。每个座位一行向量，数字在训练中自己学。</span></span>
-<span id="cb47-7"><a href="#cb47-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.tok_emb <span class="op">=</span> nn.Embedding(vocab_size, d_model)</span>
-<span id="cb47-8"><a href="#cb47-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.pos_emb <span class="op">=</span> nn.Embedding(max_seq_len, d_model)</span>
-<span id="cb47-9"><a href="#cb47-9" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb47-10"><a href="#cb47-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 堆叠 2 层积木块</span></span>
-<span id="cb47-11"><a href="#cb47-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.blocks <span class="op">=</span> nn.ModuleList([</span>
-<span id="cb47-12"><a href="#cb47-12" aria-hidden="true" tabindex="-1"></a>            BabyBlock(d_model, num_heads, max_seq_len) <span class="cf">for</span> _ <span class="kw">in</span> <span class="bu">range</span>(num_layers)</span>
-<span id="cb47-13"><a href="#cb47-13" aria-hidden="true" tabindex="-1"></a>        ])</span>
-<span id="cb47-14"><a href="#cb47-14" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb47-15"><a href="#cb47-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 输出头</span></span>
-<span id="cb47-16"><a href="#cb47-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.ln_f <span class="op">=</span> nn.LayerNorm(d_model)</span>
-<span id="cb47-17"><a href="#cb47-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head <span class="op">=</span> nn.Linear(d_model, vocab_size, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb47-18"><a href="#cb47-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb47-19"><a href="#cb47-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, idx, targets<span class="op">=</span><span class="va">None</span>):</span>
-<span id="cb47-20"><a href="#cb47-20" aria-hidden="true" tabindex="-1"></a>        B, T <span class="op">=</span> idx.shape</span>
-<span id="cb47-21"><a href="#cb47-21" aria-hidden="true" tabindex="-1"></a>        pos <span class="op">=</span> torch.arange(<span class="dv">0</span>, T, dtype<span class="op">=</span>torch.<span class="bu">long</span>, device<span class="op">=</span>idx.device)</span>
-<span id="cb47-22"><a href="#cb47-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb47-23"><a href="#cb47-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 融合词义与位置</span></span>
-<span id="cb47-24"><a href="#cb47-24" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.tok_emb(idx) <span class="op">+</span> <span class="va">self</span>.pos_emb(pos)</span>
-<span id="cb47-25"><a href="#cb47-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb47-26"><a href="#cb47-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
-<span id="cb47-27"><a href="#cb47-27" aria-hidden="true" tabindex="-1"></a>            x <span class="op">=</span> block(x)</span>
-<span id="cb47-28"><a href="#cb47-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb47-29"><a href="#cb47-29" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.ln_f(x)</span>
-<span id="cb47-30"><a href="#cb47-30" aria-hidden="true" tabindex="-1"></a>        logits <span class="op">=</span> <span class="va">self</span>.head(x)  <span class="co"># [B, T, vocab_size]</span></span>
-<span id="cb47-31"><a href="#cb47-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb47-32"><a href="#cb47-32" aria-hidden="true" tabindex="-1"></a>        loss <span class="op">=</span> <span class="va">None</span></span>
-<span id="cb47-33"><a href="#cb47-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> targets <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb47-34"><a href="#cb47-34" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 交叉熵损失：衡量预测分布与真实字的差距</span></span>
-<span id="cb47-35"><a href="#cb47-35" aria-hidden="true" tabindex="-1"></a>            loss <span class="op">=</span> F.cross_entropy(logits.view(<span class="op">-</span><span class="dv">1</span>, logits.size(<span class="op">-</span><span class="dv">1</span>)), targets.view(<span class="op">-</span><span class="dv">1</span>))</span>
-<span id="cb47-36"><a href="#cb47-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb47-37"><a href="#cb47-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> logits, loss</span></code></pre></div>
+<div class="sourceCode" id="cb59"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> BabyGPT(nn.Module):</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, vocab_size, d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>, max_seq_len<span class="op">=</span><span class="dv">128</span>):</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.max_seq_len <span class="op">=</span> max_seq_len</span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 词嵌入，以及可学习的座位表。</span></span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 这不是第 5 章的 sin/cos。每个座位一行向量，数字在训练中自己学。</span></span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.tok_emb <span class="op">=</span> nn.Embedding(vocab_size, d_model)</span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.pos_emb <span class="op">=</span> nn.Embedding(max_seq_len, d_model)</span>
+<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 堆叠 2 层积木块</span></span>
+<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.blocks <span class="op">=</span> nn.ModuleList([</span>
+<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a>            BabyBlock(d_model, num_heads, max_seq_len) <span class="cf">for</span> _ <span class="kw">in</span> <span class="bu">range</span>(num_layers)</span>
+<span id="cb59-13"><a href="#cb59-13" aria-hidden="true" tabindex="-1"></a>        ])</span>
+<span id="cb59-14"><a href="#cb59-14" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb59-15"><a href="#cb59-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 输出头</span></span>
+<span id="cb59-16"><a href="#cb59-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.ln_f <span class="op">=</span> nn.LayerNorm(d_model)</span>
+<span id="cb59-17"><a href="#cb59-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head <span class="op">=</span> nn.Linear(d_model, vocab_size, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb59-18"><a href="#cb59-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-19"><a href="#cb59-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, idx, targets<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb59-20"><a href="#cb59-20" aria-hidden="true" tabindex="-1"></a>        B, T <span class="op">=</span> idx.shape</span>
+<span id="cb59-21"><a href="#cb59-21" aria-hidden="true" tabindex="-1"></a>        pos <span class="op">=</span> torch.arange(<span class="dv">0</span>, T, dtype<span class="op">=</span>torch.<span class="bu">long</span>, device<span class="op">=</span>idx.device)</span>
+<span id="cb59-22"><a href="#cb59-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-23"><a href="#cb59-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 融合词义与位置</span></span>
+<span id="cb59-24"><a href="#cb59-24" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.tok_emb(idx) <span class="op">+</span> <span class="va">self</span>.pos_emb(pos)</span>
+<span id="cb59-25"><a href="#cb59-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-26"><a href="#cb59-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
+<span id="cb59-27"><a href="#cb59-27" aria-hidden="true" tabindex="-1"></a>            x <span class="op">=</span> block(x)</span>
+<span id="cb59-28"><a href="#cb59-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-29"><a href="#cb59-29" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.ln_f(x)</span>
+<span id="cb59-30"><a href="#cb59-30" aria-hidden="true" tabindex="-1"></a>        logits <span class="op">=</span> <span class="va">self</span>.head(x)  <span class="co"># [B, T, vocab_size]</span></span>
+<span id="cb59-31"><a href="#cb59-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-32"><a href="#cb59-32" aria-hidden="true" tabindex="-1"></a>        loss <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb59-33"><a href="#cb59-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> targets <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb59-34"><a href="#cb59-34" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 交叉熵损失：衡量预测分布与真实字的差距</span></span>
+<span id="cb59-35"><a href="#cb59-35" aria-hidden="true" tabindex="-1"></a>            loss <span class="op">=</span> F.cross_entropy(logits.view(<span class="op">-</span><span class="dv">1</span>, logits.size(<span class="op">-</span><span class="dv">1</span>)), targets.view(<span class="op">-</span><span class="dv">1</span>))</span>
+<span id="cb59-36"><a href="#cb59-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-37"><a href="#cb59-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> logits, loss</span></code></pre></div>
 <p>训练循环不要把三首诗粘成一条。每一首单独算一次“猜下一个字”的损失，再取平均：</p>
-<div class="sourceCode" id="cb48"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>encoded_poems <span class="op">=</span> [torch.tensor(encode(poem), dtype<span class="op">=</span>torch.<span class="bu">long</span>) <span class="cf">for</span> poem <span class="kw">in</span> poems]</span>
-<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> []</span>
-<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> data <span class="kw">in</span> encoded_poems:</span>
-<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>    _, loss <span class="op">=</span> model(data[:<span class="op">-</span><span class="dv">1</span>].unsqueeze(<span class="dv">0</span>), data[<span class="dv">1</span>:].unsqueeze(<span class="dv">0</span>))</span>
-<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a>    losses.append(loss)</span>
-<span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.stack(losses).mean()</span></code></pre></div>
+<div class="sourceCode" id="cb60"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>encoded_poems <span class="op">=</span> [torch.tensor(encode(poem), dtype<span class="op">=</span>torch.<span class="bu">long</span>) <span class="cf">for</span> poem <span class="kw">in</span> poems]</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> []</span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> data <span class="kw">in</span> encoded_poems:</span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>    _, loss <span class="op">=</span> model(data[:<span class="op">-</span><span class="dv">1</span>].unsqueeze(<span class="dv">0</span>), data[<span class="dv">1</span>:].unsqueeze(<span class="dv">0</span>))</span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>    losses.append(loss)</span>
+<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.stack(losses).mean()</span></code></pre></div>
 <p><code>data[:-1]</code> 是输入，<code>data[1:]</code>
 是紧挨着的下一个字。例如“床前明”，输入是“床前”，目标是“前明”。</p>
 <hr />
@@ -4266,7 +5046,7 @@ style="text-align: left;"><code>春眠不觉晓，处处闻啼鸟。夜来风雨
 </ul>
 </div>
 <hr />
-<h2 id="本章小结-3">8.7 本章小结</h2>
+<h2 id="本章小结-1">8.7 本章小结</h2>
 <p>在本章中，我们从 0 到 1：</p>
 <ol type="1">
 <li>制作了一个字符级分词器；</li>
@@ -4572,7 +5352,7 @@ Size）</strong>、<strong>训练数据量（Dataset Size）</strong> 和
 <p>有些困难任务要到模型比较大时才开始做得动。这仍然是“预测下一个词”训练出来的结果，不是模型自动获得了一套和人类相同的心智。第
 8 章那个只背三首诗的小模型，就是尺度还很小的时候。</p>
 <hr />
-<h2 id="本章小结-4">9.5 本章小结</h2>
+<h2 id="本章小结-2">9.5 本章小结</h2>
 <ul>
 <li><strong>Decoder-Only</strong>
 因为训练目标和开放式续写很贴合，成为近年聊天与代码模型中的主流选择；</li>
