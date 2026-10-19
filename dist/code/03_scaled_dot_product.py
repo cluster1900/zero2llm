@@ -2,16 +2,18 @@
 03_scaled_dot_product.py - 缩放点积注意力与因果掩码（数学原理剖析与 PyTorch 对比）
 适合人群：掌握基础统计学（方差、标准差）、了解基本矩阵概念的初学者
 
-包含两大核心实验：
-1. 为什么必须除以 √d_k？（方差爆炸与 Softmax 饱和实验）
+包含四个小型 CPU 实验：
+1. 为什么通常除以 √d_k？（方差爆炸与 Softmax 饱和实验）
 2. 什么是因果掩码（Causal Mask）？（为什么答第 1 题不能偷看第 2 题）
-3. 纯 Python 与 PyTorch 官方实现结果对比
+3. 显式 PyTorch 公式与官方 SDPA 对比
+4. padding 与未来扰动因果性检查
 """
 
 import math
 import random
 import torch
 import torch.nn.functional as F
+from attention_core import masked_softmax, scaled_attention, self_attention_mask
 
 def experiment_why_scale():
     print("=" * 65)
@@ -39,32 +41,32 @@ def experiment_why_scale():
     print(f"未除以 √{d_k} 之前的原始点积分数: {[round(s, 2) for s in raw_scores]}")
 
     # 计算 Softmax（未缩放）
-    def naive_softmax(scores):
+    def stable_softmax(scores):
         m = max(scores)
         exps = [math.exp(s - m) for s in scores]
         s = sum(exps)
         return [e / s for e in exps]
 
-    weights_unscaled = naive_softmax(raw_scores)
+    weights_unscaled = stable_softmax(raw_scores)
     print("未缩放的注意力权重 (Softmax 结果):")
     for idx, w in enumerate(weights_unscaled):
         print(f"  选项 {idx+1}: {w * 100:6.2f}%")
 
     top = max(weights_unscaled) * 100
     print(f"\n[现象警示]：最大的一项占到了 {top:.2f}%。")
-    print("原始分数只差几点到十几点，可是 e^x 会把差距急剧放大，注意力几乎全部堆到一个词上。")
-    print("训练时，这种“一家独大”的区域很平，参数稍微改一点，输出几乎不动，模型就学得很吃力。")
+    print("本例较大的分数差经过指数放大后，注意力更集中。")
+    print("Softmax 接近饱和时，对分数的局部梯度可能很小；这不等于所有训练梯度必然消失。")
 
     # 现在除以 √d_k 进行缩放！
     scale = math.sqrt(d_k)
     scaled_scores = [s / scale for s in raw_scores]
-    weights_scaled = naive_softmax(scaled_scores)
+    weights_scaled = stable_softmax(scaled_scores)
 
     print(f"\n除以 √{d_k} = {scale:.1f} 之后的缩放分数: {[round(s, 2) for s in scaled_scores]}")
-    print("缩放后的注意力权重 (平滑健康的 Softmax):")
+    print("缩放后的注意力权重 (本次随机样例):")
     for idx, w in enumerate(weights_scaled):
         print(f"  选项 {idx+1}: {w * 100:6.2f}%")
-    print("[神奇化解]：除以 √d_k 把方差重新拉回 1，让注意力权重平滑健康，所有词都能得到合理的关注！")
+    print("独立、零均值、单位方差的假设下，缩放后的点积方差为 1；真实训练不保证均匀或合理关注。")
 
 def experiment_causal_mask():
     print("\n" + "=" * 65)
@@ -84,18 +86,18 @@ def experiment_causal_mask():
 
     # 制作下三角掩码 (对角线及以下为 True/1，右上角未来位置为 False/0)
     # torch.tril 表示 lower triangular (下三角)
-    mask = torch.tril(torch.ones(seq_len, seq_len))
+    mask = torch.ones(seq_len, seq_len, dtype=torch.bool).tril()
     print("掩码矩阵 (1 表示允许看，0 表示未来禁止看):")
-    print(mask.numpy())
+    print(mask.tolist())
 
-    # 把 0 的位置替换为 -1e9 (-10亿，相当于负无穷)
-    masked_scores = scores.masked_fill(mask == 0, -1e9)
+    # 真正使用负无穷；有限大负数不是对所有 dtype 都安全
+    masked_scores = scores.masked_fill(~mask, -torch.inf)
     print("\n加上掩码后的打分矩阵 (未来的位置被极小负数封印):")
-    for row in masked_scores.numpy():
+    for row in masked_scores.tolist():
         print(["%.1f" % v if v > -100 else "-inf" for v in row])
 
     # 经过 Softmax
-    causal_weights = F.softmax(masked_scores, dim=-1)
+    causal_weights = masked_softmax(scores, mask)
     print("\n最终因果注意力权重 (未来位置的权重被精准扼杀为 0%):")
     words = ["词1(我)", "词2(爱)", "词3(学)"]
     for i in range(seq_len):
@@ -129,10 +131,28 @@ def compare_with_pytorch():
     print("\nPyTorch 官方原生内核计算结果:")
     print(official_output[0])
 
+    torch.testing.assert_close(output, official_output, rtol=1e-5, atol=1e-6)
     diff = (output - official_output).abs().max().item()
-    print(f"\n两者最大误差: {diff:.8e} (完全一致！)")
+    print(f"\n两者最大误差: {diff:.8e} (浮点容差内对齐)")
+
+def experiment_padding_and_causality():
+    torch.manual_seed(7)
+    x = torch.randn(2, 4, 4)
+    valid = torch.tensor([[True, True, True, True], [True, True, False, False]])
+    allowed = self_attention_mask(valid)[:, 0]
+    before, weights = scaled_attention(x, x, x, allowed)
+    changed = x.clone()
+    changed[:, 3] += 100
+    after, _ = scaled_attention(changed, changed, changed, allowed)
+    torch.testing.assert_close(before[:, :3], after[:, :3])
+    assert torch.count_nonzero(before[1, 2:]) == 0
+    print("未来 token 扰动不改变过去输出；padding query 行为零；全部为 True=可见的布尔 mask。")
+    print("有效行权重和:", weights.sum(-1))
+
 
 if __name__ == "__main__":
     experiment_why_scale()
     experiment_causal_mask()
     compare_with_pytorch()
+
+    experiment_padding_and_causality()

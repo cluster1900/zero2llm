@@ -4,15 +4,15 @@
 
 生活比喻：
 “三个臭皮匠，顶个诸葛亮”。
-如果只有一个注意力头，模型只能用一种视角看句子（比如只能看语法）；
+单头只有一组权重分布，但不能据此断言它只能表达一种语义；
 多头注意力把一个 8 维的向量切成 2 个 4 维的小分队，
-分队 1 专攻“主谓宾关系”，分队 2 专攻“代词指代与上下文情感”！
+不同头可以学习不同模式，不能预先给它们指定语义职业。
 """
 
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from attention_core import masked_softmax
 
 class SimpleMultiHeadAttention(nn.Module):
     def __init__(self, d_model, num_heads):
@@ -23,7 +23,8 @@ class SimpleMultiHeadAttention(nn.Module):
         - head_dim: 每个分队分到多少个特征指标 = d_model / num_heads = 8 / 2 = 4
         """
         super().__init__()
-        assert d_model % num_heads == 0, "总维度 d_model 必须能被头数整除！"
+        if d_model <= 0 or num_heads <= 0 or d_model % num_heads:
+            raise ValueError("positive d_model must be divisible by positive num_heads")
         
         self.d_model = d_model
         self.num_heads = num_heads
@@ -46,6 +47,8 @@ class SimpleMultiHeadAttention(nn.Module):
         - seq_len: 每句话几个字（例如 4）
         - d_model: 每个字几维（例如 8）
         """
+        if x.ndim != 3 or x.shape[-1] != self.d_model or x.shape[1] == 0:
+            raise ValueError("x must have shape [B,T,d_model], T > 0")
         batch_size, seq_len, _ = x.shape
 
         if verbose:
@@ -55,6 +58,7 @@ class SimpleMultiHeadAttention(nn.Module):
         Q = self.W_q(x)
         K = self.W_k(x)
         V = self.W_v(x)
+        assert Q.shape == K.shape == V.shape == (batch_size, seq_len, self.d_model)
 
         if verbose:
             print(f"2. 投影生成 Q, K, V 形状均为: {Q.shape}")
@@ -64,9 +68,14 @@ class SimpleMultiHeadAttention(nn.Module):
         # 变形后: [batch_size, seq_len, num_heads, head_dim]
         # 再换轴: [batch_size, num_heads, seq_len, head_dim]
         # 为什么要换轴？因为把 num_heads 放到第 2 维后，每个头就可以独立看作一个传统的注意力！
-        Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        def split_heads(projected):
+            split = projected.reshape(batch_size, seq_len, self.num_heads, self.head_dim)
+            assert split.shape == (batch_size, seq_len, self.num_heads, self.head_dim)
+            transposed = split.transpose(1, 2)
+            assert transposed.shape == (batch_size, self.num_heads, seq_len, self.head_dim)
+            return transposed
+
+        Q, K, V = (split_heads(projected) for projected in (Q, K, V))
 
         if verbose:
             print(f"3. 切分多头并换轴后 Q 形状: {Q.shape} (批次, 头数={self.num_heads}, 字数={seq_len}, 单头维度={self.head_dim})")
@@ -75,15 +84,15 @@ class SimpleMultiHeadAttention(nn.Module):
         # 最后的转置只对最后两个维度 (seq_len 和 head_dim) 翻转
         scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
 
-        if mask is not None:
-            # 加上掩码（比如因果掩码）
-            scores = scores.masked_fill(mask == 0, -1e9)
-
-        # Softmax 归一化
-        attn_weights = F.softmax(scores, dim=-1)
+        assert Q.shape == K.shape == V.shape == (batch_size, self.num_heads, seq_len, self.head_dim)
+        assert scores.shape == (batch_size, self.num_heads, seq_len, seq_len)
+        # mask: boolean, True=allowed; [T,T] or broadcastable [B,1,T,T].
+        attn_weights = masked_softmax(scores, mask)
+        assert attn_weights.shape == scores.shape
 
         # 4. 加权求和：Weights · V
         head_outputs = torch.matmul(attn_weights, V)
+        assert head_outputs.shape == Q.shape
 
         if verbose:
             print(f"4. 各头独立注意力计算完成，输出形状: {head_outputs.shape}")
@@ -91,13 +100,17 @@ class SimpleMultiHeadAttention(nn.Module):
         # 5. 拼回原状（Concat）：
         # 先把维度换回: [batch_size, seq_len, num_heads, head_dim]
         # 再把最后两个维度合并: [batch_size, seq_len, d_model]
-        out_concat = head_outputs.transpose(1, 2).contiguous().view(batch_size, seq_len, self.d_model)
+        restored = head_outputs.transpose(1, 2).contiguous()
+        assert restored.shape == (batch_size, seq_len, self.num_heads, self.head_dim)
+        out_concat = restored.view(batch_size, seq_len, self.d_model)
 
         if verbose:
             print(f"5. 将所有头的特征拼接还原，形状: {out_concat.shape}")
 
         # 6. 过一层融合线性层
+        assert out_concat.shape == (batch_size, seq_len, self.d_model)
         output = self.W_o(out_concat)
+        assert output.shape == x.shape
 
         if verbose:
             print(f"6. 经过最终融合矩阵 W_O，最终输出形状: {output.shape}")

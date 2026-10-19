@@ -24,6 +24,8 @@ def softmax(scores):
     3. 每个数字除以总和：变成百分比（所有人加起来等于 100%）
     """
     # 为了防止数值溢出，减去最大值（分子、分母同时除以 e^max，归一化结果不变）
+    if not scores or not all(math.isfinite(s) for s in scores):
+        raise ValueError("softmax requires a nonempty list of finite scores")
     max_val = max(scores)
     exp_scores = [math.exp(s - max_val) for s in scores]
     sum_exp = sum(exp_scores)
