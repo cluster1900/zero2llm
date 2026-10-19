@@ -501,6 +501,9 @@ figcaption, .diagram-caption {
   <li><a href="#p12-rope">旋转位置（P12）：RoPE 与 YaRN，能算更长不等于能读懂</a></li>
   <li><a href="#p13-modern-block">现代 Block（P13）：RMSNorm 与 SwiGLU</a></li>
   <li><a href="#p14-grouped-kv">架构进阶（P14）：MHA、MQA、GQA 与 MLA</a></li>
+  <li><a href="#p15-attention-systems">系统进阶（P15）：FlashAttention、PagedAttention 与服务调度</a></li>
+  <li><a href="#p16-sparse-linear">架构进阶（P16）：滑动窗口、稀疏、混合与线性注意力</a></li>
+  <li><a href="#p17-ced">架构进阶（P17）：CED 的两条 KV 路径</a></li>
   <li><a href="#第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典 Transformer 到 GPT-4、DeepSeek</a></li>
   <li><a href="#附录-数学公式速查卡与深度学习黑话翻译词典">附录：数学公式速查卡与深度学习黑话翻译词典</a></li>
 </ul>
@@ -667,9 +670,9 @@ CPU 参考实现；跳过 GPU
 <h2 id="当前阅读顺序与尚未完成的扩展">0.5
 当前阅读顺序与尚未完成的扩展</h2>
 <p>本书正在按审核通过的扩展大纲分批更新。当前已实现
-P00–P14，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE /
-现代 Block / GQA；这些 P
-编号是扩展计划的编号，不会立即替换旧版全部章号。</p>
+P00–P17，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE /
+现代 Block / GQA，以及独立的注意力系统、稀疏/线性机制与 CED 数据流；这些
+P 编号是扩展计划的编号，不会立即替换旧版全部章号。</p>
 <p>为了保留已有链接，Tokenizer 暂放在“第 1A 章”，紧跟第 1 章；旧第 2～10
 章仍可阅读，但尚未全部按新大纲改写。当前 HTML/EPUB
 会按这个顺序包含新单元，不是已完成全部 29 个单元的新书。</p>
@@ -4404,7 +4407,7 @@ class="math inline">\(d_v=2\)</span> 的手算例子：给第一行三份资料�
 [0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是
 [0.7,0.8]，不是机械复制某一个词。</p>
 <p>有源端 padding 时也要屏蔽对应 K/V
-位置。这个“跨序列”的连接方式，不应和后续 P17 的 Causal
+位置。这个“跨序列”的连接方式，不应和<a href="#p17-ced">P17</a> 的 Causal
 Encoder-Decoder（CED）名称混为一谈；本章没有实现
 CED，只学习传统翻译双塔与生成循环。</p>
 <h2 id="teacher-forcing谁向右移预测谁">7.5 Teacher
@@ -7568,7 +7571,7 @@ sin/cos 手算位置 0、1、2 的旋转，拼成 4 维 Q/K，直接点积除以
 位置项为什么单独算</h2>
 <p>不能把位置从内存账本里删掉。若把每个历史位置的内容 K
 全部旋转，不同位置带来不同旋转矩阵；一般不能再把它们吸收成一个与历史位置无关的固定
-query 投影。 原始论文 §2.1.3
+query 投影。原始论文 §2.1.3
 明确指出位置旋转夹在相应投影之间，矩阵通常不可交换，因此破坏这种固定权重吸收；随后引入独立位置
 query 和共享位置 key。<a
 href="https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3">V2
@@ -7706,7 +7709,7 @@ key，第一行只能看前四个。</li>
 <li>不能，两个路径可能共享同一个映射错误。还要用手算或独立逐头参考验证。</li>
 </ol>
 <p>到这里，S4 仍是一条普通 decoder-only 主线，只更换了 KV
-共享方式。下一阶段研究
+共享方式。下一单元 <a href="#p15-attention-systems">P15</a> 研究
 kernel、缓存管理和服务调度时，要把“模型表示减少了什么”与“系统怎样高效执行”分开记账。</p>
 <h2 id="资料与实现边界">资料与实现边界</h2>
 <ul>
@@ -7730,6 +7733,1875 @@ href="https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py">D
 <p>本章实现 GQA 的完整 tiny-model 前向和紧凑缓存；MLA
 仅实现独立矩阵教学实验，未实现完整训练模型、checkpoint
 转换流程、分布式部署或生产性能复现。</p>
+<hr />
+<h1 id="p15-attention-systems">系统进阶（P15）：FlashAttention、PagedAttention
+与服务调度</h1>
+<p><a href="#p14-grouped-kv">上一章</a>的 S4 已经有
+RoPE、RMSNorm、SwiGLU 和
+GQA。这一章<strong>不再修改模型架构</strong>，而是把镜头移到执行模型的系统：同一条注意力公式，怎样计算、怎样存储、怎样同时服务不同请求？</p>
+<p>配套 <a
+href="code/16_attention_systems.py">code/16_attention_systems.py</a>
+是独立的 CPU 教学实验。必修部分只用 Python 标准库，不下载模型，不安装
+vLLM，也不需要 PyTorch。它包含分块在线 Softmax、分页 KV
+所有权模拟、请求时间线算术；<strong>不是 CUDA 实现，不是 FlashAttention
+或 vLLM 性能复现</strong>。S4 主线仍保留在原文件中。</p>
+<h2 id="p15.1-一间餐厅里的三个不同问题">P15.1
+一间餐厅里的三个不同问题</h2>
+<p>想象餐厅同时接到很多订单：</p>
+<ul>
+<li>厨师怎样在操作台上处理食材，减少来回搬运？这是<strong>计算
+kernel</strong> 层。</li>
+<li>每份订单的食材放在哪些储物格里，哪些可以共享，什么时候释放？这是<strong>KV
+内存管理</strong>层。</li>
+<li>哪个订单先做，做完一部分后能否让新订单加入？这是<strong>请求调度</strong>层。</li>
+</ul>
+<p>这三个问题会相互影响，但不能混成一种“新注意力架构”：</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>层次</th>
+<th>代表机制</th>
+<th>主要回答</th>
+<th>不等于什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>计算与 IO</td>
+<td>FlashAttention</td>
+<td>怎样分块计算并减少显存读写</td>
+<td>不是只看部分 token 的稀疏注意力</td>
+</tr>
+<tr>
+<td>KV 存储与访问</td>
+<td>PagedAttention + 块管理器</td>
+<td>怎样通过块表读取不连续 KV，分配和共享缓存</td>
+<td>不只是把一个大数组切几段，也不是换成 GQA</td>
+</tr>
+<tr>
+<td>请求调度</td>
+<td>continuous batching</td>
+<td>哪些请求参加下一轮计算</td>
+<td>不会消除同一请求的自回归依赖</td>
+</tr>
+<tr>
+<td>跨请求复用</td>
+<td>prefix caching</td>
+<td>哪段已算出的共同前缀 KV 可以复用</td>
+<td>不是查到相似句子就能复用答案</td>
+</tr>
+</tbody>
+</table></div>
+<p>PagedAttention 有配合分页布局读取 KV
+的注意力计算方式；块管理器负责分配、引用计数等生命周期。为了看清职责，本章把它们放在内存这一层讲，但不能把真实
+PagedAttention 简化成“只有一个 Python 字典”。<a
+href="https://arxiv.org/html/2309.06180v1#S4">PagedAttention 原论文
+v1，§4</a></p>
+<figure>
+<a href="assets/rendered/p15-attention-systems.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/p15-attention-systems.svg" class="book-diagram"
+width="720"
+alt="注意力服务的计算、KV 存储与请求调度三个层次；共享尾块在写入时复制" /></a>
+<figcaption>注意力服务的计算、KV
+存储与请求调度三个层次；共享尾块在写入时复制</figcaption>
+</figure>
+<p>类比的边界：GPU 不是逐单做菜的厨师，KV
+不是文本食材。并行度、带宽、数据类型、模型和调度策略都会影响结果；下面的餐厅比喻不能推出某种方法一定更快。</p>
+<h2 id="p15.2-算术不变搬运量可以改变">P15.2
+算术不变，搬运量可以改变</h2>
+<p>普通注意力的熟悉写法是：</p>
+<pre class="text"><code>S = Q Kᵀ / √d
+P = softmax(S + mask)
+O = P V</code></pre>
+<p>如果 Q、K 都有 N 个位置，S 和 P 各有 N×N 个数。以单个
+batch、单个头、每数 2 字节举例：</p>
+<ul>
+<li>N=4096：一张矩阵有 16,777,216 个数，占 33,554,432 字节，也就是 32
+MiB。</li>
+<li>N=8192：一张矩阵占 128 MiB；长度翻倍，面积变成 4 倍。</li>
+<li>如果实现同时保存 S 和
+P，这两张矩阵的容量还要相加；实际峰值取决于实现，不能只靠这个公式断言。</li>
+</ul>
+<p>这里 MiB=2²⁰ 字节，不是十进制 MB。多
+batch、多头会继续乘上相应维度。</p>
+<p>GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU
+也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S
+写回显存、再读回来做 Softmax、再写 P，会产生额外
+IO。<strong>FlashAttention 的核心是按片上存储条件分块组织计算，用在线
+Softmax 累积输出，避免把完整 N×N 中间矩阵写到 HBM。</strong>
+它没有因此跳过普通稠密注意力的所有合法 QK
+配对；标准稠密情形的算术复杂度仍为 O(N²d)，不是 O(Nd)。<a
+href="https://arxiv.org/pdf/2205.14135v2">FlashAttention 原论文
+v2，§3</a></p>
+<p>这还涉及 GPU
+内核融合、线程组织、反向传播重计算等。本章只实现其中容易手算的<strong>前向归一化递推</strong>。Python
+列表复制、解释器开销、输入 mask 都与真实 GPU kernel
+不同，不能用本脚本的运行时间或进程内存证明 FlashAttention 的收益。</p>
+<h2 id="p15.3-先把形状缩到一个头">P15.3 先把形状缩到一个头</h2>
+<p>暂时去掉 batch 和多头轴，只看一个头，允许 Q/K 长度不同，也允许 V
+的宽度不同：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>名称</th>
+<th>形状</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q</td>
+<td>[Nq,d]</td>
+<td>当前要计算的 query</td>
+</tr>
+<tr>
+<td>K</td>
+<td>[Nk,d]</td>
+<td>可读取的全部 key</td>
+</tr>
+<tr>
+<td>V</td>
+<td>[Nk,dv]</td>
+<td>对应 value</td>
+</tr>
+<tr>
+<td>allowed</td>
+<td>[Nq,Nk]</td>
+<td>布尔 mask；True 表示允许读取</td>
+</tr>
+<tr>
+<td>O</td>
+<td>[Nq,dv]</td>
+<td>每个 query 的加权输出</td>
+</tr>
+</tbody>
+</table></div>
+<p>本例默认 query block 为 2 行，key block 为 3 行。Nq=5、Nk=7 时，query
+分成 <code>[2,2,1]</code>，key 分成
+<code>[3,3,1]</code>。最后一块不满也必须处理，不能直接用整数除法把它丢掉。</p>
+<p>为方便观察，脚本可接收完整布尔 mask；这张教学 mask 本身仍可能占
+O(Nq×Nk) 空间。生产 kernel
+可以由位置索引直接形成因果约束。本实验没有宣称整个 Python
+程序只占线性内存。</p>
+<p>对于已有 3 个历史位置、当前有 2 个新 query、总共 5 个 key
+的例子：</p>
+<pre class="text"><code>query 的绝对位置：3、4
+key 的绝对位置：  0、1、2、3、4
+allowed 第 0 行：  1、1、1、1、0
+allowed 第 1 行：  1、1、1、1、1</code></pre>
+<p><code>causal_mask(2, 5, offset=3)</code> 正是这个矩形 mask。不要把新
+query 的局部编号 0、1 当成绝对位置，否则第一行会误删历史上下文。</p>
+<h2 id="p15.4-在线-softmax只记三本账">P15.4 在线
+Softmax：只记三本账</h2>
+<p>只看某一行 query。对已经处理过的合法分数 s_j，记录：</p>
+<pre class="text"><code>m   = 已处理分数的最大值
+ell = Σ exp(s_j - m)
+acc = Σ exp(s_j - m) × v_j</code></pre>
+<p>m 和 ell 是标量；acc 是 dv 维向量。最后输出
+<code>acc / ell</code>。注意 acc
+还没有归一化，不是当前已经算好的概率均值。</p>
+<p>现在读到下一块，合法分数为 s_new。新的最大值可能变大：</p>
+<pre class="text"><code>next_m = max(m, max(s_new))
+alpha  = exp(m - next_m)
+p_new  = exp(s_new - next_m)
+
+next_ell = alpha × ell + Σ p_new
+next_acc = alpha × acc + Σ p_new × v_new</code></pre>
+<p>为什么必须乘 alpha？旧账用的是 exp(s−m)，新账用的是
+exp(s−next_m)。利用指数运算：</p>
+<pre class="text"><code>exp(s - next_m) = exp(s - m) × exp(m - next_m)</code></pre>
+<p>所以旧分母和旧分子必须一起换到新尺度。只缩放其中一个，或者把每块
+Softmax 后的输出直接相加，都不对。</p>
+<p>初始状态设
+<code>m=-∞, ell=0, acc=0</code>。第一次读到合法分数时，代码直接令
+alpha=0，不去做不必要的无穷运算。</p>
+<h2 id="p15.5-手算分成两块仍然得到-6">P15.5 手算：分成两块，仍然得到
+6</h2>
+<p>设
+d=dv=1，Q=<code>[1]</code>，K=<code>[0, ln 2, ln 4]</code>，V=<code>[2,4,8]</code>。缩放分母
+√d=1，三个分数正好就是 K。没有 mask。</p>
+<p>先做完整计算：三个指数之比为 1:2:4，因此：</p>
+<pre class="text"><code>权重 = [1/7, 2/7, 4/7]
+输出 = (1×2 + 2×4 + 4×8) / 7 = 42/7 = 6</code></pre>
+<p>现在把 key 分成前两个和最后一个，块长 <code>[2,1]</code>。</p>
+<p>第一块：</p>
+<pre class="text"><code>m = ln 2
+p = [1/2, 1]
+ell = 1/2 + 1 = 1.5
+acc = (1/2)×2 + 1×4 = 5</code></pre>
+<p>第二块的分数 ln 4 更大：</p>
+<pre class="text"><code>next_m = ln 4
+alpha = exp(ln 2 - ln 4) = 1/2
+p_new = [1]
+next_ell = (1/2)×1.5 + 1 = 1.75
+next_acc = (1/2)×5 + 1×8 = 10.5
+输出 = 10.5/1.75 = 6</code></pre>
+<p>如果错把两个块各自的均值再平均，会得到
+<code>(5/1.5 + 8)/2 = 17/3</code>，约 5.6667，不是
+6。块的概率质量不同，不能给每块相同权重。</p>
+<h2 id="p15.6-逐行看实现不要只记公式">P15.6
+逐行看实现，不要只记公式</h2>
+<p><code>blocked_attention()</code>
+的核心如下；完整输入校验和循环在配套脚本中：</p>
+<div class="sourceCode" id="cb103"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb103-1"><a href="#cb103-1" aria-hidden="true" tabindex="-1"></a>next_m <span class="op">=</span> <span class="bu">max</span>(m, <span class="bu">max</span>(scores))</span>
+<span id="cb103-2"><a href="#cb103-2" aria-hidden="true" tabindex="-1"></a>alpha <span class="op">=</span> <span class="fl">0.0</span> <span class="cf">if</span> ell <span class="op">==</span> <span class="fl">0.0</span> <span class="cf">else</span> math.exp(m <span class="op">-</span> next_m)</span>
+<span id="cb103-3"><a href="#cb103-3" aria-hidden="true" tabindex="-1"></a>weights <span class="op">=</span> [math.exp(s <span class="op">-</span> next_m) <span class="cf">for</span> s <span class="kw">in</span> scores]</span>
+<span id="cb103-4"><a href="#cb103-4" aria-hidden="true" tabindex="-1"></a>ell <span class="op">=</span> alpha <span class="op">*</span> ell <span class="op">+</span> math.fsum(weights)</span>
+<span id="cb103-5"><a href="#cb103-5" aria-hidden="true" tabindex="-1"></a>acc <span class="op">=</span> [alpha <span class="op">*</span> acc[c] <span class="op">+</span> math.fsum(w <span class="op">*</span> v[j][c] <span class="cf">for</span> w, j <span class="kw">in</span> <span class="bu">zip</span>(weights, visible))</span>
+<span id="cb103-6"><a href="#cb103-6" aria-hidden="true" tabindex="-1"></a>       <span class="cf">for</span> c <span class="kw">in</span> <span class="bu">range</span>(<span class="bu">len</span>(acc))]</span>
+<span id="cb103-7"><a href="#cb103-7" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> next_m</span></code></pre></div>
+<ol type="1">
+<li>scores 只包含当前块中允许读取的 key。</li>
+<li>next_m 取旧块、新块的共同最大值，不是只记新块的最大值。</li>
+<li>alpha 把旧的 ell、acc 转换到同一个尺度。</li>
+<li>weights 仍是未归一化的指数权重，不是单块概率。</li>
+<li>每个 value 通道 c 有自己的分子，但共享分母 ell。</li>
+<li>所有 key 块结束后才做 <code>acc/ell</code>。</li>
+</ol>
+<p>脚本按 query 块组织外循环，再逐行遍历 key
+块。它故意使用可读的标量循环，没有 GPU 的矩阵 tile、片上共享存储布局或
+warp 调度；“有两个块长参数”不等于写出了 FlashAttention kernel。</p>
+<h3 id="全-mask-是一个单独的边界">全 mask 是一个单独的边界</h3>
+<p>若某个块没有合法 key，直接跳过，不计算
+<code>max([])</code>。若整行都没有合法 key，本教学 API
+明确返回全零向量。</p>
+<p>这是 API 的安全约定，<strong>不是说空集合上的 Softmax
+有正常的概率分布</strong>。直接把全行填成 −∞ 再算
+<code>exp(s-max(s))</code>，可能遇到 <code>−∞−(−∞)</code> 而产生
+NaN。测试特意覆盖：</p>
+<ul>
+<li>第一块全被遮住，后面才出现合法 key。</li>
+<li>后面的合法分数比前面大，需要重新缩放。</li>
+<li>整行全被遮住，最终返回零。</li>
+</ul>
+<p>分数 10000、10001、10002 也不需要直接算
+exp(10002)。减去最大值后，最大指数是 exp(0)=1。输入 Q/K/V
+要求有限，点积本身若已经溢出也会拒绝；稳定 Softmax
+不能挽救此前已经算成无穷的点积。</p>
+<h2 id="p15.7-精确注意力不是逐-bit-相同">P15.7 “精确注意力”不是“逐 bit
+相同”</h2>
+<p>这里的精确，是指没有用稀疏采样、低秩近似等方法改变这条注意力公式所包含的合法配对。换一种加法顺序、分块顺序或累积精度，浮点末位仍可能不同。</p>
+<p>必修实验用 Python float，通常对应双精度浮点；随机例子固定 seed=15。5
+个 query、7 个 key、d=3、dv=2 时，本次 full/block 最大差值为
+<code>1.11e-16</code>，检查阈值为
+<code>1e-12</code>。这是这组小输入的数值检查，不是任意长度、任意 dtype
+都具有相同误差的证明。</p>
+<p>只有 full/block 相等还不够：两条路径可能一起忘记
+√d。测试另外使用标准库 Decimal 的 <strong>65 位精度独立参考</strong>，逐
+query 直接算点积、指数和归一化，不调用生产实现的输入辅助函数、Softmax 或
+block 更新。手算的 6 又提供了更容易人工核验的锚点。</p>
+<p>这与 GQA 的区别也很重要：GQA 改变 KV 头的组织方式；在线 Softmax
+只是计算同一组 Q/K/V 的方式。不能用这章的数值等价实验证明任意 MHA 改 GQA
+都不损失质量。</p>
+<h2 id="p15.8-kv-为什么要分页">P15.8 KV 为什么要分页</h2>
+<p>生成过程中，每个请求的 KV
+逐渐增长，但通常事先不知道最终会生成多长。</p>
+<p>如果按最大长度为每个请求预留一整片空间，可能空着很多暂时甚至永远用不到的位置；要求请求拥有一整段连续空间，也会限制分配与共享的灵活性。</p>
+<p>分页的基本做法是：把 KV 划为固定 token
+数的物理块，请求只保留“逻辑第几块放在哪个物理块”的块表。逻辑 token
+顺序不变，物理位置不必连续。它降低的是存储管理中的浪费，<strong>不是删除某些历史
+token 的信息路径</strong>。</p>
+<p>设块大小为 b，某 token 的逻辑位置为 t：</p>
+<pre class="text"><code>逻辑块号 = t // b
+块内偏移 = t % b
+物理块号 = block_table[逻辑块号]</code></pre>
+<p>例如 b=2，块表是 <code>[1,2,0]</code>。逻辑位置 4 在逻辑块 2、偏移
+0，对应物理块 0。读取时必须按
+<code>[1,2,0]</code>，不能为了“排序整齐”改成 <code>[0,1,2]</code>。</p>
+<p>生产 PagedAttention 根据这种映射读取 KV 并计算注意力。本脚本的
+<code>read()</code> 则为了方便检查，先重建普通 Python K/V
+列表，再调用普通 CPU 注意力。这个复制路径<strong>不具有生产分页 kernel
+的内存优势</strong>。</p>
+<h2 id="p15.9-先有共享再谈写时复制">P15.9 先有共享，再谈写时复制</h2>
+<p><code>PagedKVCache</code> 保存四类状态：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>状态</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_blocks</code></td>
+<td>物理块号 → 这个块已写入的 KV 载荷</td>
+</tr>
+<tr>
+<td><code>_tables</code></td>
+<td>请求名 → 有序的物理块号列表</td>
+</tr>
+<tr>
+<td><code>_lengths</code></td>
+<td>每个请求当前的逻辑 token 数</td>
+</tr>
+<tr>
+<td><code>_refs</code></td>
+<td>每个物理块被多少个活跃请求引用</td>
+</tr>
+</tbody>
+</table></div>
+<p>它模拟单层、单 KV 头；每个 token 的 K 和 V
+都是真实的数值向量，但这里不是模型训练得到的表示。为了手算，设 b=2，用
+10、20、30 这些数字代表载荷。</p>
+<p>A 有三个 token：</p>
+<pre class="text"><code>A 的块表：[0,1]
+物理块 0：[10,20]，引用计数 1
+物理块 1：[30,空]，引用计数 1</code></pre>
+<p>现在 <code>fork("A", "B")</code>，让 B 从完全相同的历史继续生成：</p>
+<pre class="text"><code>A 的块表：[0,1]
+B 的块表：[0,1]
+物理块 0、1 的引用计数都变为 2</code></pre>
+<p>此时只是增加块表引用，没有复制 payload。B 接下来要写入 40，尾块 1
+却仍被 A 使用。直接写入可能污染另一条分支，所以执行
+<strong>copy-on-write，写时复制</strong>：</p>
+<ol type="1">
+<li>先分配新的物理块 2，把旧尾块中的 30 复制进去。</li>
+<li>旧物理块 1 的引用计数从 2 减到 1。</li>
+<li>B 的块表改为 <code>[0,2]</code>，物理块 2 的引用计数为 1。</li>
+<li>把 40 写到物理块 2，得到 <code>[30,40]</code>。</li>
+</ol>
+<p>A 仍然是 <code>[10,20,30]</code>，B 是
+<code>[10,20,30,40]</code>；完整前缀块 0
+继续共享。这一机制与原论文的分叉采样场景一致。<a
+href="https://arxiv.org/html/2309.06180v1#S4.SS4">PagedAttention
+v1，§4.4</a></p>
+<h3 id="满块边界不要复制错">满块边界不要复制错</h3>
+<p>如果 A 原本正好只有 <code>[10,20]</code>，共享的是一个已满块。B 追加
+30
+时，直接分配<strong>下一个逻辑块</strong>即可，不必复制已满的前缀块。COW
+针对的是要写入的共享未满尾块，不是每次生成都复制全部历史。</p>
+<p>若尾块的引用计数已经是
+1，也能直接写入，不必复制。请求释放时只减少它所引用块的计数；降到 0
+的物理块才回到空闲池。脚本的空闲块可以再次分配，但旧数据必须清掉。</p>
+<h2 id="p15.10-用槽位记账不伪造显存数字">P15.10
+用槽位记账，不伪造显存数字</h2>
+<p>上面的分叉实例可以独立数出来：</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>时点</th>
+<th>所有请求逻辑 token 合计</th>
+<th>实际物理载荷数</th>
+<th>已分配槽位</th>
+<th>空槽位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A 有三个 token</td>
+<td>3</td>
+<td>3</td>
+<td>4</td>
+<td>1</td>
+</tr>
+<tr>
+<td>B 刚 fork，还未追加</td>
+<td>6</td>
+<td>3</td>
+<td>4</td>
+<td>1</td>
+</tr>
+<tr>
+<td>B COW 后追加 40</td>
+<td>7</td>
+<td>5</td>
+<td>6</td>
+<td>1</td>
+</tr>
+</tbody>
+</table></div>
+<p>最后一行不是物理存了 7 个 token，因为 <code>[10,20]</code>
+仍共享；也不是只存 4 个，因为尾部的 30 已各有一份。</p>
+<p>若每个物理载荷只有一个 K 标量和一个 V 标量，且真正使用 float32
+数组，则“5 个已写载荷”的理想 payload 是 <code>5×2×4=40</code> 字节，“6
+个已分配槽位”的理想容量是 48 字节。<strong>本脚本使用 Python
+对象，不实际只占这些字节。</strong>
+块表、引用计数、对象开销、分配器、临时工作区和模型权重都不在这个理想账本里。</p>
+<p>对没有共享的一个长度为 T 的请求，分配槽位是
+<code>ceil(T/b)×b</code>，尾块空槽位范围为 0 到 b−1。例如 b=4、T=9，需要
+3 块，共 12 槽位，空 3
+个。分页不是“所有浪费严格等于零”；块越大、越小也有不同管理和访问开销。</p>
+<p>池容量不足时，<code>append()</code> 会在改变块表和引用计数前报告
+<code>MemoryError</code>。测试检查失败后 A/B
+数据和所有权完全不变。这里没有实现 GPU 抢占、交换到 CPU
+或重计算恢复；不能把异常提示当成完整服务系统的容错方案。</p>
+<h2 id="p15.11-prefix-caching复用的是同一段计算历史">P15.11 Prefix
+caching：复用的是同一段计算历史</h2>
+<p>假设两个请求都以完全相同的系统提示开头，后面的提问不同。已经算好的共同前缀
+KV 有机会直接复用，减少第二个请求的重复 prefill 工作；它不是为每一个后续
+decode token 免掉注意力计算。<a
+href="https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/apc.html">vLLM
+0.6.4 APC 文档快照</a></p>
+<p>但“出现同一个 token”远远不够。KV
+依赖它之前的上下文，还依赖模型权重、位置处理和适配器等计算设置。可复用的应是<strong>兼容计算环境下相同的
+token
+前缀</strong>，不是语义相似句子，也不是任意两段文字中碰巧相同的后缀。</p>
+<p>本脚本故意分开两个 API：</p>
+<ul>
+<li><code>fork(source, target)</code>：已经知道整段历史完全相同，可以共享未满尾块，未来写入时
+COW。</li>
+<li><code>share_prefix(source, target, tokens)</code>：由调用者先确认前缀兼容，只接收完整块边界。例如
+b=2，来源长度 5，可以共享前 4 个 token；要求共享前 3 个会报错。</li>
+</ul>
+<p>完整块边界是这个教学 API
+的简化契约，不是所有缓存系统只能这样设计。真实 APC
+还需要前缀标识、查找、失效规则、淘汰策略以及正确的请求隔离；固定版本
+vLLM 文档说明了块级缓存查找的设计。<a
+href="https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/details.html">vLLM
+0.6.4 实现说明</a></p>
+<p>脚本没有实现这些查找和安全机制，也不会检查两个文本是否相同。它还没有“请求结束后仍保留的前缀缓存”引用：所有活跃请求释放后，物理块就释放了。因此不能把这个块表模拟当成可部署的
+APC 服务。</p>
+<p>这里引用 0.6.4
+是为了固定机制说明的文档快照，<strong>不是说它是当前最新版或建议安装的版本</strong>。本章不需要安装任何版本的
+vLLM。</p>
+<h2 id="p15.12-continuous-batching不要让空位等整桌结束">P15.12
+Continuous batching：不要让空位等整桌结束</h2>
+<p>普通静态 batch 可能要等同一批里最长的请求完成，才接下一批。Continuous
+batching
+在每轮计算边界移除已结束请求，再把符合资源条件的新请求加进来。</p>
+<p>做一个完全明确的玩具：</p>
+<ul>
+<li>有两个 decode 槽位，每轮固定 10 ms。</li>
+<li>A、B 在 t=0 已经可以 decode，分别还需要 2、4 个输出 token。</li>
+<li>C 在 t=10 可以 decode，还需要 2 个输出 token。</li>
+<li><strong>所有 prompt 已在别处完成 prefill；这里只模拟 decode
+槽位。</strong></li>
+<li>每个活跃请求每轮产出一个 token，时间戳记在本轮结束时。</li>
+</ul>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>时间段（ms）</th>
+<th>静态 batch</th>
+<th>连续 batch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0–10</td>
+<td>A、B</td>
+<td>A、B</td>
+</tr>
+<tr>
+<td>10–20</td>
+<td>A、B；A 随后完成</td>
+<td>A、B；A 随后完成</td>
+</tr>
+<tr>
+<td>20–30</td>
+<td>空位、B</td>
+<td>C、B</td>
+</tr>
+<tr>
+<td>30–40</td>
+<td>空位、B；B 随后完成</td>
+<td>C、B；两者随后完成</td>
+</tr>
+<tr>
+<td>40–50</td>
+<td>C、空位</td>
+<td>已结束</td>
+</tr>
+<tr>
+<td>50–60</td>
+<td>C、空位</td>
+<td>已结束</td>
+</tr>
+</tbody>
+</table></div>
+<p>C 在 t=10 到达时，两槽仍被占用，所以连续 batch 也不是立刻开始。它到
+t=20 才进入，两个输出时间为 30、40 ms；静态 batch 则是 50、60 ms。</p>
+<p>两种方法都完成 8 个输出 token。按这个人造观察窗口，静态是
+<code>8/0.06≈133.333</code> tokens/s，连续是 <code>8/0.04=200</code>
+tokens/s。<strong>这些是固定轮时假设推出来的数字，不是 GPU
+实测，也不是“连续 batch 一定快 1.5 倍”的结论。</strong></p>
+<p>真实 batch 大小会影响轮时，KV
+不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token
+间隔可能变长。必须把每轮执行时间和排队一起看。</p>
+<h2 id="p15.13-prefilldecode-与排队会互相影响">P15.13 Prefill、decode
+与排队会互相影响</h2>
+<p>Prefill 一次处理已知 prompt 的很多位置，decode
+沿着输出依赖一步一步走。把一个很长的新 prompt
+放进服务计算，可能延后其他请求的下一次 decode。</p>
+<p>调度器可以选择分块 prefill、限制每轮 token
+预算、为不同请求设置优先级等。这些策略会在首 token 等待、后续 token
+间隔和总吞吐间取舍，不能只报一个“速度”。</p>
+<p>注意三件事不是同一个概念：</p>
+<ol type="1">
+<li>FlashAttention 分块：在一次注意力计算内部安排数据和归一化。</li>
+<li>Chunked prefill：把一个请求的 prompt 计算拆成多个调度单元。</li>
+<li>Prefill/decode 分离部署：把两个阶段放到不同的执行资源。</li>
+</ol>
+<p>这里的在线 Softmax 代码只涉及第 1 种算法思想；小调度器没有实现第 2、3
+种。后续架构章节再讲 encoder/decoder 时，也不能把它们与服务端 P/D
+分离混称。</p>
+<h2 id="p15.14-ttfttpot吞吐用时间戳而不是印象">P15.14
+TTFT、TPOT、吞吐：用时间戳而不是印象</h2>
+<p>本章固定采用<strong>客户端可观察时间</strong>：请求到达时间为 a，输出
+token 接收时间依次为
+t₁…tₙ。不同工具可能采用不同统计口径，比较前先写清楚。</p>
+<pre class="text"><code>TTFT = t₁ - a                         首 token 等待
+TPOT = (tₙ - t₁) / (n - 1)，n&gt;1       后续每 token 平均间隔
+E2E  = tₙ - a                         整个请求耗时
+输出吞吐 = 观察窗口内输出 token 数 / 窗口秒数</code></pre>
+<p>TTFT 可以包含排队、prefill、采样与网络等延迟，不等于纯 prefill kernel
+时间。TPOT 这里排除了第一 token 的等待。只有一个输出 token
+时，没有后续间隔，所以脚本返回 <code>None</code>，不是除以零，也不是假装
+TPOT=0。</p>
+<p>再做一组<strong>与上一节不同的人造时间线</strong>：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>请求</th>
+<th>到达时刻（ms）</th>
+<th>输出 token 时刻（ms）</th>
+<th>TTFT</th>
+<th>TPOT</th>
+<th>E2E</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>0</td>
+<td>100、140、190</td>
+<td>100 ms</td>
+<td>(190−100)/2=45 ms</td>
+<td>190 ms</td>
+</tr>
+<tr>
+<td>B</td>
+<td>50</td>
+<td>150、210</td>
+<td>100 ms</td>
+<td>(210−150)/1=60 ms</td>
+<td>160 ms</td>
+</tr>
+</tbody>
+</table></div>
+<p>观察窗口明确取 0–210 ms，两个请求一共产出 5 个 token，因此输出吞吐为
+<code>5/0.210≈23.809524 tokens/s</code>。不能用 A 的 TPOT
+倒数代表两请求总吞吐，也不能把两请求 E2E
+相加当成并行服务的总墙钟时间。</p>
+<p>“平均 TPOT”也要说清楚权重：</p>
+<ul>
+<li>先算每请求 TPOT，再等权平均：<code>(45+60)/2=52.5 ms</code>。</li>
+<li>把所有后续 token 间隔放一起平均：<code>(90+60)/3=50 ms</code>。</li>
+</ul>
+<p>两者都可有定义，但不能用同一个标签不加说明。真实服务还应报告分位数、并发、错误率和输出长度；两条请求不足以说明线上长尾表现。</p>
+<h2 id="p15.15-运行与输出哪些确实测过">P15.15
+运行与输出：哪些确实测过</h2>
+<p>在仓库根目录直接运行：</p>
+<div class="sourceCode" id="cb108"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb108-1"><a href="#cb108-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/16_attention_systems.py</span>
+<span id="cb108-2"><a href="#cb108-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_attention_systems.py <span class="at">-v</span></span></code></pre></div>
+<p>核心只需要 Python 标准库。已经安装本仓库依赖时，测试会额外用 CPU SDPA
+做一个独立交叉检查；兼容性按仓库共享规则要求稳定版 torch
+2.14.x。不满足条件只跳过这一项，<strong>不会跳过在线
+Softmax、分页和时间线的必修测试</strong>。</p>
+<p>本批在 Python 3.12.14 上运行，随机部分 seed=15。环境中的 PyTorch 是
+2.14.1+cpu，没有可用 CUDA。关键输出为：</p>
+<pre class="text"><code>Online hand example: output=6.000000000000, expected=6; blocks=[2,1]
+Uneven blocks Q=5,K=7,d=3,dv=2: max_error=1.11e-16; tolerance=1e-12
+All-masked safety: [[0.0]]
+Before COW: A=(0, 1), B=(0, 1), refs={0: 2, 1: 2}
+After COW: A=(0, 1), B=(0, 2), refs={0: 2, 1: 1, 2: 1}
+Output throughput: 23.809524 tokens/s (invented timeline, not measured)
+GPU SDPA: not requested, not run. This CPU script is not a performance benchmark.</code></pre>
+<p>本章当前 23 项测试：在兼容 torch 环境中 23 项通过；无 torch 环境中 22
+项通过、1 项明确 skip。无 torch 的正常 CLI 仍能完整运行，显式请求 GPU
+选修时会解释跳过原因。<strong>被跳过的 GPU 或 SDPA
+检查不算数值通过。</strong></p>
+<p>除了正例，测试还在内存中构造 9
+个错误版本：忘记重缩放、两条路径一起丢缩放分母、忽略
+mask、丢最后一块、不做 COW、COW
+后不减引用计数、共享时不加计数、按物理块号排序、TPOT 除以
+n。每个都必须被断言拒绝，且运行错误数为
+0；坏导入或崩溃不能算“抓住算法错误”。源文件不会被这些 mutation
+改写。</p>
+<p>分页测试还有 240 步固定种子的随机
+create/append/fork/prefix/release，对照一个独立的普通序列模型，并逐步检查引用计数和空闲池。它检验的是这个单线程模拟器，不是生产系统并发安全。</p>
+<h2 id="p15.16-gpu-选修先确认后端不先晒跑分">P15.16 GPU
+选修：先确认后端，不先晒跑分</h2>
+<p><strong>本批 GPU kernel 未运行，未测 GPU 显存、时延或吞吐。</strong>
+CPU SDPA 检查通过不代表执行了 CUDA FlashAttention。</p>
+<p>如果你已经有兼容的 GPU、驱动与官方 CUDA 版
+PyTorch，可以单独尝试：</p>
+<div class="sourceCode" id="cb110"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb110-1"><a href="#cb110-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/16_attention_systems.py <span class="at">--gpu-sdpa</span></span></code></pre></div>
+<p>不要为这一章把现有 CPU 环境强行替换掉；GPU
+环境的安装要按官方硬件/驱动要求单独配置。脚本会打印实际
+PyTorch、CUDA、设备、dtype 和形状，并在缺少依赖或 CUDA 时明确
+<code>SKIP</code>。本批实际运行这个开关得到：</p>
+<pre class="text"><code>SKIP GPU SDPA: torch=2.14.1+cpu, CUDA unavailable; GPU kernel not run.</code></pre>
+<p>选修 smoke 的 Q/K/V 各为
+<code>[1,1,8,16]</code>、float16；三者数据本身共 768
+字节，但运行时上下文、工作区和 profiler 远不止这点，不能把 768
+字节写成显存需求。它不下载模型，不承诺耗时或 GPU 总显存上限。</p>
+<p>其核心调用明确限定后端：</p>
+<div class="sourceCode" id="cb112"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb112-1"><a href="#cb112-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> sdpa_kernel(backends<span class="op">=</span>[SDPBackend.FLASH_ATTENTION]):</span>
+<span id="cb112-2"><a href="#cb112-2" aria-hidden="true" tabindex="-1"></a>    actual <span class="op">=</span> torch.nn.functional.scaled_dot_product_attention(</span>
+<span id="cb112-3"><a href="#cb112-3" aria-hidden="true" tabindex="-1"></a>        q, k, v, dropout_p<span class="op">=</span><span class="fl">0.0</span>, is_causal<span class="op">=</span><span class="va">True</span>)</span></code></pre></div>
+<p>这里 Q/K 等长，才使用简单的
+<code>is_causal=True</code>；带缓存偏移的矩形 mask
+不应不加分析地照抄。函数的 dropout 参数明确设为 0，不依赖外部模型的 eval
+状态。脚本记录 profiler 中实际出现的 attention/flash 事件，再与本章 CPU
+数值参考比较；“调用了 SDPA”本身不能证明走了期望后端。<a
+href="https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py">PyTorch
+固定源码 v2.5.1：SDPA 后端选择接口</a></p>
+<p>此固定源码链接用于接口背景，不是安装建议。本批另检查了实际 torch
+2.14.1 的 <code>sdpa_kernel</code> 和
+<code>SDPBackend.FLASH_ATTENTION</code> 可导入，但无 GPU，因此没有验证其
+GPU 支持条件。后端不支持或运行失败时会报告
+skip/失败原因，不会悄悄退回数学后端然后宣称 GPU Flash 成功。</p>
+<p>要做真正的性能对比，还需要另外安排可复现基准：</p>
+<ol type="1">
+<li>固定模型 revision、tokenizer、dtype、采样策略，记录权重与 KV
+是否量化。</li>
+<li>固定 prompt/输出 token
+长度分布、请求到达方式、并发以及前缀命中率；冷缓存与热缓存分开。</li>
+<li>先预热，再重复多轮；GPU kernel 计时使用同步或正确的 CUDA
+event，避免只测到提交任务的时间。</li>
+<li>同时报客户端 TTFT、TPOT、E2E、输出吞吐与失败请求；不能拿输入 token
+吞吐冒充输出吞吐。</li>
+<li>显存分别记录模型基线、KV payload、峰值 allocated/reserved
+和工作区；重置峰值统计的时机要相同。</li>
+<li>改一个因素再比，并核验 profiler
+实际后端；保存硬件、软件版本和命令。微型 attention smoke
+不能替代端到端服务基准。</li>
+</ol>
+<p>这是选修实验的记录清单，<strong>不是本批已经跑出的服务性能报告</strong>。</p>
+<h2 id="p15.17-自测题与参考答案">P15.17 自测题与参考答案</h2>
+<ol type="1">
+<li>FlashAttention 为什么不等于把稠密 attention 改成 O(Nd)？与 GQA
+分别改了什么？</li>
+<li>N 从 4096 变为 8192，单头一张 2 字节 score 矩阵从多少 MiB
+变成多少？</li>
+<li>手算例子第二块到来时，alpha、ell、acc、最终输出各是多少？若平均两块各自均值，会得到多少？</li>
+<li>第一块全 mask，后块才出现合法 key，该怎样初始化？若整行全 mask，本
+API 输出什么？</li>
+<li>b=4、长度 9 的无共享请求分配几个块、几个空槽？块表
+<code>[9,2,7]</code> 中位置 7 对应哪里？</li>
+<li>b=2 时 A/B 共享 <code>[10,20,30]</code>，B 追加 40
+后，逻辑总长度与物理载荷数分别是多少？为什么只复制尾块？</li>
+<li>前缀文本“看起来意思一样”，能直接共享 KV
+吗？这个模拟器会自动核验文本兼容性吗？</li>
+<li>连续 batch 的例子里 C 在 10 ms 就绪，为什么第一 token 是 30
+ms，而不是 20 ms？这个 20 ms 等待能否叫真实端到端 TTFT？</li>
+<li>到达 0、输出时刻 <code>[100,140,190]</code> 的 TTFT、TPOT、E2E
+各是多少？只输出一个 token 时 TPOT 是什么？</li>
+<li>full/block 一致，且 CPU SDPA 通过，能否说明实现了生产
+FlashAttention，并证明线上请求更快？</li>
+</ol>
+<p>参考答案：</p>
+<ol type="1">
+<li>它保留全部合法 QK 配对，标准稠密算术量仍为 O(N²d)，重点是计算组织与
+IO。GQA 改变 KV 头共享方式，属于模型表示的改变。</li>
+<li>32 MiB → 128 MiB，增长 4 倍；这只是单张矩阵，不是完整模型峰值。</li>
+<li>alpha=0.5，ell=1.75，acc=10.5，输出=6。错误的块均值平均是 17/3，约
+5.6667。</li>
+<li>空块跳过，保持 ell=0；首个合法块用 alpha=0。整行无合法 key
+返回全零，这是明确约定，不是正常概率分布。</li>
+<li>3 块、12 槽位、3 个空槽。位置 7 的逻辑块号 <code>7//4=1</code>、偏移
+<code>7%4=3</code>，物理块号为 2。</li>
+<li>逻辑总长度 3+4=7，物理载荷数
+2+1+2=5。满的前缀块继续共享；只要写入仍共享的未满尾块，才需要 COW。</li>
+<li>不能；要相同 token
+前缀和兼容的模型/位置等计算环境。模拟器不检查文本或模型身份，调用者必须先保证前提。</li>
+<li>10–20 ms 两槽仍被 A/B 占用，C 到 20 ms 才开始一轮，30 ms
+才产出。这里未包括 prompt prefill、网络等，不是端到端 TTFT。</li>
+<li>100 ms、45 ms、190 ms。只有一个 token 时没有后续间隔，TPOT 返回
+None。</li>
+<li>不能。还要独立数值参考、GPU
+后端证据，以及同硬件、同工作负载的性能测量。本章只完成教学 CPU
+实验。</li>
+</ol>
+<p>接下来，<a
+href="#p16-sparse-linear">P16</a>才讨论窗口、稀疏与线性机制怎样改变可见信息路径或状态表示。先分清这条线，才能避免把“换一种高效执行方式”与“改了模型所能看到什么”混为一谈。</p>
+<h2 id="资料与实现边界-1">资料与实现边界</h2>
+<p>核验日：2026-10-19。以下只用论文或官方资料：</p>
+<ul>
+<li><a href="https://arxiv.org/pdf/2205.14135v2">FlashAttention 原论文
+v2</a>：IO-aware tiling、在线归一化与精确注意力的边界；本章未实现其 GPU
+前反向 kernel。</li>
+<li><a href="https://arxiv.org/html/2309.06180v1">PagedAttention 原论文
+v1</a>：块表、非连续
+KV、共享和写时复制、请求调度；本章只模拟单线程所有权和逻辑读取。</li>
+<li><a
+href="https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/apc.html">vLLM
+0.6.4 APC 介绍</a>与<a
+href="https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/details.html">实现说明</a>：固定文档快照，不是当前版本推荐；本章没有安装、运行或测速
+vLLM。</li>
+<li><a
+href="https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py">PyTorch
+v2.5.1 官方后端选择源码</a>：固定接口背景；实际 CPU 测试环境为 torch
+2.14.1+cpu，GPU 选修未运行。</li>
+</ul>
+<p>本章不改 S4、不训练模型、不实现 CUDA
+或生产调度器，不把人造时间线写成实验吞吐，不承诺任何 GPU 加速比。</p>
+<hr />
+<h1 id="p16-sparse-linear">架构进阶（P16）：滑动窗口、稀疏、混合与线性注意力</h1>
+<p><a href="#p15-attention-systems">P15</a>
+把“怎样执行同一个注意力算式”与服务端内存管理分开。本章换一个问题：<strong>如果不让每个
+query 逐一读取全部历史，我们改掉了哪些信息路径？</strong></p>
+<p>配套 <a
+href="code/17_sparse_linear_attention.py">code/17_sparse_linear_attention.py</a>，只做
+CPU 小实验，不训练、不下载权重。它独立于 S4，不默认替换 Baby-GPT
+的注意力，也不拿短脚本的运行时间当生产性能结论。</p>
+<h2 id="p16.1-查原始卡片还是查累计账本">P16.1
+查原始卡片，还是查累计账本</h2>
+<p>把历史 token 想成一排资料卡片，当前 query 是来查资料的人：</p>
+<ul>
+<li><strong>全量因果注意力</strong>：允许翻所有已经出现的卡片，再按问题决定权重。</li>
+<li><strong>滑动窗口注意力（SWA）</strong>：只允许翻最近几张卡片。</li>
+<li><strong>全局加局部</strong>：最近几张之外，额外保留某些可访问的位置。</li>
+<li><strong>线性注意力</strong>：本章这一种把卡片逐张加入固定形状的累计账本，再用
+query 读取账本。</li>
+</ul>
+<p>类比的边界很重要：窗口内仍会学习不同权重，不是简单平均；“账本”是数值状态，不是能保证保留所有事实的人类摘要。少读卡片和压成账本也不是同一种操作。</p>
+<figure>
+<a href="assets/rendered/p16-sparse-linear.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/p16-sparse-linear.svg" class="book-diagram"
+width="720"
+alt="左侧窗口只保留允许读取的边，叠层扩展可达范围；右侧线性注意力累计 S 和 z，再由当前 query 读取" /></a>
+<figcaption>左侧窗口只保留允许读取的边，叠层扩展可达范围；右侧线性注意力累计
+S 和 z，再由当前 query 读取</figcaption>
+</figure>
+<h2 id="p16.2-先约定-w-到底数什么">P16.2 先约定 W 到底数什么</h2>
+<p>本书采用一个贯穿代码、图和手算的约定：<strong>窗口 W
+包含当前位置自己</strong>。位置从 0 开始，query i 可以看 key
+j，当且仅当：</p>
+<p><span class="math display">\[
+\max(0,i-W+1)\le j\le i
+\]</span></p>
+<p>例如 W=3，是“当前位 + 前面至多两位”，不是“前三位 + 当前位”。T=6 的
+mask 如下，1 表示允许读取：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>query i  key j</th>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+<th>可见位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0、1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0、1、2</td>
+</tr>
+<tr>
+<td>3</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>1、2、3</td>
+</tr>
+<tr>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>2、3、4</td>
+</tr>
+<tr>
+<td>5</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>3、4、5</td>
+</tr>
+</tbody>
+</table></div>
+<p>因此 W=1 退化为只看自己；W≥T 退化为普通因果
+mask，仍然不能看未来。</p>
+<p>窗口是论文和库之间常见的差一位陷阱。<a
+href="https://arxiv.org/html/2310.06825v1#S2">Mistral 7B v1，§2</a> 用
+SWA 解释层间信息传播，但其正文的 i−W 到 i
+与图示的窗口槽数表述不能直接当作本章函数契约。复现具体库时，应检查实际不等式，不能只复制名为
+window_size 的数字。本章不声称复刻该模型。</p>
+<p>代码中的矩形版本还允许已有 P 个历史位置、本次处理 C 个新位置：</p>
+<div class="sourceCode" id="cb113"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb113-1"><a href="#cb113-1" aria-hidden="true" tabindex="-1"></a>query_pos <span class="op">=</span> torch.arange(offset, offset <span class="op">+</span> length)[:, <span class="va">None</span>]</span>
+<span id="cb113-2"><a href="#cb113-2" aria-hidden="true" tabindex="-1"></a>key_pos <span class="op">=</span> torch.arange(offset <span class="op">+</span> length)[<span class="va">None</span>, :]</span>
+<span id="cb113-3"><a href="#cb113-3" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> (key_pos <span class="op">&lt;=</span> query_pos) <span class="op">&amp;</span> (key_pos <span class="op">&gt;</span> query_pos <span class="op">-</span> window)</span></code></pre></div>
+<p>这里 <code>offset=P</code>、<code>length=C</code>。第一行生成 [C,1]
+的绝对 query 位置，第二行生成 [1,P+C] 的 key 位置，广播后得到
+[C,P+C]。P=4、C=2、W=3 时，正好是手算表的最后两行，不能用一个从 0 开始的
+C×C 三角形代替。</p>
+<h2 id="p16.3-一层看不见不等于多层完全没有路径">P16.3
+一层看不见，不等于多层完全没有路径</h2>
+<p>设每层都用 W=3，且没有别的跨位置连接。输出位置 5
+在第一层读取上一层位置
+3、4、5；第二层读取这些位置携带的信息，就可能间接收到输入位置 1、2
+的内容。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>层数 L</th>
+<th>输出位置 5 能到达的输入位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>5</td>
+</tr>
+<tr>
+<td>1</td>
+<td>3、4、5</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1、2、3、4、5</td>
+</tr>
+<tr>
+<td>3</td>
+<td>0、1、2、3、4、5</td>
+</tr>
+</tbody>
+</table></div>
+<p>按本章约定，每层最多向前跨 W−1 个位置，所以 L
+层的结构可达区间是：</p>
+<p><span class="math display">\[
+[\max(0,i-L(W-1)),\ i]
+\]</span></p>
+<p>区间长度最多是 <code>1+L×(W−1)</code>。逐位置
+FFN、归一化和残差不增加新的跨位置边。代码
+<code>receptive_positions()</code>
+逐层合并可达集合，测试再用上面的闭式表达核验。</p>
+<p><strong>结构上存在一条路径，不等于信息一定被学会、保留或准确检索。</strong>
+远处原始 K/V
+已经不在当前层的窗口中；传来的只是中间隐藏表示。也不能把理论可达长度当成实测的长上下文能力。</p>
+<h2 id="p16.4-稀疏全局加局部混合层分别是什么">P16.4
+稀疏、全局加局部、混合层分别是什么</h2>
+<p>“稀疏”首先描述哪些 query-key
+边存在。滑动窗口是其中一种；也可以按块选取位置，或者根据内容动态选择。它们未必使用相同的索引、缓存或
+kernel。</p>
+<p>“全局加局部”是在<strong>同一层的 mask
+中</strong>增加某些边。Longformer
+原论文介绍了局部窗口与任务相关全局位置的组合；其中用于双向编码的图样不能原样搬到自回归
+decoder。<a href="https://arxiv.org/html/2004.05150v2#S3.SS1">Longformer
+v2，§3.1</a></p>
+<p>本章定义一个更简单的因果教学图样，设全局位置集合为 G：</p>
+<p><span class="math display">\[
+M_{ij}=(j\le i)\ \land\ [(j&gt;i-W)\ \lor\ (j\in G)\ \lor\ (i\in G)]
+\]</span></p>
+<ul>
+<li>普通 query 可以读局部窗口，以及已经出现的全局 key。</li>
+<li>全局 query 可以读全部过去和自己，但仍然不能读未来。</li>
+<li>W=3、G={0} 时，query 5 的可见位置为 <code>{0,3,4,5}</code>。</li>
+<li>若 4 也是全局位置，query 4 可读 <code>{0,1,2,3,4}</code>；query 0
+仍只能读自己。</li>
+</ul>
+<p>因此位置 0 不能在因果模型里“先收集整段未来，再广播给大家”。源码最后的
+<code>&amp; causal</code> 不能被删除。本函数只演示图样，不实现
+Longformer 的独立全局投影或完整模型。</p>
+<p>“混合层”则是<strong>不同层使用不同机制</strong>：例如三层 SWA
+后接一层全量注意力，或者把线性层与普通注意力层交替。它不同于在同一层给窗口加几列全局
+key。若某些层仍读取全量历史，这些层的 KV 缓存仍会随 T
+增长，不能把整个模型都按窗口大小计费。</p>
+<h2 id="p16.5-稀疏选择不等于-mla-压缩">P16.5 稀疏选择不等于 MLA
+压缩</h2>
+<p><a href="#p14-grouped-kv">P14</a> 的 MLA
+主要问：“每个历史位置用什么表示保存？”稀疏选择问：“当前 query
+读取哪些位置？”</p>
+<ul>
+<li>MLA
+的较短潜变量可以仍然为每个历史位置各存一份，且注意力仍读全部位置。</li>
+<li>SWA 可以只保留较少位置，却为每个位置保存普通 K/V。</li>
+<li>二者可以组合，但必须分别计算选中位置数、每位置
+payload、索引和临时工作区，不能把同一份节省算两遍。</li>
+</ul>
+<p>动态稀疏也不自动等于小缓存：如果未来 query
+可能再次选到任何旧位置，就可能还需要保留历史表示或额外检索结构。只把大矩阵中的一些权重设为
+0，并不能证明存储已经减少。</p>
+<h2 id="p16.6-线性注意力先改相似度再移动括号">P16.6
+线性注意力先改相似度，再移动括号</h2>
+<p>普通 Softmax 注意力的未归一化权重是
+<code>exp(q·k/√d)</code>。本章换成正特征的内积：</p>
+<p><span class="math display">\[
+\phi(x)=\operatorname{ELU}(x)+1
+=\begin{cases}x+1,&amp;x\ge0\\e^x,&amp;x&lt;0\end{cases},\qquad
+w_{tj}=\phi(q_t)^\top\phi(k_j)
+\]</span></p>
+<p>这是一个新的核函数，<strong>不与原来的 Softmax
+注意力精确等价</strong>。它的“线性”指固定特征宽度时，计算量可对序列长度
+T
+呈线性关系，不是说整层没有非线性。采用该特征映射及下面的因果归一化表达，依据的是
+<a
+href="https://proceedings.mlr.press/v119/katharopoulos20a/katharopoulos20a.pdf">Linear
+Transformer 原论文，ICML 2020，§3.2–3.4、式 7–12</a>。</p>
+<p>先写所有可见历史的加权平均：</p>
+<p><span class="math display">\[
+y_t=\frac{\sum_{j=0}^{t}\bigl(\phi(q_t)^\top\phi(k_j)\bigr)v_j}
+{\sum_{j=0}^{t}\phi(q_t)^\top\phi(k_j)}
+\]</span></p>
+<p>正权重除以总和后加起来为
+1。分母不能省略，否则重复历史会改变输出尺度，且不再是这个算式。</p>
+<p>本章省略头轴，只保留一个头；多头可在 B 之外再增加 H 轴。设特征宽度为
+r、value 宽度为 d_v。本例 φ 不改变维度，所以
+r=d，但别把这个特例当成所有核映射的定义。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>张量</th>
+<th>形状</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>q、k</td>
+<td>[B,T,r]</td>
+<td>每个位置的查询、键</td>
+</tr>
+<tr>
+<td>v</td>
+<td>[B,T,d_v]</td>
+<td>每个位置的内容</td>
+</tr>
+<tr>
+<td>φ(q)、φ(k)</td>
+<td>[B,T,r]</td>
+<td>正特征</td>
+</tr>
+<tr>
+<td>显式权重矩阵</td>
+<td>[B,T,T]</td>
+<td>只作为小规模对照</td>
+</tr>
+<tr>
+<td>S_t</td>
+<td>[B,r,d_v]</td>
+<td>历史 key 特征与 value 的外积和</td>
+</tr>
+<tr>
+<td>z_t</td>
+<td>[B,r]</td>
+<td>历史 key 特征之和</td>
+</tr>
+<tr>
+<td>y</td>
+<td>[B,T,d_v]</td>
+<td>所有位置的输出</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="p16.7-把整段历史变成递推状态">P16.7 把整段历史变成递推状态</h2>
+<p>用列向量写单位置公式，初始 S 和 z 都是 0：</p>
+<p><span class="math display">\[
+S_t=S_{t-1}+\phi(k_t)v_t^\top,\qquad
+z_t=z_{t-1}+\phi(k_t),\qquad
+y_t=\frac{\phi(q_t)^\top S_t}{\phi(q_t)^\top z_t}
+\]</span></p>
+<p>外积把 r 个 key 特征与 d_v 个 value 分量两两相乘，产生 r×d_v
+个数。先把当前 k、v 加入状态，再读取，才能包含
+j=t。这里的矩阵结合律对<strong>选定的核</strong>精确成立；它不能把已经改掉的核变回
+Softmax。</p>
+<p>手算 B=1、r=2、d_v=1：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>t</th>
+<th>q_t</th>
+<th>k_t</th>
+<th>v_t</th>
+<th>更新后的 S_t</th>
+<th>更新后的 z_t</th>
+<th>输出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>[0,0]</td>
+<td>[0,0]</td>
+<td>2</td>
+<td>[2,2]ᵀ</td>
+<td>[1,1]</td>
+<td>4/2=2</td>
+</tr>
+<tr>
+<td>1</td>
+<td>[0,1]</td>
+<td>[1,0]</td>
+<td>4</td>
+<td>[10,6]ᵀ</td>
+<td>[3,2]</td>
+<td>22/7</td>
+</tr>
+</tbody>
+</table></div>
+<p>第二行：φ(q)=[1,2]、φ(k)=[2,1]；新外积是
+<code>[8,4]ᵀ</code>，加上旧状态得到 <code>[10,6]ᵀ</code>。分子
+<code>1×10+2×6=22</code>，分母
+<code>1×3+2×2=7</code>。也可以直接对两条历史算权重 3、4，得到
+<code>(3×2+4×4)/(3+4)=22/7</code>。</p>
+<p>对应源码的循环核心：</p>
+<div class="sourceCode" id="cb114"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb114-1"><a href="#cb114-1" aria-hidden="true" tabindex="-1"></a>qt, kt <span class="op">=</span> positive_features(q[:, t]), positive_features(k[:, t])</span>
+<span id="cb114-2"><a href="#cb114-2" aria-hidden="true" tabindex="-1"></a>state <span class="op">=</span> state <span class="op">+</span> kt[:, :, <span class="va">None</span>] <span class="op">*</span> v[:, t, <span class="va">None</span>, :]</span>
+<span id="cb114-3"><a href="#cb114-3" aria-hidden="true" tabindex="-1"></a>normalizer <span class="op">=</span> normalizer <span class="op">+</span> kt</span>
+<span id="cb114-4"><a href="#cb114-4" aria-hidden="true" tabindex="-1"></a>numerator <span class="op">=</span> (qt[:, :, <span class="va">None</span>] <span class="op">*</span> state).<span class="bu">sum</span>(dim<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb114-5"><a href="#cb114-5" aria-hidden="true" tabindex="-1"></a>denominator <span class="op">=</span> (qt <span class="op">*</span> normalizer).<span class="bu">sum</span>(dim<span class="op">=</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb114-6"><a href="#cb114-6" aria-hidden="true" tabindex="-1"></a>outputs.append(_normalized(numerator, denominator))</span></code></pre></div>
+<p>新增的 <code>None</code> 轴把 <code>[B,r]</code> 与
+<code>[B,d_v]</code> 变成可广播的 <code>[B,r,1]</code> 和
+<code>[B,1,d_v]</code>。读取时沿 r 求和，得到
+<code>[B,d_v]</code>；分母保留 <code>[B,1]</code>，才能对各个 value
+分量正确广播。</p>
+<p><code>linear_parallel()</code>
+则显式算整个核矩阵、把上三角置零、逐行归一化。它用于检查公式，仍然占
+O(T²) 临时空间，<strong>不是线性复杂度的并行 scan
+实现</strong>。两个函数的数学输出应一致；浮点求和顺序不同，允许小误差。</p>
+<h2 id="p16.8-固定状态大小能否一直记住第一条">P16.8
+固定状态大小，能否一直记住第一条？</h2>
+<p>我们不训练模型，直接设计一个可手算的干扰实验。每个长度 T
+都使用同样的查询和规则：</p>
+<ul>
+<li>q=[4,−4]；第一条目标 key 也是 [4,−4]，目标 value=1。</li>
+<li>其余 T−1 条都是 key=[−4,4]、value=0 的干扰项。</li>
+<li>比较最后一行输出，正确目标是 1；预先定义成功为绝对误差 ≤0.1。</li>
+<li>三条路径使用完全相同的 Q/K/V、顺序、float64
+和单头。没有训练差异、不同量化或不等的输入长度。</li>
+</ul>
+<p>这里查询直接给定，是一个检索算式测试，不是完整“读文字后回答”的语言模型；末尾也没有额外插入一条会改变记账的查询
+token。</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>T</th>
+<th>全量 Softmax</th>
+<th>W=4 的局部 Softmax</th>
+<th>本章线性核</th>
+<th>线性 S+z 的 payload</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>1.000000</td>
+<td>1.000000</td>
+<td>1.000000</td>
+<td>32 字节</td>
+</tr>
+<tr>
+<td>8</td>
+<td>1.000000</td>
+<td>0.000000</td>
+<td>0.951219</td>
+<td>32 字节</td>
+</tr>
+<tr>
+<td>64</td>
+<td>1.000000</td>
+<td>0.000000</td>
+<td>0.684206</td>
+<td>32 字节</td>
+</tr>
+<tr>
+<td>256</td>
+<td>1.000000</td>
+<td>0.000000</td>
+<td>0.348654</td>
+<td>32 字节</td>
+</tr>
+</tbody>
+</table></div>
+<p>不是只看打印结果。线性核给目标的权重为
+<code>a=25+exp(−8)</code>，每条干扰项的权重为
+<code>b=10×exp(−4)</code>，因此最后输出恰好是：</p>
+<p><span class="math display">\[
+y_{T-1}=\frac{a}{a+(T-1)b}
+\]</span></p>
+<p>Softmax 的目标与干扰打分差是 <code>64/√2</code>，所以对应输出为
+<code>1/[1+(T−1)exp(−64/√2)]</code>，这些长度下打印成 1。W=4
+的单层路径在 T&gt;4 时彻底读不到位置 0，因此输出为
+0。三者并没有被要求使用相同核或相同存储量，那正是实验改变的因素。</p>
+<p>状态只含 S 的 2×1 个数和 z 的 2 个数，float64 每数 8 字节，共
+<code>(2×1+2)×8=32</code>。这不包含输入、输出、模型参数、Python 对象或
+autograd
+保存的中间状态。测试核对最终张量的实际存储，不把整个脚本说成“常数内存”。</p>
+<p><strong>能得出的结论</strong>：此固定宽度、未训练的 ELU+1
+核在这组输入上，随着非零干扰权重累积，T=64
+已不满足预设检索误差标准；状态大小不随 T 变，并不保证检索质量不变。</p>
+<p><strong>不能得出的结论</strong>：所有线性注意力、所有递推模型都必然在同样长度失败；失败全部由浮点容量耗尽造成；或者
+Softmax
+对任意长度、任意数据都能完美检索。这个实验具体展示的是核区分度与干扰累积，不是固定维度状态的普适不可能性证明。它也没有评估多层训练后的
+SWA 信息传递能力。</p>
+<h2 id="p16.9-复杂度是账本不是速度承诺">P16.9
+复杂度是账本，不是速度承诺</h2>
+<p>下面只数单层、单头的注意力主体，忽略投影、FFN 和常数；batch 可另外乘
+B。全量 Q/K 宽度 d、value 宽度 d_v；全局位置数量为 g。</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>机制</th>
+<th>整段处理的理论主体成本</th>
+<th>逐 token 推理保存的历史表示</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>全量注意力</td>
+<td>O(T²(d+d_v))</td>
+<td>O(T(d+d_v))</td>
+</tr>
+<tr>
+<td>真正按窗口执行的 SWA</td>
+<td>O(TW(d+d_v))</td>
+<td>可用至多 W 位置的 K/V</td>
+</tr>
+<tr>
+<td>局部 + 固定数量全局位置</td>
+<td>O(T(W+g)(d+d_v))</td>
+<td>局部与全局位置的 K/V；全局 query 另需审查</td>
+</tr>
+<tr>
+<td>本章的线性递推</td>
+<td>O(Trd_v+Tr)</td>
+<td>S、z，共 r×d_v+r 个数</td>
+</tr>
+</tbody>
+</table></div>
+<p>第三行需特别注意：如果未来有一个全局 query 要直接读取全部旧
+key，就不能提前只留窗口与若干全局 key。本章只画
+mask，没有实现这种缓存生命周期；不能拿稀疏边数代替完整的存储证明。g 若随
+T 增长，也不能再把它视为固定常数。</p>
+<p>本章的窗口函数只是产生 bool
+mask，<code>masked_softmax_attention()</code> 仍先计算完整
+QKᵀ。它证明可见性，不兑现表格里的稀疏执行成本；<code>linear_parallel()</code>
+同样只是 O(T²) 对照。递推函数保留全部输出，训练时普通 autograd
+还会保存历史计算图，所以固定的推理状态不等于固定的训练峰值内存。</p>
+<p>实际选择要同时看质量、长距离检索、状态/缓存、吞吐和延迟。<a
+href="#p15-attention-systems">P15</a> 的 FlashAttention
+优化计算和访存；FLA 是另一个实现库，名称相似不代表算法相同。这里只提供
+<a href="https://github.com/fla-org/flash-linear-attention">FLA
+官方仓库</a>
+作为实现阅读入口，不安装、不调用，也不把库中的其他架构或速度声明算作本章实验结果。</p>
+<h2 id="p16.10-运行与数值边界">P16.10 运行与数值边界</h2>
+<p>在仓库根目录：</p>
+<div class="sourceCode" id="cb115"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb115-1"><a href="#cb115-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
+<span id="cb115-2"><a href="#cb115-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/17_sparse_linear_attention.py</span>
+<span id="cb115-3"><a href="#cb115-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_sparse_linear_attention.py <span class="at">-v</span></span></code></pre></div>
+<p>本批实际使用 Python 3.12.14、PyTorch
+2.14.1+cpu、单线程、seed=16、float64。随机 B=2、T=7、r=3、d_v=2
+对照得到最大误差 <code>3.33e-16</code>，S/z 形状分别为
+<code>[2,3,2]</code>、<code>[2,3]</code>；检索结果见上表。不同平台的末位浮点误差可不同，不是质量分数。</p>
+<p>教学接口主动收窄范围：</p>
+<ul>
+<li>CPU float32/float64；不接受 half、bfloat16、整数、混合 dtype、GPU 或
+autocast。张量必须非空且有限。</li>
+<li>单次 query 长度和总 key 长度均为
+1–512；这是小实验的保护上限，不是理论上下文限制。窗口可以大于
+T，但必须为正整数；布尔值不当成整数参数。</li>
+<li>Softmax
+对照拒绝全遮罩行，避免把“没有可读内容”的未定义归一化悄悄当成正常输出。若扩展
+padding，需要另行规定这些行如何输出。</li>
+<li>φ 的负半轴直接算 <code>exp(x)</code>，避免先得到接近 −1 的 ELU 再加
+1 所造成的抵消。极端负数仍可能下溢为
+0；分母非正或非有限时明确报错，不偷偷加 epsilon 改掉参考公式。</li>
+<li>太大的输入也可能让分数、状态或除法溢出；遇到非有限值拒绝继续。这里的检查有
+CPU 开销，不是生产优化。</li>
+<li>每次递推从零状态开始，不支持跨请求复用、chunk 状态输入、位置编码或
+padding。先把这些语义补齐并测试，才可以谈替换真实层。</li>
+</ul>
+<h2 id="p16.11-为什么要有独立参考和故意写错的版本">P16.11
+为什么要有独立参考和故意写错的版本</h2>
+<p>“并行=递推”还不够：两者可能一起漏掉分母。本章的测试逐 batch、逐
+query、逐历史位置用 Python 标量和 <code>math.exp</code>
+重新算权重，不调用主实现的
+φ、mask、矩阵乘法或状态递推。两个路径分别对齐它，而不是只互相对齐。</p>
+<p>21 项测试包含：手算 mask、矩形
+offset、W=1/W≥T、层间感受野、全局位置不泄漏未来、手算
+S/z、float32/64、T=1/512、非法长度/类型、全遮罩行、下溢/溢出、有限梯度与梯度对齐、改写未来不影响过去、输入不被改写、请求间不残留状态、检索闭式公式及固定状态存储。</p>
+<p>另在内存中生成五种错误版本：窗口边界多放进一位；全局位置越过因果限制；线性矩阵漏掉三角
+mask；两条路径一起漏掉归一化；递推把当前 value
+错换成前一位。每个都必须被相应断言抓住，而不是靠导入失败或异常崩溃假装“检出了错误”。这些测试不改写源码。</p>
+<p>无兼容 torch 2.14.x 时，1 项缺依赖 CLI/导入契约测试仍可运行，其余 20
+项按共享门控明确跳过。<strong>skip
+不是通过</strong>；安装依赖后才能声称数值行为已经验证。</p>
+<h2 id="p16.12-自测题与参考答案">P16.12 自测题与参考答案</h2>
+<ol type="1">
+<li>W=3、query=5 时，位置 2 是否可见？W=1 是否只看前一位？</li>
+<li>W=3、两层、输出位置
+5，最早可达哪个输入位置？这是否保证能回答那个位置的事实？</li>
+<li>因果全局位置 0 能否先汇总位置 5，再把它传回位置 2？</li>
+<li>“三层窗口 + 一层全量”能否把所有层的历史缓存都限制为 W？</li>
+<li>B=2、r=3、d_v=2、float64，S+z 的 payload 是多少字节？T
+翻倍会怎样？</li>
+<li>手算例第二个位置的输出为什么是 22/7，而不是 22？</li>
+<li>检索表里线性输出随 T
+降低，是否证明所有固定状态架构都没法长距离检索？</li>
+<li>窗口 mask 很稀疏，为什么本章 Softmax 对照仍可能分配 T×T 分数？MLA
+是否自动改变这个 mask？</li>
+</ol>
+<p>参考答案：</p>
+<ol type="1">
+<li>不可见，可见的是 3、4、5。W=1 只看当前位，不是前一位。</li>
+<li>最早位置 1，因为
+<code>5−2×(3−1)=1</code>。只证明路径存在，不保证学习和保存了事实。</li>
+<li>不能。每条边都必须满足 key 位置不晚于
+query；全局标记不能打破因果性。</li>
+<li>不能，全量层仍可能需要全部历史 K/V。各层分别记账。</li>
+<li><code>2×(3×2+3)×8=144</code> 字节。固定 B、r、d_v 时，最终 S/z 不因
+T 翻倍而增大；输入、输出和训练计算图不能据此忽略。</li>
+<li>正特征权重还要除以总权重
+7。省略分母会改变函数，不再是这个归一化注意力。</li>
+<li>不能。这里只展示指定 ELU+1
+核、固定输入幅度、未训练单头的干扰累积；不代表所有特征映射、状态更新或训练模型。</li>
+<li>它先做完整 QKᵀ，再遮罩，并没有稀疏 kernel。MLA
+压缩每位置的表示，不自动决定读取哪些位置。</li>
+</ol>
+<p>下一章 <a href="#p17-ced">P17</a>
+再用这些信息路径概念理解因果编码器—解码器。不要把“局部窗口”“低维
+KV”“固定状态”或“编码/解码”几个词互相替代。</p>
+<h2 id="资料与实现边界-2">资料与实现边界</h2>
+<ul>
+<li><a href="https://arxiv.org/html/2310.06825v1#S2">Mistral
+7B，arXiv:2310.06825v1，§2</a>：窗口及叠层传播的原始模型说明；本章另行固定
+W 包含当前位的契约，不复制论文性能数字。</li>
+<li><a
+href="https://arxiv.org/html/2004.05150v2#S3.SS1">Longformer，arXiv:2004.05150v2，§3.1</a>：局部与全局图样的原始来源；本章是显式因果约束的简化
+mask，不复现完整 Longformer。</li>
+<li><a
+href="https://proceedings.mlr.press/v119/katharopoulos20a.html">Transformers
+are RNNs，ICML 2020 定稿，PMLR
+119:5156–5165</a>：正特征核、因果归一化和递推的原始依据，不把其他新架构混入该公式。</li>
+<li><a href="https://github.com/fla-org/flash-linear-attention">FLA
+官方实现入口</a>：动态仓库链接，仅作选读；不是本章固定算法或性能证据。</li>
+</ul>
+<p>上述原始来源与官方入口核验于 2026-10-19。CPU
+实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏
+kernel、完整训练模型或 GPU 性能比较。</p>
+<hr />
+<h1 id="p17-ced">架构进阶（P17）：CED 的两条 KV 路径</h1>
+<p>前两章分别问：怎样安排计算、内存和请求，怎样改变 token
+之间的信息路径？本章把镜头移到另一条边：<strong>上半部分网络所读取的历史
+K/V，一定要由上半部分自己逐层生成吗？</strong></p>
+<p>这是 DeepSeek-V4.1-Flash 的 Causal
+Encoder-Decoder（CED，因果编码器—解码器）要解决的问题之一。长任务中，模型常常读入很长的工具结果，只生成较短的回复。如果每次读新输入都要完成全部层的逐
+token 计算，prefill 就很昂贵。CED 改变 global KV 的来源，让多数输入
+token 可以不经过完整 decoder 计算，同时保留 decoder 的局部处理能力。</p>
+<p>本章配套 <a
+href="code/18_ced_architecture.py">code/18_ced_architecture.py</a> 和
+独立测试 <code>tests/test_ced_architecture.py</code>。它们是
+<strong>CPU、float64、固定小矩阵的数据流实验</strong>，不是官方模型的缩小权重版，也不是训练或性能
+benchmark。完成后，你应当能指出 global / local KV 各从哪里来，解释
+replay 为什么有误差，并检查缓存位置有没有接错。</p>
+<h2 id="p17.1-先把三个编码解码分开">P17.1 先把三个“编码—解码”分开</h2>
+<p>第 7 章 中的经典 seq2seq
+有两条序列：例如先编码中文句子，再自回归生成英文句子。经典 Transformer
+的源句 encoder 可以双向看源句，目标句 decoder
+则只能看已经生成的目标词。</p>
+<p>本章的 CED 不是把同一张图换个名字：</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>容易混淆的说法</th>
+<th>实际在划分什么</th>
+<th>本章是否讨论</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>经典 seq2seq encoder / decoder</td>
+<td>源序列和目标序列的建模角色</td>
+<td>只作对照</td>
+</tr>
+<tr>
+<td>CED causal encoder / decoder</td>
+<td>同一自回归序列中，下半层与上半层，以及 global KV 的来源</td>
+<td>本章重点</td>
+</tr>
+<tr>
+<td>服务端 prefill / decode 分离</td>
+<td>请求的两个执行阶段放在哪些设备、怎样调度和传输缓存</td>
+<td>属于 P15 的服务层</td>
+</tr>
+</tbody>
+</table></div>
+<p>tokenizer 的 encode / decode 又是第四件事：文本与 token ID
+的转换，既不是这里的网络层，也不是生成阶段。</p>
+<p><strong>网络的 decoder 不等于推理的 decode 阶段。</strong> 在 CED
+中，生成一个新 token 的表示，仍然要经过 causal encoder 和
+decoder。反过来，prefill 也不是绝对不运行
+decoder，稍后会看到需要处理一段后缀。</p>
+<h2 id="p17.2-哪些是已经核验的官方事实">P17.2
+哪些是已经核验的官方事实</h2>
+<p>本节只谈
+<strong>DeepSeek-V4.1-Flash</strong>，不把结论泛化成所有叫“V4.1”的模型。2026-10-19
+核验了技术报告 v1，以及官方 Hugging Face 仓库的固定 revision：</p>
+<pre class="text"><code>314113f8a7dadb388215396ba5fbee2c610a04d6</code></pre>
+<p><a href="https://arxiv.org/html/2609.19969v1#S2.SS1">技术报告
+§2.1–2.2</a> 与 <a
+href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/README.md">固定版官方模型卡</a>
+相互印证：语言主干为 40 层，分成 20 层 causal encoder 和 20 层
+decoder；decoder global KV 来自 encoder 最终表示，而非各 decoder
+层自己的表示。官方报告的激活参数口径是 <strong>prefill 每 token
+8B、decode 每 token
+16B</strong>。这是官方架构数据，<strong>不是本书测得的速度、内存或质量结果，也不是模型总参数量</strong>。</p>
+<p>实际配置也必须看，不能从模型名反推：</p>
+<ul>
+<li><a
+href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/config.json">固定版
+config.json</a> 的 text_config
+中，num_hidden_layers=40，sliding_window=128。</li>
+<li><a
+href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/config.json">固定版
+inference/config.json</a> 使用
+n_layers=40、window_size=128；kv_source_layers 为 [2,8,14,20]，索引从 0
+开始。</li>
+<li>主干前两层只有 SWA；随后 18 个 encoder 层的压缩比是 2，20 个 decoder
+层的压缩比是
+1。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。<a
+href="https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1">报告
+§4.2.1</a></li>
+</ul>
+<p>再向源码走一步：<a
+href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py">固定版
+inference/model.py</a> 中，Attention._compress_kv 由指定 source 层产生
+global latent，其他层读共享缓存；decoder 边界的第 20 号层是
+source，之后的 decoder 层复用它。每层的 _window_kv 仍从本层 attention
+输入生成局部状态。真实路径还包括归一化、位置旋转、量化和 residual-stream
+mixing，不能将它们抹去后声称与生产张量逐项相同。</p>
+<p>这里也发现一个重要边界：参考代码的 Transformer.forward
+遍历全部主干层，并不是报告部署系统的“跳过多数 decoder prompt
+计算”调度器。<a
+href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/README.md">inference
+README</a> 明确定位为可读参考实现；其 generation
+是普通自回归采样，内置小模型 self-test 的权重未初始化，只查形状与 kernel
+连接。本书没有运行官方权重或用该 self-test 证明数值正确性。</p>
+<h2 id="p17.3-普通-decoder-only-的依赖链">P17.3 普通 decoder-only
+的依赖链</h2>
+<p>设位置 i 的输入向量是 x_i，第 l 层的输入表示是
+h_i^(l)。先忽略归一化与多头，普通 self-attention 的 K/V
+通常来自本层输入：</p>
+<p><span class="math display">\[
+K^{(l)}=H^{(l)}W_K^{(l)},\qquad V^{(l)}=H^{(l)}W_V^{(l)}.
+\]</span></p>
+<p>因此，如果想得到很高一层的历史 K/V，通常要先算完历史 token
+在下面各层的表示。KV cache
+可以避免“已经算过又重算”，但没有缓存的新输入仍要经过这条层间链。</p>
+<p>这不是说全量 prefill 必须按 token 一个一个串行执行。因果 mask
+允许同一层的多个位置并行计算；<strong>沿层的依赖</strong>和<strong>沿时间的可见性</strong>是两个不同问题。CED
+改变的是前者中的 KV 来源，而不是放弃后者的因果约束。</p>
+<h2 id="p17.4-ced-改了哪条边">P17.4 CED 改了哪条边</h2>
+<p>把下半部分的最终输出记为 E，形状 [B,N,D]。B 是 batch，N 是输入长度，D
+是每个 token 的表示宽度。上半部分 decoder 的某层输入仍记为 H^(l)。</p>
+<p>为了先看清路径，本章教学模型使用分开的 K、V：</p>
+<p><span class="math display">\[
+K_g^{(l)}=E W_{Kg}^{(l)},\qquad V_g^{(l)}=E W_{Vg}^{(l)}.
+\]</span></p>
+<p>下标 g 是 global。<strong>右边是 E，不是 H^(l)。</strong> 查询 Q
+则仍由当前 decoder
+层提出。可以把它理解成：多个深层处理步骤各自提问，但查阅的历史资料可以先由下面的网络准备好。</p>
+<p>生产模型的报告用 KV latent C 和压缩权重 Z
+表达投影，不是本章这两块独立矩阵；CSA2 还会跨层复用，因此并非每个
+decoder 层都独占一份 global cache。先分开写 K/V
+是为了看清来源，不是对官方 checkpoint 的逐张量复刻。</p>
+<p>与此同时，局部路径仍保留原来的依赖：</p>
+<p><span class="math display">\[
+K_{local}^{(l)}=H^{(l)}W_{Kl}^{(l)},\qquad
+V_{local}^{(l)}=H^{(l)}W_{Vl}^{(l)}.
+\]</span></p>
+<p>local 的意思是滑动窗口，不是“来自另一台本地机器”。这两套 KV
+不能互换：global 可以承接较远的历史，local
+保留本层对最近上下文的加工。</p>
+<figure>
+<a href="assets/rendered/p17-ced.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/p17-ced.svg" class="book-diagram" width="720"
+alt="教学 CED 数据流：encoder 最终输出投影为 decoder global KV；decoder 本层输入产生 local KV；有界 replay 只处理后缀且为近似" /></a>
+<figcaption>教学 CED 数据流：encoder 最终输出投影为 decoder global
+KV；decoder 本层输入产生 local KV；有界 replay
+只处理后缀且为近似</figcaption>
+</figure>
+<h3 id="因果-encoder-为什么不会偷看未来">因果 encoder
+为什么不会偷看未来</h3>
+<p>“encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的
+encoder 是因果的：E_j 只依赖 x_0 到 x_j。</p>
+<p>decoder 在位置 i 又只读取位置 j≤i 的 global
+条目。两条规则串起来，任何可读条目 E_j 都不可能包含 x_(i+1)
+之后的信息。局部路径同样必须满足 j≤i。因此允许提前算出整段 E 和 global
+bank，<strong>不代表每个 query 都可以读 bank 的所有行</strong>。</p>
+<p>这里的 global
+指覆盖历史的范围，不保证生产系统每次读取所有历史条目。真实模型还会做稀疏选择；本章为了隔离数据来源，用稠密的因果
+global attention，省去索引器。</p>
+<h2 id="p17.5-为何还要-replay">P17.5 为何还要 replay</h2>
+<p>如果 global KV 已经准备好了，为什么不把整个 decoder
+都跳过？因为生成开始时还需要各 decoder 层的 <strong>local
+KV</strong>。高层 local KV 依赖低层处理后的表示，不能直接拿 encoder 的
+global KV 充当替身。</p>
+<p>replay（重放）就是重新运行一段历史的计算，用它恢复当前需要的状态。它不是把历史文字再生成一遍，也不是修改用户输入。</p>
+<p>设局部窗口 W 包含当前 token，每层最多再读取 W−1
+个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部
+value 已经混合了第一层更早的信息。因此“最后 W 行还在”不等于“能从这 W
+个原始输入精确重建所有深层状态”。</p>
+<p><a href="https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2">报告
+§3.2.2</a> 的 Bounded Replay
+只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 s、当前
+query 为 i，局部可见范围变成：</p>
+<p><span class="math display">\[
+\max(s,i-W+1)\le j\le i.
+\]</span></p>
+<p>这会丢掉 replay
+边界之前的局部依赖。<strong>报告明确说这不是全量计算的数学等价重建。</strong>
+官方对响应质量影响的判断来自其模型与评估，本书的小矩阵误差不能验证或否定那项质量结论。</p>
+<p>还要分清两个用途：</p>
+<ul>
+<li>Encoder replay：持久缓存命中 global、却缺少 encoder SWA
+状态时，重放缓存前缀的末尾，再处理新后缀；不覆盖已命中的 global
+cache。近似状态可能使新后缀的结果依赖缓存命中边界。</li>
+<li>Decoder replay：global KV 已由 encoder 准备好，再把 prompt
+末尾的一段 encoder 输出送进 decoder，准备之后生成所需的 local
+状态。</li>
+</ul>
+<p><strong>本实验只模拟第二种。</strong> 我们完整计算 encoder，因而 full
+与 bounded 两条路径中的 encoder 和 global KV 完全相同；生产 encoder
+replay 不享有这个简化保证。代码不模拟
+SSD、主机内存、驱逐、缓存命中策略或分布式服务。</p>
+<h2 id="p17.6-cedcsa2-与量化各管什么">P17.6 CED、CSA2
+与量化各管什么</h2>
+<p>不要把这些名字合成一个“省显存技巧”：</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>机制</th>
+<th>主要改变的问题</th>
+<th>不能据此推出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CED</td>
+<td>decoder global KV 从哪里生成，哪些 prompt 位置要经过完整
+decoder</td>
+<td>所有 decoder prompt 工作都消失</td>
+</tr>
+<tr>
+<td>SWA Bounded Replay</td>
+<td>缺失局部状态时重算多长的后缀，接受什么近似</td>
+<td>与全量前向完全等价</td>
+</tr>
+<tr>
+<td>CSA2</td>
+<td>哪些层共享 global KV、哪些层重做或复用稀疏索引</td>
+<td>所有层的 Q 和 local KV 都相同</td>
+</tr>
+<tr>
+<td>KV 量化</td>
+<td>每个缓存数值怎样表示、占多少字节</td>
+<td>数据流完全不变就一定无误差</td>
+</tr>
+<tr>
+<td>P/D 服务分离</td>
+<td>计算阶段怎样分配到设备与队列</td>
+<td>模型已经采用 CED</td>
+</tr>
+</tbody>
+</table></div>
+<p><a href="https://arxiv.org/html/2609.19969v1#S2.SS3">报告 §2.3</a>
+与固定版模型卡把 CSA2 分成 Full、Reindex、Reuse 三种模式：Full 产生
+global KV 并选择索引；Reindex 复用 global KV、重新选择索引；Reuse
+连选择结果一起复用。它们仍保留本层 query 与 SWA 状态。这里的 Full 是
+<strong>CSA2 模式名</strong>，不能理解成“取消因果约束的全注意力”。</p>
+<p>所以，CED 解释“资料从下半网络准备”，CSA2
+进一步解释“哪些层共用资料和选取结果”。两者可以协同，但不应把所有缓存节省都归功于
+CED。相关头数 / latent 概念见 <a
+href="#p14-grouped-kv">P14</a>，局部与稀疏路径见 <a
+href="#p16-sparse-linear">P16</a>。</p>
+<h2 id="p17.7-先把教学模型的边界写在前面">P17.7
+先把教学模型的边界写在前面</h2>
+<p>ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两层
+encoder、两层 decoder，窗口 W=3；所有权重都显式初始化并固定，全部在 CPU
+上用 float64 运算。</p>
+<p>本模型故意只保留：</p>
+<ol type="1">
+<li>因果的局部 encoder。</li>
+<li>每个 decoder 层从同一个最终 E 投影 global K/V。</li>
+<li>decoder 本层输入产生 local K/V。</li>
+<li>完整前向、增量缓存和近似后缀 replay 三条路径。</li>
+</ol>
+<p>它省略 tokenizer、词嵌入训练、输出词表和 loss，也省略生产的 MoE、压缩
+latent / Z、CSA2 共享与 Top-K、层级索引器、RoPE /
+YaRN、RMSNorm、FFN、mHC、Engram、量化、视觉输入、DSpark 与 GPU
+kernel。因此输出是二维 hidden states，<strong>不是语言模型
+logits，不能用来评估语言质量</strong>。</p>
+<p>还有两项特意不同的数学约定：</p>
+<ul>
+<li>为了让新手逐项手算，本模型分别计算 global 和 local 的
+Softmax，然后把两路结果加到残差上。官方参考 Attention.forward
+则合并局部与 global KV，送入同一次
+sparse_attn，不能拿我们的“两个平均值相加”解释生产 attention
+的归一化。</li>
+<li>本模型给初始向量加上
+<code>[0.01×position, −0.01×position]</code>，只为让位置错误可见。它不是
+RoPE，也不提供长上下文外推能力。</li>
+</ul>
+<p>因此这是“保留关键依赖边”的实验，不是通过换小维度就自动忠实复现完整模型。</p>
+<h2 id="p17.8-手算三行输入如何走完两条路径">P17.8
+手算：三行输入如何走完两条路径</h2>
+<p>先使用更简单的配置：encoder 一层、decoder 一层、W=2，位置项关闭；所有
+Q、K 投影为零，所有 V 投影为单位矩阵。分数都是 0，Softmax
+就是可见位置的平均权重。第二个坐标始终为 0，只写第一个坐标：</p>
+<pre class="text"><code>输入 x = [1, 2, 3]</code></pre>
+<p>encoder 只看自身及前一个位置，再加回残差：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>位置</th>
+<th>encoder 可见输入</th>
+<th>均值</th>
+<th>加上本位置输入后的 E</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>[1]</td>
+<td>1</td>
+<td>2</td>
+</tr>
+<tr>
+<td>1</td>
+<td>[1,2]</td>
+<td>3/2</td>
+<td>7/2</td>
+</tr>
+<tr>
+<td>2</td>
+<td>[2,3]</td>
+<td>5/2</td>
+<td>11/2</td>
+</tr>
+</tbody>
+</table></div>
+<p>于是 E=[2,7/2,11/2]。decoder 的 global V 直接来自这三行 E，local V
+来自本层输入；第一层的输入恰好也是 E，但多层时不能继续混为一谈。</p>
+<p>位置 2 的完整 decoder 输出为：</p>
+<p><span class="math display">\[
+\underbrace{\frac{11}{2}}_{\text{残差}}
++\underbrace{\frac{2+7/2+11/2}{3}}_{\text{global 平均值 }11/3}
++\underbrace{\frac{7/2+11/2}{2}}_{\text{local 平均值 }9/2}
+=\frac{41}{3}.
+\]</span></p>
+<p>完整的输出是 <code>[6,9,41/3]</code>。</p>
+<p>现在只 replay 末尾 W=2 个位置，即位置 1、2。<strong>global bank
+仍有全部三行 E</strong>，只是 decoder 的局部计算从位置 1 重新开始。</p>
+<ul>
+<li>replay 位置 1 的 global 均值仍为 (2+7/2)/2=11/4；local
+却只能看到自己，为 7/2。输出是 7/2+11/4+7/2=39/4=9.75，而完整结果是
+9。</li>
+<li>replay 位置 2 恰好已经拥有完整的单层局部窗口，所以这一行仍是
+41/3。</li>
+</ul>
+<p>这说明两件事：有界 replay
+已经在第一行产生差异；<strong>最后一行偶然相同，也不能证明多层情况下等价</strong>。下一层可以读取已经改变的前一行，差异便继续传播。默认两层实验会实际展示最后一个位置也不同。</p>
+<h2 id="p17.9-对照源码不要只看图上写了-encoder">P17.9
+对照源码：不要只看图上写了 encoder</h2>
+<p>最重要的实现不长：</p>
+<div class="sourceCode" id="cb118"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb118-1"><a href="#cb118-1" aria-hidden="true" tabindex="-1"></a><span class="co"># global_from_encoder()：在运行 decoder 前准备好各层 global bank</span></span>
+<span id="cb118-2"><a href="#cb118-2" aria-hidden="true" tabindex="-1"></a>kv <span class="op">=</span> join_kv(encoder <span class="op">@</span> layer.global_k, encoder <span class="op">@</span> layer.global_v,</span>
+<span id="cb118-3"><a href="#cb118-3" aria-hidden="true" tabindex="-1"></a>             offset, <span class="va">None</span> <span class="cf">if</span> old <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> old[i])</span></code></pre></div>
+<p>这里的 encoder 就是两层 causal encoder 的最终输出，不是把 decoder
+的输出换个变量名。每层 global bank 都在 decoder 开始前生成，不依赖
+decoder 本身。</p>
+<p>相反，decoder 的局部路径是：</p>
+<div class="sourceCode" id="cb119"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb119-1"><a href="#cb119-1" aria-hidden="true" tabindex="-1"></a>kv <span class="op">=</span> join_kv(h <span class="op">@</span> layer.k, h <span class="op">@</span> layer.v, offset,</span>
+<span id="cb119-2"><a href="#cb119-2" aria-hidden="true" tabindex="-1"></a>             <span class="va">None</span> <span class="cf">if</span> old <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> old[i])</span>
+<span id="cb119-3"><a href="#cb119-3" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> h <span class="op">@</span> layer.q</span>
+<span id="cb119-4"><a href="#cb119-4" aria-hidden="true" tabindex="-1"></a>h <span class="op">=</span> h <span class="op">+</span> attention(q, global_kv[i], offset) <span class="op">+</span> attention(q, kv, offset, window)</span></code></pre></div>
+<p>h 每经过一层就改变。于是第二层 local V
+会跟着第一层的处理改变，而提前准备的 global V 不会。</p>
+<p>测试对此做了“干预”，不只检查变量名：把第一层 decoder 的 local V
+投影放大三倍，重新计算。结果应当是：encoder-derived global banks
+保持不变，第二层 decoder 的 local cache 和最终输出改变。如果 global bank
+也被改变了，说明路径很可能接回了 decoder 自己。</p>
+<h2 id="p17.10-形状和绝对位置必须一起记">P17.10
+形状和绝对位置必须一起记</h2>
+<p>默认例子 B=1、N=6、D=2、W=3。这里 D 始终是向量宽度；后文用 L_e、L_d
+表示 encoder、decoder 的层数。</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>对象</th>
+<th>完整 prefill 后的形状 / 位置</th>
+<th>来源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输入、encoder 输出</td>
+<td>[1,6,2]</td>
+<td>输入二维向量与 encoder 计算</td>
+</tr>
+<tr>
+<td>每个 decoder 层的 global K、V</td>
+<td>各 [1,6,2]，绝对位置 0…5</td>
+<td>encoder 最终输出</td>
+</tr>
+<tr>
+<td>每个 encoder / decoder 层的 local K、V</td>
+<td>各 [1,2,2]，绝对位置 4、5</td>
+<td>各自层的输入</td>
+</tr>
+<tr>
+<td>full 输出</td>
+<td>[1,6,2]，位置 0…5</td>
+<td>完整 decoder</td>
+</tr>
+<tr>
+<td>bounded 输出</td>
+<td>[1,3,2]，位置 3…5</td>
+<td>只运行最后 3 行 decoder</td>
+</tr>
+<tr>
+<td>下一次位置</td>
+<td>next_position=6</td>
+<td>已处理 6 个位置</td>
+</tr>
+</tbody>
+</table></div>
+<p>为什么 local cache 留 W−1=2 行而不是 W=3
+行？因为下一次会先加入当前新行。处理位置 6 时，局部可见位置正好是
+<code>[4,5,6]</code>。这只是本实验的存储约定；生产实现可以用大小为 W
+的环形缓冲区。</p>
+<p>代码用 KV.start 记录第一行的绝对位置，不能把缓存的行号 0
+当成原序列的位置 0。增量输入 C 行时，位置项要从 offset
+开始；注意力的比较也是
+<code>key_position &lt;= query_position</code>，而不是按本次小块的行号比较。</p>
+<p>当 W=1 时，不需要保留旧 local 行。切片要专门处理长度 0：Python 中
+<code>-0</code> 等于 <code>0</code>，<code>tensor[:, -0:]</code>
+会意外保留全部历史。tail_kv 使用 <code>size-n</code>
+作为起点，测试覆盖了这个边界。</p>
+<p>缓存是调用者持有的快照，新请求传
+None。增量调用不原地覆盖之前的快照，可以从同一个前缀分叉实验。它还记录模型身份和配置
+/ buffer
+版本；常规原地改权重、换配置或换模型后会拒绝旧缓存。不要编辑缓存张量，也不要用
+<code>.data</code>
+或底层共享存储写入绕过版本跟踪；这里不承诺检测这些破坏。</p>
+<p>bounded 路径会把 approximate 标记保留到后续 decode。它记录“来自截断
+replay
+的状态”，不是错误大小；某些窗口或输入上误差恰好为零，也不能把来源标记擅自改成精确。</p>
+<h2 id="p17.11-算清少走的路径别把路径数叫速度">P17.11
+算清少走的路径，别把路径数叫速度</h2>
+<p>定义：B 为 batch，N 为 prompt 长度，L_e / L_d 分别为 encoder /
+decoder 层数，R=min(N,W) 为 replay 长度。</p>
+<p>本实验把“一个 token 的表示经过一个层”记作一次 <strong>token-layer
+visit</strong>。完整和有界路径分别是：</p>
+<p><span class="math display">\[
+C_{full}=BN(L_e+L_d),\qquad
+C_{bounded}=B(NL_e+RL_d).
+\]</span></p>
+<p>这里的 full 基线是同一个 CED 教学模型的完整执行，不是另一个普通
+decoder-only
+模型，更不是两个训练模型的质量对比。这是本模型实际循环累计的层处理次数，不是仅打印一条假想公式。被省掉的是
+<code>B(N−R)L_d</code> 次 decoder token-layer visit。</p>
+<p>但不能把所有工作都塞进这个计数：两条路径仍为全部 N 个 encoder 输出做
+global K/V 投影。本教学模型每个 decoder 层各有一对投影，故两边都要
+<code>BNL_d</code> 对投影。<strong>官方 CSA2
+有跨层复用，不能把本实验这个投影数量直接套到真实模型。</strong></p>
+<p>默认 B=1、N=6、L_e=L_d=2、W=3：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>计数项目</th>
+<th>完整路径</th>
+<th>有界路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>encoder token-layer visits</td>
+<td>12</td>
+<td>12</td>
+</tr>
+<tr>
+<td>decoder token-layer visits</td>
+<td>12</td>
+<td>6</td>
+</tr>
+<tr>
+<td>合计 block visits</td>
+<td>24</td>
+<td>18</td>
+</tr>
+<tr>
+<td>global K+V 投影对</td>
+<td>12</td>
+<td>12</td>
+</tr>
+</tbody>
+</table></div>
+<p>24 变成 18，<strong>不等于运行时间变成 3/4</strong>。不同路径的每次
+attention 涉及的 key
+数不同，投影和内存操作也有成本；本脚本甚至显式构造稠密分数矩阵，再用
+mask 遮住局部不可见位置，根本不是稀疏 GPU kernel。</p>
+<p>当 N≤W 时，R=N，有界路径不会省掉 decoder
+的任何位置。只有输入显著长于窗口时，计数差异才突出。即使如此，也不能由这个固定小矩阵实验推出官方吞吐、TTFT、TPOT、显存节省或语言质量。</p>
+<h2 id="p17.12-运行与验证">P17.12 运行与验证</h2>
+<p>在仓库根目录安装依赖后运行：</p>
+<div class="sourceCode" id="cb120"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb120-1"><a href="#cb120-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
+<span id="cb120-2"><a href="#cb120-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/18_ced_architecture.py</span>
+<span id="cb120-3"><a href="#cb120-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_ced_architecture.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>若使用仓库的虚拟环境，把 python 换成
+<code>.venv/bin/python</code>。没有 PyTorch 时，CLI
+给出安装提示并以非零状态退出；测试按仓库稳定 torch
+版本门槛跳过数值部分，<strong>跳过不是通过</strong>。</p>
+<p>本章在 CPU / torch 2.14.1 / float64 下验证，核心输出为：</p>
+<pre class="text"><code>手算 encoder: [2.0, 3.5, 5.5]
+手算 full decoder: [6.0, 9.0, 13.666666666666666]
+手算 bounded 后缀: [9.75, 13.666666666666666]
+完整 / 有界 replay 的 block visits: 24 18
+两条路径各自 global K+V 投影对计数: 12
+有界 replay 的输出范围: 3 到 5
+最后位置 full / replay 最大差: 0.014462788</code></pre>
+<p>末行是两组教学 hidden states
+的最大绝对差，不是困惑度、回答错误率或可接受质量阈值；不同平台的末位浮点数可略有变化。</p>
+<h3 id="为什么-fullcache-对齐还不够">为什么 full/cache 对齐还不够</h3>
+<p>如果完整路径和缓存路径共用一个错误
+mask，两条路径可能同时看未来，对齐测试仍然会通过。因此测试同时覆盖：</p>
+<ol type="1">
+<li><strong>独立标量 oracle</strong>：用 Python 循环做二维乘法、逐位置
+Softmax 和残差，不调用脚本的 attention、projection 或 cache helper；检查
+full 和 bounded 两条路径。</li>
+<li><strong>手算结果</strong>：直接断言
+<code>[2,7/2,11/2]</code>、<code>[6,9,41/3]</code> 与
+<code>[39/4,41/3]</code>。</li>
+<li><strong>未来隔离</strong>：对每一个 prefix cut 改写之后的输入，前缀
+encoder / global / 输出都不应变化；replay 也不能提前读 global bank
+的未来行。</li>
+<li><strong>缓存等价</strong>：每一种两块切分和逐 token 增量都与独立
+full oracle 对齐，包含 offset、W=1、短 prompt、快照分叉和新请求。</li>
+<li><strong>近似差异</strong>：多层 replay 的末位置以及后续 decode
+确实可与完整路径不同；不把“不等价”误写成 bug。</li>
+<li><strong>错误变体</strong>：故意把 global 来源接成当前 decoder
+h、取消局部窗口、放开未来、重置增量位置、把 replay 全局 query 位置重置为
+0。必须被实际数值断言抓住，不能把变体运行崩溃当成“成功检测”。</li>
+</ol>
+<p>完整数值比较使用 rtol=atol=1e−12。这只适用于本章小规模 float64
+实验；生产低精度算子不应照搬这个阈值。</p>
+<h2 id="p17.13-小练习与本章结论">P17.13 小练习与本章结论</h2>
+<ol type="1">
+<li>将 W 从 3 改成 8，输入仍为 6 行。为什么 bounded 输出长度变回
+6、block visits 也不再减少？</li>
+<li>不看图，只检查 global_from_encoder 与 decode
+的参数。哪一条调用证明第二层 decoder 的 global KV 不依赖第一层
+decoder？</li>
+<li>手算例子里最后一行相同，为什么不能删除“近似”警告？试着把
+decoder_layers 改成 2，追踪第一层位置 1 的误差会流向哪里。</li>
+<li>如果把本实验换成真正的 CSA2，你需要新增哪些缓存、source
+映射和索引有效性测试？为什么不能只把类名改成 CSA2？</li>
+</ol>
+<h3 id="参考答案-6">参考答案</h3>
+<ol type="1">
+<li>R=min(6,8)=6，整个输入都在 replay 范围内；两层 encoder 与两层
+decoder 共计 6×4=24 次 block visits，和完整路径相同。</li>
+<li>forward 先调用 global_from_encoder(encoder, …)，再调用
+decode(encoder, …, global_kv, …)；所有 decoder 层的 global bank 在第一层
+decoder 运行之前就已经生成。测试放大第一层 decoder 的 local V 后，global
+bank 也确实不变。</li>
+<li>延续手算配置，只把 decoder 改为两层。第二层位置 2 的 global 平均仍为
+11/3，残差仍为 41/3。完整 local 均值为 (9+41/3)/2=34/3，结果是
+<strong>86/3</strong>。replay local 均值为 (39/4+41/3)/2=281/24，结果是
+<strong>697/24</strong>，比完整结果大
+<strong>3/8</strong>。第二层读到了第一层已改变的位置
+1，单层末位的巧合就消失了。self-test 和独立测试都断言这组数。</li>
+<li>至少要分别跟踪 main KV、indexer K、Top-K 选择及各自
+source，处理共享层的写入与读取时机，并重新验证索引与压缩条目的因果可见性。压缩块没有收齐时不能提前公开含有未来输入的摘要；修改名字不提供这些保证。</li>
+</ol>
+<p>记住这条主线即可：<strong>CED 改变 decoder global KV 的来源；局部 SWA
+仍有自己的逐层状态，所以需要 replay；有界 replay
+是明确接受误差的取舍，不是免费的等价省算。</strong>
+本章已经用实际张量和反例验证这三件事，但没有复现官方训练、权重、服务系统或性能。</p>
 <hr />
 <h1 id="第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典
 Transformer 到 GPT-4、DeepSeek</h1>

@@ -95,6 +95,18 @@
     "width": 920.0,
     "height": 430.0
   },
+  "p15-attention-systems": {
+    "width": 920.0,
+    "height": 650.0
+  },
+  "p16-sparse-linear": {
+    "width": 980.0,
+    "height": 520.0
+  },
+  "p17-ced": {
+    "width": 980.0,
+    "height": 660.0
+  },
   "flow-11": {
     "width": 460.2265625,
     "height": 294

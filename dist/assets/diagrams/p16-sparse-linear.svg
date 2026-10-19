@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="520" viewBox="0 0 980 520" role="img" aria-labelledby="p16-title p16-desc">
+  <title id="p16-title">窗口选择读取位置，线性注意力累计固定形状状态</title>
+  <desc id="p16-desc">左侧采用窗口包含当前位置的约定。位置五在窗口三时只读三四五，叠加三层后结构可达零到五。右侧每个新的键值更新状态 S 和归一化状态 z，当前查询在更新后读取两者得到输出。可达不保证保留，固定状态不保证检索。</desc>
+  <defs>
+    <marker id="p16-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#64748b"/></marker>
+    <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#172033}.title{font-size:21px;font-weight:700}.label{font-size:17px}.small{font-size:15px}.line{stroke:#64748b;stroke-width:2;fill:none;marker-end:url(#p16-arrow)}</style>
+  </defs>
+  <rect x="1" y="1" width="978" height="518" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="490" y="35" text-anchor="middle" class="title">少读一些位置，还是累计一个状态？</text>
+  <rect x="20" y="56" width="450" height="428" rx="12" fill="#eff6ff" stroke="#bfdbfe"/>
+  <rect x="490" y="56" width="470" height="428" rx="12" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="245" y="89" text-anchor="middle" class="title">SWA：窗口选择边</text>
+  <text x="725" y="89" text-anchor="middle" class="title">线性注意力：先更新，再读取</text>
+  <text x="245" y="119" text-anchor="middle" class="label">W = 3 包含当前位；query 在位置 5</text>
+  <g class="label" text-anchor="middle">
+    <rect x="44" y="144" width="54" height="48" rx="6" fill="#e2e8f0" stroke="#94a3b8"/><text x="71" y="175">0</text>
+    <rect x="112" y="144" width="54" height="48" rx="6" fill="#e2e8f0" stroke="#94a3b8"/><text x="139" y="175">1</text>
+    <rect x="180" y="144" width="54" height="48" rx="6" fill="#e2e8f0" stroke="#94a3b8"/><text x="207" y="175">2</text>
+    <rect x="248" y="144" width="54" height="48" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="275" y="175">3</text>
+    <rect x="316" y="144" width="54" height="48" rx="6" fill="#dbeafe" stroke="#3b82f6"/><text x="343" y="175">4</text>
+    <rect x="384" y="144" width="54" height="48" rx="6" fill="#bfdbfe" stroke="#2563eb" stroke-width="2"/><text x="411" y="175">5</text>
+    <text x="139" y="222" class="small">本层不直接读取</text><text x="343" y="222" class="small">允许读取：当前 + 前两位</text>
+  </g>
+  <path d="M248 199V204H438V199" stroke="#2563eb" stroke-width="2" fill="none"/>
+  <text x="46" y="263" class="label" font-weight="700">叠层后的结构可达范围</text>
+  <text x="46" y="298" class="label">1 层：3、4、5</text>
+  <text x="46" y="332" class="label">2 层：1、2、3、4、5</text>
+  <text x="46" y="366" class="label">3 层：0、1、2、3、4、5</text>
+  <text x="245" y="408" text-anchor="middle" class="label">每层最多向前跨 W − 1 位</text>
+  <text x="245" y="453" text-anchor="middle" class="small">有路径 ≠ 一定学会或保留了远处事实</text>
+  <g class="label" text-anchor="middle">
+    <rect x="609" y="112" width="232" height="44" rx="7" fill="#fff" stroke="#94a3b8"/>
+    <text x="725" y="141">新 key：k_t　新 value：v_t</text>
+    <path class="line" d="M675 156L622 190"/><path class="line" d="M775 156L830 190"/>
+    <rect x="510" y="197" width="220" height="88" rx="8" fill="#dcfce7" stroke="#4ade80"/>
+    <text x="620" y="223">内容状态 S_t</text>
+    <text x="620" y="249" class="small">旧 S + φ(k_t) v_t^T</text>
+    <text x="620" y="272" class="small">形状 [r, d_v]</text>
+    <rect x="745" y="197" width="195" height="88" rx="8" fill="#fef3c7" stroke="#fbbf24"/>
+    <text x="842" y="223">归一化状态 z_t</text>
+    <text x="842" y="249" class="small">旧 z + φ(k_t)</text>
+    <text x="842" y="272" class="small">形状 [r]</text>
+    <path class="line" d="M620 285L682 337"/><path class="line" d="M842 285L787 337"/>
+    <rect x="538" y="345" width="375" height="54" rx="8" fill="#fff" stroke="#94a3b8"/>
+    <text x="725" y="378">输出 = φ(q_t)^T S_t / φ(q_t)^T z_t</text>
+    <text x="725" y="426" class="label">状态元素数 r × d_v + r，不随 T 增长</text>
+    <text x="725" y="453" class="small">固定状态 ≠ 任意长度都能准确检索</text>
+  </g>
+  <text x="490" y="505" text-anchor="middle" class="small">这是独立教学机制，不默认替换 S4；稀疏 mask 也不等于稀疏执行 kernel。</text>
+</svg>
