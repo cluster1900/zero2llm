@@ -91,6 +91,20 @@ class OnlineAttentionTests(unittest.TestCase):
                 assert_matrix(self, a.blocked_attention(q, [[shift], [shift + 1], [shift + 2]], v,
                                                        key_block_size=block), baseline)
 
+    def test_descending_extreme_scores_preserve_running_maximum(self):
+        # The maximum can be in an EARLIER block, not only the newest block.
+        for shift in (-10000, 0, 10000):
+            for keys, values in (([[shift + 1000], [shift]], [[1], [2]]),
+                                 ([[shift + 1000], [shift], [shift - 5]], [[1], [2], [3]])):
+                q = [[1]]
+                expected = decimal_oracle(q, keys, values)
+                for block in (1, 2):
+                    with self.subTest(shift=shift, keys=keys, block=block):
+                        actual = a.blocked_attention(q, keys, values, key_block_size=block)
+                        self.assertTrue(all(math.isfinite(x) for row in actual for x in row))
+                        assert_matrix(self, actual, expected)
+                        self.assertEqual(actual, [[1.0]])
+
     def test_absolute_causal_offset_and_future_mutation(self):
         mask = a.causal_mask(2, 5, 3)
         self.assertEqual(mask, [[True, True, True, True, False], [True] * 5])
@@ -294,7 +308,8 @@ class ServingArithmeticTests(unittest.TestCase):
     def test_timestamps_ttft_tpot_and_throughput(self):
         self.assertEqual(a.request_metrics(0, [100, 140, 190]),
                          {'ttft_ms': 100, 'tpot_ms': 45, 'e2e_ms': 190, 'output_tokens': 3})
-        self.assertEqual(a.request_metrics(50, [150, 210])['tpot_ms'], 60)
+        self.assertEqual(a.request_metrics(50, [150, 210]),
+                         {'ttft_ms': 100, 'tpot_ms': 60, 'e2e_ms': 160, 'output_tokens': 2})
         self.assertAlmostEqual(a.output_throughput(5, 0, 210), 23.80952380952381)
         self.assertEqual((45 + 60) / 2, 52.5)  # Per-request mean, not pooled intervals.
         self.assertEqual((90 + 60) / 3, 50)
@@ -326,6 +341,7 @@ class ServingArithmeticTests(unittest.TestCase):
 
 class MutationTests(unittest.TestCase):
     def rejected_by_assertion(self, old, new, checker):
+        checker(self, a)  # The same contract must pass on the unmodified implementation.
         source = SCRIPT.read_text()
         self.assertIn(old, source)
         mutated = types.ModuleType('p15_mutant')
@@ -337,6 +353,30 @@ class MutationTests(unittest.TestCase):
         Contract().run(result)
         self.assertEqual(len(result.errors), 0, result.errors)
         self.assertEqual(len(result.failures), 1, 'Mutant must fail a semantic assertion, not crash')
+
+    def test_lost_running_maximum_overflow_breaks_valid_input_contract(self):
+        def descending(case, module):
+            q, k, v = [[1]], [[1000], [0]], [[1], [2]]
+            expected = decimal_oracle(q, k, v)
+            try:
+                actual = module.blocked_attention(q, k, v, key_block_size=1)
+            except OverflowError as exc:
+                # A legitimate numeric failure on valid input is the defect.
+                # Do not swallow import errors, syntax errors or unrelated exceptions.
+                case.fail(f"Valid finite descending scores must not overflow: {exc}")
+            case.assertTrue(all(math.isfinite(x) for row in actual for x in row))
+            assert_matrix(case, actual, expected)
+        self.rejected_by_assertion('next_m = max(m, max(scores))',
+                                   'next_m = max(scores)', descending)
+
+    def test_nonzero_arrival_ttft_and_e2e_mutations(self):
+        def timestamps(case, module):
+            case.assertEqual(module.request_metrics(50, [150, 210]),
+                             {'ttft_ms': 100, 'tpot_ms': 60, 'e2e_ms': 160, 'output_tokens': 2})
+        self.rejected_by_assertion('token_times_ms[0] - arrival_ms',
+                                   'token_times_ms[0]', timestamps)
+        self.rejected_by_assertion('token_times_ms[-1] - arrival_ms',
+                                   'token_times_ms[-1]', timestamps)
 
     def test_rescale_scale_mask_and_remainder_mutations(self):
         def online(case, module):

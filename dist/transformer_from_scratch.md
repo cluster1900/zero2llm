@@ -3973,7 +3973,7 @@ O = P V
 
 这里 MiB=2²⁰ 字节，不是十进制 MB。多 batch、多头会继续乘上相应维度。
 
-GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 N×N 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 O(N²d)，不是 O(Nd)。[FlashAttention 原论文 v2，§3](https://arxiv.org/pdf/2205.14135v2)
+GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 N×N 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 O(N²d)，不是 O(Nd)。[FlashAttention 原论文（arXiv 2205.14135v2），§3](https://arxiv.org/pdf/2205.14135v2)
 
 这还涉及 GPU 内核融合、线程组织、反向传播重计算等。本章只实现其中容易手算的**前向归一化递推**。Python 列表复制、解释器开销、输入 mask 都与真实 GPU kernel 不同，不能用本脚本的运行时间或进程内存证明 FlashAttention 的收益。
 
@@ -4309,9 +4309,9 @@ Output throughput: 23.809524 tokens/s (invented timeline, not measured)
 GPU SDPA: not requested, not run. This CPU script is not a performance benchmark.
 ```
 
-本章当前 23 项测试：在兼容 torch 环境中 23 项通过；无 torch 环境中 22 项通过、1 项明确 skip。无 torch 的正常 CLI 仍能完整运行，显式请求 GPU 选修时会解释跳过原因。**被跳过的 GPU 或 SDPA 检查不算数值通过。**
+本章当前 26 项测试：在兼容 torch 环境中 26 项通过；无 torch 环境中 25 项通过、1 项明确 skip。无 torch 的正常 CLI 仍能完整运行，显式请求 GPU 选修时会解释跳过原因。**被跳过的 GPU 或 SDPA 检查不算数值通过。**
 
-除了正例，测试还在内存中构造 9 个错误版本：忘记重缩放、两条路径一起丢缩放分母、忽略 mask、丢最后一块、不做 COW、COW 后不减引用计数、共享时不加计数、按物理块号排序、TPOT 除以 n。每个都必须被断言拒绝，且运行错误数为 0；坏导入或崩溃不能算“抓住算法错误”。源文件不会被这些 mutation 改写。
+除了正例，测试还在内存中构造 12 个错误版本：忘记重缩放、两条路径一起丢缩放分母、忽略 mask、丢最后一块、不做 COW、COW 后不减引用计数、共享时不加计数、按物理块号排序、TPOT 除以 n、丢掉旧块最大值、TTFT/E2E 不减到达时间。每个契约先在正确实现上通过，再要求错误版本被断言拒绝。对于丢旧最大值的版本，合法有限输入（分数1000再到0）会触发 OverflowError；测试明确将这种稳定性违约转成断言失败，不能把它隐瞒成“没有数值异常”。坏导入、语法错误或其他无关异常仍会让变异测试失败。源文件不会被这些 mutation 改写。
 
 分页测试还有 240 步固定种子的随机 create/append/fork/prefix/release，对照一个独立的普通序列模型，并逐步检查引用计数和空闲池。它检验的是这个单线程模拟器，不是生产系统并发安全。
 
@@ -4388,7 +4388,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 核验日：2026-10-19。以下只用论文或官方资料：
 
-- [FlashAttention 原论文 v2](https://arxiv.org/pdf/2205.14135v2)：IO-aware tiling、在线归一化与精确注意力的边界；本章未实现其 GPU 前反向 kernel。
+- [FlashAttention 原论文（arXiv 2205.14135v2）](https://arxiv.org/pdf/2205.14135v2)：IO-aware tiling、在线归一化与精确注意力的边界；本章未实现其 GPU 前反向 kernel。
 - [PagedAttention 原论文 v1](https://arxiv.org/html/2309.06180v1)：块表、非连续 KV、共享和写时复制、请求调度；本章只模拟单线程所有权和逻辑读取。
 - [vLLM 0.6.4 APC 介绍](https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/apc.html)与[实现说明](https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/details.html)：固定文档快照，不是当前版本推荐；本章没有安装、运行或测速 vLLM。
 - [PyTorch v2.5.1 官方后端选择源码](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)：固定接口背景；实际 CPU 测试环境为 torch 2.14.1+cpu，GPU 选修未运行。
@@ -4693,11 +4693,11 @@ python -m unittest discover -s tests -p test_sparse_linear_attention.py -v
 
 这是 DeepSeek-V4.1-Flash 的 Causal Encoder-Decoder（CED，因果编码器—解码器）要解决的问题之一。长任务中，模型常常读入很长的工具结果，只生成较短的回复。如果每次读新输入都要完成全部层的逐 token 计算，prefill 就很昂贵。CED 改变 global KV 的来源，让多数输入 token 可以不经过完整 decoder 计算，同时保留 decoder 的局部处理能力。
 
-本章配套 [code/18_ced_architecture.py](../code/18_ced_architecture.py) 和 独立测试 `tests/test_ced_architecture.py`。它们是 **CPU、float64、固定小矩阵的数据流实验**，不是官方模型的缩小权重版，也不是训练或性能 benchmark。完成后，你应当能指出 global / local KV 各从哪里来，解释 replay 为什么有误差，并检查缓存位置有没有接错。
+本章配套 [code/18_ced_architecture.py](../code/18_ced_architecture.py) 和独立测试 `tests/test_ced_architecture.py`。它们是 **CPU、float64、固定小矩阵的数据流实验**，不是官方模型的缩小权重版，也不是训练或性能 benchmark。完成后，你应当能指出 global / local KV 各从哪里来，解释 replay 为什么有误差，并检查缓存位置有没有接错。
 
 ## P17.1 先把三个“编码—解码”分开
 
-第 7 章 中的经典 seq2seq 有两条序列：例如先编码中文句子，再自回归生成英文句子。经典 Transformer 的源句 encoder 可以双向看源句，目标句 decoder 则只能看已经生成的目标词。
+第 7 章中的经典 seq2seq 有两条序列：例如先编码中文句子，再自回归生成英文句子。经典 Transformer 的源句 encoder 可以双向看源句，目标句 decoder 则只能看已经生成的目标词。
 
 本章的 CED 不是把同一张图换个名字：
 
@@ -4929,6 +4929,8 @@ $$
 C_{full}=BN(L_e+L_d),\qquad
 C_{bounded}=B(NL_e+RL_d).
 $$
+
+令 B=1、L_e=L_d=L/2 且 N≥W，则 C_bounded=NL/2+WL/2，对应报告 §2.2 的 O(NL/2+n_win·L/2) 路径计数写法；短输入仍应使用 R=min(N,W)。
 
 这里的 full 基线是同一个 CED 教学模型的完整执行，不是另一个普通 decoder-only 模型，更不是两个训练模型的质量对比。这是本模型实际循环累计的层处理次数，不是仅打印一条假想公式。被省掉的是 `B(N−R)L_d` 次 decoder token-layer visit。
 

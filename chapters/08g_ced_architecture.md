@@ -4,11 +4,11 @@
 
 这是 DeepSeek-V4.1-Flash 的 Causal Encoder-Decoder（CED，因果编码器—解码器）要解决的问题之一。长任务中，模型常常读入很长的工具结果，只生成较短的回复。如果每次读新输入都要完成全部层的逐 token 计算，prefill 就很昂贵。CED 改变 global KV 的来源，让多数输入 token 可以不经过完整 decoder 计算，同时保留 decoder 的局部处理能力。
 
-本章配套 [code/18_ced_architecture.py](../code/18_ced_architecture.py) 和 独立测试 `tests/test_ced_architecture.py`。它们是 **CPU、float64、固定小矩阵的数据流实验**，不是官方模型的缩小权重版，也不是训练或性能 benchmark。完成后，你应当能指出 global / local KV 各从哪里来，解释 replay 为什么有误差，并检查缓存位置有没有接错。
+本章配套 [code/18_ced_architecture.py](../code/18_ced_architecture.py) 和独立测试 `tests/test_ced_architecture.py`。它们是 **CPU、float64、固定小矩阵的数据流实验**，不是官方模型的缩小权重版，也不是训练或性能 benchmark。完成后，你应当能指出 global / local KV 各从哪里来，解释 replay 为什么有误差，并检查缓存位置有没有接错。
 
 ## P17.1 先把三个“编码—解码”分开
 
-第 7 章 中的经典 seq2seq 有两条序列：例如先编码中文句子，再自回归生成英文句子。经典 Transformer 的源句 encoder 可以双向看源句，目标句 decoder 则只能看已经生成的目标词。
+第 7 章中的经典 seq2seq 有两条序列：例如先编码中文句子，再自回归生成英文句子。经典 Transformer 的源句 encoder 可以双向看源句，目标句 decoder 则只能看已经生成的目标词。
 
 本章的 CED 不是把同一张图换个名字：
 
@@ -240,6 +240,8 @@ $$
 C_{full}=BN(L_e+L_d),\qquad
 C_{bounded}=B(NL_e+RL_d).
 $$
+
+令 B=1、L_e=L_d=L/2 且 N≥W，则 C_bounded=NL/2+WL/2，对应报告 §2.2 的 O(NL/2+n_win·L/2) 路径计数写法；短输入仍应使用 R=min(N,W)。
 
 这里的 full 基线是同一个 CED 教学模型的完整执行，不是另一个普通 decoder-only 模型，更不是两个训练模型的质量对比。这是本模型实际循环累计的层处理次数，不是仅打印一条假想公式。被省掉的是 `B(N−R)L_d` 次 decoder token-layer visit。
 
