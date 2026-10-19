@@ -196,6 +196,25 @@ class ModernTests(unittest.TestCase):
         self.assertEqual(modern.ffn_parameter_count(48, 128, 'swiglu', True), 18736)
         self.assertEqual(modern.matched_swiglu_width(16, multiple_of=8), 40)
 
+    def test_width_ties_choose_smaller_with_exhaustive_independent_reference(self):
+        # D=2, H=4, bias=True: GELU has 22 parameters, SwiGLU M=2/3
+        # has 18/26. Both miss by 4, so the documented smaller-width tie wins.
+        self.assertEqual(modern.matched_swiglu_width(2, gelu_width=4, bias=True), 2)
+        for d in range(1, 9):
+            for h in range(1, 13):
+                for bias in (False, True):
+                    for multiple in (1, 2, 4, 8):
+                        target = 2*d*h + (h+d if bias else 0)
+                        # Enumerate in ascending order using independent arithmetic.
+                        # The last width is >=2H+multiple, past the positive optimum.
+                        candidates = range(multiple, 2*h + 2*multiple, multiple)
+                        error = lambda m: abs(3*d*m + (2*m+d if bias else 0) - target)
+                        best_error = min(error(m) for m in candidates)
+                        expected = next(m for m in candidates if error(m) == best_error)
+                        with self.subTest(d=d, h=h, bias=bias, multiple=multiple):
+                            self.assertEqual(modern.matched_swiglu_width(
+                                d, gelu_width=h, bias=bias, multiple_of=multiple), expected)
+
     def test_invalid_config_and_module_contracts(self):
         for kwargs in ({'norm_kind':'batchnorm'}, {'ffn_kind':'relu'}, {'norm_eps':0},
                        {'norm_eps':float('nan')}, {'norm_eps':True}, {'intermediate_size':0},
@@ -228,6 +247,50 @@ class ModernTests(unittest.TestCase):
         torch.testing.assert_close(model(ids)[0], reference(ids)[0], atol=0, rtol=0)
         self.assertIsInstance(reference.blocks[0].ln1, torch.nn.LayerNorm)
         self.assertIsInstance(reference.blocks[0].mlp[1], torch.nn.GELU)
+
+    def test_all_configured_norm_types_and_nondefault_epsilon(self):
+        models = modern.make_ablation_models(self.config(norm_eps=1e-6))
+        expected_types = {
+            'A_LN_GELU': torch.nn.LayerNorm,
+            'B_RMS_GELU': modern.RMSNorm,
+            'C_RMS_SwiGLU': modern.RMSNorm,
+        }
+        self.assertEqual(set(models), set(expected_types))
+        for label, model in models.items():
+            norms = [('ln_f', model.ln_f)]
+            for i, block in enumerate(model.blocks):
+                norms.extend(((f'blocks.{i}.ln1', block.ln1),
+                              (f'blocks.{i}.ln2', block.ln2)))
+            self.assertEqual(len(norms), 2*model.config.num_layers + 1)
+            for name, norm in norms:
+                with self.subTest(model=label, norm=name):
+                    self.assertIs(type(norm), expected_types[label])
+                    self.assertEqual(norm.eps, 1e-6)
+                    self.assertIsNone(getattr(norm, 'bias', None))
+                    self.assertEqual(tuple(norm.weight.shape), (model.config.d_model,))
+
+    def test_norm_copy_helper_preserves_nontrivial_gamma_without_aliasing(self):
+        # Initial gamma is all ones: deleting its copy is equivalent for that
+        # initial state. Exercise the helper's actual contract with other values.
+        source, target, _ = modern.make_ablation_models(self.config()).values()
+        source_norms = [(name, module) for name, module in source.named_modules()
+                        if isinstance(module, torch.nn.LayerNorm)]
+        target_modules = dict(target.named_modules())
+        self.assertEqual(len(source_norms), 2*source.config.num_layers + 1)
+        with torch.no_grad():
+            for i, (name, norm) in enumerate(source_norms):
+                norm.weight.copy_(torch.linspace(-.7, 1.9, source.config.d_model) + i)
+                target_modules[name].weight.fill_(-9)
+        modern.copy_unchanged(source, target, 'norm')
+        for name, norm in source_norms:
+            copied = target_modules[name].weight
+            with self.subTest(norm=name):
+                torch.testing.assert_close(copied, norm.weight, atol=0, rtol=0)
+                self.assertNotEqual(copied.data_ptr(), norm.weight.data_ptr())
+        with torch.no_grad():
+            source_norms[0][1].weight.add_(1)
+        self.assertFalse(torch.equal(source_norms[0][1].weight,
+                                     target_modules[source_norms[0][0]].weight))
 
     def test_ablation_changes_only_declared_modules_and_copies_common_weights(self):
         models = list(modern.make_ablation_models(self.config()).values())
@@ -322,9 +385,53 @@ class ModernTests(unittest.TestCase):
             self.assertLess(row['after'], row['before'])
             self.assertLess(row['cache_error'], 3e-6)
 
+    def test_default_eight_step_ablation_matches_chapter_snapshot(self):
+        expected = (
+            ('A_LN_GELU', 'A：LN + GELU', 192, 4.429393, 2.889954),
+            ('B_RMS_GELU', 'B：RMSNorm + GELU', 192, 4.441514, 2.896931),
+            ('C_RMS_SwiGLU', 'C：RMSNorm + SwiGLU', 128, 4.403015, 3.212187),
+        )
+        records = modern.run_ablation(steps=8)
+        self.assertEqual(len(records), len(expected))
+        chapter = (ROOT / 'chapters/08c_modern_block.md').read_text()
+        for record, (name, label, width, before, after) in zip(records, expected):
+            with self.subTest(model=name):
+                self.assertEqual(record['name'], name)
+                self.assertEqual(record['width'], width)
+                self.assertEqual(record['ffn_params'], 18432)
+                self.assertEqual(record['params'], 61008)
+                self.assertAlmostEqual(record['before'], before, delta=2e-5)
+                self.assertAlmostEqual(record['after'], after, delta=2e-5)
+                self.assertTrue(record['finite_backward'])
+                # Cache rounding is hardware-dependent, not a decimal snapshot.
+                self.assertLess(record['cache_error'], 3e-6)
+                self.assertIn(f'| {label} | 18432 | 61008 | {before:.6f} | '
+                              f'{after:.6f} | True |', chapter)
+
+    def test_norm_budget_and_optimizer_contract_mutations_are_detected(self):
+        mutations = (
+            ('        self.ln_f = norm(self.ln_f)',
+             '        # Mutant: omit final normalization replacement.',
+             'test_all_configured_norm_types_and_nondefault_epsilon'),
+            ('result = RMSNorm(config.d_model, eps=config.norm_eps)',
+             'result = RMSNorm(config.d_model)',
+             'test_all_configured_norm_types_and_nondefault_epsilon'),
+            ('result = nn.LayerNorm(config.d_model, eps=config.norm_eps, bias=config.norm_bias)',
+             'result = nn.LayerNorm(config.d_model, bias=config.norm_bias)',
+             'test_all_configured_norm_types_and_nondefault_epsilon'),
+            ('lr=1e-3,', 'lr=2e-3,',
+             'test_default_eight_step_ablation_matches_chapter_snapshot'),
+            ('d_model, width, "swiglu", bias) - target), width))',
+             'd_model, width, "swiglu", bias) - target), -width))',
+             'test_width_ties_choose_smaller_with_exhaustive_independent_reference'),
+            ('                new[name].copy_(old[name])',
+             '                pass  # Mutant: omit corresponding gamma copy.',
+             'test_norm_copy_helper_preserves_nontrivial_gamma_without_aliasing'),
+        )
+        self.assert_mutations_fail(mutations)
+
     def test_wrong_rms_and_gate_mutations_are_detected(self):
         # Compile mutants only in memory; production files never change.
-        source = CODE.read_text()
         mutations = (
             ('work.square().mean(dim=-1, keepdim=True) + self.eps',
              '(work - work.mean(dim=-1, keepdim=True)).square().mean(dim=-1, keepdim=True) + self.eps',
@@ -339,8 +446,12 @@ class ModernTests(unittest.TestCase):
              'self.down(F.silu(self.gate(x)) + self.up(x))',
              'test_gate_hand_table_and_multiplication_not_addition'),
         )
+        self.assert_mutations_fail(mutations)
+
+    def assert_mutations_fail(self, mutations):
+        source = CODE.read_text()
         for i, (old, new, test) in enumerate(mutations):
-            self.assertIn(old, source)
+            self.assertEqual(source.count(old), 1, f'mutation target must be unique: {old}')
             mutant = types.ModuleType(f'p13_mutant_{i}')
             mutant.__file__ = str(CODE)
             sys.modules[mutant.__name__] = mutant

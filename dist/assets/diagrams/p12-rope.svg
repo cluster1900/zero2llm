@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="340" viewBox="0 0 960 340" role="img" aria-labelledby="title desc">
-<title id="title">RoPE rotation and cache positions</title>
-<desc id="desc">A ninety-degree rotation maps vector three four to minus four three and preserves length five. A cache with three old keys appends only new keys rotated at positions three and four.</desc>
+<title id="title">RoPE：二维旋转与缓存位置</title>
+<desc id="desc">向量 (3,4) 逆时针旋转 90° 后变为 (-4,3)，长度仍为 5。缓存已有三个旧 K 时，只追加按位置 3、4 旋转的新 K。</desc>
 <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#425466"/></marker><marker id="blue" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#2563eb"/></marker><marker id="orange" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#d97706"/></marker></defs>
 <rect width="960" height="340" rx="18" fill="#f8fafc"/>
-<g font-family="Arial,sans-serif" font-size="16" fill="#172b4d">
-<text x="25" y="32" font-size="20" font-weight="bold">1. Rotate each pair, preserve its length</text>
+<g font-family="Noto Sans CJK SC, sans-serif" font-size="16" fill="#172b4d">
+<text x="25" y="32" font-size="20" font-weight="bold">1. 每对坐标旋转，长度不变</text>
 <line x1="30" y1="221" x2="320" y2="221" stroke="#94a3b8" marker-end="url(#arrow)"/>
 <line x1="170" y1="282" x2="170" y2="64" stroke="#94a3b8" marker-end="url(#arrow)"/>
 <circle cx="170" cy="221" r="120" fill="none" stroke="#cbd5e1" stroke-dasharray="5 5"/>
@@ -14,19 +14,19 @@
 <path d="M212,165 A70,70 0 0,0 114,179" fill="none" stroke="#425466" stroke-width="2" marker-end="url(#arrow)"/>
 <text x="146" y="145">90°</text><text x="315" y="243">x</text><text x="183" y="71">y</text>
 <rect x="45" y="292" width="265" height="33" rx="8" fill="#e2e8f0"/>
-<text x="68" y="314">norm = 5 before and after</text>
+<text x="68" y="314">旋转前后的长度均为 5</text>
 <line x1="382" y1="48" x2="382" y2="315" stroke="#cbd5e1"/>
-<text x="410" y="32" font-size="20" font-weight="bold">2. Continue positions when appending</text>
-<text x="414" y="79">Old rotated K: keep unchanged</text>
+<text x="410" y="32" font-size="20" font-weight="bold">2. 追加时延续位置编号</text>
+<text x="414" y="79">旧 K 已经旋转，保持不变</text>
 <g fill="#dbeafe" stroke="#60a5fa"><rect x="414" y="94" width="82" height="55" rx="8"/><rect x="505" y="94" width="82" height="55" rx="8"/><rect x="596" y="94" width="82" height="55" rx="8"/></g>
-<text x="442" y="127">K₀</text><text x="533" y="127">K₁</text><text x="624" y="127">K₂</text>
+<text x="442" y="127">K0</text><text x="533" y="127">K1</text><text x="624" y="127">K2</text>
 <g fill="#ffedd5" stroke="#fbbf24"><rect x="713" y="94" width="82" height="55" rx="8"/><rect x="804" y="94" width="82" height="55" rx="8"/></g>
-<text x="741" y="127">K₃</text><text x="832" y="127">K₄</text>
+<text x="741" y="127">K3</text><text x="832" y="127">K4</text>
 <text x="694" y="129" font-size="24">+</text>
 <path d="M755,199 L755,158" stroke="#425466" stroke-width="2" marker-end="url(#arrow)"/>
 <path d="M845,199 L845,158" stroke="#425466" stroke-width="2" marker-end="url(#arrow)"/>
-<text x="410" y="223">P = 3 cached tokens, C = 2 new tokens</text>
-<text x="410" y="253">Rotate NEW Q/K at positions [3, 4]</text>
-<text x="410" y="283" fill="#b45309">Not [0, 1]. Do not rotate old K again.</text>
-<text x="410" y="313">V is not rotated in this implementation.</text>
+<text x="410" y="223">已缓存 P = 3 个词元，新增 C = 2 个词元</text>
+<text x="410" y="253">新 Q/K 按位置 [3, 4] 旋转</text>
+<text x="410" y="283" fill="#b45309">不是 [0, 1]；旧 K 不要再次旋转</text>
+<text x="410" y="313">本实现不旋转 V。</text>
 </g></svg>

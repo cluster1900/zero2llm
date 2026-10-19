@@ -298,21 +298,107 @@ class GroupedKVTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 g.mean_pool_kv_weight(bad, 4, 2)
 
+    @staticmethod
+    def mla_independent_reference():
+        """Scalar-loop oracle from the documented fixture, not demo intermediates.
+
+        Deliberately restate x/weights here so editing the demo cannot silently
+        edit its expected answer. No demo helper, einsum, apply_rope, latent
+        absorption path, or production scores enter this calculation.
+        """
+        x = [[1., 0., 1., 0.], [0., 1., 0., 1.], [1., 1., 0., 0.]]
+        down = [[1., 0.], [0., 1.], [.5, 0.], [0., .5]]
+        up_k = [[[1., 0.], [0., 1.]], [[1., .5], [-.5, 1.]]]
+        up_v = [[[1., 2.], [0., 1.]], [[-1., 0.], [1., 2.]]]
+        query_content = [[[1., .2], [.3, 1.], [.5, -.5]],
+                         [[.1, 1.], [1., -.2], [.4, .8]]]
+
+        def row_times_matrix(row, matrix):
+            return [sum(row[j] * matrix[j][i] for j in range(len(row)))
+                    for i in range(len(matrix[0]))]
+
+        def manual_rotate(pair, position):
+            # Explicit positions 0, 1, 2 radians, with the fixture frequency 1.
+            cosine, sine = math.cos(position), math.sin(position)
+            return [pair[0] * cosine - pair[1] * sine,
+                    pair[0] * sine + pair[1] * cosine]
+
+        latent = [row_times_matrix(row, down) for row in x]
+        key_rope = [manual_rotate(x[t][:2], t) for t in (0, 1, 2)]
+        scores, outputs, positional_scores = [], [], []
+        for head in range(2):
+            # Construct literal four-dimensional Q/K, instead of splitting
+            # and adding the two dot products as both demo paths do.
+            queries = [query_content[head][t] + manual_rotate(
+                [value * .5 for value in query_content[head][t]], t)
+                for t in (0, 1, 2)]
+            keys = [row_times_matrix(latent[t], up_k[head]) + key_rope[t]
+                    for t in (0, 1, 2)]
+            values = [row_times_matrix(row, up_v[head]) for row in latent]
+            head_scores = [[sum(query[j] * key[j] for j in range(4)) / 2.
+                            for key in keys] for query in queries]
+            head_positions = [[sum(query[j] * key[j] for j in (2, 3))
+                               for key in keys] for query in queries]
+            head_outputs = []
+            for position in (0, 1, 2):
+                # Causality by selecting only the visible prefix, not by
+                # reusing the demo's mask or any attention implementation.
+                visible = head_scores[position][:position + 1]
+                exponentials = [math.exp(score - max(visible)) for score in visible]
+                normalizer = sum(exponentials)
+                probabilities = [value / normalizer for value in exponentials]
+                head_outputs.append([sum(probabilities[t] * values[t][feature]
+                                         for t in range(position + 1))
+                                     for feature in range(2)])
+            scores.append(head_scores)
+            outputs.append(head_outputs)
+            positional_scores.append(head_positions)
+        return {name: torch.tensor(value, dtype=torch.float64) for name, value in
+                {'latent': latent, 'k_rope': key_rope, 'scores': scores,
+                 'output': outputs, 'positional_scores': positional_scores}.items()}
+
+    def assert_mla_matches_independent_reference(self, result):
+        expected = self.mla_independent_reference()
+        for name in ('latent', 'k_rope', 'positional_scores'):
+            torch.testing.assert_close(result[name], expected[name], atol=1e-12, rtol=1e-12)
+        for name in ('full_scores', 'latent_scores'):
+            torch.testing.assert_close(result[name], expected['scores'], atol=1e-12, rtol=1e-12)
+        for name in ('full_output', 'latent_output'):
+            torch.testing.assert_close(result[name], expected['output'], atol=1e-12, rtol=1e-12)
+
     def test_mla_absorption_position_payload_and_rank_loss(self):
         result = g.mla_matrix_demo()
-        torch.testing.assert_close(result['latent'], torch.tensor([[1.5, 0.], [0., 1.5], [1., 1.]], dtype=torch.float64))
-        torch.testing.assert_close(result['full_scores'], result['latent_scores'], atol=1e-12, rtol=1e-12)
-        torch.testing.assert_close(result['full_output'], result['latent_output'], atol=1e-12, rtol=1e-12)
+        self.assert_mla_matches_independent_reference(result)
         self.assertEqual(result['compact_bytes'], 96)
         self.assertEqual(result['expanded_bytes'], 240)
-        self.assertEqual(result['k_rope'].shape, (3, 2))
-        # Omitting the positional term is not the same attention.
-        self.assertGreater(result['positional_scores'].abs().max().item(), .1)
-        without_rope = result['latent_scores'] - result['positional_scores'] / 2
-        self.assertFalse(torch.allclose(without_rope, result['full_scores']))
         self.assertEqual((result['rank_target'], result['rank_compressed'], result['rank_loss']), (3, 2, 1.))
         self.assertLess(result['score_error'], 1e-12)
         self.assertLess(result['output_error'], 1e-12)
+
+    def test_mla_shared_wrong_scale_omitted_position_and_unrotated_key_mutants_fail(self):
+        changes = [
+            ('scale = math.sqrt(q_content.shape[-1] + q_rope.shape[-1])',
+             'scale = math.sqrt(c.shape[-1])', 1, 'mla_scale'),
+            (' + positional_scores) / scale', ') / scale', 2, 'mla_position'),
+            ('k_rope = rotate2(x[:, :2])', 'k_rope = x[:, :2]', 1, 'mla_key_rotation'),
+        ]
+        for old, new, occurrences, name in changes:
+            with self.subTest(mutation=name):
+                self.assertEqual(SCRIPT.read_text().count(old), occurrences)
+                module = self.mutant(old, new, name)
+                mutated = module.mla_matrix_demo()
+                # All three bugs still pass the old two-self-path comparison.
+                self.assertLess(mutated['score_error'], 1e-12)
+                self.assertLess(mutated['output_error'], 1e-12)
+                # Execute the real oracle assertion: require a test FAILURE,
+                # never count a broken mutant/import/runtime ERROR as detection.
+                probe = unittest.FunctionTestCase(
+                    lambda: self.assert_mla_matches_independent_reference(mutated))
+                report = unittest.TestResult()
+                probe.run(report)
+                self.assertEqual(report.testsRun, 1)
+                self.assertEqual(len(report.errors), 0, report.errors)
+                self.assertEqual(len(report.failures), 1, report.failures)
 
     def mutant(self, old, new, suffix):
         source = SCRIPT.read_text()

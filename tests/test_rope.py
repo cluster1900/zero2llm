@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+import xml.etree.ElementTree as ET
 from unittest.mock import patch
 from torch_test_support import torch_status, torch_reason
 
@@ -17,6 +18,23 @@ if READY:
 
 
 class RopeCLITests(unittest.TestCase):
+    def test_diagram_explanations_are_chinese(self):
+        diagram = Path(__file__).resolve().parents[1] / 'assets/diagrams/p12-rope.svg'
+        root = ET.parse(diagram).getroot()
+        labels = [''.join(node.itertext()).strip() for node in root.iter()
+                  if node.tag.rsplit('}', 1)[-1] in ('title', 'desc', 'text')]
+        # Mathematical symbols/coordinates need no translation; every explanatory
+        # label, including accessible title/description, must contain Chinese.
+        math_labels = {'(3, 4)', '(-4, 3)', '90°', 'x', 'y', 'K0', 'K1', 'K2', 'K3', 'K4', '+'}
+        self.assertTrue(math_labels.issubset(set(labels)))
+        for label in labels:
+            if label not in math_labels:
+                self.assertRegex(label, r'[\u4e00-\u9fff]', label)
+                self.assertNotRegex(label.replace('RoPE', ''), r'[A-Za-z]{2,}')
+        for phrase in ('每对坐标旋转', '追加时延续位置编号', '旧 K 不要再次旋转', '本实现不旋转 V'):
+            self.assertTrue(any(phrase in label for label in labels), phrase)
+        self.assertIn('Noto Sans CJK SC', diagram.read_text())
+
     def test_missing_torch_cli_is_concise_and_import_still_raises(self):
         script = Path(__file__).resolve().parents[1] / 'code/13_rope.py'
         blocker = """
@@ -110,6 +128,29 @@ class RopeTests(unittest.TestCase):
             self.assertTrue(torch.isfinite(out).all())
             (out.float().square().mean()).backward()
             self.assertTrue(torch.isfinite(x.grad).all())
+
+    def test_half_large_positions_match_independent_float32_oracle(self):
+        positions = torch.tensor([2048, 2049, 2051, 4095, 4097], dtype=torch.long)
+        source = torch.arange(1, 51, dtype=torch.float32).reshape(1, 5, 10) / 8 - 3
+        for dtype, atol, rtol in ((torch.float16, .002, .002), (torch.bfloat16, .02, .01)):
+            with self.subTest(dtype=dtype):
+                x = source.to(dtype)
+                # Independent, explicit 2x2 float32 matrices. Do not call
+                # apply_rope to build the oracle or inherit its work_dtype.
+                work = x.float()
+                expected = work.clone()
+                for t, position in enumerate(positions.tolist()):
+                    for pair in range(4):
+                        frequency = torch.tensor(10000. ** (-2 * pair / 8), dtype=torch.float32)
+                        angle = torch.tensor(position, dtype=torch.float32) * frequency
+                        c, s = angle.cos(), angle.sin()
+                        matrix = torch.stack((c, -s, s, c)).reshape(2, 2)
+                        start = 2 * pair
+                        expected[:, t, start:start+2] = work[:, t, start:start+2] @ matrix.T
+                actual = rope.apply_rope(x, positions, rotary_dim=8)
+                self.assertEqual(actual.dtype, dtype)
+                torch.testing.assert_close(actual, expected.to(dtype), atol=atol, rtol=rtol)
+                torch.testing.assert_close(actual[..., 8:], x[..., 8:], atol=0, rtol=0)
 
     def compare_chunks(self, sizes, dtype=None):
         dtype = torch.float32 if dtype is None else dtype

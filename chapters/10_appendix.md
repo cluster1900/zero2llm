@@ -21,7 +21,7 @@
 | **独立随机变量方差加法** | $\text{Var}(X + Y) = \text{Var}(X) + \text{Var}(Y)$ | **缩放因子证明**：解释为什么注意力点积必须除以 $\sqrt{d_k}$ | 第 3 章 |
 | **三角函数与周期** | $y = \sin(\omega t), \ T = \frac{2\pi}{\omega}$ | **正弦余弦位置编码**：通过高低频波浪给序列中的词发座位号 | 第 5 章 |
 | **三角恒等变换和角公式** | $\cos(\alpha+\beta) = \cos\alpha\cos\beta - \sin\alpha\sin\beta$ | **相对位置线性外推**：解释为什么三角函数能表达相对距离 | 第 5 章 |
-| **复数乘法与旋转矩阵** | $(x+iy) \cdot e^{i\theta} \leftrightarrow \begin{pmatrix}\cos\theta & -\sin\theta \\ \sin\theta & \cos\theta\end{pmatrix}$ | **RoPE 旋转位置编码**：现代 LLaMA/DeepSeek 的相对位置核心 | 第 9 章 |
+| **复数乘法与旋转矩阵** | $(x+iy) \cdot e^{i\theta} \leftrightarrow \begin{pmatrix}\cos\theta & -\sin\theta \\ \sin\theta & \cos\theta\end{pmatrix}$ | **RoPE 旋转位置编码**：现代 LLaMA/DeepSeek 的相对位置核心 | [P12](#p12-rope) |
 
 ---
 

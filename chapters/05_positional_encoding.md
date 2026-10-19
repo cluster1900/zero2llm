@@ -306,4 +306,4 @@ python -m unittest discover -s tests -p 'test_positions.py' -v
 
 1. Vaswani et al., [Attention Is All You Need，arXiv:1706.03762v7](https://arxiv.org/html/1706.03762v7)，版本日期 2023-08-02，初稿 2017-06-12。§3.4：输入嵌入缩放；§3.5：正弦公式、相加、相对偏移动机与长度外推动机；§6.2 表 3(E)：可学习位置对照。
 2. Shaw, Uszkoreit & Vaswani, [Self-Attention with Relative Position Representations，arXiv:1803.02155v2](https://arxiv.org/html/1803.02155v2)，版本日期 2018-04-12。§3.1：相对关系进入键和值；§3.2：按相对距离查表与截断。仅作类型比较，不在本章实现该模型。
-3. Su et al., [RoFormer，arXiv:2104.09864v5](https://arxiv.org/html/2104.09864v5)，版本日期 2023-11-08。§3.1–3.2：用 Q/K 旋转表达位置关系。本章只给路线提示，详细实现留给大纲 P12。
+3. Su et al., [RoFormer，arXiv:2104.09864v5](https://arxiv.org/html/2104.09864v5)，版本日期 2023-11-08。§3.1–3.2：用 Q/K 旋转表达位置关系。本章只给路线提示，详细实现见 [P12](#p12-rope)。

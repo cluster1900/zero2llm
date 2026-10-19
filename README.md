@@ -109,7 +109,7 @@ python code/07_baby_gpt.py
 
 如果想先从手算和纯 Python 实验入手，可以直接运行 `python3 code/01_vector_similarity.py` 和
 `python3 code/02_manual_attention.py`，它们不需要安装 PyTorch。重新编译 EPUB/HTML 还需要系统中的
-`pandoc` 和 Node.js 22 或更高版本（macOS 可运行 `brew install pandoc node`），并先运行 `npm ci` 安装锁定版本的图表构建工具。阅读成品不需要这些依赖。
+`pandoc`（本书验证版本为 **3.9**）和 Node.js 22 或更高版本（macOS 可运行 `brew install pandoc node`），并先运行 `npm ci` 安装锁定版本的图表构建工具。阅读成品不需要这些依赖。
 
 ---
 
@@ -192,3 +192,5 @@ Mermaid 图必须提供 `accTitle` 和 `accDescr`；渲染错误、缺图或内�
 在 GitHub Actions 手动运行 **Refresh book release downloads**，选择已有 Release 标签，即可替换阅读文件。
 也可以在推送到 `main` 的提交消息中加入 `[refresh-release]`，显式更新 `v1.0.0` 的下载文件。
 工作流不会移动旧标签；Release 说明会标出本次阅读文件对应的提交，并用新的附件链接替换旧 ZIP 链接。
+
+构建环境提示：本书要求 **Pandoc 3.9 或更新版本**，已验证版本为 **3.9**。[官方 3.9 发布记录](https://pandoc.org/releases.html#pandoc-3.9)说明该版本加入 Pandoc Markdown 的 `+alerts` 支持；3.5 不支持该组合，独立审核也已复现失败。新版本仍须重跑产物/布局检查，不假定任意系统自带版本均兼容。

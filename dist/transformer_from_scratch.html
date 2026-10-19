@@ -2127,7 +2127,7 @@ class="math inline">\(V\)</span>。本章把这套计算分成几个并行的“
 <p>配套代码是 <a
 href="code/04_multi_head_attention.py">code/04_multi_head_attention.py</a>。本章只讨论<strong>标准、等宽的多头自注意力</strong>：Q、K、V
 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV
-头等变体留到后续章节（大纲 S05：<a
+头等变体见已实现的 <a href="#p14-grouped-kv">P14</a>（大纲 S05：<a
 href="https://arxiv.org/abs/2305.13245">GQA 原始论文</a>）。</p>
 <hr />
 <h2 id="为什么要多头多张权重表而不是预先分配的专家">4.1
@@ -3370,7 +3370,8 @@ Position Representations，arXiv:1803.02155v2</a>，版本日期
 <li>Su et al., <a
 href="https://arxiv.org/html/2104.09864v5">RoFormer，arXiv:2104.09864v5</a>，版本日期
 2023-11-08。§3.1–3.2：用 Q/K
-旋转表达位置关系。本章只给路线提示，详细实现留给大纲 P12。</li>
+旋转表达位置关系。本章只给路线提示，详细实现见 <a
+href="#p12-rope">P12</a>。</li>
 </ol>
 <hr />
 <h1 id="第-6-章-积木组件-残差连接-层归一化与前馈神经网络">第 6
@@ -3387,7 +3388,8 @@ href="code/06_transformer_block.py">code/06_transformer_block.py</a>。先读数
 LayerNorm、带偏置的两层 ReLU FFN，以及没有 dropout 的多头自注意力；默认
 Pre-LN，也提供 Post-LN 对照。它是教学积木，不是某个 GPT、LLaMA 或
 DeepSeek checkpoint 的完整复刻。RMSNorm 与 SwiGLU
-只在章末留路标，系统推导放到规划 P13。</p>
+只在章末留路标，系统推导与实验见 <a
+href="#p13-modern-block">P13</a>。</p>
 <hr />
 <h2 id="残差连接不是重新抄一份而是学习改多少">6.1
 残差连接：不是重新抄一份，而是学习“改多少”</h2>
@@ -4075,7 +4077,7 @@ class="math inline">\(1024+64+1024+16=2128\)</span>。不会翻倍，因为每�
 <li>普通 FFN
 用共享的两层仿射变换和中间非线性逐位置加工；算参数时记得偏置，算成本时区分参数与运算。</li>
 </ul>
-<p>后续规划 P13 会单独讲 RMSNorm 与
+<p>已实现的 <a href="#p13-modern-block">P13</a> 单独讲 RMSNorm 与
 SwiGLU，并在相近参数预算下做对比。本章不实现它们，也不预先承诺某个通用加速比例。先把基础
 Block 的路径读准，再逐个替换组件。<a
 href="https://arxiv.org/abs/1910.07467">路标：RMSNorm 原始论文</a>、<a
@@ -5907,6 +5909,8 @@ Attention 设计文档</a>（动态文档，访问核验日
 vLLM、没有运行其内核，也未实现分页缓存；本地 S1
 的行为以配套脚本为准。</li>
 </ol>
+<p>下一单元 <a href="#p12-rope">P12</a> 将绝对位置表换成 Q/K
+旋转，并继续用同参数全量/增量 logits 对照检查缓存。</p>
 <hr />
 <h1 id="p12-rope">旋转位置（P12）：RoPE 与
 YaRN，能算更长不等于能读懂</h1>
@@ -6309,7 +6313,10 @@ L 的比值 r=L/λ，来区分频段：</p>
 </ul>
 <p>论文定义的 ramp γ 从 0 过渡到 1，混合式为
 <code>θ′=(1−γ)θ/s+γθ</code>；因此 γ=0 对应完全插值，γ=1
-对应不改频率，方向不要写反。</p>
+对应不改频率，方向不要写反。论文 v2 的 §3.2 用 α、β
+作为两端阈值：<code>r&lt;α</code> 时 γ=0，<code>r&gt;β</code> 时
+γ=1，中间线性过渡；该节针对 LLaMA 系列给出的经验取值是
+<strong>α=1、β=32</strong>。这不是所有模型的默认值，论文明确说应按具体情况调节。</p>
 <p>另一部分是注意力温度：把 <code>softmax(QKᵀ/√d)</code> 改为
 <code>softmax(QKᵀ/(t√d))</code>。若 Q 和 K 各乘 a=√(1/t)，点积会乘
 <strong>a²</strong>，不是 a。论文对 LLaMA 系列给出的经验关系是
@@ -6397,37 +6404,43 @@ P12-5：每个种子的完整准确率</h3>
 <h3 id="表-p12-6种子-2026-的-query-损失账本">表 P12-6：种子 2026 的
 QUERY 损失账本</h3>
 <div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
 <thead>
 <tr>
 <th>T</th>
 <th>样本数</th>
-<th>交叉熵总和</th>
-<th>每样本平均交叉熵</th>
+<th>交叉熵总和（保留 3 位小数）</th>
+<th>每样本平均交叉熵（本次运行）</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>8</td>
 <td>512</td>
-<td>0.535311</td>
+<td>0.535</td>
 <td>0.001046</td>
 </tr>
 <tr>
 <td>16</td>
 <td>512</td>
-<td>1698.983002</td>
+<td>1698.983</td>
 <td>3.318326</td>
 </tr>
 <tr>
 <td>32</td>
 <td>512</td>
-<td>2015.840637</td>
+<td>2015.841</td>
 <td>3.937189</td>
 </tr>
 <tr>
 <td>64</td>
 <td>512</td>
-<td>594.218678</td>
+<td>594.219</td>
 <td>1.160583</td>
 </tr>
 </tbody>
@@ -6435,7 +6448,9 @@ QUERY 损失账本</h3>
 <p>该种子第一训练 batch 的 CE 为 2.338030，最后一个为
 0.001039。训练日志是训练
 batch，表格是独立测试样本，不能混写成同一组指标。CE
-按自然对数计算；总和除以样本数得到均值，表中做了六位小数舍入。</p>
+按自然对数计算。总和列保留三位小数；均值列和上面的训练 CE
+保留本次本地运行打印的六位小数。均值由未舍入总和除以样本数得到，不应拿表中已舍入的总和再计算并要求末位一致。不同
+CPU 或数值库可能有末位浮点差异，六位打印值不是跨机器逐位一致的承诺。</p>
 <p><strong>结论只到这里：这个设置在训练长度内成功，但直接外推后不能保持准确率。</strong>
 不是证明 RoPE 在所有长任务上都失败，也不是证明 YaRN
 一定解决这个任务。增长长度同时增加检索距离和干扰 token
@@ -7022,8 +7037,9 @@ decode 分支里。测试把同一串 token 分成 <code>[12]</code>、12 次单
 token、<code>[3,5,4]</code> 和 <code>[11,1]</code>，拼接每块
 logits，与同权重的完整前向逐项比较。B&gt;1、float32 和 float64
 都覆盖。</p>
-<p>在表 P13-4 更新后的模型上，用长度 5 的块重放同一输入，三行 float32
-最大 logit 误差分别约为 5.36×10⁻⁷、4.47×10⁻⁷、3.58×10⁻⁷；测试容差为
+<p>在表 P13-4 更新后的模型上，用长度 5 的块重放同一输入，本机实测三行
+float32 最大 logit 误差均小于
+1e-6；末位可随硬件与算子实现变化，不作逐位快照。测试容差为
 atol=3e-6、rtol=1e-5。缓存等价比较的是<strong>同一个模型的两种计算路线</strong>，不是要求
 A、B、C 三个不同模型的输出彼此相等。</p>
 <p>缓存仍然是每请求私有、eval-only，不接受权重更新后的旧
@@ -7033,6 +7049,10 @@ cache。配置、Norm 的 ε 或 GELU 近似模式变化也需要重置。手工
 <h2 id="p13.10-让测试真的能抓错">P13.10 让测试真的能抓错</h2>
 <p>正常通过只能说明当前样例没发现问题。这里还在内存里编译几个错误版本，确认独立参考测试会失败；生产源码不会被改动。</p>
 <div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>故意制造的错误</th>
@@ -7056,8 +7076,24 @@ cache。配置、Norm 的 ε 或 GELU 近似模式变化也需要重置。手工
 <td>门与内容相加而非相乘</td>
 <td>两路投影的最终输出参考</td>
 </tr>
+<tr>
+<td>漏换最后的 ln_f，或忽略配置中的 ε</td>
+<td>三种配置下逐个检查 ln1/ln2/ln_f 的类型与 ε=1e-6</td>
+</tr>
+<tr>
+<td>消融学习率由 0.001 改成 0.002</td>
+<td>表 P13-4 的八步 loss 快照，绝对容差 2e-5</td>
+</tr>
+<tr>
+<td>预算宽度平局时误选较大值</td>
+<td>D=2、H=4、有 bias 的等距例子及独立穷举参考</td>
+</tr>
 </tbody>
 </table></div>
+<p>FFN 中间宽度，以及表 P13-4 的每层 FFN
+参数和整模型参数，也由实际运行结果核对。γ 初值全为 1
+时，省略对应复制可能不改变结果，不能把这种等价变异声称为已发现错误；另用非全
+1 的 γ 验证复制助手的值与非共享存储约定。</p>
 <p>还有 double
 精度自动微分数值检查、全零与半精度大输入的有限反向、真实参数计数、显式复制后的数值一致性、S2
 兼容模式及缓存对齐。测试一旦失败，应先定位公式、dtype、配置或共享状态，而不是扩大容差直到它变绿。</p>
@@ -7432,11 +7468,13 @@ token，原来四个头的 V 为
 的均值转换不是无损等价变换。</strong></p>
 <h2 id="p14.8-mla共享低维内容不是共享完整-kv-头">P14.8
 MLA：共享低维内容，不是共享完整 KV 头</h2>
-<p>MLA 是 Multi-head Latent Attention。DeepSeek-V3
-报告中的关键设计是：用同一个较短的潜变量共同表示内容 K 和 V，并把 RoPE
-位置键单独保存；各头的内容上投影可以不同。<a
-href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1">技术报告
-v2，§2.1.1</a></p>
+<p>MLA 是 Multi-head Latent Attention，首先由 DeepSeek-V2
+提出。其关键设计是：用同一个较短的潜变量共同表示内容 K 和 V，并把 RoPE
+位置键单独保存；各头的内容上投影可以不同。本章的权重吸收与解耦位置解释以原始
+<a href="https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2">DeepSeek-V2
+报告 v5，§2.1.2–2.1.3</a> 为依据。DeepSeek-V3 延续这一结构，可对照 <a
+href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1">V3 报告
+v2，§2.1.1</a>。</p>
 <p>为了与 PyTorch
 批量张量的方向一致，下面都用<strong>行向量右乘矩阵</strong>。这与论文常用的列向量写法互为转置，不是换了算法。设单个
 token 输入为 x_t，潜变量宽度 r，内容 key 宽度 d_c，value 宽度 d_v：</p>
@@ -7482,6 +7520,13 @@ c_t=x_t W_{down},\qquad k^C_{t,h}=c_t U^K_h,\qquad v_{t,h}=c_t U^V_h
 <p>GQA 中，同组 query 使用<strong>相同完整 K/V</strong>。这里不同头的 U
 可以不同，所以同一个 c_t 可以产生不同头的
 K/V；共享的是潜在表示，不是说这些头的 K/V 必须相等。</p>
+<p><strong>教学简化要单独记住</strong>：完整 MLA 还包含 query
+的低秩降维/升维分支，用来减少训练激活内存，但不进一步缩小历史 KV
+缓存。本实验省略该分支，直接给定两头的内容 query
+数值，把其一半作为旋转前的位置 query；也不包含完整输出投影
+W_O、量化或并行实现。它验证的是 KV 侧吸收与解耦位置的矩阵关系，不是完整
+MLA 模型。<a href="https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2">V2
+v5，§2.1.2，式 12–13</a></p>
 <p>“先降维、再升维”也不是任意矩阵的免费无损压缩。<code>W_down @ U</code>
 的秩最多是 r。比如目标矩阵 <code>diag(3,2,1)</code> 的秩为 3，用秩 2 的
 <code>diag(3,2,0)</code> 代替，最后一个方向被丢掉，Frobenius 误差为
@@ -7504,19 +7549,30 @@ query：<code>q_absorbed = q_content @ U_k.T</code>，再与缓存的 c_t
 \]</span></p>
 <p>先对潜变量加权求和，再做一次上投影即可。每个头的 a_t
 仍可不同，因此不会强迫所有头输出相同。</p>
+<p>原始论文把这种推理重排描述为：内容 key 的上投影可以吸收到 query
+投影，value 的上投影可以吸收到输出投影。这里为了让每一步可见，只演示把
+value 上投影移到加权求和之后，不把它继续融合进 W_O。<a
+href="https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2">V2
+v5，§2.1.2</a></p>
 <p>小矩阵实验分别计算：</p>
 <ol type="1">
 <li>先显式展开各头的内容 K/V，再做注意力。</li>
 <li>不把展开的内容 K/V 当作缓存，只使用潜变量计算打分和加权结果。</li>
 </ol>
-<p>对同一组低秩参数，这两种括号位置的结果应当只差浮点舍入。测试比较全部
-score
-和输出，不只看一两个标量。本函数为核对而同时保留两条路径的张量，<strong>它本身并不是一段峰值内存优化实现</strong>。</p>
+<p>对同一组低秩参数，这两种括号位置的结果应当只差浮点舍入，但两条路径相等仍不足以证明算对：它们可能一起忘记位置项，或一起用了错误的缩放分母。测试因此另写一个不调用演示函数内部步骤的标量循环参考：独立列出输入和权重，用
+sin/cos 手算位置 0、1、2 的旋转，拼成 4 维 Q/K，直接点积除以
+2，再对可见前缀做 Softmax 和 value
+加权。两条实现各自对齐这个参考，并逐项核对旋转后位置键。</p>
+<p>本函数为核对而同时保留两条路径的张量，<strong>它本身并不是一段峰值内存优化实现</strong>。</p>
 <h2 id="p14.10-rope-位置项为什么单独算">P14.10 RoPE
 位置项为什么单独算</h2>
 <p>不能把位置从内存账本里删掉。若把每个历史位置的内容 K
 全部旋转，不同位置带来不同旋转矩阵；一般不能再把它们吸收成一个与历史位置无关的固定
-query 投影。</p>
+query 投影。 原始论文 §2.1.3
+明确指出位置旋转夹在相应投影之间，矩阵通常不可交换，因此破坏这种固定权重吸收；随后引入独立位置
+query 和共享位置 key。<a
+href="https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3">V2
+v5，§2.1.3</a></p>
 <p>本章演示的解耦方案把打分拆成两项：</p>
 <p><span class="math display">\[
 \text{score}_{h,i,t}
@@ -7600,12 +7656,15 @@ logits，也不是质量或吞吐排行榜。</p>
 <li><strong>哪些输入会被拒绝</strong>：非法头数、空序列、错误
 dtype、越界
 token、跨模型缓存、长度溢出、坏缓存形状、权重/位置设置改变。</li>
-<li><strong>错误实现能被抓住吗</strong>：内存中把连续重复改成平铺重复、把
-RoPE offset 重置为 0、把矩形 mask 错当普通下三角、把扩展后的 KV
-存入缓存，分别验证测试判据会发现错误。源码文件不会被这些 mutation
-测试改写。</li>
+<li><strong>错误实现能被抓住吗</strong>：GQA 检查错误的重复映射、RoPE
+offset、矩形 mask 和扩展后缓存。MLA 再故意把两条路径的缩放一起改成
+√r、一起删除位置打分项，或让位置 key
+不旋转；每个变体虽然仍能通过内部两路径对齐，却必须被独立参考判为
+assertion failure，且运行错误数为
+0。这样不会把坏导入或异常崩溃误报为“抓住数值错误”。源码文件不会被这些
+mutation 测试改写。</li>
 </ul>
-<p>本批共 22 项测试。没有安装兼容的 torch 2.14.x
+<p>本章共 23 项测试。没有安装兼容的 torch 2.14.x
 时，数值类按共享测试门控明确跳过；缺依赖的 CLI
 给出安装提示。<strong>skip 不是通过，不能靠只有 CLI 检查成功来宣称 GQA
 数值实现已验证。</strong></p>
@@ -7653,6 +7712,12 @@ kernel、缓存管理和服务调度时，要把“模型表示减少了什么�
 <ul>
 <li><a href="https://arxiv.org/html/2305.13245v3">GQA 原论文
 v3</a>：核验 MHA/MQA/GQA 边界及分组均值初始化、继续预训练的区别。</li>
+<li><a
+href="https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2">DeepSeek-V2
+原始报告 v5，§2.1.2</a> 与 <a
+href="https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3">§2.1.3</a>：权重吸收、query
+低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日
+2026-10-19。</li>
 <li><a
 href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1">DeepSeek-V3
 技术报告 v2，§2.1.1</a>：核验 MLA
@@ -8087,7 +8152,7 @@ e^{i\theta} \leftrightarrow \begin{pmatrix}\cos\theta &amp; -\sin\theta
 \\ \sin\theta &amp; \cos\theta\end{pmatrix}\)</span></td>
 <td style="text-align: left;"><strong>RoPE 旋转位置编码</strong>：现代
 LLaMA/DeepSeek 的相对位置核心</td>
-<td style="text-align: center;">第 9 章</td>
+<td style="text-align: center;"><a href="#p12-rope">P12</a></td>
 </tr>
 </tbody>
 </table></div>

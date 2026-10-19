@@ -13,6 +13,18 @@ LESSONS = [('08b_rope_yarn.md', '13_rope.py', 'p12-rope'),
 
 
 class Batch5TextTests(unittest.TestCase):
+    def test_completed_lesson_forward_references(self):
+        for filename, anchor, stale in (
+            ('04_multi_head_attention.md', '#p14-grouped-kv', '变体留到后续章节'),
+            ('05_positional_encoding.md', '#p12-rope', '详细实现留给大纲 P12'),
+            ('06_residual_layernorm_ffn.md', '#p13-modern-block', '后续规划 P13'),
+            ('10_appendix.md', '#p12-rope', '位置核心 | 第 9 章'),
+            ('08a_kv_cache.md', '#p12-rope', '下一单元 P12 尚未实现')):
+            body = (ROOT / 'chapters' / filename).read_text()
+            self.assertIn(anchor, body)
+            self.assertNotIn(stale, body)
+        self.assertIn('Pandoc 3.9', (ROOT / 'README.md').read_text())
+
     def test_explicit_heading_ids_and_legacy_slugs(self):
         self.assertEqual(build.chapter_title_id('# 旋转位置（P12）：RoPE {#p12-rope}\n'),
                          ('旋转位置（P12）：RoPE', 'p12-rope'))
