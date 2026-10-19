@@ -4,7 +4,7 @@ The dependency gate is tested without importing torch. The numerical reference
 is scalar math, independent of the implementation's pairing loop. No downloads.
 """
 import importlib.util
-from importlib.metadata import PackageNotFoundError, version
+from torch_test_support import compatible_torch, torch_status, torch_reason
 import io
 import math
 from pathlib import Path
@@ -18,16 +18,10 @@ CHAPTER = (ROOT / 'chapters/05_positional_encoding.md').read_text()
 
 
 def torch_eligible(present, installed_version):
-    """Allow the verified release series, including local +cpu build tags."""
-    return bool(present and re.fullmatch(r'2\.14\.\d+(?:\+[A-Za-z0-9.]+)?', installed_version))
+    return bool(present and compatible_torch(installed_version))
 
 
-HAS_TORCH = importlib.util.find_spec('torch') is not None
-try:
-    TORCH_VERSION = version('torch')
-except PackageNotFoundError:
-    TORCH_VERSION = 'not installed'
-TORCH_READY = torch_eligible(HAS_TORCH, TORCH_VERSION)
+TORCH_READY, TORCH_VERSION, HAS_TORCH = torch_status()
 
 if TORCH_READY:
     import torch
@@ -71,8 +65,7 @@ class PositionDependencyTests(unittest.TestCase):
 
 @unittest.skipUnless(
     TORCH_READY,
-    f'P06 tensor experiments require installed torch 2.14.x; found {TORCH_VERSION} '
-    f'(module present={HAS_TORCH}). Install requirements.txt; skipped is not passed.',
+    torch_reason('P06 tensor experiments', TORCH_VERSION, HAS_TORCH),
 )
 class PositionTests(unittest.TestCase):
     def setUp(self):

@@ -1,4 +1,4 @@
-# 第6章：积木组件——残差连接、层归一化与前馈神经网络
+# 第 6 章：积木组件——残差连接、层归一化与前馈神经网络
 
 > 注意力负责交换信息，但交换之后，还需要保留原有表示、调整数值尺度，并在每个位置上加工特征。
 
@@ -147,9 +147,13 @@ $\gamma$ 与 $\beta$ 各有 D 个参数，不是整个向量共用一个标量�
 ### 对照代码：每一行对应刚才哪一步
 
 ```python
+# 1. 每个位置沿最后的特征轴求均值；不混合 batch 或 token。
 mean = x.mean(dim=-1, keepdim=True)
+# 2. 除以 D，不是 D-1：这里描述当前向量，不估计总体方差。
 variance = x.var(dim=-1, keepdim=True, unbiased=False)
+# 3. 先减均值，再除以标准差；epsilon 放在平方根里面。
 x_norm = (x - mean) / torch.sqrt(variance + self.eps)
+# 学到的 gamma/beta 之后，输出不必继续保持零均值、近单位方差。
 return self.gamma * x_norm + self.beta
 ```
 
@@ -195,7 +199,7 @@ Post-LN 最后一行四位小数恰好与 $\operatorname{LN}(x)$ 一样，但加
 
 所以“把支路清零，输出应等于输入”的测试有适用对象：**本章没有额外输出归一化的 Pre-LN Block**。它不是所有残差网络都必须满足的完整输出性质。
 
-2017 年原始 Transformer 的残差加法后接 LayerNorm，即 Post-LN。Pre-LN 把归一化移进支路；Xiong 等人在指定初始化和实验设置下分析了两者梯度尺度与 warm-up 的差别。这支持“位置会影响优化”的结论，不支持“Pre-LN 永不需要 warm-up”或“Post-LN 一定训练失败”。[来源：Transformer §3.1](https://arxiv.org/html/1706.03762v7#S3.SS1)、[On Layer Normalization，图1、表1、§3](https://arxiv.org/pdf/2002.04745)
+2017 年原始 Transformer 的残差加法后接 LayerNorm，即 Post-LN。Pre-LN 把归一化移进支路；Xiong 等人在指定初始化和实验设置下分析了两者梯度尺度与 warm-up 的差别。这支持“位置会影响优化”的结论，不支持“Pre-LN 永不需要 warm-up”或“Post-LN 一定训练失败”。[来源：Transformer §3.1](https://arxiv.org/html/1706.03762v7#S3.SS1)、[On Layer Normalization，图 1、表 1、§3](https://arxiv.org/pdf/2002.04745)
 
 ---
 
@@ -329,7 +333,7 @@ y=u+F(\operatorname{LN}_2(u))$$
 - FFN 第二层缩回 `[B,T,D]`，才可以做第二次残差相加。
 
 ```python
-# Pre-LN，默认 norm_first=True
+# Pre-LN: 残差主干不经过 LN，LN 只在计算增量的支路上。
 x = x + self._attention(self.ln1(x), mask)
 x = x + self.ffn(self.ln2(x))
 ```
@@ -339,7 +343,7 @@ x = x + self.ffn(self.ln2(x))
 切换 `norm_first=False` 后，代码改为：
 
 ```python
-# Post-LN
+# Post-LN: 先求增量并加回输入，然后归一化整个和。
 x = self.ln1(x + self._attention(x, mask))
 x = self.ln2(x + self.ffn(x))
 ```
@@ -425,7 +429,7 @@ Pre-LN zero-sublayer identity max error=0.000000
 
 后续规划 P13 会单独讲 RMSNorm 与 SwiGLU，并在相近参数预算下做对比。本章不实现它们，也不预先承诺某个通用加速比例。先把基础 Block 的路径读准，再逐个替换组件。[路标：RMSNorm 原始论文](https://arxiv.org/abs/1910.07467)、[GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202)
 
-接下来读第7章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention 和训练目标，组成不同的系统。
+接下来读第 7 章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention 和训练目标，组成不同的系统。
 
 ### 来源与核验范围
 
@@ -434,5 +438,5 @@ Pre-LN zero-sublayer identity max error=0.000000
 - He 等，2015：[Deep Residual Learning for Image Recognition](https://arxiv.org/pdf/1512.03385)，§3.1–3.2：残差函数与恒等捷径。
 - Ba 等，2016：[Layer Normalization](https://arxiv.org/pdf/1607.06450)，§3、§3.1：单样本统计、每维增益与偏置。
 - Vaswani 等，2017：[Attention Is All You Need](https://arxiv.org/html/1706.03762v7)，§3.1、§3.3：Post-LN 与逐位置 ReLU FFN。
-- Xiong 等，2020：[On Layer Normalization in the Transformer Architecture](https://arxiv.org/pdf/2002.04745)，图1、表1、§3：两种布局及有条件的初始化/优化分析。
+- Xiong 等，2020：[On Layer Normalization in the Transformer Architecture](https://arxiv.org/pdf/2002.04745)，图 1、表 1、§3：两种布局及有条件的初始化/优化分析。
 - [PyTorch 2.14 LayerNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html)：epsilon、方差口径、参数形状；[MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：布尔 mask 语义和参数接口。

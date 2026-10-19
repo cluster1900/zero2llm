@@ -492,10 +492,12 @@ figcaption, .diagram-caption {
   <li><a href="#第2章-注意力机制的直觉-为什么我们需要-注意力">第2章：注意力机制的直觉——为什么我们需要“注意力”？</a></li>
   <li><a href="#第3章-拆解注意力三剑客-Q-K-V-与安全的掩码">第3章：拆解注意力三剑客——Q、K、V 与安全的掩码</a></li>
   <li><a href="#第4章-多头注意力-Multi-Head-Attention-给每个维度记一本账">第4章：多头注意力（Multi-Head Attention）——给每个维度记一本账</a></li>
-  <li><a href="#第5章-位置编码-Positional-Encoding-给词语发-座位号">第5章：位置编码（Positional Encoding）——给词语发“座位号”</a></li>
-  <li><a href="#第6章-积木组件-残差连接-层归一化与前馈神经网络">第6章：积木组件——残差连接、层归一化与前馈神经网络</a></li>
-  <li><a href="#第7章-编码器与解码器-从文本理解到自回归生成">第7章：编码器与解码器——从文本理解到自回归生成</a></li>
+  <li><a href="#第-5-章-位置编码-Positional-Encoding-给词语发-座位号">第 5 章：位置编码（Positional Encoding）——给词语发“座位号”</a></li>
+  <li><a href="#第-6-章-积木组件-残差连接-层归一化与前馈神经网络">第 6 章：积木组件——残差连接、层归一化与前馈神经网络</a></li>
+  <li><a href="#第-7-章-编码器与解码器-从文本理解到自回归生成">第 7 章：编码器与解码器——从文本理解到自回归生成</a></li>
+  <li><a href="#训练基础-P09-让一次猜字变成一次学习">训练基础（P09）：让一次猜字变成一次学习</a></li>
   <li><a href="#第8章-实战-手搭一个微型大语言模型-Baby-GPT">第8章：实战——手搭一个微型大语言模型（Baby-GPT）</a></li>
+  <li><a href="#生成优化-P11-KV-Cache-不再重复算历史">生成优化（P11）：KV Cache，不再重复算历史</a></li>
   <li><a href="#第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典 Transformer 到 GPT-4、DeepSeek</a></li>
   <li><a href="#附录-数学公式速查卡与深度学习黑话翻译词典">附录：数学公式速查卡与深度学习黑话翻译词典</a></li>
 </ul>
@@ -2670,8 +2672,8 @@ token，输出只会跟着重排。因果掩码限制可见方向，但与为表
 Encoding）</strong>。</p>
 <p>文档核验日：2026-10-19，来源见相关段落。文档版本不等于本书的完整兼容性测试范围；本章实验验证教学计算，不提供未测的速度或显存提升比例。</p>
 <hr />
-<h1 id="第5章-位置编码-Positional-Encoding-给词语发-座位号">第5章：位置编码（Positional
-Encoding）——给词语发“座位号”</h1>
+<h1 id="第-5-章-位置编码-Positional-Encoding-给词语发-座位号">第 5
+章：位置编码（Positional Encoding）——给词语发“座位号”</h1>
 <blockquote>
 <p>注意力擅长比较内容；要理解句子，还得知道内容出现在什么位置。</p>
 </blockquote>
@@ -3265,11 +3267,12 @@ mask 或有限缓存，即使采用正弦，也可能先在实现处越界。可
 <div class="sourceCode" id="cb41"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>pe <span class="op">=</span> torch.zeros(max_seq_len, d_model, dtype<span class="op">=</span>torch.float32, device<span class="op">=</span><span class="st">&#39;cpu&#39;</span>)</span>
 <span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> pos <span class="kw">in</span> <span class="bu">range</span>(max_seq_len):</span>
-<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>((d_model <span class="op">+</span> <span class="dv">1</span>) <span class="op">//</span> <span class="dv">2</span>):</span>
-<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>        div_term <span class="op">=</span> math.<span class="bu">pow</span>(<span class="fl">10000.0</span>, (<span class="dv">2</span> <span class="op">*</span> k) <span class="op">/</span> d_model)</span>
-<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>        pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
-<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
-<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span></code></pre></div>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>    <span class="co"># 向上取整，奇数宽度的最后一列也要填；k 是“第几对”。</span></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>((d_model <span class="op">+</span> <span class="dv">1</span>) <span class="op">//</span> <span class="dv">2</span>):</span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>        div_term <span class="op">=</span> math.<span class="bu">pow</span>(<span class="fl">10000.0</span>, (<span class="dv">2</span> <span class="op">*</span> k) <span class="op">/</span> d_model)</span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>        pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span></code></pre></div>
 <p>逐行核对：</p>
 <ul>
 <li>外层遍历位置 0 到 <span
@@ -3365,7 +3368,8 @@ href="https://arxiv.org/html/2104.09864v5">RoFormer，arXiv:2104.09864v5</a>，�
 旋转表达位置关系。本章只给路线提示，详细实现留给大纲 P12。</li>
 </ol>
 <hr />
-<h1 id="第6章-积木组件-残差连接-层归一化与前馈神经网络">第6章：积木组件——残差连接、层归一化与前馈神经网络</h1>
+<h1 id="第-6-章-积木组件-残差连接-层归一化与前馈神经网络">第 6
+章：积木组件——残差连接、层归一化与前馈神经网络</h1>
 <blockquote>
 <p>注意力负责交换信息，但交换之后，还需要保留原有表示、调整数值尺度，并在每个位置上加工特征。</p>
 </blockquote>
@@ -3626,10 +3630,14 @@ epsilon，精确公式以上文为准；“方差约 1”有输入方差远大�
 <h3
 id="对照代码每一行对应刚才哪一步">对照代码：每一行对应刚才哪一步</h3>
 <div class="sourceCode" id="cb45"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> x.mean(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>variance <span class="op">=</span> x.var(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>, unbiased<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>x_norm <span class="op">=</span> (x <span class="op">-</span> mean) <span class="op">/</span> torch.sqrt(variance <span class="op">+</span> <span class="va">self</span>.eps)</span>
-<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">self</span>.gamma <span class="op">*</span> x_norm <span class="op">+</span> <span class="va">self</span>.beta</span></code></pre></div>
+class="sourceCode python"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. 每个位置沿最后的特征轴求均值；不混合 batch 或 token。</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>mean <span class="op">=</span> x.mean(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. 除以 D，不是 D-1：这里描述当前向量，不估计总体方差。</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>variance <span class="op">=</span> x.var(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>, unbiased<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. 先减均值，再除以标准差；epsilon 放在平方根里面。</span></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>x_norm <span class="op">=</span> (x <span class="op">-</span> mean) <span class="op">/</span> torch.sqrt(variance <span class="op">+</span> <span class="va">self</span>.eps)</span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 学到的 gamma/beta 之后，输出不必继续保持零均值、近单位方差。</span></span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">self</span>.gamma <span class="op">*</span> x_norm <span class="op">+</span> <span class="va">self</span>.beta</span></code></pre></div>
 <p><code>dim=-1</code> 指最后的特征轴，<code>keepdim=True</code>
 把均值与方差保留成 <code>[B,T,1]</code>，以便广播回
 <code>[B,T,D]</code>。这里只广播同一 token 的统计量，不是在 token
@@ -3725,7 +3733,7 @@ warm-up 的差别。这支持“位置会影响优化”的结论，不支持“
 warm-up”或“Post-LN 一定训练失败”。<a
 href="https://arxiv.org/html/1706.03762v7#S3.SS1">来源：Transformer
 §3.1</a>、<a href="https://arxiv.org/pdf/2002.04745">On Layer
-Normalization，图1、表1、§3</a></p>
+Normalization，图 1、表 1、§3</a></p>
 <hr />
 <h2 id="ffn每个位置独立加工但共用一套工具">6.4
 FFN：每个位置独立加工，但共用一套工具</h2>
@@ -3922,7 +3930,7 @@ Block，不包括完整语言模型的嵌入、位置处理、输出词表投影
 <li>FFN 第二层缩回 <code>[B,T,D]</code>，才可以做第二次残差相加。</li>
 </ul>
 <div class="sourceCode" id="cb49"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Pre-LN，默认 norm_first=True</span></span>
+class="sourceCode python"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Pre-LN: 残差主干不经过 LN，LN 只在计算增量的支路上。</span></span>
 <span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>._attention(<span class="va">self</span>.ln1(x), mask)</span>
 <span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>.ffn(<span class="va">self</span>.ln2(x))</span></code></pre></div>
 <p>第一行右边先求值，再把新的结果赋给 <code>x</code>；第二行拿到的已经是
@@ -3931,7 +3939,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb49-1"><a h
 则只沿最后的特征维加工。</p>
 <p>切换 <code>norm_first=False</code> 后，代码改为：</p>
 <div class="sourceCode" id="cb50"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Post-LN</span></span>
+class="sourceCode python"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Post-LN: 先求增量并加回输入，然后归一化整个和。</span></span>
 <span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> <span class="va">self</span>.ln1(x <span class="op">+</span> <span class="va">self</span>._attention(x, mask))</span>
 <span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> <span class="va">self</span>.ln2(x <span class="op">+</span> <span class="va">self</span>.ffn(x))</span></code></pre></div>
 <p>这和 §6.3 的单支路公式一致，只是连续做了注意力、FFN
@@ -4068,7 +4076,8 @@ Block 的路径读准，再逐个替换组件。<a
 href="https://arxiv.org/abs/1910.07467">路标：RMSNorm 原始论文</a>、<a
 href="https://arxiv.org/abs/2002.05202">GLU Variants Improve
 Transformer</a></p>
-<p>接下来读第7章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention
+<p>接下来读第 7
+章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention
 和训练目标，组成不同的系统。</p>
 <h3 id="来源与核验范围">来源与核验范围</h3>
 <p>以下为论文原文与官方 API 文档；访问核验日期为
@@ -4084,8 +4093,8 @@ Normalization</a>，§3、§3.1：单样本统计、每维增益与偏置。</li
 href="https://arxiv.org/html/1706.03762v7">Attention Is All You
 Need</a>，§3.1、§3.3：Post-LN 与逐位置 ReLU FFN。</li>
 <li>Xiong 等，2020：<a href="https://arxiv.org/pdf/2002.04745">On Layer
-Normalization in the Transformer
-Architecture</a>，图1、表1、§3：两种布局及有条件的初始化/优化分析。</li>
+Normalization in the Transformer Architecture</a>，图 1、表
+1、§3：两种布局及有条件的初始化/优化分析。</li>
 <li><a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html">PyTorch
 2.14 LayerNorm</a>：epsilon、方差口径、参数形状；<a
@@ -4093,7 +4102,8 @@ href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.h
 mask 语义和参数接口。</li>
 </ul>
 <hr />
-<h1 id="第7章-编码器与解码器-从文本理解到自回归生成">第7章：编码器与解码器——从文本理解到自回归生成</h1>
+<h1 id="第-7-章-编码器与解码器-从文本理解到自回归生成">第 7
+章：编码器与解码器——从文本理解到自回归生成</h1>
 <p>前面已经有了词向量、位置编码、注意力和完整积木。现在把它们接成系统：哪些位置可以互相读信息？一张预测分数表，怎样变成逐步写出的句子？</p>
 <p>本章的数值演示来自 <a
 href="code/10_generation_loop.py">code/10_generation_loop.py</a>，只依赖
@@ -4189,7 +4199,8 @@ alt="因果掩码矩阵原理" /></a>
 </figure>
 <p>下面完整保留原来的分数表与手算链。原始分数是人为设定；脚本的
 <code>mask_walkthrough()</code>
-用这些数生成三张表并验证结果，不声称它们是某个模型的测量值。本例每行至少能看见自己，没有全禁用行；全禁用行的处理约定见第3章。</p>
+用这些数生成三张表并验证结果，不声称它们是某个模型的测量值。本例每行至少能看见自己，没有全禁用行；全禁用行的处理约定见第
+3 章。</p>
 <h3 id="表-7-24-词序列的掩码矩阵数值演变推导表">表 7-2：4
 词序列的掩码矩阵数值演变推导表</h3>
 <p>假设输入序列为四个字：“我”、“爱”、“学”、“习”。</p>
@@ -4370,15 +4381,16 @@ i\)</span>，再只对这些分数归一化，最后给未来位置补精确的
 冒充。打印到两位的百分数可能有舍入误差，测试用未舍入值检查行和。</p>
 <h2 id="cross-attention查询来自目标资料来自源句">7.4
 Cross-attention：查询来自目标，资料来自源句</h2>
-<p>图书馆类比里，写作者提出问题，原文资料提供标签和内容。在经典
+<p>图书馆类比里，写作者提出问题，原文资料提供标签和内容。这个类比只帮助区分信息来源：Q/K/V
+都是数值向量，不是人写好的问题、书签或原文摘录，也不保证检索到的内容正确。在经典
 cross-attention 中：</p>
 <ul>
 <li>Q 由解码器当前层的目标侧表示投影得到；</li>
 <li>K/V 由编码器输出投影得到；</li>
 <li>权重沿源序列位置归一化，而不是沿译文词表归一化。</li>
 </ul>
-<p>例如
-batch=1，译文当前有2个位置、原文有3个位置，每头宽度4。省略头轴后，Q=[1,2,4]，K=[1,3,4]，V=[1,3,4]；分数为
+<p>例如 batch=1，译文当前有 2 个位置、原文有 3 个位置，每头宽度
+4。省略头轴后，Q=[1,2,4]，K=[1,3,4]，V=[1,3,4]；分数为
 [1,2,3]，聚合结果为
 [1,2,4]。输入输出长度不必相同，也不需要把它们硬凑成方阵。另取一个 <span
 class="math inline">\(d_v=2\)</span> 的手算例子：给第一行三份资料权重
@@ -4529,17 +4541,20 @@ T&gt;0.\]</span></p>
 </tr>
 </tbody>
 </table></div>
-<p>低温使本例更集中，高温更平坦；随机抽样仍可能选择非最大项，不是“有51%就必选它”。若仍用
-argmax 而不抽样，任意正温度都不会改变最大项的顺序。</p>
-<p>数学公式不能直接除以0。教学函数的 <code>temperature=0</code>
-<strong>另走greedy分支</strong>，同分时选词表中第一个最大项。只有最大项唯一时，<span
+<p>低温使本例更集中，高温更平坦；随机抽样仍可能选择非最大项，不是“有 51%
+就必选它”。若仍用 argmax
+而不抽样，任意正温度都不会改变最大项的顺序。</p>
+<p>数学公式不能直接除以 0。教学函数的 <code>temperature=0</code>
+<strong>另走 greedy
+分支</strong>，同分时选词表中第一个最大项。只有最大项唯一时，<span
 class="math inline">\(T\to0^+\)</span>
 的分布才趋向该项；并列最大项的极限仍共享权重，不等于我们的“选第一个”约定。</p>
 <h2 id="表-7-3从真实脚本输出逐步追踪停止">7.8 表
 7-3：从真实脚本输出逐步追踪停止</h2>
 <p>为了让每个数都可核对，原先的示意概率换成脚本的固定四词输出词表：[明，月，光，<code>&lt;EOS&gt;</code>]。提示中的“床前”由示例直接给定。预测器按前缀长度选用写好的
 logits 行，<strong>没有学习诗歌</strong>；固定行不需要随机种子，下面使用
-greedy。显示的概率统一是温度1的参考分布，并非greedy必须先算的东西。</p>
+greedy。显示的概率统一是温度 1 的参考分布，并非 greedy
+必须先算的东西。</p>
 <div class="table-wrapper"><table style="width:100%;">
 <colgroup>
 <col style="width: 16%" />
@@ -4596,46 +4611,72 @@ greedy。显示的概率统一是温度1的参考分布，并非greedy必须先�
 </table></div>
 <p>两种上限分别运行，不要混在一条追踪里：</p>
 <ul>
-<li><code>max_new_tokens=8</code>：第4步生成
-EOS，立即停止，不用等到8步。返回列表保留
-EOS，界面可另行隐藏特殊符号。</li>
-<li><code>max_new_tokens=2</code>：第2步后就达到新增上限，返回“床前明月”，没有生成
+<li><code>max_new_tokens=8</code>：第 4 步生成 EOS，立即停止，不用等到 8
+步。返回列表保留 EOS，界面可另行隐藏特殊符号。</li>
+<li><code>max_new_tokens=2</code>：第 2
+步后就达到新增上限，返回“床前明月”，没有生成
 EOS，停止原因是长度预算。</li>
 <li><code>max_new_tokens=0</code>：不调用预测函数、无新增
 token。若前缀本来已以 EOS 结尾，本教学函数立即按 EOS 停止。</li>
 </ul>
-<p>这里的上限计<strong>新增token</strong>，不把2个提示token算进去；实际框架里的
-<code>max_length</code> 与 <code>max_new_tokens</code>
+<p>这里的上限计<strong>新增 token</strong>，不把 2 个提示 token
+算进去；实际框架里的 <code>max_length</code> 与
+<code>max_new_tokens</code>
 含义可能不同，调用时需查版本文档。长度停止可能截断一句话；模型预测 EOS
 也不代表内容必然完整或正确。</p>
 <p>把循环逐行拆开看：</p>
 <div class="sourceCode" id="cb55"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>logits <span class="op">=</span> <span class="bu">list</span>(logits_fn(<span class="bu">list</span>(tokens)))</span>
-<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>chosen <span class="op">=</span> vocab[choose_token(logits, temperature, rng)]</span>
-<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>tokens.append(chosen)</span>
-<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> chosen <span class="op">==</span> eos:</span>
-<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> tokens, trace, <span class="st">&quot;eos&quot;</span></span></code></pre></div>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="bu">len</span>(logits) <span class="op">!=</span> <span class="bu">len</span>(vocab):</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&quot;one logit per vocabulary token required&quot;</span>)</span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>chosen <span class="op">=</span> vocab[choose_token(logits, temperature, rng)]</span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>trace.append({<span class="st">&quot;step&quot;</span>: step <span class="op">+</span> <span class="dv">1</span>, <span class="st">&quot;prefix&quot;</span>: <span class="bu">list</span>(tokens),</span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>              <span class="st">&quot;probs_at_t1&quot;</span>: probabilities(logits), <span class="st">&quot;chosen&quot;</span>: chosen})</span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a>tokens.append(chosen)</span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> chosen <span class="op">==</span> eos:</span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> tokens, trace, <span class="st">&quot;eos&quot;</span></span></code></pre></div>
 <p>外层 <code>for step in range(max_new_tokens)</code>
-保证有限次数；每轮取得词表分数、选择一个token、追加前缀，再检查EOS。源码在追加前记录
-<code>trace</code>，以便显示本轮旧前缀。EOS检查不能等到下一轮才做，否则会多调用一次模型。输出格式检查保证每个词表项恰好一个logit。若启用抽样，固定seed便于复查本例，但不承诺跨框架和版本逐位一致。</p>
+保证有限次数；每轮取得词表分数、选择一个 token、追加前缀，再检查
+EOS。源码在追加前记录 <code>trace</code>，以便显示本轮旧前缀。EOS
+检查不能等到下一轮才做，否则会多调用一次模型。输出格式检查保证每个词表项恰好一个
+logit。若启用抽样，固定 seed
+便于复查本例，但不承诺跨框架和版本逐位一致。</p>
 <h2 id="自测运行与下一步">7.9 自测、运行与下一步</h2>
 <div class="sourceCode" id="cb56"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/10_generation_loop.py</span>
 <span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-v</span></span></code></pre></div>
-<p>本章无 PyTorch/GPU
-依赖。回归覆盖三步mask数值、标签错位、温度数表、低温唯一最大项、EOS、最大新增数、零预算、固定seed及非法输入。</p>
+<p>本章无 PyTorch/GPU 依赖。回归覆盖三步 mask
+数值、标签错位、温度数表、低温唯一最大项、EOS、最大新增数、零预算、固定
+seed 及非法输入。</p>
+<h3 id="先回答六个问题">先回答六个问题</h3>
 <ol type="1">
-<li>原文3个位置、目标2个位置，cross-attention分数该为几行几列？2×3；两行目标query，各查询三份源资料。若三份二维V及权重如§7.4，输出是[0.7,0.8]。</li>
-<li>输入“BOS 我 爱”，标签是“BOS 我 爱”吗？不是。若完整样本是“BOS 我 爱
-EOS”，输入是“BOS 我 爱”，标签是“我 爱
-EOS”，最后一个位置预测停止符。</li>
-<li>logits=[2,1,0]，温度0.5一定选A吗？抽样不一定，A约86.68%；greedy才确定选A。T趋0的结论还要检查是否唯一最大。</li>
-<li>表7-3在新增上限2时何时停止？第2步，得到4个总token（2提示+2新增），不是等EOS出现才停。</li>
-<li>encoder-only没有因果mask，所以可以不处理padding吗？不可以；允许前后文不代表补位是有用内容。</li>
-<li>第一次生成“明”之前有没有decode输出“明”的表示？不需要。prefill的最后位置logits已可选出“明”；再将“明”作为下一次条件输入。我们的示例是全前缀重算，不是KV缓存实现。</li>
+<li>原文 3 个位置、目标 2 个位置，cross-attention
+分数该为几行几列？若三份二维 V 及权重如 §7.4，输出是多少？</li>
+<li>输入“BOS 我 爱”，标签是“BOS 我 爱”吗？</li>
+<li>logits=[2,1,0]，温度 0.5 一定选 A 吗？</li>
+<li>表 7-3 在新增上限 2 时何时停止？</li>
+<li>encoder-only 没有因果 mask，所以可以不处理 padding 吗？</li>
+<li>第一次生成“明”之前有没有 decode 输出“明”的表示？</li>
 </ol>
-<p>下一章保留现有 Baby-GPT
-训练实践。扩展大纲的训练闭环与评估章节将另批完成，本章不把固定logits演示当成它们已经落地。</p>
+<h3 id="参考答案-3">参考答案</h3>
+<ol type="1">
+<li>2×3；两行目标 query，各查询三份源资料。若三份二维 V 及权重如
+§7.4，输出是 [0.7,0.8]。</li>
+<li>不是。若完整样本是“BOS 我 爱 EOS”，输入是“BOS 我 爱”，标签是“我 爱
+EOS”，最后一个位置预测停止符。</li>
+<li>抽样不一定，A 约 86.68%；greedy 才确定选 A。T 趋 0
+的结论还要检查是否唯一最大。</li>
+<li>第 2 步，得到 4 个总 token（2 提示 + 2 新增），不是等 EOS
+出现才停。</li>
+<li>不可以；允许前后文不代表补位是有用内容。</li>
+<li>不需要。prefill 的最后位置 logits
+已可选出“明”；再将“明”作为下一次条件输入。我们的示例是全前缀重算，不是
+KV 缓存实现。</li>
+</ol>
+<p>下一单元
+P09（训练基础，07a）把数据切分、交叉熵、梯度更新与评估串成训练闭环，再进入第
+8 章 Baby-GPT 实践。本章的固定 logits
+演示仍只是生成控制流程，不等于训练模型。</p>
 <h2 id="原始来源与版本">原始来源与版本</h2>
 <ul>
 <li><a href="https://arxiv.org/html/1706.03762v7">Attention Is All You
@@ -4644,102 +4685,560 @@ Need，v7，§3.1、§3.2.3、§3.4</a>：双塔结构、因果约束、目标�
 原始论文，§3</a>：双向编码器预训练；“双向”不是任何任务都可看未来答案。</li>
 <li><a
 href="https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation">Transformers
-4.57.1
-生成参数文档</a>：temperature、EOS及长度参数的接口语义；本章不用这个库执行实验。</li>
+4.57.1 生成参数文档</a>：temperature、EOS
+及长度参数的接口语义；本章不用这个库执行实验。</li>
 <li><a
 href="https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation">Transformers
-4.57.1
-缓存说明</a>：理解历史K/V复用的概念路标。文档核验日期：2026-10-19。</li>
+4.57.1 缓存说明</a>：理解历史 K/V
+复用的概念路标。文档核验日期：2026-10-19。</li>
 </ul>
 <hr />
-<h1 id="第8章-实战-手搭一个微型大语言模型-Baby-GPT">第8章：实战——手搭一个微型大语言模型（Baby-GPT）</h1>
-<blockquote>
-<p>“纸上得来终觉浅，绝知此事要躬行。没有什么比亲眼看着一行行代码从乱码训练到出口成章更令人震撼的了。”</p>
-</blockquote>
-<hr />
-<h2 id="我们的任务目标诗词小才子-baby-gpt">8.1
-我们的任务目标：诗词小才子 Baby-GPT</h2>
-<p>在本章中，我们将抛开一切复杂的工业级封装，从第一行代码开始，亲手搭建一个真正的、完整的自回归大语言模型——<strong>Baby-GPT</strong>！</p>
-<p>我们让它学习李白《静夜思》、王之涣《登鹳雀楼》和孟浩然《春晓》。三首诗分开喂，不粘成一条。
-训练前，给它“床前”，它会吐出乱码。训练 80 轮后，损失会降到接近
-0，三个课文开头都能接回去。再给一个不是开头的“明月”，它就接错。请把这个限度一起看完。</p>
-<hr />
-<h2 id="模型超参数与配置规格表">8.2 模型超参数与配置规格表</h2>
-<p>为了让这个实验在普通笔记本的 CPU
-上也能较快跑完，我们把数据和模型都控制得很小。实际耗时会随电脑、PyTorch
-版本和线程数变化，不把“2 秒”当成硬性承诺：</p>
-<h3 id="表-8-1baby-gpt-架构超参数规格表">表 8-1：Baby-GPT
-架构超参数规格表</h3>
+<h1 id="训练基础-P09-让一次猜字变成一次学习">训练基础（P09）：让一次猜字变成一次学习</h1>
+<p>前面我们已经装好了注意力、残差和因果掩码。但“能算出下一个字的分数”不等于“已经学会猜字”。本章先把训练循环慢放，再到下一章《Baby-GPT》拼完整模型。</p>
+<p><strong>读完你应该能回答：这一批题从哪里来，答案对齐哪一格，错多少，谁计算梯度，谁修改参数，以及凭什么说模型变好了。</strong>
+先懂 Python 切片与前几章的 <code>[B,T,C]</code>
+就够了；导数只用“向哪个方向微调”的直觉。</p>
+<h2 id="p09.1-练习册答题纸与考试卷">P09.1 练习册、答题纸与考试卷</h2>
+<p>训练像练习默写：模型交一份答题纸，损失函数评分，梯度告诉我们怎样微调，优化器实施调整。类比的边界是：模型没有老师式理解；一次更新是数值计算，不保证每道题都改对，也不保证下一次总分必然更好。</p>
+<pre class="text"><code>原文 -&gt; 按文档分组 -&gt; 训练文档 -&gt; 抽一个 batch
+                         |           |
+                         |       前向得到 logits
+                         |           |
+                         |       对齐答案算 loss
+                         |           |
+                         |       backward 算梯度
+                         |           |
+                         +------ step 改参数
+
+独立保留文档 -----------------&gt; 只评分，不更新</code></pre>
+<p>先分文档，再抽窗口。把同一首诗的许多重叠窗口随机分成“训练/验证”，相当于考试卷藏着练习册里几乎相同的题。窗口不相同，也不代表来源独立。</p>
+<p>本章把三首诗中的前两首作为训练来源，把整首《春晓》留下。每个窗口只取自一首诗，不把上一首最后一字接到下一首首字。这个划分可演示评估流程，<strong>只有一个保留文档，不是可靠的泛化基准</strong>；共同标点、体裁与小样本噪声都会影响结果。真正做项目，还要按来源去重，留出更多文档；用于选择超参数的是验证集，最终测试集不能反复拿来调参。本章没有声称拥有独立最终测试集。</p>
+<p>为复用下一章词表，本实验预先用三首诗的全部字符定义 57
+字词表。训练不读取第三首的标签，但词表知道第三首出现哪些字：这是
+<strong>transductive（利用了保留数据的词汇信息）设置</strong>，不是严格训练集独立构建的
+tokenizer。更严格的方案要预先固定词表，或只在训练文档建词表并明确未知字符策略。即使知道字符
+ID，模型也没有学到这些字符在第三首中的顺序。</p>
+<h2 id="p09.2-输入与标签只错开一个位置">P09.2
+输入与标签只错开一个位置</h2>
+<p>假设文本是“床前明月光”，取长度 <code>T=4</code>，需要先取 <strong>5
+个字符</strong>：</p>
 <div class="table-wrapper"><table>
-<colgroup>
-<col style="width: 23%" />
-<col style="width: 23%" />
-<col style="width: 29%" />
-<col style="width: 23%" />
-</colgroup>
 <thead>
 <tr>
-<th style="text-align: left;">超参数名称</th>
-<th style="text-align: left;">变量名</th>
-<th style="text-align: center;">数值</th>
-<th style="text-align: left;">通俗初学者解释</th>
+<th>时间格 t</th>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>字符词表大小</strong></td>
-<td style="text-align: left;"><code>vocab_size</code></td>
-<td style="text-align: center;"><strong>57</strong></td>
-<td
-style="text-align: left;">训练诗句中所有出现过的不同汉字与标点总数</td>
+<td>输入 x</td>
+<td>床</td>
+<td>前</td>
+<td>明</td>
+<td>月</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>词向量特征维度</strong></td>
-<td style="text-align: left;"><code>d_model</code></td>
-<td style="text-align: center;"><strong>48</strong></td>
-<td style="text-align: left;">每个汉字用 48
-个特征数字（坐标）来描述</td>
+<td>目标 y</td>
+<td>前</td>
+<td>明</td>
+<td>月</td>
+<td>光</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>注意力头数</strong></td>
-<td style="text-align: left;"><code>num_heads</code></td>
-<td style="text-align: center;"><strong>4</strong></td>
-<td style="text-align: left;">分成 4 个专家小分队，每个分队维度为 <span
-class="math inline">\(48/4 = 12\)</span></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>积木块层数</strong></td>
-<td style="text-align: left;"><code>num_layers</code></td>
-<td style="text-align: center;"><strong>2</strong></td>
-<td style="text-align: left;">堆叠 2 层 Pre-LN Transformer Block</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>最大上下文窗口</strong></td>
-<td style="text-align: left;"><code>max_seq_len</code></td>
-<td style="text-align: center;"><strong>128</strong></td>
-<td style="text-align: left;">模型单次能够阅读和记忆的最长汉字数</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>学习率</strong></td>
-<td style="text-align: left;"><code>learning_rate</code></td>
-<td style="text-align: center;"><strong>0.01</strong></td>
-<td style="text-align: left;">每次梯度下山微调参数的步伐大小</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>总参数量</strong></td>
-<td style="text-align: left;"><code>Parameters</code></td>
-<td style="text-align: center;"><strong>67872</strong></td>
-<td
-style="text-align: left;">运行脚本时会打印这个整数。聊天模型的参数量比它大很多个数量级，GPT-4
-的准确数字官方没有公布</td>
+<td>这一格能看的输入</td>
+<td>床</td>
+<td>床前</td>
+<td>床前明</td>
+<td>床前明月</td>
 </tr>
 </tbody>
 </table></div>
+<p>Python 切片是
+<code>x = ids[start:start+T]</code>，<code>y = ids[start+1:start+T+1]</code>。右端不包含。<code>start+T</code>
+必须小于文档长度，否则最后一个输入没有答案。</p>
+<p>为什么整行输入包含“明”，预测“前”的时候不会偷看？因为前面学过的因果掩码限制每一格只能看自己和左边。标签是评分依据，不能作为当前格输入的额外通道。训练中一次并行算全部位置，生成时则只有已有前缀。</p>
+<p>脚本的 <code>shifted_pair</code> 负责切片，<code>assert_shift</code>
+用原始文档核对，不只比较 x/y 的长度。若误写
+<code>y=x</code>，形状完全正确，训练目标却从“预测下一个字”变成了“抄当前字”。</p>
+<h3 id="亲手做一次作弊反例">亲手做一次作弊反例</h3>
+<p>给定输入 ID <code>[0,1,2]</code>，每一格都把当前输入 ID 的分数设成
+12，其他三个类别设成 0。这个“模型”没有训练：</p>
+<ul>
+<li>错误答案 <code>[0,1,2]</code>：平均 loss 约
+<strong>0.00001843</strong>。</li>
+<li>正确的下一字答案 <code>[1,2,3]</code>：平均 loss 约
+<strong>12.00001843</strong>。</li>
+</ul>
+<p>一个漂亮的 loss 可以来自一道错误的题。因果掩码不能修好
+<code>y=x</code>，因为当前格本来就允许看见自己。</p>
+<h2 id="p09.3-损失到底在罚什么手算交叉熵">P09.3
+损失到底在罚什么：手算交叉熵</h2>
+<p>模型输出的是任意实数分数 logits，不必为正，也不要求总和为 1。softmax
+将分数变成概率；交叉熵取正确答案概率的负自然对数：<code>loss = -ln(p_correct)</code>。正确答案概率越小，罚得越重。对数底数为
+e，单位可称 nats。</p>
+<p>下面只有 A/B 两类、两个待评分位置，二者正确答案都是 A。令
+<code>ln(3)=1.098612289</code>：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>位置</th>
+<th>logits (A,B)</th>
+<th>softmax (A,B)</th>
+<th>正确答案</th>
+<th>单位置 loss</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>(ln(3), 0)</td>
+<td>(0.75, 0.25)</td>
+<td>A</td>
+<td>-ln(0.75) = 0.287682072</td>
+</tr>
+<tr>
+<td>1</td>
+<td>(0, ln(3))</td>
+<td>(0.25, 0.75)</td>
+<td>A</td>
+<td>-ln(0.25) = 1.386294361</td>
+</tr>
+</tbody>
+</table></div>
+<p>默认平均损失为
+<code>(0.287682072 + 1.386294361) / 2 = 0.836988217</code>。不是先把正确答案概率平均成
+0.5 再取负对数，后者是不同的量。PyTorch 的 <code>cross_entropy</code>
+已包含稳定的 log-softmax 计算，<strong>传 logits，不要先 softmax
+再传进去</strong>。</p>
+<p>一般 batch 有 B 行、每行 T 格、词表 V 个字：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>对象</th>
+<th>形状 / 类型</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>x、y</td>
+<td><code>[B,T]</code>，整数 long</td>
+<td>输入 ID、正确目标 ID</td>
+</tr>
+<tr>
+<td>logits</td>
+<td><code>[B,T,V]</code>，浮点</td>
+<td>每格每个候选字的分数</td>
+</tr>
+<tr>
+<td>用于 CE 的 logits</td>
+<td><code>[B*T,V]</code></td>
+<td>把格子排成一个题目列表</td>
+</tr>
+<tr>
+<td>用于 CE 的 y</td>
+<td><code>[B*T]</code></td>
+<td>每题一个类别编号</td>
+</tr>
+<tr>
+<td>mean loss</td>
+<td>标量</td>
+<td>本 batch 所有格子的平均损失</td>
+</tr>
+</tbody>
+</table></div>
+<p>这里没有 padding、类别权重或忽略标签，每格权重相同。以后有 padding
+时，分母应是有效标签数，不能把 padding
+算进去。评估多份长度不同的文档时，也要按预测 token
+数加权，不是把每份文档的平均 loss 再简单平均。</p>
+<h2 id="p09.4-backward-不更新参数step-才更新">P09.4 backward
+不更新参数，step 才更新</h2>
+<p>先把模型缩到最小：只有两个可训练分数
+<code>z=[ln(3),0]</code>，正确答案 A。此时梯度是“预测概率减真实
+one-hot”：</p>
+<pre class="text"><code>预测概率             [0.75, 0.25]
+真实答案             [1.00, 0.00]
+loss 对 z 的梯度     [-0.25, 0.25]
+学习率 0.1 的 SGD:
+新 z = 旧 z - 0.1 * 梯度 = [1.123612289, -0.025]</code></pre>
+<p>A 分数上升、B 分数下降，新 loss 为
+<strong>0.275414489</strong>，小于原来的
+0.287682072。脚本用标准库生成这些数值；测试另用微小扰动的有限差分验证梯度，不只检查输出里是否有这串数字。这个例子是直接优化
+logits 的单题 SGD，真实模型要把梯度沿计算图反传到
+embedding、投影矩阵等参数。</p>
+<p>两格取 mean 时，每格梯度还要除以 2，因此上表两个位置的梯度分别是
+<code>[-0.125,0.125]</code> 和 <code>[-0.375,0.375]</code>。换成
+sum，梯度也会跟着变；学习率不能脱离 loss reduction 讨论。</p>
+<p>下面是<a href="code/11_training_loop.py">实验源码</a>的
+<code>train_step</code> 核心：</p>
+<div class="sourceCode" id="cb59"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>model.train()</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>optimizer.zero_grad(set_to_none<span class="op">=</span><span class="va">True</span>)  <span class="co"># backward adds; do not mix batches accidentally</span></span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>logits, loss <span class="op">=</span> model(x, y)</span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>loss.backward()</span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>optimizer.step()</span></code></pre></div>
+<p>逐行拆开：</p>
+<ol type="1">
+<li><code>train()</code> 设置训练模式，不是“开始训练”的魔法按钮。</li>
+<li><code>zero_grad</code> 清掉上一轮梯度。这不是把权重清零。</li>
+<li>前向调用模型，得到分数和当前损失；autograd 记录需要求导的运算。</li>
+<li><code>backward()</code> 按链式法则算梯度并写入参数的
+<code>.grad</code>，还没有修改权重。</li>
+<li><code>step()</code> 根据梯度更新权重。脚本使用 AdamW，下面的手算则用
+SGD；不要把 SGD 的一步公式当成 AdamW 的精确公式。</li>
+</ol>
+<p>为什么每轮清零？PyTorch
+默认把新梯度加到旧梯度上。对同一个参数、不更新参数地反传同一道题两次，<code>[-0.25,0.25]</code>
+会变成 <code>[-0.5,0.5]</code>。有意积累多个 micro-batch
+可以节省显存，但需要设计缩放和更新时机；本实验每 batch
+更新一次，不需要跨 batch 积累。</p>
+<h2 id="p09.5-traineval-与-no_grad-是三件不同的事">P09.5 train、eval 与
+no_grad 是三件不同的事</h2>
+<p><code>eval()</code> 影响 Dropout、BatchNorm
+等有模式差异的层，<strong>不禁止梯度</strong>；<code>no_grad()</code>
+不记录求导图，<strong>不自动切成 eval
+模式</strong>。评估通常两者一起使用，且不调用
+optimizer。下面是独立示意代码，不是源码摘录：</p>
+<div class="sourceCode" id="cb60"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>was_training <span class="op">=</span> model.training</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>model.<span class="bu">eval</span>()</span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> torch.no_grad():</span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>    logits, loss <span class="op">=</span> model(x, y)</span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>model.train(was_training)</span></code></pre></div>
+<p>实验的 <code>evaluate</code> 还通过 <code>try/finally</code>
+保证恢复模式。当前 BabyGPT 没有
+Dropout/BatchNorm，因此切换模式可能不改变它的数值输出；测试用一个
+<code>Dropout(p=1)</code> 小对照说明模式的真实作用，而不虚构 BabyGPT
+的随机层。</p>
+<p>评估 loss
+时，保留诗的前面字符作为已知前缀是允许的，这是条件概率评分；没有用其标签更新参数。不要把“不给梯度”误写为“连保留文档都不能前向读取”。不过，反复根据这个
+loss
+挑种子、调步数，会让它成为调参验证集，不能再声称是从未碰过的最终测试。</p>
+<h2 id="p09.6-cpu-实验同一个种子再跑一次">P09.6 CPU
+实验：同一个种子再跑一次</h2>
+<p>从仓库根目录执行。无需下载模型、无需 GPU，也不写 checkpoint：</p>
+<div class="sourceCode" id="cb61"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/11_training_loop.py <span class="at">--scalar-only</span></span>
+<span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/11_training_loop.py <span class="at">--steps</span> 40 <span class="at">--seeds</span> 7 7 11</span>
+<span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_training_loop.py <span class="at">-v</span></span></code></pre></div>
+<p>第一条只用标准库；第二条需要稳定版 PyTorch
+<strong>2.14.x</strong>。缺失或不兼容版本时它解释原因并退出，不自动安装；测试仍运行标量部分，只跳过张量部分。已配置仓库环境可把
+<code>python</code> 换成 <code>.venv/bin/python</code>。</p>
+<p>教学配置是 CPU 单线程、<code>d_model=16</code>、4 头、1 层、最大位置
+32、B=4、T=8、AdamW 学习率 0.003、40 次更新。每次从两首训练诗随机取 4
+个窗口；共消费 40×4×8=1280 个预测位置，<strong>包含重复，不等于 1280
+个独立样本</strong>。每次运行重新初始化模型与优化器，同时固定 Python
+抽样 RNG 和 PyTorch 种子，并开启确定性算法。</p>
+<p>下面是 2026-10-19、PyTorch 2.14.1+cpu
+的复核记录，显示到六位小数。seed 11 保留后值采用独立审核环境的
+4.397413730…，四舍五入为 4.397414；本地复跑为 4.397413254…，相差一个
+float32 ULP。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU
+数值差异，而不容许学习率改变造成的偏移。训练/保留 loss
+都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>运行</th>
+<th>首 batch loss</th>
+<th>训练文档 loss 前→后</th>
+<th>保留文档 loss 前→后</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>seed 7</td>
+<td>4.280819</td>
+<td>4.219313 → 3.175501</td>
+<td>4.494203 → 4.843005</td>
+</tr>
+<tr>
+<td>seed 7 再跑</td>
+<td>4.280819</td>
+<td>4.219313 → 3.175501</td>
+<td>4.494203 → 4.843005</td>
+</tr>
+<tr>
+<td>seed 11</td>
+<td>4.219005</td>
+<td>4.189975 → 3.263426</td>
+<td>3.923873 → 4.397414</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="先检查标签分布再解释-loss">先检查标签分布，再解释 loss</h3>
+<p>这里“训练见过”严格指两首训练诗的<strong>下一字标签集合</strong>，即各自
+<code>encode(doc)[1:]</code>
+的并集，不是全部输入字符，更不是预先定义的全语料词表。留出诗有 23
+个目标位置，其中 19 个目标从未作为训练答案出现；共有的 4
+个目标只包括“，”和“。”各两次。计数按出现次数，不按不同字符数。</p>
+<p><code>evaluate_strata</code>
+逐位置计算不归约的交叉熵，再按这个集合分组；训练前后都输出
+count、loss_sum 和 mean loss：</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>运行</th>
+<th>训练标签见过的目标数</th>
+<th>见过组 loss 前→后</th>
+<th>未见过的目标数</th>
+<th>未见组 loss 前→后</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>seed 7（重复相同）</td>
+<td>4 / 23</td>
+<td>4.266185 → 3.506729</td>
+<td>19 / 23</td>
+<td>4.542207 → 5.124327</td>
+</tr>
+<tr>
+<td>seed 11</td>
+<td>4 / 23</td>
+<td>4.072877 → 3.441714</td>
+<td>19 / 23</td>
+<td>3.892503 → 4.598613</td>
+</tr>
+</tbody>
+</table></div>
+<p>两组不是各占一半：整体均值应是
+<code>(4 × 见过组 loss + 19 × 未见组 loss) / 23</code>。测试检查这个重组合等于总体
+loss（允许 float32 归约误差）。共有目标的 loss
+实际下降；整体上升主要来自那 19 个从未作为训练答案的目标。在训练 softmax
+分类时，这些类别没有正目标奖励，但仍出现在分母里，其分数可能被相对压低。<strong>这次留出
+loss 上升主要反映标签分布不匹配，本实验不能证明过拟合。看到留出 loss
+上升，先检查留出标签是否见过。</strong> 只有 4
+个共有标点变好，也不能据此推断词汇或语言泛化变好。</p>
+<p>过拟合指模型过度适应训练材料、在可比的新样本上表现变差；训练 loss
+下降而验证 loss
+上升只是需要诊断的现象，不是自动成立的结论。若要演示它，需要另设词汇覆盖可比、来源独立的留出材料，固定评估口径并跟踪训练过程，例如检查验证
+loss
+是否先下降后上升。本批只讨论过拟合概念，<strong>没有演示或证实过拟合</strong>，也不将不匹配的两组数据包装成过拟合实验。</p>
+<p>同种子同环境重复是复现实验的检查，不是跨硬件/版本逐位相同的承诺；换种子也不是新增独立测试语料。</p>
+<p>下一章的 S0 会在三首诗上训练并检查背诵，它是
+<strong>同语料记忆/工程基线</strong>。本章两首训练、一首保留是另一种评估演示，不要把两个
+loss
+混在同一条曲线上。生成检查能发现乱码、循环、提示词接不上等直观问题，但背出训练诗并不证明新诗写作或通用语言能力。只有
+loss 和生成片段一起看，再核对数据来源，才不会被“出口成章”迷惑。</p>
+<h2 id="p09.7-自测先答再看后面的答案">P09.7
+自测：先答，再看后面的答案</h2>
+<ol type="1">
+<li>对 ID <code>[4,7,1,9,3]</code>，start=1、T=3，x/y 各是什么？把 y
+设为 x，因果掩码能否补救？</li>
+<li>表中两道题的 mean loss 是多少？为什么不是
+<code>-ln(0.5)</code>？</li>
+<li>单题 logits <code>[ln(3),0]</code>、答案 A，梯度与学习率 0.1 的 SGD
+更新后 logits 是什么？若两题取 mean，梯度怎样变化？</li>
+<li>不调用 step，连续 backward 同一道题两次会怎样？在哪一行清零？</li>
+<li><code>eval()</code> 是否关闭 autograd？<code>no_grad()</code>
+是否关闭 Dropout？当前 BabyGPT 切换模式为什么可能没有数值变化？</li>
+<li>把同诗重叠窗口分到训练和验证有什么问题？本实验整首保留后，为什么仍不能据此声称通用语言能力或证明过拟合？</li>
+</ol>
+<h3 id="参考答案与可执行测试对应">参考答案与可执行测试对应</h3>
+<ol type="1">
+<li>x=<code>[7,1,9]</code>，y=<code>[1,9,3]</code>；不能。当前格合法地能看见自己，错误任务变成复制。对应
+<code>test_shift_and_wrong_shift_mutation</code> 与
+<code>test_copy_cheat_is_not_next_token_skill</code>，错误标签会被拒绝，而作弊低
+loss 会被实际计算出来。</li>
+<li>0.836988217。交叉熵是各题负对数的均值，不是概率均值的负对数。对应
+<code>test_hand_calculated_cross_entropy</code> 与
+<code>test_reduction_and_autograd_match_handcalc</code>。</li>
+<li>梯度 <code>[-0.25,0.25]</code>，更新后
+<code>[1.123612289,-0.025]</code>；两题取 mean 时每题梯度除以 2。对应
+<code>test_gradient_finite_difference_and_update</code> 与
+<code>test_reduction_and_autograd_match_handcalc</code>。</li>
+<li>梯度累加成两倍；下一批前调用
+<code>optimizer.zero_grad(set_to_none=True)</code>。对应
+<code>test_gradient_accumulation_and_clear</code>；<code>test_train_step_rejects_zero_grad_omission_numerically</code>
+另跑不清零的错误循环，确认其参数偏离正确参考，避免仅靠搜一行源码“证明正确”。</li>
+<li>两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。对应
+<code>test_eval_no_grad_and_restore_mode</code>：用真实
+<code>evaluate</code> 前向的 pre-hook 确认 <code>training=False</code>
+与 <code>is_grad_enabled=False</code>，另检查权重不变、模式恢复，并用
+Dropout
+对照。<code>test_evaluate_unequal_documents_token_weighted</code> 使用 1
+个与 4 个目标的不等长文档，核对 token 加权 3.4，而不是文档均值
+2.5。</li>
+<li>重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23
+个留出目标未在训练标签中出现，4 个共有标点的 loss
+反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本批未演示过拟合。下一章
+S0 更只是同语料记忆。对应
+<code>test_split_and_leakage_mutation</code>：将训练文档混入保留集合会报错；<code>test_fixed_seed_repeat_and_heldout_report</code>
+检查重复运行；<code>test_40_step_snapshots_and_label_strata</code>
+固定种子 7/11 的 40 步结果、实际学习率、19/23
+计数、共有组下降方向及两组重组合，不断言“训练必能改善整体保留
+loss”。</li>
+</ol>
+<h2 id="p09.8-来源与边界">P09.8 来源与边界</h2>
+<p>核验日期：2026-10-19。API 依据锁定为 PyTorch 2.14 文档，运行数值使用
+2.14.1+cpu：</p>
+<ul>
+<li><a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.CrossEntropyLoss.html">CrossEntropyLoss</a>：logits
+输入、类别标签与 reduction。</li>
+<li><a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.optim.Optimizer.zero_grad.html">Optimizer.zero_grad</a>：梯度清理与
+<code>set_to_none</code>。</li>
+<li><a
+href="https://docs.pytorch.org/docs/2.14/notes/autograd.html">Autograd
+mechanics</a>：梯度记录、no-grad 与 eval 的区别。</li>
+<li>大纲 S14 的 <a
+href="https://huggingface.co/docs/transformers/index">Transformers
+文档入口</a> 是进一步学习训练框架的导航；本实验不调用
+Transformers，也不把动态文档版本冒充已验证依赖。</li>
+<li>大纲 S18 <a href="https://arxiv.org/abs/2203.15556">Training
+Compute-Optimal Large Language Models</a>
+研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出
+scaling law，也不据此承诺增加步数就能提升泛化。</li>
+</ul>
 <hr />
-<h2 id="数据流与模型前向传播全景图">8.3 数据流与模型前向传播全景图</h2>
-<p>下图清晰展示了一个汉字序列从输入、穿过积木块、直到预测下一个字的全部旅程：</p>
-<p>为了看清每一步，把这次旅程分为“准备输入 → 提炼信息 →
-训练或生成”三段。图中所有形状都对应本章的 Baby-GPT 配置。</p>
+<h1 id="第8章-实战-手搭一个微型大语言模型-Baby-GPT">第8章：实战——手搭一个微型大语言模型（Baby-GPT）</h1>
+<p>上一单元 P09 把“数据 → 预测 → 损失 → 梯度 →
+更新”走了一遍。现在不再换一套神秘组件，而是把已经学过的嵌入、注意力和
+Block 接起来，留下一份后续改进都能比较的 <strong>S0 基线</strong>。</p>
+<p>本章的目标是训练一个能背三首诗的微型自回归模型，不是训练通用聊天助手。先确认它算对，再看它记住了什么，最后保存与重新载入同一套参数。下一单元
+P11 只改变生成的计算方法，加 KV cache；不会偷偷换模型再宣称提速。</p>
+<h2 id="任务边界与运行">8.1 任务、边界与运行</h2>
+<p>配套 <a href="code/07_baby_gpt.py">code/07_baby_gpt.py</a>
+保留三首完整诗：《静夜思》《登鹳雀楼》《春晓》。每首 24
+个字符（含标点），共 72 个字符；字符词表 57 项。</p>
+<div class="sourceCode" id="cb62"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python3</span> code/07_baby_gpt.py</span>
+<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_baby_gpt.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>需要 <code>requirements.txt</code> 中的 CPU PyTorch；本文数值来自
+Python 3.12、PyTorch 2.14.1+cpu、种子
+42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同
+seed 承诺跨平台逐位相同。</p>
+<p>本章把三首诗全用于训练，观察的是<strong>训练集记忆</strong>。P09
+的整首留出实验才有训练与验证之分，而且数据仍小到不足以评价通用语言能力。本章的生成例子也不是盲测集。不要将每首诗的重叠窗口随机分组后叫作独立泛化评估。</p>
+<h2 id="先读配置与参数账">8.2 先读配置与参数账</h2>
+<h3 id="表-8-1s0-的固定配置">表 8-1：S0 的固定配置</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>数值</th>
+<th>在模型中的作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vocab_size</code></td>
+<td>57</td>
+<td>每个位置输出 57 个 logits</td>
+</tr>
+<tr>
+<td><code>d_model</code></td>
+<td>48</td>
+<td>残差主干的宽度</td>
+</tr>
+<tr>
+<td><code>num_heads</code></td>
+<td>4</td>
+<td>每头宽度 48 / 4 = 12，不是 4 个独立语言模型</td>
+</tr>
+<tr>
+<td><code>num_layers</code></td>
+<td>2</td>
+<td>两个 Pre-LN 因果 Block</td>
+</tr>
+<tr>
+<td><code>max_seq_len</code></td>
+<td>128</td>
+<td>可学习位置表和因果 mask 的容量</td>
+</tr>
+<tr>
+<td>FFN 中间宽度</td>
+<td>192</td>
+<td>4 × 48，激活使用 GELU</td>
+</tr>
+<tr>
+<td>学习率 / 更新次数</td>
+<td>0.01 / 80</td>
+<td>本章记忆实验，不是通用推荐参数</td>
+</tr>
+<tr>
+<td>参数总数</td>
+<td>67872</td>
+<td>不包含不训练的 mask 缓冲区</td>
+</tr>
+</tbody>
+</table></div>
+<p>可以自己逐项加总，而不是只相信打印结果：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>部件</th>
+<th>算式</th>
+<th>参数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>词嵌入</td>
+<td>57 × 48</td>
+<td>2736</td>
+</tr>
+<tr>
+<td>可学习位置表</td>
+<td>128 × 48</td>
+<td>6144</td>
+</tr>
+<tr>
+<td>每个 Block 的 Q/K/V/O（无偏置）</td>
+<td>4 × 48²</td>
+<td>9216</td>
+</tr>
+<tr>
+<td>每个 Block 的 FFN（有偏置）</td>
+<td>48 × 192 + 192 + 192 × 48 + 48</td>
+<td>18672</td>
+</tr>
+<tr>
+<td>每个 Block 的两个 LayerNorm</td>
+<td>2 × (48 + 48)</td>
+<td>192</td>
+</tr>
+<tr>
+<td>两个 Block</td>
+<td>2 × (9216 + 18672 + 192)</td>
+<td>56160</td>
+</tr>
+<tr>
+<td>最终 LayerNorm</td>
+<td>48 + 48</td>
+<td>96</td>
+</tr>
+<tr>
+<td>输出头（无偏置）</td>
+<td>48 × 57</td>
+<td>2736</td>
+</tr>
+<tr>
+<td>总计</td>
+<td>2736 + 6144 + 56160 + 96 + 2736</td>
+<td>67872</td>
+</tr>
+</tbody>
+</table></div>
+<p>输出头与词嵌入是两份参数，并没有权重绑定。第 6 章用
+<code>nn.MultiheadAttention</code> 的带偏置示例，所以不能照搬它的 MHA
+公式。GELU 不含可训练参数；它与 ReLU 都提供非线性，但函数不同。[来源
+1]</p>
+<p><code>GPTConfig</code> 记录架构配置，<code>model.config</code>
+可以拿回来核对。更改宽度、层数、词表或位置容量会改变参数形状，不能把不兼容
+checkpoint 硬塞进去。</p>
+<h2 id="一个短句的完整数据流">8.3 一个短句的完整数据流</h2>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-08.svg" title="点击查看原尺寸图"><img
 src="assets/rendered/flow-08.svg" class="book-diagram" width="268"
@@ -4764,29 +5263,9 @@ alt="Baby-GPT 第三段：训练与生成的分岔。训练时对各位置的下
 Baby-GPT 第三段：训练与生成的分岔
 </div>
 </div>
-<hr />
-<h2 id="完整源代码深度精讲保姆级逐行拆解">8.4
-完整源代码深度精讲（保姆级逐行拆解）</h2>
-<p>让我们逐段拆解配套脚本 <a
-href="code/07_baby_gpt.py">code/07_baby_gpt.py</a>。</p>
-<h3 id="词表与分词器tokenizer">1. 词表与分词器（Tokenizer）</h3>
-<div class="sourceCode" id="cb57"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 训练语料：三首经典唐诗</span></span>
-<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>text_corpus <span class="op">=</span> (</span>
-<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;床前明月光，疑是地上霜。举头望明月，低头思故乡。&quot;</span></span>
-<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;白日依山尽，黄河入海流。欲穷千里目，更上一层楼。&quot;</span></span>
-<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。&quot;</span></span>
-<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a><span class="co"># 提取不重复汉字构建字典</span></span>
-<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">list</span>(<span class="bu">set</span>(text_corpus)))</span>
-<span id="cb57-10"><a href="#cb57-10" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="bu">len</span>(unique_chars)  <span class="co"># 57 个字符</span></span>
-<span id="cb57-11"><a href="#cb57-11" aria-hidden="true" tabindex="-1"></a>char2idx <span class="op">=</span> {ch: i <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span>
-<span id="cb57-12"><a href="#cb57-12" aria-hidden="true" tabindex="-1"></a>idx2char <span class="op">=</span> {i: ch <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span></code></pre></div>
-<h4 id="表-8-2部分汉字与数字-id运行脚本时的真实编号">表
-8-2：部分汉字与数字 ID（运行脚本时的真实编号）</h4>
-<p><code>sorted</code> 按 Unicode
-编码排序。句号“。”排在汉字前面，全角逗号“，”排在汉字后面。这些编号只是座位号，没有“逗号比霜更大”这种含义。</p>
+<p>三张图沿用同一配置。最后一张的温度采样是温度大于 0
+的路径；<code>temperature=0</code> 走 argmax，不做除零。</p>
+<h3 id="表-8-2真实字符编号">表 8-2：真实字符编号</h3>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -4833,161 +5312,128 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb57-1"><a h
 </tr>
 </tbody>
 </table></div>
-<p>所以“床前明月光”五个字的编号是
-23、10、27、32、8。请用脚本打印核对，不要凭感觉给汉字编号。</p>
-<hr />
-<h3 id="因果自注意力模块causalselfattention">2.
-因果自注意力模块（CausalSelfAttention）</h3>
-<p>这是模型的“灵魂中枢”，注意看我们是如何将因果掩码注册进 PyTorch
-缓冲区的：</p>
-<div class="sourceCode" id="cb58"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CausalSelfAttention(nn.Module):</span>
-<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, d_model, num_heads, max_seq_len):</span>
-<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.num_heads <span class="op">=</span> num_heads</span>
-<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head_dim <span class="op">=</span> d_model <span class="op">//</span> num_heads</span>
-<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 线性投影层</span></span>
-<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb58-9"><a href="#cb58-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb58-10"><a href="#cb58-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb58-11"><a href="#cb58-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(d_model, d_model, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb58-12"><a href="#cb58-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb58-13"><a href="#cb58-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 核心：下三角掩码缓冲区（不需要计算梯度）</span></span>
-<span id="cb58-14"><a href="#cb58-14" aria-hidden="true" tabindex="-1"></a>        mask <span class="op">=</span> torch.tril(torch.ones(max_seq_len, max_seq_len))</span>
-<span id="cb58-15"><a href="#cb58-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.register_buffer(<span class="st">&quot;mask&quot;</span>, mask)</span>
-<span id="cb58-16"><a href="#cb58-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb58-17"><a href="#cb58-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, x):</span>
-<span id="cb58-18"><a href="#cb58-18" aria-hidden="true" tabindex="-1"></a>        B, T, C <span class="op">=</span> x.shape  <span class="co"># Batch(批次), Time(序列长度), Channel(维度)</span></span>
-<span id="cb58-19"><a href="#cb58-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb58-20"><a href="#cb58-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 投影并切分多头: [B, num_heads, T, head_dim]</span></span>
-<span id="cb58-21"><a href="#cb58-21" aria-hidden="true" tabindex="-1"></a>        Q <span class="op">=</span> <span class="va">self</span>.W_q(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb58-22"><a href="#cb58-22" aria-hidden="true" tabindex="-1"></a>        K <span class="op">=</span> <span class="va">self</span>.W_k(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb58-23"><a href="#cb58-23" aria-hidden="true" tabindex="-1"></a>        V <span class="op">=</span> <span class="va">self</span>.W_v(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
-<span id="cb58-24"><a href="#cb58-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb58-25"><a href="#cb58-25" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 点乘打分并缩放</span></span>
-<span id="cb58-26"><a href="#cb58-26" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span>
-<span id="cb58-27"><a href="#cb58-27" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb58-28"><a href="#cb58-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 施加掩码：将右上角未来位置填入 -1e9 (-∞)</span></span>
-<span id="cb58-29"><a href="#cb58-29" aria-hidden="true" tabindex="-1"></a>        scores <span class="op">=</span> scores.masked_fill(<span class="va">self</span>.mask[:T, :T] <span class="op">==</span> <span class="dv">0</span>, <span class="op">-</span><span class="fl">1e9</span>)</span>
-<span id="cb58-30"><a href="#cb58-30" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb58-31"><a href="#cb58-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Softmax 归一化</span></span>
-<span id="cb58-32"><a href="#cb58-32" aria-hidden="true" tabindex="-1"></a>        weights <span class="op">=</span> F.softmax(scores, dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb58-33"><a href="#cb58-33" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb58-34"><a href="#cb58-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 加权求和并拼回原状</span></span>
-<span id="cb58-35"><a href="#cb58-35" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> torch.matmul(weights, V).transpose(<span class="dv">1</span>, <span class="dv">2</span>).contiguous().view(B, T, C)</span>
-<span id="cb58-36"><a href="#cb58-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>.W_o(out)</span></code></pre></div>
-<hr />
-<h3 id="完整的-babygpt-模型组装">3. 完整的 BabyGPT 模型组装</h3>
-<div class="sourceCode" id="cb59"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> BabyGPT(nn.Module):</span>
-<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, vocab_size, d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>, max_seq_len<span class="op">=</span><span class="dv">128</span>):</span>
-<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>()</span>
-<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.max_seq_len <span class="op">=</span> max_seq_len</span>
-<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 词嵌入，以及可学习的座位表。</span></span>
-<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 这不是第 5 章的 sin/cos。每个座位一行向量，数字在训练中自己学。</span></span>
-<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.tok_emb <span class="op">=</span> nn.Embedding(vocab_size, d_model)</span>
-<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.pos_emb <span class="op">=</span> nn.Embedding(max_seq_len, d_model)</span>
-<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 堆叠 2 层积木块</span></span>
-<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.blocks <span class="op">=</span> nn.ModuleList([</span>
-<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a>            BabyBlock(d_model, num_heads, max_seq_len) <span class="cf">for</span> _ <span class="kw">in</span> <span class="bu">range</span>(num_layers)</span>
-<span id="cb59-13"><a href="#cb59-13" aria-hidden="true" tabindex="-1"></a>        ])</span>
-<span id="cb59-14"><a href="#cb59-14" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb59-15"><a href="#cb59-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 输出头</span></span>
-<span id="cb59-16"><a href="#cb59-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.ln_f <span class="op">=</span> nn.LayerNorm(d_model)</span>
-<span id="cb59-17"><a href="#cb59-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.head <span class="op">=</span> nn.Linear(d_model, vocab_size, bias<span class="op">=</span><span class="va">False</span>)</span>
-<span id="cb59-18"><a href="#cb59-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-19"><a href="#cb59-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> forward(<span class="va">self</span>, idx, targets<span class="op">=</span><span class="va">None</span>):</span>
-<span id="cb59-20"><a href="#cb59-20" aria-hidden="true" tabindex="-1"></a>        B, T <span class="op">=</span> idx.shape</span>
-<span id="cb59-21"><a href="#cb59-21" aria-hidden="true" tabindex="-1"></a>        pos <span class="op">=</span> torch.arange(<span class="dv">0</span>, T, dtype<span class="op">=</span>torch.<span class="bu">long</span>, device<span class="op">=</span>idx.device)</span>
-<span id="cb59-22"><a href="#cb59-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-23"><a href="#cb59-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 融合词义与位置</span></span>
-<span id="cb59-24"><a href="#cb59-24" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.tok_emb(idx) <span class="op">+</span> <span class="va">self</span>.pos_emb(pos)</span>
-<span id="cb59-25"><a href="#cb59-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-26"><a href="#cb59-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
-<span id="cb59-27"><a href="#cb59-27" aria-hidden="true" tabindex="-1"></a>            x <span class="op">=</span> block(x)</span>
-<span id="cb59-28"><a href="#cb59-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-29"><a href="#cb59-29" aria-hidden="true" tabindex="-1"></a>        x <span class="op">=</span> <span class="va">self</span>.ln_f(x)</span>
-<span id="cb59-30"><a href="#cb59-30" aria-hidden="true" tabindex="-1"></a>        logits <span class="op">=</span> <span class="va">self</span>.head(x)  <span class="co"># [B, T, vocab_size]</span></span>
-<span id="cb59-31"><a href="#cb59-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-32"><a href="#cb59-32" aria-hidden="true" tabindex="-1"></a>        loss <span class="op">=</span> <span class="va">None</span></span>
-<span id="cb59-33"><a href="#cb59-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> targets <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
-<span id="cb59-34"><a href="#cb59-34" aria-hidden="true" tabindex="-1"></a>            <span class="co"># 交叉熵损失：衡量预测分布与真实字的差距</span></span>
-<span id="cb59-35"><a href="#cb59-35" aria-hidden="true" tabindex="-1"></a>            loss <span class="op">=</span> F.cross_entropy(logits.view(<span class="op">-</span><span class="dv">1</span>, logits.size(<span class="op">-</span><span class="dv">1</span>)), targets.view(<span class="op">-</span><span class="dv">1</span>))</span>
-<span id="cb59-36"><a href="#cb59-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb59-37"><a href="#cb59-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> logits, loss</span></code></pre></div>
-<p>训练循环不要把三首诗粘成一条。每一首单独算一次“猜下一个字”的损失，再取平均：</p>
-<div class="sourceCode" id="cb60"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>encoded_poems <span class="op">=</span> [torch.tensor(encode(poem), dtype<span class="op">=</span>torch.<span class="bu">long</span>) <span class="cf">for</span> poem <span class="kw">in</span> poems]</span>
-<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> []</span>
-<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> data <span class="kw">in</span> encoded_poems:</span>
-<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>    _, loss <span class="op">=</span> model(data[:<span class="op">-</span><span class="dv">1</span>].unsqueeze(<span class="dv">0</span>), data[<span class="dv">1</span>:].unsqueeze(<span class="dv">0</span>))</span>
-<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>    losses.append(loss)</span>
-<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.stack(losses).mean()</span></code></pre></div>
-<p><code>data[:-1]</code> 是输入，<code>data[1:]</code>
-是紧挨着的下一个字。例如“床前明”，输入是“床前”，目标是“前明”。</p>
-<hr />
-<h2 id="训练过程与-loss-下降实验数据表">8.5 训练过程与 Loss
-下降实验数据表</h2>
-<p>运行训练后，模型在 80 个步长内展现出了惊人的学习速度：</p>
-<p>三首诗<strong>分开</strong>训练，每首都从座位 0
-开始，损失取三次的平均。随机种子是
-42。如果把三首诗粘成一条，模型会只记住“第 i
-个座位的下一个字”；这时提示“白日”仍会被放到第 0
-号座位，于是接着背《静夜思》。</p>
-<p>前馈网络用的是 GELU。它在 0 附近是一条平滑曲线。第 6 章的小演示用的是
-ReLU，两种都能把积木跑通。</p>
-<h3 id="表-8-3种子-42三首诗分开训练时的损失">表 8-3：种子
-42、三首诗分开训练时的损失</h3>
-<p>完全瞎猜下一个字时，损失大约是 <span class="math inline">\(-\ln(1/57)
-= \ln 57 \approx 4.04\)</span>。第 1 轮测到的 4.1271
-和这个数很接近。</p>
+<p>编号来自 <code>sorted(set(text_corpus))</code> 的 Unicode
+顺序，没有语义大小关系。“床前明月光”编码为
+<code>[23,10,27,32,8]</code>；输入张量形状 <code>[1,5]</code>，不是
+<code>[5,57]</code>。</p>
+<pre class="text"><code>ids [B,T]          → tok_emb [B,T,48]
+positions [T]      → pos_emb [T,48]，广播到 batch 后相加
+每层 Q/K/V         → [B,4,T,12]
+注意力分数/权重     → [B,4,T,T]
+拼接、投影、FFN     → [B,T,48]
+最终 LN 与输出头    → logits [B,T,57]</code></pre>
+<p>本模型用的是<strong>可学习绝对位置表</strong>，不是第 5 章的
+sin/cos，也不是 RoPE。每次完整前向从位置 0 开始。它没有
+cross-attention、外部文档输入或对话角色处理。</p>
+<h2 id="按模块读源码不把组件跳过去">8.4
+按模块读源码，不把组件跳过去</h2>
+<p>完整实现只在源码维护，下面摘出关键语句；标记 <code># ...</code>
+的位置表示省略，不是可独立运行的完整类。</p>
+<h3 id="词表与样本边界">词表与样本边界</h3>
+<div class="sourceCode" id="cb64"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a>text_corpus <span class="op">=</span> <span class="st">&quot;&quot;</span>.join(poems)</span>
+<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ...</span></span>
+<span id="cb64-3"><a href="#cb64-3" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">list</span>(<span class="bu">set</span>(text_corpus)))</span>
+<span id="cb64-4"><a href="#cb64-4" aria-hidden="true" tabindex="-1"></a>vocab_size <span class="op">=</span> <span class="bu">len</span>(unique_chars)</span>
+<span id="cb64-5"><a href="#cb64-5" aria-hidden="true" tabindex="-1"></a>char2idx <span class="op">=</span> {ch: i <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span>
+<span id="cb64-6"><a href="#cb64-6" aria-hidden="true" tabindex="-1"></a>idx2char <span class="op">=</span> {i: ch <span class="cf">for</span> i, ch <span class="kw">in</span> <span class="bu">enumerate</span>(unique_chars)}</span></code></pre></div>
+<p>合并 <code>text_corpus</code>
+<strong>只用于建词表</strong>；训练仍逐首取样。否则一首诗末尾会被错误地要求预测下一首开头。<code>encode</code>
+没有未知字符回退，也没有 BPE，输入词表外字符会报错；<code>decode</code>
+则将 ID 反查字符。两者的顺序也是 checkpoint 的一部分。</p>
+<h3 id="因果自注意力">因果自注意力</h3>
+<div class="sourceCode" id="cb65"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a>Q <span class="op">=</span> <span class="va">self</span>.W_q(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb65-2"><a href="#cb65-2" aria-hidden="true" tabindex="-1"></a>K <span class="op">=</span> <span class="va">self</span>.W_k(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb65-3"><a href="#cb65-3" aria-hidden="true" tabindex="-1"></a>V <span class="op">=</span> <span class="va">self</span>.W_v(x).view(B, T, <span class="va">self</span>.num_heads, <span class="va">self</span>.head_dim).transpose(<span class="dv">1</span>, <span class="dv">2</span>)</span>
+<span id="cb65-4"><a href="#cb65-4" aria-hidden="true" tabindex="-1"></a><span class="co"># ...</span></span>
+<span id="cb65-5"><a href="#cb65-5" aria-hidden="true" tabindex="-1"></a>scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span></code></pre></div>
+<p>每个 query 只能看自己和更早的 key。未来位置先在 scores 中遮挡，再做
+Softmax；不能先归一化再删掉未来权重。当前 S0 没有
+padding，合法非空输入每行至少能看见自己。S0
+测试会改变后缀字符，检查前缀<strong>所有 logits</strong>
+不变，而不只看最后选出来的字碰巧一样。</p>
+<h3 id="pre-lngelu-与最终输出">Pre-LN、GELU 与最终输出</h3>
+<div class="sourceCode" id="cb66"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>.attn(<span class="va">self</span>.ln1(x))</span>
+<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>.mlp(<span class="va">self</span>.ln2(x))</span></code></pre></div>
+<p><code>BabyBlock</code> 先用 LN 求增量，再把增量加回主干，与第 6
+章默认 Pre-LN 顺序相同。MLP 是
+<code>Linear(48,192) → GELU → Linear(192,48)</code>。GELU 可写成 x
+乘标准正态分布的累计概率，负半轴并非一刀切为零；不必在这里背积分，知道它不是线性层即可。[来源
+1]</p>
+<p>两个 Block 后还要经过 <code>ln_f</code> 和
+<code>head</code>。<code>head</code> 输出的是实数
+logits，不是已经归一化的概率。训练时直接把 logits
+交给交叉熵；生成时再根据策略选择下一字。不要在交叉熵前重复 Softmax。</p>
+<h2 id="从一次-loss-到-80-次更新">8.5 从一次 loss 到 80 次更新</h2>
+<p>每首诗取前 23 个字符作为输入，后 23
+个字符作为标签。每个位置预测紧挨着的下一字；一首诗有 23
+个监督目标，三首共 69 个。训练循环做：</p>
+<div class="sourceCode" id="cb67"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a>optimizer.zero_grad()</span>
+<span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a>losses <span class="op">=</span> []</span>
+<span id="cb67-3"><a href="#cb67-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> data <span class="kw">in</span> encoded_poems:</span>
+<span id="cb67-4"><a href="#cb67-4" aria-hidden="true" tabindex="-1"></a>    _, loss <span class="op">=</span> model(data[:<span class="op">-</span><span class="dv">1</span>].unsqueeze(<span class="dv">0</span>), data[<span class="dv">1</span>:].unsqueeze(<span class="dv">0</span>))</span>
+<span id="cb67-5"><a href="#cb67-5" aria-hidden="true" tabindex="-1"></a>    losses.append(loss)</span>
+<span id="cb67-6"><a href="#cb67-6" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.stack(losses).mean()</span>
+<span id="cb67-7"><a href="#cb67-7" aria-hidden="true" tabindex="-1"></a>loss.backward()</span>
+<span id="cb67-8"><a href="#cb67-8" aria-hidden="true" tabindex="-1"></a>optimizer.step()</span></code></pre></div>
+<p>内部交叉熵是该首所有 token
+的平均，外部再对三首取平均。三首长度相等，这等于 69 个 token
+的平均；如果长度不同，“每首等权”不再等于“每个 token 等权”。P09 的
+reduction 例子专门区分这两种目标。</p>
+<p><code>zero_grad</code> 清掉上一轮的梯度，<code>backward</code>
+算出本轮梯度，<code>step</code> 更新参数。当前脚本使用
+AdamW，包含自适应状态，不是手算小节里的裸
+SGD；学习率相同也不能预期更新完全一样。<code>train()</code>
+不会替你反向传播，<code>eval()</code> 也不会替你关闭梯度。本模型没有
+dropout，因此两种模式对当前层的数值本身没有随机开关；生成仍显式使用 eval
+和 no_grad，以建立正确习惯。</p>
+<h3 id="表-8-3种子-42-的-s0-训练日志">表 8-3：种子 42 的 S0
+训练日志</h3>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
-<th style="text-align: center;">训练轮次</th>
-<th style="text-align: center;">损失值</th>
-<th style="text-align: left;">这时实际发生了什么</th>
+<th>更新序号</th>
+<th>更新前训练 loss</th>
+<th>解释</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: center;"><strong>第 1 轮</strong></td>
-<td style="text-align: center;"><strong>4.1271</strong></td>
-<td style="text-align: left;">接近盲目乱猜</td>
+<td>1</td>
+<td>4.1271</td>
+<td>与均匀猜测 ln(57) ≈ 4.0431 同量级，但不是完全均匀分布</td>
 </tr>
 <tr>
-<td style="text-align: center;"><strong>第 20 轮</strong></td>
-<td style="text-align: center;"><strong>0.0196</strong></td>
-<td style="text-align: left;">三首课文的下一个字已经大体背出来</td>
+<td>20</td>
+<td>0.0196</td>
+<td>正在记住同一批目标</td>
 </tr>
 <tr>
-<td style="text-align: center;"><strong>第 40 轮</strong></td>
-<td style="text-align: center;"><strong>0.0021</strong></td>
-<td style="text-align: left;">仍在把同一份课文背得更死</td>
+<td>40</td>
+<td>0.0021</td>
+<td>继续提高训练字符的概率</td>
 </tr>
 <tr>
-<td style="text-align: center;"><strong>第 60 轮</strong></td>
-<td style="text-align: center;"><strong>0.0011</strong></td>
-<td style="text-align: left;">训练损失继续变小</td>
+<td>60</td>
+<td>0.0011</td>
+<td>仍是训练集结果</td>
 </tr>
 <tr>
-<td style="text-align: center;"><strong>第 80 轮</strong></td>
-<td style="text-align: center;"><strong>0.0009</strong></td>
-<td style="text-align: left;">对这三首诗的下一个字几乎没有误差</td>
+<td>80</td>
+<td>0.0009</td>
+<td>不能据此推出验证集正确</td>
 </tr>
 </tbody>
 </table></div>
-<p>损失接近 0，是因为课文只有 72 个字，67872
-个参数足够把它记住。这不是学会了作诗。</p>
-<hr />
-<h2 id="见证奇迹真实生成效果对比">8.6 见证奇迹：真实生成效果对比</h2>
-<p>让我们看看训练前后的生成效果对比：</p>
-<p>下表用的是贪心解码：每一步都选当前分数最高的字，所以种子 42
-下每次运行都是这几句。温度大于 0 时会掷骰子，句子可能变化。</p>
-<h3 id="表-8-4训练前后的贪心续写每次再生成-15-个字">表
-8-4：训练前后的贪心续写（每次再生成 15 个字）</h3>
+<p>表内是本次循环算完前向、尚未 <code>step()</code> 时的值；“第 80
+行”不代表更新 80 次后的另一次评估。参数有 67872 个，而语料只有 72
+个字符，记忆这个微型训练集不是惊人的泛化证据。固定版本的回归核对这份四位小数日志快照；其他张量比较使用声明的数值容差，不把训练墙钟时间当成通过门槛。</p>
+<h2 id="保留生成对照也保留失败案例">8.6
+保留生成对照，也保留失败案例</h2>
+<h3 id="表-8-4每次新增-15-字温度-0">表 8-4：每次新增 15 字，温度 0</h3>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -4996,70 +5442,466 @@ ReLU，两种都能把积木跑通。</p>
 </colgroup>
 <thead>
 <tr>
-<th style="text-align: left;">输入提示</th>
-<th style="text-align: left;">未训练</th>
-<th style="text-align: left;">训练 80 轮后</th>
+<th>提示</th>
+<th>未训练</th>
+<th>更新 80 次后</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>床前</strong></td>
-<td
-style="text-align: left;"><code>床前穷河前月眠欲黄头黄一日依疑，床</code></td>
-<td
-style="text-align: left;"><code>床前明月光，疑是地上霜。举头望明月</code></td>
+<td>床前</td>
+<td><code>床前穷河前月眠欲黄头黄一日依疑，床</code></td>
+<td><code>床前明月光，疑是地上霜。举头望明月</code></td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>白日</strong></td>
-<td
-style="text-align: left;"><code>白日穷河前月眠欲黄头黄一日依疑，床</code></td>
-<td
-style="text-align: left;"><code>白日依山尽，黄河入海流。欲穷千里目</code></td>
+<td>白日</td>
+<td><code>白日穷河前月眠欲黄头黄一日依疑，床</code></td>
+<td><code>白日依山尽，黄河入海流。欲穷千里目</code></td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>春眠</strong></td>
-<td
-style="text-align: left;"><code>春眠落头黄风白望入落欲一日依疑，床</code></td>
-<td
-style="text-align: left;"><code>春眠不觉晓，处处闻啼鸟。夜来风雨声</code></td>
+<td>春眠</td>
+<td><code>春眠落头黄风白望入落欲一日依疑，床</code></td>
+<td><code>春眠不觉晓，处处闻啼鸟。夜来风雨声</code></td>
 </tr>
 </tbody>
 </table></div>
-<p>三个课文开头都能接回去。再试一个课文里有、但不是开头的提示：</p>
-<p><code>明月</code> →
-<code>明月不觉晓，处处闻啼鸟。夜来风雨声</code></p>
-<p>它没有接成“明月<strong>光，疑是地上霜</strong>”，而是滑进了《春晓》。小模型记住的是三首短课文的开头，不是“月光”这个意思。</p>
-<div class="tip">
-<div class="title">
-直觉
-</div>
-<p><strong>关于采样温度（Temperature）的数学直觉</strong>：
-在生成代码中，有一行： <code>logits = logits / temperature</code></p>
-<ul>
-<li>当 <code>temperature = 1.0</code> 时：保持原有概率；</li>
-<li>当 <code>temperature = 0.2</code> 时：所有得分被除以 0.2（相当于放大
-5 倍！）。经过 Softmax
-后，概率会更偏向当前最高分的字，模型通常更<strong>保守、集中</strong>，但不保证达到
-100%；</li>
-<li>当 <code>temperature = 2.0</code>
-时：分数差距被缩小，概率会更平均，模型通常更<strong>随机</strong>，也更容易生成训练语料里没有出现过的组合。</li>
-</ul>
-</div>
-<hr />
-<h2 id="本章小结-1">8.7 本章小结</h2>
-<p>在本章中，我们从 0 到 1：</p>
+<p>再输入不在课文开头的“明月”，这个固定实验输出：</p>
+<pre class="text"><code>明月不觉晓，处处闻啼鸟。夜来风雨声</code></pre>
+<p>它没有接回“明月光”，而是转入另一首诗。这个反例说明本次训练不保证任意提示都能接回原文；单个反例也不能证明模型内部完全没有学到任何词关系。不要将“背诵
+vs 理解”写成可由一条输出解决的哲学判定。</p>
+<p>S0 的停止条件是新增字符数，没有训练 <code>&lt;EOS&gt;</code>。句号和
+EOS 不是同一回事：生成句号不会自动停。温度 0 是贪心；为兼容旧
+API，负温度也走贪心，新的调用建议只用 0 或正数。温度为正时按概率采样，1
+是原分布，0.2 放大分数差，2 缩小分数差；都不是正确率旋钮。</p>
+<p>S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位置重新编号为
+0–127。这是一个明确的<strong>滑窗重算策略</strong>，不是无限上下文，也不能与沿用旧绝对位置的缓存结果直接比较。P11
+的缓存演示到容量上限就报错，不伪装成同一滑窗策略。</p>
+<h2 id="保存再加载基线必须能回来">8.7 保存再加载：基线必须能回来</h2>
+<p>只有 loss 日志不够。后续要比较
+S0/S1，必须复用完全相同的权重、配置和词表。配套
+<code>save_checkpoint(path, model)</code>
+保存配置、参数与字符顺序；<code>load_checkpoint(path)</code> 在 CPU
+创建对应模型并恢复权重。测试在临时目录保存后加载，对同一批输入比较所有
+logits。</p>
+<div class="sourceCode" id="cb69"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 在已导入本脚本的 Python 会话内；model 是你的 BabyGPT 实例。</span></span>
+<span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a>save_checkpoint(<span class="st">&quot;baby_gpt.pt&quot;</span>, model)</span>
+<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>restored <span class="op">=</span> load_checkpoint(<span class="st">&quot;baby_gpt.pt&quot;</span>)</span>
+<span id="cb69-4"><a href="#cb69-4" aria-hidden="true" tabindex="-1"></a>restored.<span class="bu">eval</span>()</span></code></pre></div>
+<p>这里只提供<strong>推理基线恢复</strong>，不承诺训练中途精确续跑。续训通常还需
+optimizer 状态、随机数状态、数据采样位置与步数；不能将本 checkpoint 的
+round-trip 测试当成全部续训条件已经实现。</p>
+<p>只加载自己生成或可信来源的文件。实现显式使用
+<code>torch.load(..., weights_only=True)</code>
+并核对格式；这不是允许任意陌生文件的安全保证，不要为载入来历不明文件改成不受限反序列化。[来源
+2]</p>
+<h2 id="先预测再看答案">8.8 先预测，再看答案</h2>
 <ol type="1">
-<li>制作了一个字符级分词器；</li>
-<li>搭建了带因果掩码的多头自注意力层与完整的 Transformer 积木块；</li>
-<li>编写了训练循环与自回归生成函数；</li>
-<li>看到损失从 <span class="math inline">\(4.13\)</span> 降到 <span
-class="math inline">\(0.0009\)</span>，以及这种下降的限度：三首诗的开头被背下来了，没学过的提示不会。</li>
+<li><code>[2,5]</code> 的字符 ID 输入在默认配置下，logits
+是什么形状？</li>
+<li>三首 24 字诗各自
+shift，监督目标一共多少个？直接拼接后会多出什么？</li>
+<li>为什么不能把表 8-3 叫验证 loss？长度不同时，平均每首 loss
+等于平均每个 token 吗？</li>
+<li>默认模型参数为什么不是把 57×48 只算一次？mask 是训练参数吗？</li>
+<li>生成遇到句号会停吗？保存 checkpoint
+后是否能精确恢复优化器继续训练？</li>
+<li>改掉输入后两个字符，因果模型前面位置的 logits 应该变化吗？只看
+argmax 是否足够？</li>
 </ol>
-<p>到这里，主干计算已经能亲手走通。 然而，真实世界中的
-ChatGPT、Claude、DeepSeek
-拥有上千亿参数，它们在此基础上又进化出了哪些现代武器？
-请看最后一章：<strong>走向未来——从经典 Transformer 到
-GPT-4、DeepSeek</strong>！</p>
+<h3 id="参考答案-4">参考答案</h3>
+<ol type="1">
+<li><code>[2,5,57]</code>。每个 batch、每个位置都给整个词表打分。</li>
+<li>3×23=69。拼成 72 字会有 71
+个目标，其中两个跨诗边界是本任务不想训练的连接。</li>
+<li>全部诗都参与了参数更新。长度不同时每首等权与 token 等权不同。</li>
+<li>输入嵌入和输出头没有绑定，各有 2736 个参数。mask 是固定
+buffer，不算可训练参数；总计 67872。</li>
+<li>不会，本模型无 EOS，只按新增预算停。checkpoint
+恢复配置/权重/词表，不保存全部续训状态。</li>
+<li>不应该；要逐位置比较
+logits。两个分布变化后仍可能选同一个最大项，argmax
+相同不能证明计算等价。</li>
+</ol>
+<p>这些结论对应 <code>tests/test_baby_gpt.py</code>
+的形状/loss、词表与参数、因果性、训练与 checkpoint 检查。P09
+负责训练基础的梯度和数据边界；下一单元 P11
+负责缓存与完整计算的数值等价，不用一次庞大测试掩盖各自的契约。</p>
+<h2 id="原始来源与实现版本">原始来源与实现版本</h2>
+<p>核验日：2026-10-19。S0
+是本仓库教学实现，不是某个商业模型的精确复刻。</p>
+<ol type="1">
+<li><a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.GELU.html">PyTorch
+2.14 GELU</a>：激活定义。模型结构以 <a
+href="code/07_baby_gpt.py">code/07_baby_gpt.py</a> 为准。</li>
+<li><a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.save.html">PyTorch
+2.14 torch.save</a>、<a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.load.html">torch.load</a>：序列化、设备映射与
+weights_only 边界。</li>
+<li><a
+href="https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation">Transformers
+4.57.1 生成参数</a>：用于比较长度/采样接口概念；本章不依赖 Transformers
+运行，不声称它的参数语义与旧 Baby-GPT 每处相同。</li>
+</ol>
+<hr />
+<h1 id="生成优化-P11-KV-Cache-不再重复算历史">生成优化（P11）：KV
+Cache，不再重复算历史</h1>
+<p>第 8 章得到一份明确的 S0：相同字符词表、可学习绝对位置、两个 Pre-LN
+Block。现在实现
+S1，<strong>权重一项都不改，只缓存生成中可以复用的中间结果</strong>。先证明
+logits
+对齐，再问时间和内存，不能把“生成的字看起来一样”当作正确性证明。</p>
+<p>配套 <a href="code/12_kv_cache.py">code/12_kv_cache.py</a>
+直接使用 S0 的模型模块，不另训一份近似模型。实验是 CPU、float32、无
+dropout、eval 模式；不下载权重，不用 GPU。</p>
+<h2 id="p11.1-重算发生在哪里">P11.1 重算发生在哪里</h2>
+<p>假设提示有“床前”两个字符。S0
+先计算这两个位置，再选出“明”；下一轮把“床前明”三个位置全部送进模型，先前“床”“前”的计算又做一次。</p>
+<p>在因果模型中，较早位置不能看后来追加的 token。如果权重、位置、历史
+token
+和确定性的前向计算都不变，较早位置在每层的表示也不会因追加后缀而变化。因此它们的
+K 和 V 可以保存，下一步直接读。Q
+是本次新位置要发出的查询，不必保存整个历史 Q。</p>
+<pre class="text"><code>S0：床 前          → 全部位置前向 → 选 明
+    床 前 明       → 全部位置前向 → 选 月
+
+S1：床 前          → prefill，存各层 K/V → 选 明
+          明       → 新 Q/K/V + 历史 K/V → 选 月
+             月    → 新 Q/K/V + 历史 K/V → ...</code></pre>
+<p>可以把它比作保存已经整理好的借阅索引，下一次只补新条目。类比的边界是：真实缓存不是保存自然语言摘要，也不是模型长期记忆；它保存的是当前请求、当前参数与位置下的浮点张量。缓存本身不会让模型学会新的事实。</p>
+<h2 id="p11.2-prefill-与-decode首字到底从哪来">P11.2 Prefill 与
+decode，首字到底从哪来</h2>
+<p><strong>Prefill</strong> 一次处理提示，建立每一层的
+K/V。提示最后一个位置的 logits 已经能选出第一个新
+token；不用先把这个尚未选出的 token 输入模型。</p>
+<p><strong>Decode</strong> 通常每次送入刚选出的一个
+token。这个新位置产生 Q、K、V；把新 K/V 接在对应层的历史后面，Q
+对全部可见 K 打分，然后更新本层缓存。下一层使用的是本层更新后的新 token
+表示，而不是直接复用第一层的 K/V。</p>
+<p>模型有两层就有两组缓存。每组分别保存 K 和
+V，共四个张量。我们的接口：</p>
+<div class="sourceCode" id="cb71"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a>logits, cache <span class="op">=</span> cached_forward(model, prompt_ids, cache<span class="op">=</span><span class="va">None</span>)</span>
+<span id="cb71-2"><a href="#cb71-2" aria-hidden="true" tabindex="-1"></a><span class="co"># logits: [B, prompt_T, vocab_size]</span></span>
+<span id="cb71-3"><a href="#cb71-3" aria-hidden="true" tabindex="-1"></a><span class="co"># ... 选出 next_ids: [B,1]</span></span>
+<span id="cb71-4"><a href="#cb71-4" aria-hidden="true" tabindex="-1"></a>new_logits, cache <span class="op">=</span> cached_forward(model, next_ids, cache)</span>
+<span id="cb71-5"><a href="#cb71-5" aria-hidden="true" tabindex="-1"></a><span class="co"># new_logits: [B,1,vocab_size]</span></span></code></pre></div>
+<p>这里的片段是调用顺序，完整可运行示例在源码。<code>cached_forward</code>
+不选 token，只返回当前新块的 logits；<code>generate_cached</code>
+才负责选择与循环。它每次调用从空缓存开始，防止第二个请求误接在第一个请求后面。</p>
+<h2 id="p11.3-逐层形状与位置偏移">P11.3 逐层形状与位置偏移</h2>
+<p>设已有 P 个位置，本次新输入 C 个位置；头数 H，每头宽度 d，主干宽度
+D=H×d。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>张量</th>
+<th>形状</th>
+<th>本次是否新算</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>输入 ID</td>
+<td>[B,C]</td>
+<td>本次输入</td>
+</tr>
+<tr>
+<td>新 Q/K/V</td>
+<td>[B,H,C,d]</td>
+<td>是</td>
+</tr>
+<tr>
+<td>历史 K/V</td>
+<td>[B,H,P,d]</td>
+<td>否</td>
+</tr>
+<tr>
+<td>拼接后的 K/V</td>
+<td>[B,H,P+C,d]</td>
+<td>保存历史和新块</td>
+</tr>
+<tr>
+<td>注意力 scores / weights</td>
+<td>[B,H,C,P+C]</td>
+<td>是，通常不是方阵</td>
+</tr>
+<tr>
+<td>当前块输出</td>
+<td>[B,C,D]</td>
+<td>是</td>
+</tr>
+<tr>
+<td>当前块 logits</td>
+<td>[B,C,57]</td>
+<td>是</td>
+</tr>
+</tbody>
+</table></div>
+<p>默认模型 H=4、d=12。当 B=1、P=3、C=2 时，新 Q 是
+<code>[1,4,2,12]</code>，K/V 总长为 5，scores 是
+<code>[1,4,2,5]</code>。</p>
+<p>新块位置必须是 <strong>P,P+1,…,P+C−1</strong>。不是每次 decode 都从 0
+开始，否则每一个新字都会拿到错误的可学习位置向量。源码的关键语句：</p>
+<div class="sourceCode" id="cb72"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a>pos <span class="op">=</span> torch.arange(offset, offset <span class="op">+</span> T, device<span class="op">=</span>idx.device)</span>
+<span id="cb72-2"><a href="#cb72-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> model.tok_emb(idx) <span class="op">+</span> model.pos_emb(pos)</span></code></pre></div>
+<p>这里 T 是本次新块长度，<code>offset</code>
+是缓存长度。旧位置向量已经进入旧 K/V
+的计算，不应给旧缓存再加一次位置向量。参数表最大 128 行，索引只能是
+0–127。</p>
+<h2 id="p11.4-矩形-mask最容易写错的两行">P11.4 矩形
+mask：最容易写错的两行</h2>
+<p>把提示分块计算，或者一次追加两个
+token，同样必须阻止本块早位置看到本块未来。P=3、C=2 时，新 query
+的绝对位置是 3、4，key 的位置是 0–4。可见规则仍是 <strong>key_position ≤
+query_position</strong>。</p>
+<h3 id="表-p11-1三格历史加两格新输入">表
+P11-1：三格历史加两格新输入</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>新 query 位置</th>
+<th>key 0</th>
+<th>key 1</th>
+<th>key 2</th>
+<th>key 3</th>
+<th>key 4</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3</td>
+<td>True</td>
+<td>True</td>
+<td>True</td>
+<td>True</td>
+<td>False</td>
+</tr>
+<tr>
+<td>4</td>
+<td>True</td>
+<td>True</td>
+<td>True</td>
+<td>True</td>
+<td>True</td>
+</tr>
+</tbody>
+</table></div>
+<p>直接 <code>tril(ones(2,5))</code> 会得到第一行只看 key0、第二行只看
+key0/1，错误地屏蔽了大部分历史。反过来完全不加 mask，又会让位置 3
+偷看位置 4。C=1
+时本行可以看全部历史加自己，但这个特殊情况不能代替通用实现。</p>
+<div class="sourceCode" id="cb73"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a>query_positions <span class="op">=</span> torch.arange(offset, offset <span class="op">+</span> T, device<span class="op">=</span>x.device)[:, <span class="va">None</span>]</span>
+<span id="cb73-2"><a href="#cb73-2" aria-hidden="true" tabindex="-1"></a>key_positions <span class="op">=</span> torch.arange(offset <span class="op">+</span> T, device<span class="op">=</span>x.device)[<span class="va">None</span>, :]</span>
+<span id="cb73-3"><a href="#cb73-3" aria-hidden="true" tabindex="-1"></a>allowed <span class="op">=</span> key_positions <span class="op">&lt;=</span> query_positions</span>
+<span id="cb73-4"><a href="#cb73-4" aria-hidden="true" tabindex="-1"></a>scores <span class="op">=</span> q <span class="op">@</span> k.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>) <span class="op">/</span> math.sqrt(attn.head_dim)</span>
+<span id="cb73-5"><a href="#cb73-5" aria-hidden="true" tabindex="-1"></a>weights <span class="op">=</span> scores.masked_fill(<span class="op">~</span>allowed, <span class="bu">float</span>(<span class="st">&quot;-inf&quot;</span>)).softmax(dim<span class="op">=-</span><span class="dv">1</span>)</span></code></pre></div>
+<p>这是源码片段，<code>True</code> 表示允许；先填负无穷，再
+Softmax。本实现不接受空块，也不提供
+padding，因此每行至少有自己可见，不会产生全 mask 行。带
+padding/变长批次是另一层接口契约，不能把这个限制忘掉后套到任意批次。</p>
+<h3 id="表-p11-2把可见性变成可手算的输出">表
+P11-2：把可见性变成可手算的输出</h3>
+<p>暂时只看一个头，让两行 scores 都是
+<code>[ln1,ln2,ln3,ln4,ln5]</code>，五个标量 V 是
+<code>[10,20,30,40,50]</code>。这些是独立手算输入，不是随机模型碰巧得到的分数。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>query</th>
+<th>允许项 exp(score)</th>
+<th>分母</th>
+<th>weights</th>
+<th>加权 V</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>位置 3</td>
+<td>[1,2,3,4,0]</td>
+<td>10</td>
+<td>[0.1,0.2,0.3,0.4,0]</td>
+<td>30.000000</td>
+</tr>
+<tr>
+<td>位置 4</td>
+<td>[1,2,3,4,5]</td>
+<td>15</td>
+<td>[1/15,2/15,3/15,4/15,5/15]</td>
+<td>36.666667</td>
+</tr>
+</tbody>
+</table></div>
+<p>第一行分子是 10+40+90+160=300，除以 10 得 30；第二行再加
+250，550/15≈36.666667。错误的小矩形下三角会分别得到 10 和
+50/3≈16.666667。这张表由脚本手算函数与测试核对，不用生成句子的表面效果来掩盖错误。</p>
+<h2 id="p11.5-证明-s0-与-s1-等价要比较什么">P11.5 证明 S0 与 S1
+等价，要比较什么</h2>
+<p>对同一个 eval 模型与同一串 ID，先完整前向取得 <code>[B,T,57]</code>
+的参考 logits，再分块调用缓存路径，将新块 logits
+沿时间拼起来。比较的是每个位置的每个词表项，而不是仅比较选出的
+token。</p>
+<p>检查覆盖：</p>
+<ul>
+<li>一次完整 prefill、逐 token 输入、7-token chunked
+prefill，最后一块不足 7 也要正确。</li>
+<li>T=1 和 B&gt;1；每层 K/V 长度应随新块增加。</li>
+<li>同一请求分支：保留旧 cache，从它分别追加不同后缀，不应偷偷原地修改旧
+cache。</li>
+<li>两次独立请求：重新传
+<code>None</code>，第二次结果不能包含第一次历史。</li>
+<li>错误边界：train 模式、空输入、超过位置上限、错误
+batch/层数/头维、不同模型或更新权重后的旧缓存。</li>
+</ul>
+<p>float32 的运算顺序可能因为矩阵大小不同而有微小舍入差；测试使用明确的
+<code>atol/rtol</code>，不是要求逐位相同，也不是放宽到“都能生成一句诗”。脚本打印最大绝对误差，超出容差时必须排查位置、mask、拼接维度或参数是否相同。</p>
+<p><code>KVCache</code>
+的容器不可重赋字段，但其中的张量仍可被调用者修改。因此约定缓存张量只读，不承诺
+Python 的 frozen dataclass 能深度冻结 Tensor。它不是持久化
+checkpoint，也不要跨模型、跨参数更新复用。</p>
+<h2 id="p11.6-用空间换计算先算真实-kv-负担">P11.6 用空间换计算：先算真实
+K/V 负担</h2>
+<p>MHA 有 L 层，batch 为 B，缓存 T 个 token，H 个头，每头 d
+个数，每个元素 s 字节，则：</p>
+<p><span class="math display">\[M_{KV}=2LBHTds=2LBTDs\]</span></p>
+<p>前面的 2 是 K 和 V 两份，不是两个 Block。默认
+L=2、B=1、H=4、d=12、float32 的 s=4。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>缓存长度 T</th>
+<th>计算</th>
+<th>K/V 逻辑字节数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5</td>
+<td>2×2×1×4×5×12×4</td>
+<td>3840</td>
+</tr>
+<tr>
+<td>48</td>
+<td>2×2×1×4×48×12×4</td>
+<td>36864</td>
+</tr>
+<tr>
+<td>128</td>
+<td>2×2×1×4×128×12×4</td>
+<td>98304</td>
+</tr>
+</tbody>
+</table></div>
+<p>脚本用 <code>numel() * element_size()</code> 把每层 K/V
+实际相加，再与公式比较；float64
+会将这些数字翻倍。此处的“内存”仅指逻辑张量载荷，不包括 Python
+对象、模型权重、临时 scores、分配器保留空间和拼接复制的峰值。</p>
+<p>S1 用 <code>torch.cat</code>
+动态增长，旧新张量可能在某一瞬间同时存在。因此公式不是进程 RSS
+或显存峰值。每步注意力仍需读全部历史
+K/V；缓存不把任意长注意力变成与历史长度无关的常数成本。</p>
+<p>GQA/MQA 会改变 KV
+头数，量化会改变元素存储，分页会改变分配策略；都不在 S1 实现。这里用 MHA
+的 H 直接计算，只把后续主题留作路线，不能用本章数字声称完成了
+PagedAttention。[来源 2]</p>
+<h2 id="p11.7-长度重置与批处理的诚实边界">P11.7
+长度、重置与批处理的诚实边界</h2>
+<p>S0 的旧 <code>generate</code> 超长后保留最后 128 字、重置位置编号。S1
+<strong>拒绝超过容量</strong>：只删掉最老 K/V
+并不能重现这种重编号，因为保留下来的 K/V
+已含旧位置与旧上下文影响。需要新的窗口语义和重算策略才能比较，不能静默丢缓存就声称等价。</p>
+<p><code>generate_cached</code> 采用保守规则：提示长度+请求新增预算
+≤128。最后一个选出的 token
+不一定还需送回模型，但预算规则仍把它计算在内，方便调用者预先知道边界。零新增返回原输入，不做模型前向。它和
+S0 一样没有 EOS，按预算停止。</p>
+<p>批量实验只支持同长、无 padding 的 B 个请求，位置从 0
+开始对齐。若要把长短不一的用户请求动态加入/退出，需要分别记录有效长度、注意力可见性与缓存所有权，本教学实现没有做到。对不同
+batch 直接复用旧 cache 会报错，不会替你猜如何重排请求。</p>
+<h2 id="p11.8-计时首-token-与后续-token-分开记">P11.8 计时：首 token
+与后续 token 分开记</h2>
+<div class="sourceCode" id="cb74"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python3</span> code/12_kv_cache.py</span>
+<span id="cb74-2"><a href="#cb74-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_kv_cache.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>基准使用同一个默认 S0 的随机权重，固定 48 个输入 ID，前 16
+个作提示，后 32
+个逐个回放。随机权重足以检查数值等价和计算路径，不用于评价文本质量。</p>
+<ul>
+<li>首 token 指标：提示前向产生可选择首字的 logits
+的耗时；不含分词、采样、网络或排队，不是端到端服务 TTFT。</li>
+<li>后续 token 指标：同一次运行中 32
+次后续前向的平均耗时，再跨重复运行取统计量；不是逐 token
+尾延迟分位数。</li>
+<li>先预热 2 轮，再计 7 轮；交替 S0/S1 测量顺序，输出各指标
+min/median/max。</li>
+<li>CPU 单线程用 <code>perf_counter</code>；没有异步 GPU
+工作，因此本实验不涉及 CUDA 同步。将方法搬到 GPU
+时需要另外处理同步。</li>
+</ul>
+<p>本机测量值和版本见本批验证记录；每次运行都会重新打印，不将抖动的毫秒数写成单元测试常数。小矩阵下
+Python 验证、<code>cat</code>
+和分配可能抵消省下的计算，缓存不保证在这个微型 CPU
+例子里更快。正确的优化报告应同时列出两条路径和计时范围，而不是只挑最漂亮的一次。</p>
+<h2 id="p11.9-先预测再看答案">P11.9 先预测，再看答案</h2>
+<ol type="1">
+<li>P=3、C=2 时 scores 的最后两维是什么？第二个新 query 能看几个
+key？</li>
+<li>已缓存 5 个 token，下一块 2 个 token 的位置编号是什么？可以重新从 0
+开始吗？</li>
+<li>默认模型 float32、B=1、T=5 时，K/V
+逻辑载荷多少字节？等于进程总内存吗？</li>
+<li>提示 prefill 结束后，第一个新 token
+是否还要先输入模型才能被选出？</li>
+<li>两次独立请求使用同一个模型，第二次如何开始？能在更新权重后继续旧
+cache 吗？</li>
+<li>缓存与完整前向生成相同贪心 token 就算验证通过吗？删最老缓存能重现 S0
+的超长滑窗吗？</li>
+</ol>
+<h3 id="参考答案-5">参考答案</h3>
+<ol type="1">
+<li><code>[2,5]</code>；第二行能看 5
+个。矩形可见性由绝对位置比较得到。</li>
+<li>5、6。重新从 0 开始会查错位置嵌入。</li>
+<li>3840 字节。不是总内存，也不是 <code>cat</code> 时的峰值。</li>
+<li>不需要；提示最后位置的 logits 已可选首字。选出后才将它作为后续
+decode 输入。</li>
+<li>传 <code>cache=None</code>；<code>generate_cached</code>
+自动为每次调用创建空缓存。参数更新后旧缓存无效。实现核对参数对象身份、版本、dtype
+与 device，包含 <code>assign=True</code> 替换参数的情况；不支持通过
+<code>.data</code> 等方式故意绕过 PyTorch 版本跟踪。</li>
+<li>不算，需比较每个位置完整 logits；也不能，因为旧 K/V
+的位置与上下文没有重新计算。</li>
+</ol>
+<p><code>tests/test_kv_cache.py</code> 对应形状/偏移、矩形 mask、全
+logits 对齐、内存公式、独立请求和上限契约；还实际构造错误 offset 和错误
+mask 的负面对照。后续 RoPE、GQA
+或缓存布局的改动，都要继续通过这种同参数对齐，而不是跳过 S0
+直接看速度。</p>
+<h2 id="原始来源与版本-1">原始来源与版本</h2>
+<p>核验日期：2026-10-19。本章 S1 是教学实现，既不是 HF Cache API
+的完整实现，也不是 vLLM 服务实现。</p>
+<ol type="1">
+<li><a
+href="https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation">Transformers
+4.57.1 Caching</a>：逐层 K/V、增量计算、cache position 与组合注意力
+mask；只在推理使用缓存的边界。</li>
+<li>Kwon 等，<a href="https://arxiv.org/abs/2309.06180">Efficient Memory
+Management for Large Language Model Serving with
+PagedAttention</a>，§2–3：KV cache
+与服务内存管理动机。分页和连续批处理留给后续，不将本地 <code>cat</code>
+称为 PagedAttention。</li>
+<li><a href="code/07_baby_gpt.py">code/07_baby_gpt.py</a> 与 <a
+href="code/12_kv_cache.py">code/12_kv_cache.py</a>：本章形状、容量策略、计时范围及可运行数值的直接依据。</li>
+<li>大纲 S15 的 <a
+href="https://docs.vllm.ai/en/latest/design/paged_attention/">vLLM Paged
+Attention 设计文档</a>（动态文档，访问核验日
+2026-10-19）仅作后续服务实现导航。本章不依赖
+vLLM、没有运行其内核，也未实现分页缓存；本地 S1
+的行为以配套脚本为准。</li>
+</ol>
 <hr />
 <h1 id="第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典
 Transformer 到 GPT-4、DeepSeek</h1>
@@ -5352,7 +6194,7 @@ Size）</strong>、<strong>训练数据量（Dataset Size）</strong> 和
 <p>有些困难任务要到模型比较大时才开始做得动。这仍然是“预测下一个词”训练出来的结果，不是模型自动获得了一套和人类相同的心智。第
 8 章那个只背三首诗的小模型，就是尺度还很小的时候。</p>
 <hr />
-<h2 id="本章小结-2">9.5 本章小结</h2>
+<h2 id="本章小结-1">9.5 本章小结</h2>
 <ul>
 <li><strong>Decoder-Only</strong>
 因为训练目标和开放式续写很贴合，成为近年聊天与代码模型中的主流选择；</li>

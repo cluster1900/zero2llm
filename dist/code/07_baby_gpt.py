@@ -8,6 +8,7 @@
 """
 
 import math
+from dataclasses import asdict, dataclass
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -42,11 +43,50 @@ def decode(indices):
 # =====================================================================
 # 2. 微型 GPT 架构（Baby-GPT）
 # =====================================================================
+@dataclass(frozen=True)
+class GPTConfig:
+    """S0 配置；默认值保留最初的三首诗实验。"""
+    vocab_size: int
+    d_model: int = 48
+    num_heads: int = 4
+    num_layers: int = 2
+    max_seq_len: int = 128
+
+    def __post_init__(self):
+        for name, value in asdict(self).items():
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        if self.d_model % self.num_heads:
+            raise ValueError("d_model must be divisible by num_heads")
+
+
+def validate_tokens(idx, config, *, length_limit=True):
+    """拒绝空序列、错误类型和越界 ID，而不是等到 embedding 报错。"""
+    if not isinstance(idx, torch.Tensor) or idx.ndim != 2:
+        raise ValueError("tokens must have shape [B, T]")
+    if idx.dtype != torch.long:
+        raise ValueError("tokens must use torch.long")
+    if min(idx.shape) <= 0:
+        raise ValueError("batch and sequence must be nonempty")
+    if length_limit and idx.shape[1] > config.max_seq_len:
+        raise ValueError("sequence exceeds max_seq_len")
+    if (idx < 0).any() or (idx >= config.vocab_size).any():
+        raise ValueError("token ID outside vocabulary")
+
+
+def validate_generation(max_new_tokens, temperature):
+    if type(max_new_tokens) is not int or max_new_tokens < 0:
+        raise ValueError("max_new_tokens must be a nonnegative integer")
+    if not isinstance(temperature, (int, float)) or not math.isfinite(temperature):
+        raise ValueError("temperature must be finite; <= 0 means greedy")
+
+
 class CausalSelfAttention(nn.Module):
     """带因果掩码的多头自注意力机制"""
     def __init__(self, d_model, num_heads, max_seq_len):
         super().__init__()
-        assert d_model % num_heads == 0
+        if num_heads <= 0 or d_model % num_heads:
+            raise ValueError("d_model must be divisible by positive num_heads")
         self.num_heads = num_heads
         self.head_dim = d_model // num_heads
 
@@ -71,7 +111,7 @@ class CausalSelfAttention(nn.Module):
         scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
         
         # 施加下三角因果掩码：把未来看不到的位置遮挡为负无穷大
-        scores = scores.masked_fill(self.mask[:T, :T] == 0, -1e9)
+        scores = scores.masked_fill(self.mask[:T, :T] == 0, float("-inf"))
         
         # Softmax 归一化
         weights = F.softmax(scores, dim=-1)
@@ -104,6 +144,7 @@ class BabyGPT(nn.Module):
     """完整的自回归生成大语言模型"""
     def __init__(self, vocab_size, d_model=48, num_heads=4, num_layers=2, max_seq_len=128):
         super().__init__()
+        self.config = GPTConfig(vocab_size, d_model, num_heads, num_layers, max_seq_len)
         self.max_seq_len = max_seq_len
         # 1. 词嵌入与可学习的位置表。
         # 这里的 pos_emb 不是第 5 章那个 sin/cos 公式。
@@ -120,7 +161,16 @@ class BabyGPT(nn.Module):
         self.ln_f = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, vocab_size, bias=False)
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**asdict(config))
+
     def forward(self, idx, targets=None):
+        validate_tokens(idx, self.config)
+        if targets is not None:
+            validate_tokens(targets, self.config)
+            if targets.shape != idx.shape:
+                raise ValueError("targets must have the same [B, T] shape as inputs")
         B, T = idx.shape
         # 生成位置索引 [0, 1, ..., T-1]
         pos = torch.arange(0, T, dtype=torch.long, device=idx.device)
@@ -138,7 +188,7 @@ class BabyGPT(nn.Module):
         loss = None
         if targets is not None:
             # 交叉熵损失函数：预测下一个词的概率
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
 
         return logits, loss
 
@@ -148,11 +198,18 @@ class BabyGPT(nn.Module):
         自回归生成文本：
         一个字一个字往后预测，把新生成的字再追加到输入末尾！
         """
+        validate_generation(max_new_tokens, temperature)
+        if not isinstance(prompt_text, str) or not prompt_text:
+            raise ValueError("prompt_text must be a nonempty string")
+        if self.config.vocab_size != vocab_size:
+            raise ValueError("text generation requires the poem character vocabulary")
         self.eval()
-        idx = torch.tensor([encode(prompt_text)], dtype=torch.long)
+        idx = torch.tensor([encode(prompt_text)], dtype=torch.long,
+                           device=self.tok_emb.weight.device)
 
         for _ in range(max_new_tokens):
-            # 截断不能超过最大序列长度
+            # 保留历史行为：滑动窗口截断后位置重新从 0 编号。
+            # 这不是严格等价于丢弃缓存前缀；S1 不在长度上限处偷偷滑窗。
             idx_cond = idx[:, -self.max_seq_len:]
             logits, _ = self(idx_cond)
             # 只取最后一个时间步的预测结果。
@@ -162,12 +219,34 @@ class BabyGPT(nn.Module):
             if temperature <= 0:
                 next_idx = torch.argmax(logits_last, dim=-1, keepdim=True)
             else:
-                probs = F.softmax(logits_last / temperature, dim=-1)
+                safe_temperature = max(temperature, torch.finfo(logits_last.dtype).tiny)
+                scaled = (logits_last - logits_last.amax(dim=-1, keepdim=True)) / safe_temperature
+                probs = F.softmax(scaled, dim=-1)
                 next_idx = torch.multinomial(probs, num_samples=1)
             # 追加到已知序列末尾
             idx = torch.cat((idx, next_idx), dim=1)
 
         return decode(idx[0].tolist())
+
+def save_checkpoint(path, model):
+    """保存可重建 S0 的配置、词表和权重；不保存 optimizer/RNG 训练恢复状态。"""
+    torch.save({"format_version": 1, "config": asdict(model.config),
+                "tokenizer_chars": unique_chars,
+                "state_dict": model.state_dict()}, path)
+
+
+def load_checkpoint(path):
+    """只读取本教程自己生成、可信的 checkpoint；默认加载到 CPU/eval。"""
+    checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+    if checkpoint.get("format_version") != 1:
+        raise ValueError("unsupported checkpoint format")
+    if checkpoint.get("tokenizer_chars") != unique_chars:
+        raise ValueError("checkpoint character vocabulary differs")
+    model = BabyGPT.from_config(GPTConfig(**checkpoint["config"]))
+    model.to(dtype=checkpoint["state_dict"]["tok_emb.weight"].dtype)
+    model.load_state_dict(checkpoint["state_dict"], strict=True)
+    return model.eval()
+
 
 # =====================================================================
 # 3. 训练与效果展示
@@ -226,7 +305,7 @@ def main():
 
     stranger = model.generate("明月", max_new_tokens=15, temperature=0)
     print(f"没在课文开头出现过的提示 '明月' ==> '{stranger}'")
-    print("如果这里接不回原诗，就说明它是在背三首短课文，不是在理解月光。\n")
+    print("这次未能接回原诗，说明本实验不保证任意提示都能稳定续写原文；一条输出不能判定是否理解。\n")
 
     print("[复盘认知]：")
     print("Loss 下降，靠的是同一套手续：")
