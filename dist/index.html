@@ -507,6 +507,9 @@ figcaption, .diagram-caption {
   <li><a href="#p18-moe">架构进阶（P18）：MoE 的专家、路由与负载</a></li>
   <li><a href="#p19-pretraining">预训练（P19）：从三首诗到可恢复的数据流水线</a></li>
   <li><a href="#p20-frameworks">训练进阶（P20）：从手写循环到训练框架</a></li>
+  <li><a href="#p21-sft">指令微调（P21）：对话数据、SFT 与 LoRA</a></li>
+  <li><a href="#p22-preference">训练进阶（P22）：RLHF、DPO 与 GRPO</a></li>
+  <li><a href="#p23-mtp">训练与应用（P23）：推理模型、MTP 与投机解码</a></li>
   <li><a href="#第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典 Transformer 到 GPT-4、DeepSeek</a></li>
   <li><a href="#附录-数学公式速查卡与深度学习黑话翻译词典">附录：数学公式速查卡与深度学习黑话翻译词典</a></li>
 </ul>
@@ -673,9 +676,10 @@ CPU 参考实现；跳过 GPU
 <h2 id="当前阅读顺序与尚未完成的扩展">0.5
 当前阅读顺序与尚未完成的扩展</h2>
 <p>本书正在按审核通过的扩展大纲分批更新。当前已实现
-P00–P20，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE /
+P00–P23，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE /
 现代 Block / GQA，以及独立的注意力系统、稀疏/线性机制与 CED
-数据流，新增教学 MoE、预训练数据与恢复训练、框架对照；这些 P
+数据流，新增教学 MoE、预训练数据与恢复训练、框架与
+SFT/LoRA/偏好优化对照及可选教学 MTP；这些 P
 编号是扩展计划的编号，不会立即替换旧版全部章号。</p>
 <p>为了保留已有链接，Tokenizer 暂放在“第 1A 章”，紧跟第 1 章；旧第 2～10
 章仍可阅读，但尚未全部按新大纲改写。当前 HTML/EPUB
@@ -688,10 +692,10 @@ alt="入门三单元阅读顺序" /></a>
 </figure>
 <p>读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer
 章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是
-Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA →
-MoE。当前主线已实现到教学
-MoE，并补充预训练数据与框架对照；后训练等后续单元仍按批次推进；YaRN 与
-MLA 的教学边界见对应章节，不能把路线图当作完整工业模型的功能清单。</p>
+Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学
+MTP。当前主线已实现到可选教学 MTP，并补充预训练数据、框架、SFT/LoRA
+和偏好优化对照；量化与综合案例等后续单元仍按批次推进；YaRN 与 MLA
+的教学边界见对应章节，不能把路线图当作完整工业模型的功能清单。</p>
 <h2 id="开始前的三个自测">0.6 开始前的三个自测</h2>
 <ol type="1">
 <li>一个数组形状是
@@ -11668,6 +11672,1910 @@ v0.16.5 ZeRO 文档源码</a>：已读取该 tag
 href="https://arxiv.org/abs/2104.04473">流水线与大规模训练论文</a>、<a
 href="https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0">Megatron-Core
 core_v0.12.0 仓库</a>：并行与 checkpoint 参考，未运行其 GPU 示例。</li>
+</ul>
+<hr />
+<h1 id="p21-sft">指令微调（P21）：对话数据、SFT 与 LoRA</h1>
+<p>在 <a href="#p19-pretraining">P19：预训练数据流水线</a>
+中，我们问“下一段文字是什么”；在 <a
+href="#p20-frameworks">P20：训练框架</a>
+中，我们把同一个目标交给框架。现在的问题变成：<strong>给定一段对话，模型应该学习续写哪一部分？又允许修改哪些参数？</strong></p>
+<p>这其实是两道题。SFT（Supervised
+Fine-Tuning，有监督微调）规定从示范答案中学习什么；全量更新或 LoRA
+决定怎样调整参数。SFT 不等于 LoRA，LoRA 也不只用于
+SFT。换了训练方法，错误的标签依旧是错误的标签。</p>
+<p>读完本章，你应能给一段多轮对话逐 token 标出 loss，手算一个 LoRA
+层，并用测试证明基础权重没有被偷偷更新。前置是 P02 的 tokenizer、P09
+的交叉熵与梯度，以及 P19–P20 的数据和框架契约。不需要
+GPU，也不下载模型。</p>
+<p>配套 <a href="code/22_sft_lora.py">code/22_sft_lora.py</a>
+分为标准库手算和真实 PyTorch CPU
+更新两部分。<strong>实验用随机初始化的微型 Transformer 学习 SFT
+形式的目标，再冻结它继续训练
+LoRA；不是对一个已有通用预训练模型做能力适配。</strong>
+这里的四条合成对话足以验证机械过程，不足以评价指令遵循、泛化或安全性。没有运行
+HF SFTTrainer、PEFT、QLoRA 或任何大模型训练。</p>
+<figure>
+<a href="assets/rendered/p21-sft.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/p21-sft.svg" class="book-diagram" width="615"
+alt="SFT 只评分 assistant 内容和结束标记；LoRA 冻结主路，仅训练低秩支路，再合并验证" /></a>
+<figcaption>SFT 只评分 assistant 内容和结束标记；LoRA
+冻结主路，仅训练低秩支路，再合并验证</figcaption>
+</figure>
+<h2 id="p21.1-同一本练习册两种学习目标">P21.1
+同一本练习册，两种学习目标</h2>
+<p>预训练和指令微调都可以使用 next-token
+交叉熵。它们并不是“一个预测词、另一个不用预测词”，而是数据分布、上下文形式和被评分的位置不同。</p>
+<p>想象一张带标准答案的练习卡：上方是规则，中间是问题，下方是示范回答。我们希望学生读规则、看问题，再学习如何回答，而不是主要练习复述题目。这个类比解释了
+assistant-only
+loss，但不能推出模型像人一样理解规则，更不能把“正确格式”当成“可靠知识”。</p>
+<p>本章选择的目标是：</p>
+<ul>
+<li>system 和 user 内容仍然作为模型的输入。</li>
+<li>每轮 assistant 的回答正文，以及其真实结束标记，作为预测目标。</li>
+<li>role header、system/user 的结束标记和 padding 不评分。</li>
+<li>同一条多轮对话中的<strong>所有</strong> assistant
+轮都评分，不只最后一轮。</li>
+</ul>
+<p>这是一个明确的教学策略，不是 SFT
+唯一合法的定义。有的任务训练整段文本，有的只训练最后一个回答，有的分别加权不同片段。关键是把选择写进数据与测试，不能仅凭类名里出现“SFT”就断言得到了
+assistant-only loss。</p>
+<p><a
+href="https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py">TRL
+0.18.2 的 SFTTrainer 源码</a>
+展示了成熟训练入口如何处理数据和训练配置。这里引用它作为框架定位，不调用其中
+API；更不把其他版本的参数名当成这个版本已经验证过的接口。</p>
+<h2 id="p21.2-对话模板角色不是另一个输入通道">P21.2
+对话模板：角色不是另一个输入通道</h2>
+<p>输入常以消息列表保存：</p>
+<div class="sourceCode" id="cb142"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb142-1"><a href="#cb142-1" aria-hidden="true" tabindex="-1"></a>messages <span class="op">=</span> [</span>
+<span id="cb142-2"><a href="#cb142-2" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;user&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;问红&quot;</span>},</span>
+<span id="cb142-3"><a href="#cb142-3" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;assistant&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;红&quot;</span>},</span>
+<span id="cb142-4"><a href="#cb142-4" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
+<p>但本章的 decoder-only 模型最终收到的仍是一串 token
+ID，而不是一个会自动理解 role
+字段的聊天对象。模板决定怎样把消息列表变成序列。</p>
+<p>本章写死一个透明的教学模板，版本名为
+<code>p21-char-chat-v1</code>：</p>
+<pre class="text"><code>&lt;bos&gt;
+&lt;system&gt;系统正文&lt;end&gt;        # 可选，只能在最前面
+&lt;user&gt;问题正文&lt;end&gt;
+&lt;assistant&gt;答案正文&lt;eos&gt;
+&lt;user&gt;下一轮问题&lt;end&gt;
+&lt;assistant&gt;下一轮答案&lt;eos&gt;</code></pre>
+<p>上面的换行和注释只是便于阅读，<strong>不会成为实验输入</strong>。在这份模板中，<code>&lt;end&gt;</code>
+结束 system/user 消息，<code>&lt;eos&gt;</code> 结束 assistant
+回答；多轮训练时 EOS 后面可以继续出现下一轮
+user。这个命名是本章约定，不是所有模型的共同协议。实际模型可能区分“消息结束”“当前轮结束”“整个序列结束”，必须查看它自己的
+tokenizer 和模板。</p>
+<p>词表恰好有 17 项：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+<th>6</th>
+<th>7</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>token</td>
+<td>PAD</td>
+<td>BOS</td>
+<td>SYSTEM</td>
+<td>USER</td>
+<td>ASSISTANT</td>
+<td>END</td>
+<td>EOS</td>
+<td>UNK</td>
+</tr>
+</tbody>
+</table></div>
+<p>剩余九个字依次是：<code>只=8，答=9，颜=10，色=11，问=12，红=13，蓝=14，绿=15，黄=16</code>。特殊标记由模板直接插入
+ID；正文逐字编码，未知字变为 UNK。</p>
+<p>因此，用户在正文输入字符串
+<code>&lt;assistant&gt;</code>，不会凭这个拼写变成 role ID
+4；每个未知字符只是
+UNK。测试会确认内容中不能凭特殊标记的外观插入新角色。<strong>这只是一条序列化性质，不是提示注入防护或模型安全保证。</strong>
+模型仍可能受普通语言内容影响。</p>
+<p>真实 BPE/tokenizer 的词表远大于本例，不能把这个 17 项字符表套到已有
+checkpoint 上。新加 special token 时，也要处理模型 embedding /
+输出层的大小及其训练状态，而不是只修改字符串。</p>
+<h3 id="训练与推理必须用同一套标点">训练与推理，必须用同一套标点</h3>
+<p>训练输入包含示范回答；推理时没有答案，模板停在 assistant header
+后：</p>
+<pre class="text"><code>训练：&lt;bos&gt;&lt;user&gt;问红&lt;end&gt;&lt;assistant&gt;红&lt;eos&gt;
+推理：&lt;bos&gt;&lt;user&gt;问红&lt;end&gt;&lt;assistant&gt;</code></pre>
+<p><code>generation_prompt</code> 与 <code>encode_chat</code>
+共用消息编码逻辑。测试不只看第一轮，还逐轮确认：推理 prompt
+必须与训练序列到该轮回答起点为止的前缀完全相同。不能训练时用一种 role
+标记、推理时随手换另一种，也不能多加一遍 BOS/EOS。</p>
+<p><a
+href="https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating">Transformers
+4.51.3 的模板文档</a>
+说明了模板与生成提示的关系，并提醒避免在模板已经加入特殊 token
+后重复加入。本章只借助这些接口概念，不把手写模板称为
+<code>apply_chat_template</code> 的实际运行结果。P20 已经验证过的 HF
+tokenizer 也没有被本章暗中改写。</p>
+<h2 id="p21.3-八个位置只有两个评分点">P21.3
+八个位置，只有两个评分点</h2>
+<p>先完整写出“问红 → 红”的数据。这里的位置从 0 开始，<code>-100</code>
+是本章 loss 的忽略值，不是词表中的一个 token。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>位置</th>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+<th>6</th>
+<th>7</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>input token</td>
+<td>BOS</td>
+<td>USER</td>
+<td>问</td>
+<td>红</td>
+<td>END</td>
+<td>ASSISTANT</td>
+<td>红</td>
+<td>EOS</td>
+</tr>
+<tr>
+<td>input ID</td>
+<td>1</td>
+<td>3</td>
+<td>12</td>
+<td>13</td>
+<td>5</td>
+<td>4</td>
+<td>13</td>
+<td>6</td>
+</tr>
+<tr>
+<td>labels</td>
+<td>-100</td>
+<td>-100</td>
+<td>-100</td>
+<td>-100</td>
+<td>-100</td>
+<td>-100</td>
+<td>13</td>
+<td>6</td>
+</tr>
+<tr>
+<td>是否为目标</td>
+<td>否</td>
+<td>否</td>
+<td>否</td>
+<td>否</td>
+<td>否</td>
+<td>否</td>
+<td>是</td>
+<td>是</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>labels 与 input_ids 保持同样的位置。不要在构造 labels
+时提前移动答案。</strong> 移动发生在计算 loss
+的函数里，并且只发生一次：</p>
+<div class="sourceCode" id="cb145"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb145-1"><a href="#cb145-1" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> labels[:, <span class="dv">1</span>:]</span>
+<span id="cb145-2"><a href="#cb145-2" aria-hidden="true" tabindex="-1"></a>predictions <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>]</span></code></pre></div>
+<p>所以位置 5 的 logits 预测位置 6 的“红”，位置 6 的 logits 预测位置 7
+的 EOS。我们<strong>不是</strong>用“红”位置的 logits
+预测同一个“红”；那样会让模型看到答案再复述答案。最后一个输入位置的
+logits 没有下一个真实标签，本例不使用它。</p>
+<p>写成数学式，令 m 表示一个目标位置是否应评分：</p>
+<p><span class="math display">\[
+\mathcal L=-\frac{1}{N}\sum_{b=1}^{B}\sum_{t=0}^{T-2}
+m_{b,t+1}\log p_\theta(x_{b,t+1}\mid x_{b,\le t}),
+\qquad N=\sum_{b,t}m_{b,t+1}.
+\]</span></p>
+<p>这个 N 是有效目标数，不是 batch 大小，也不是 <code>B×T</code>。本例
+N=2。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：</p>
+<p><span class="math display">\[
+\mathcal L=-\frac{\ln 0.5+\ln 0.25}{2}
+=\frac{0.69314718+1.38629436}{2}
+\approx1.03972077.
+\]</span></p>
+<p>这是自然对数下的平均负对数似然。除以八个输入格子，会错误得到四分之一大小的
+loss 与梯度；只要分母错误固定，loss
+依然可能下降，因此“曲线看起来正常”不能代替索引检查。</p>
+<h3 id="不评分-user不等于看不见-user">“不评分 user”不等于“看不见
+user”</h3>
+<p>这里有三个职责不同的 mask：</p>
+<ol type="1">
+<li><strong>causal mask</strong>：位置 t
+不能看到未来，防止预测时偷看答案。</li>
+<li><strong>attention padding mask</strong>：有效 query 不读取补齐用的
+PAD key。</li>
+<li><strong>label mask</strong>：指定哪些 next-token 目标进入
+loss。</li>
+</ol>
+<p>system/user 的 attention mask 仍为 1，它们是有效上下文；labels 设为
+-100 只意味着“不要求模型预测这些
+token”。代码测试会发现：这些忽略目标对应的 logits 没有直接 loss 梯度，但
+user 字符的 embedding 仍可能通过注意力影响 assistant
+预测，因此收到梯度。</p>
+<p>所以“忽略用户
+loss”与“冻结用户表示”不是一回事。也不要把系统提示全部藏起来，却以为自己实现了
+assistant-only loss。</p>
+<h2 id="p21.4-多轮结束补齐与截断四个常见陷阱">P21.4
+多轮、结束、补齐与截断：四个常见陷阱</h2>
+<h3 id="每一轮的答案都要能追溯">每一轮的答案都要能追溯</h3>
+<p>增加 system 和第二轮后，完整序列长 21：</p>
+<pre class="text"><code>&lt;bos&gt;&lt;system&gt;只答颜色&lt;end&gt;
+&lt;user&gt;问红&lt;end&gt;&lt;assistant&gt;红&lt;eos&gt;
+&lt;user&gt;问蓝&lt;end&gt;&lt;assistant&gt;蓝&lt;eos&gt;</code></pre>
+<p>有效标签位于 12、13、19、20，分别是“红、EOS、蓝、EOS”。对应评分
+logits 位于 11、12、18、19。第一轮 assistant
+正文的表示也会成为下一轮的上下文；这是 teacher
+forcing，不是模型先生成了第一轮答案再继续训练。</p>
+<p><code>ChatRow.assistant_spans</code> 用左闭右开区间保存
+<code>[12,14)</code> 与 <code>[19,21)</code>，包含答案和 EOS，但不包含
+assistant role
+header。它便于人工检查；测试还使用手写的完整标签序列对照，避免实现与测试都照抄同一个错误
+span。</p>
+<h3 id="eos-是一个需要学习的目标">EOS 是一个需要学习的目标</h3>
+<p>如果把所有 special token 都排除，EOS
+也会消失，模型就缺少这份数据里的结束监督。这里即使 assistant
+正文为空，也保留一个 EOS
+目标，明确表示“立即结束”。是否允许空回答是数据质量决策，不是 mask
+自动决定的事情。</p>
+<p>PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加
+0，labels 加 -100。<strong>本例 PAD=0、EOS=6，二者不同。</strong>
+对某些把 pad_token_id 设为 eos_token_id 的真实配置，更不能简单按“ID 等于
+EOS”把所有标签删掉；应按实际 padding
+位置屏蔽，保留真实回答里的结束目标。</p>
+<h3
+id="本章宁可丢完整轮也不造半个答案">本章宁可丢完整轮，也不造半个答案</h3>
+<p>盲目 <code>ids[:max_length]</code> 可能在 assistant
+header、答案中间或 EOS 前截断。有时还会把只含问题、不含答案的样本交给
+loss。另一种坏补丁是截断后强加
+EOS：原本应继续的回答被错误教成“到这里结束”。</p>
+<p>本章采用保守、可测试的策略：保留 BOS、可选
+system，以及从开头开始能装下的<strong>完整 user/assistant
+对</strong>，只在轮与轮之间截断。第一轮都放不下就明确报错，不返回一个零目标样本，不跳过长轮后拼上后面的轮，也不创造
+EOS。</p>
+<p>去掉 system 的两轮例子长度为 15；第一轮长度为 8：</p>
+<ul>
+<li>max_length=15：两轮都保留，4 个目标。</li>
+<li>max_length=8 到 14：只保留第一轮，2
+个目标，<code>dropped_turns=1</code>。</li>
+<li>max_length=1 到 7：没有完整轮，拒绝这条样本。</li>
+</ul>
+<p>这是本实验的契约，不是生产最佳策略。它会偏向较早的轮次，也可能丢掉有价值的长回答。实际项目可设计保留最近上下文、切分会话或拒绝过长样本等规则，但必须重新检查角色、目标、上下文完整性和分布变化，记录丢弃比例。改变规则就是改变数据版本。</p>
+<h3 id="零个目标不能平均一下">零个目标不能“平均一下”</h3>
+<p>如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer
+继续，也不能悄悄说“loss=0，训练很好”。<code>masked_causal_loss</code>
+在这种情况下抛出清晰异常；测试把一整个 batch
+的标签设为忽略值，验证参数未变、没有 backward，也没有 optimizer
+更新。</p>
+<p>我们的 encoder 通常会更早拒绝没有完整监督轮的样本；loss
+层仍保留这道检查，防止别的数据入口绕过前置约束。</p>
+<h2 id="p21.5-全量更新与-lora改整张表还是加一条窄支路">P21.5 全量更新与
+LoRA：改整张表，还是加一条窄支路</h2>
+<p>对一个线性层，采用列向量记法：</p>
+<p><span class="math display">\[
+y=W_0x,\qquad W_0\in\mathbb R^{d_{out}\times d_{in}}.
+\]</span></p>
+<p>全量更新允许直接调整 W0 中的全部元素。普通 LoRA
+冻结它，增加两个小矩阵：</p>
+<p><span class="math display">\[
+A\in\mathbb R^{r\times d_{in}},\quad
+B\in\mathbb R^{d_{out}\times r},\quad
+\Delta W=\frac{\alpha}{r}BA,\quad
+y=W_0x+\frac{\alpha}{r}B(Ax).
+\]</span></p>
+<p>可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是<strong>这次更新</strong>：<code>rank(BA)≤r</code>，还可能低于
+r。</p>
+<p>这里是 <a href="https://arxiv.org/abs/2106.09685v2">LoRA 原论文
+v2</a> 的普通低秩更新及 alpha/r 缩放形式，不包含 DoRA、rsLoRA
+或其他变体。PyTorch 的 Linear 接受行式 batch，所以实现写成先
+<code>F.linear(x,A)</code> 再
+<code>F.linear(...,B)</code>；不要因为记法切换就把 BA
+的乘法顺序颠倒。</p>
+<h3 id="先数参数再谈节省">先数参数，再谈节省</h3>
+<p>不计 bias 等额外可训练项时：</p>
+<p><span class="math display">\[
+P_{full}=d_{out}d_{in},\qquad P_{LoRA}=r(d_{in}+d_{out}).
+\]</span></p>
+<p>例如 <code>d_in=d_out=4096，r=8</code>：原矩阵有 16,777,216
+个参数，A/B 合计 65,536 个，是原矩阵的 1/256，约
+0.390625%。这只是这一层的<strong>新增可训练参数比例</strong>；冻结的
+16,777,216 个原参数仍需保存和参与前向。</p>
+<p>当矩阵很小或 r 很大时，LoRA 甚至可能比原矩阵参数更多。例如 2×3
+的层，r=2 时有 2×(3+2)=10 个适配参数，超过原来的 6
+个。低秩不是免费的效果保证。</p>
+<p>本章小模型只给 q_proj 和 v_proj 接上 LoRA。每个原矩阵为
+16×16，r=2，A/B 合计 64 个；两个投影合计 <strong>128
+个可训练参数</strong>。其余 3,760 个基础参数全部冻结，包括
+embedding、位置表、norm、FFN 和输出层。加入 adapter 后模型实际总参数为
+3,888，不是变成只有 128 个参数。</p>
+<p>少算基础权重的梯度和优化器状态，通常能降低相应训练状态开销；但基础权重、激活、中间结果及部分反向计算仍存在。可训练参数减少
+99%，不能据此声称峰值显存或训练时间也减少 99%。本章不做 GPU
+显存和速度测试。</p>
+<h2 id="p21.6-一个可以手算到底的-lora-层">P21.6 一个可以手算到底的 LoRA
+层</h2>
+<p>取输入 x、基础矩阵 W0 和适配矩阵如下，r=1、alpha=2，因此缩放系数为
+2：</p>
+<p><span class="math display">\[
+x=\begin{bmatrix}2\\-1\\0.5\end{bmatrix},\quad
+W_0=\begin{bmatrix}1&amp;2&amp;3\\4&amp;5&amp;6\end{bmatrix},\quad
+A=\begin{bmatrix}1&amp;0&amp;2\end{bmatrix},\quad
+B=\begin{bmatrix}3\\-1\end{bmatrix}.
+\]</span></p>
+<p>逐步相乘：</p>
+<p><span class="math display">\[
+W_0x=\begin{bmatrix}1.5\\6\end{bmatrix},\quad
+Ax=3,\quad
+2B(Ax)=\begin{bmatrix}18\\-6\end{bmatrix},\quad
+y=\begin{bmatrix}19.5\\0\end{bmatrix}.
+\]</span></p>
+<p>只写一句“输出等于基础输出加 adapter
+输出”很容易让两个实现一起错。测试直接以这组手算数值为参考，另用
+r=2、alpha=6 的独立矩阵检查“漏除 rank”错误，同时检查 A/B 一共 5
+个可训练参数、W0 的 6 个参数被冻结。</p>
+<h3 id="冻结参数不等于关闭整条计算图">冻结参数不等于关闭整条计算图</h3>
+<p><code>requires_grad_(False)</code>
+让基础参数不接收梯度更新；它不等于把经过基础层的全部运算包进
+<code>no_grad()</code>。有些早先层的 adapter
+仍需要通过后面的冻结层回传梯度。把整条主路断开，可能切断正确的学习路径。</p>
+<p>令这个手算例子的标量目标为 <code>L=y₁+y₂</code>，链式法则给出：</p>
+<p><span class="math display">\[
+\frac{\partial L}{\partial B}=\begin{bmatrix}6\\6\end{bmatrix},\quad
+\frac{\partial L}{\partial
+A}=\begin{bmatrix}8&amp;-4&amp;2\end{bmatrix},\quad
+\frac{\partial L}{\partial x}=\begin{bmatrix}9\\7\\17\end{bmatrix}.
+\]</span></p>
+<p>这些数值由测试独立写死，用来检查
+autograd，而不是仅比较两个使用同一段代码的模型。W0 的梯度为
+None，因为它被显式冻结。输入 x
+仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。</p>
+<h3 id="为什么初始-b-为零不代表学习卡死">为什么初始 B
+为零，不代表学习卡死</h3>
+<p>代码使用随机初始化 A、零初始化 B，保证刚插入 adapter 时
+<code>BA=0</code>，不改变原模型预测。具体采用 Kaiming-uniform 初始化
+A；它是本实现的选择，不声称逐项复现原论文的高斯初始化。固定版 <a
+href="https://huggingface.co/docs/peft/v0.15.0/package_reference/lora">PEFT
+0.15.0 LoRA 配置说明</a> 也区分初始化、rank、alpha 与 target
+modules；本章没有调用 PEFT。</p>
+<p>在第一步，如果 B=0，则对 A 的梯度为 0，但对 B 的梯度通常不为 0。B
+更新之后，下一步 A 也能获得梯度。测试确实执行这两次
+backward，验证这一变化。若 A、B
+都初始化为零，两个方向都可能没有初始学习信号；不要因为“初始更新应为零”就把两个矩阵都清零。</p>
+<h2 id="p21.7-真正训练一次明确哪些结果不能比较">P21.7
+真正训练一次，明确哪些结果不能比较</h2>
+<p>CPU
+实验生成四条记录，问题分别问“红、蓝、绿、黄”，答案是相应颜色字；红色记录再附加“问蓝
+→ 蓝”的第二轮。每条都有 system“只答颜色”。因此共四条对话、五个 assistant
+回答，每个回答含一个颜色和一个 EOS，一共 <strong>10
+个有效目标</strong>。</p>
+<p>它们没有来自网络、用户文件或私人聊天。也没有设置真正的验证/测试集：同样十个目标反复参与更新，报告的是训练
+loss，不是 held-out 性能。</p>
+<h3 id="模型与步骤">模型与步骤</h3>
+<p><code>TinyChatLM</code> 是独立的 1 层、1 头、宽度 16 的 causal
+Transformer：字符 embedding + 可学习绝对位置、LayerNorm、q/k/v/o
+投影、两层 GELU FFN、输出层。最大位置长度 64，无
+dropout，不共享输入/输出权重，一共 3,760 参数。它不是在 S5
+主线上偷偷替换组件，也不读取之前章节的 checkpoint。</p>
+<p>训练过程分两阶段：</p>
+<div class="sourceCode" id="cb147"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb147-1"><a href="#cb147-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 第一阶段：整个随机小模型学习这四条合成示范。</span></span>
+<span id="cb147-2"><a href="#cb147-2" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.15</span>)</span>
+<span id="cb147-3"><a href="#cb147-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb147-4"><a href="#cb147-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 第二阶段：冻结刚得到的基础模型，给 q/v 加普通 LoRA。</span></span>
+<span id="cb147-5"><a href="#cb147-5" aria-hidden="true" tabindex="-1"></a>model.zero_grad(set_to_none<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb147-6"><a href="#cb147-6" aria-hidden="true" tabindex="-1"></a>model.requires_grad_(<span class="va">False</span>)</span>
+<span id="cb147-7"><a href="#cb147-7" aria-hidden="true" tabindex="-1"></a>model.q_proj <span class="op">=</span> LoRALinear(model.q_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb147-8"><a href="#cb147-8" aria-hidden="true" tabindex="-1"></a>model.v_proj <span class="op">=</span> LoRALinear(model.v_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb147-9"><a href="#cb147-9" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
+<p><code>_updates</code> 只把 <code>requires_grad=True</code> 的参数交给
+SGD，并按“清梯度 → 前向 → assistant-only loss → backward →
+step”的顺序更新。固定 seed=21，CPU float32，单线程；无 momentum、weight
+decay、梯度累积或外部日志服务。SGD 是为了让过程容易检查，不是推荐真实
+SFT 一律用这些超参数。</p>
+<p><strong>这不是全量微调与 LoRA 的公平效果对比。</strong> LoRA
+从第一阶段的终点继续训练同一任务，学习率也不同。我们只检验：完整训练循环能更新参数、低秩支路能单独更新、基础权重不变，以及合并前后的计算一致。想比较质量，需要相同起点、独立评估数据、明确预算和调参规则。</p>
+<h3 id="本次实测">本次实测</h3>
+<p>2026-10-19，Python 3.12 / PyTorch 2.14.1+cpu
+的一次结果如下。数值为教学夹具记录，不是吞吐
+benchmark；其他平台可能有末位浮点差异。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>检查项</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>input_ids / logits 形状</td>
+<td>[4,21] / [4,21,17]</td>
+</tr>
+<tr>
+<td>有效监督目标数</td>
+<td>10</td>
+</tr>
+<tr>
+<td>全量参数 / 新增 LoRA 可训练参数</td>
+<td>3,760 / 128</td>
+</tr>
+<tr>
+<td>第一阶段 loss，24 次更新</td>
+<td>2.83717895 → 0.61146003</td>
+</tr>
+<tr>
+<td>第一阶段参数最大变化</td>
+<td>约 0.76645482</td>
+</tr>
+<tr>
+<td>Torch loss 与独立标准库参考差</td>
+<td>约 5.62e-8</td>
+</tr>
+<tr>
+<td>第二阶段 loss，24 次更新</td>
+<td>0.61146003 → 0.61064279</td>
+</tr>
+<tr>
+<td>LoRA 参数最大变化</td>
+<td>约 0.03599648</td>
+</tr>
+<tr>
+<td>冻结基础参数 / 梯度</td>
+<td>逐元素未变 / 全部为 None</td>
+</tr>
+<tr>
+<td>合并前后 logits 最大差</td>
+<td>约 7.15e-7</td>
+</tr>
+</tbody>
+</table></div>
+<p>训练 loss
+的下降证明这个目标在这批数据上被优化，不证明模型会回答新问题。脚本显式输出
+<code>heldout_quality_evaluated=false</code> 与
+<code>hf_peft_qlora_run=false</code>，避免把未测项目混进“通过”的结果。</p>
+<h3 id="运行方式">运行方式</h3>
+<p>只查看模板、标签和手算，不需要 PyTorch：</p>
+<div class="sourceCode" id="cb148"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb148-1"><a href="#cb148-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/22_sft_lora.py</span>
+<span id="cb148-2"><a href="#cb148-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>测试在缺少 PyTorch 时会明确跳过真实训练相关部分。<strong>skipped
+不算训练验证成功。</strong> 默认脚本打印
+<code>training: NOT RUN</code>；它不会因为输出了 loss
+手算数字，就假装跑过训练。</p>
+<p>已经安装全书基础依赖后，执行真实 CPU 更新：</p>
+<div class="sourceCode" id="cb149"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb149-1"><a href="#cb149-1" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> code/22_sft_lora.py <span class="at">--train</span></span>
+<span id="cb149-2"><a href="#cb149-2" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>本章不新增 requirements，也不需要安装 transformers、trl、peft 或
+bitsandbytes。若没有 PyTorch 却指定
+<code>--train</code>，标准库演示仍可输出，但训练明确提示 SKIP 并以退出码
+2
+结束。已经满足依赖后的实际训练错误会正常报错，不被吞成“可选功能跳过”。</p>
+<h2 id="p21.8-合并把两条线变回一条线">P21.8
+合并：把两条线变回一条线</h2>
+<p>普通、无量化、无 LoRA dropout 的线性层，可以构造：</p>
+<p><span class="math display">\[
+W_{merged}=W_0+\frac{\alpha}{r}BA.
+\]</span></p>
+<p>于是 <code>W_merged x</code>
+与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：</p>
+<p><span class="math display">\[
+W_{merged}=\begin{bmatrix}7&amp;2&amp;15\\2&amp;5&amp;2\end{bmatrix}.
+\]</span></p>
+<p>代码的 <code>merged()</code> 返回一个<strong>新的普通
+Linear</strong>，保留原来的 bias，不改原 adapter
+或基础层。调用两次也各自从同一个原始 W0 出发，不会把 BA
+重复加两遍。合并后的模型不再额外执行 adapter
+支路；若既改了原权重又保留支路，更新就会被算两次。</p>
+<p>测试分别检查手算矩阵和整个模型的 logits。float64
+小整数例子得到精确对齐；float32 整模因乘法顺序不同，按
+<code>atol=2e-6、rtol=2e-5</code>
+检查。这里验证的是数值等价，不是实测推理加速。</p>
+<p>实际保存 adapter 时，还需要记录基础 checkpoint
+的精确版本、目标层名、rank/alpha、tokenizer/template、额外训练的
+embedding 或其他模块。只有 A/B
+文件并不等于一个独立完整模型。<strong>本章没有实现 adapter
+保存/重载或跨框架转换</strong>，不声称这条部署链已经通过测试。</p>
+<h2 id="p21.9-qlora冻结的底座换成低比特存储">P21.9
+QLoRA：冻结的底座换成低比特存储</h2>
+<p>QLoRA 的 Q 指 quantization。它不是“把 A/B 变成 4 bit
+再训练”，也不是“训练中直接对 4 bit 整数权重做普通梯度下降”。<a
+href="https://arxiv.org/abs/2305.14314v1">QLoRA 原论文 v1</a>
+的关键思路是冻结量化后的基础模型，通过相应计算路径，把梯度传到可训练的低秩
+adapter；论文还讨论 NF4、量化常数的再次量化和 paged optimizers。</p>
+<p>需要区分三件事：基础权重的存储格式、运算时使用的计算精度、adapter /
+梯度 / 优化器状态的精度。它们不必相同。基础参数“4
+bit”也不表示整个训练进程只占 <code>参数数×0.5</code>
+字节；量化元数据、激活、临时反量化结果及优化器状态仍要计算。</p>
+<p>本章只运行普通 float32 LoRA，没有 bitsandbytes、NF4
+kernel、量化训练或 GPU 内存测量。普通 LoRA
+的合并等式，也不能直接推出“量化、反量化、合并、再量化”全过程零误差。</p>
+<p>P24 将进一步讲
+scale、zero-point、group、量化误差，以及推理格式和框架选择。<strong>这是后续阅读边界，不是本章已经完成的功能。</strong>
+不要为了这个章节临时安装 GPU
+依赖，更不要把本文几十毫秒级的小矩阵算术换算成真实大模型所需显存。</p>
+<h2 id="p21.10-数据质量与评估训练正确还只是第一关">P21.10
+数据质量与评估：训练正确还只是第一关</h2>
+<p>一份有用的 SFT
+数据，应能说明问题来自哪里、回答为什么可信、允许怎样使用，以及它与验证集有没有重叠。沿用
+P19
+的来源记录、去重、固定划分和隐私边界；不要把私人聊天直接当成现成的训练集。</p>
+<p>对话任务还有一些额外检查：</p>
+<ul>
+<li>同一问题是否出现互相矛盾的示范？模型可能学到混合分布，而不是自动挑对的那条。</li>
+<li>系统规则与答案是否一致？“只答颜色”后面接长篇解释，会改变学习目标。</li>
+<li>真实部署会遇到的多轮结构、长度和角色，训练里是否覆盖？</li>
+<li>长样本被过滤了多少？丢掉长回答是否恰好丢掉某一类任务？</li>
+<li>训练推理的模板、EOS、tokenizer 和截断策略是否完全对齐？</li>
+<li>评估是否按独立问题或来源划分，而不是把同一对话的改写随机分到两边？</li>
+</ul>
+<p>验证时除了 held-out assistant
+loss，还要根据任务检查答案正确性、格式、是否遵守约束、停止行为，以及不应回答时的适当处理。teacher
+forcing loss
+使用真实历史答案，而真实生成会受自己之前错误的影响，因此二者不能互相代替。需要明确失败案例，不只挑最漂亮的一条演示。</p>
+<p>LoRA 不是数据审校器，也不能保证不遗忘既有能力。SFT
+通过模仿示范调整分布，不会自动把“看起来专业”的错误答案变真。下一章 P22
+会把“示范该怎么答”进一步区分为“比较哪个回答更好”和“按奖励优化”，不能把这几种目标混叫成同一件事。</p>
+<h2 id="p21.11-自测与已验证参考答案">P21.11 自测与已验证参考答案</h2>
+<p>下面所有数值和边界都在 <code>tests/test_sft_lora.py</code>
+中有对应检查。先独立回答，再看参考答案。</p>
+<h3 id="题-1标签与错位">题 1：标签与错位</h3>
+<p>“问红 → 红”的八个输入位置，哪些 labels 保留？哪些 logits
+被评分？若两个正确目标概率分别为 0.5、0.25，平均 loss 是多少？</p>
+<p><strong>参考答案：</strong> labels 仅位置 6=13、7=6，其余为
+-100；logits 位置 5、6 被评分；N=2，loss≈1.03972077。不能把 labels
+提前左移，也不能除以八。对应
+<code>test_hand_example_literal_ids</code>、<code>test_scalar_loss_hand_answer_and_large_offsets</code>
+与独立 log-probability 测试。</p>
+<h3 id="题-2多轮与-eos">题 2：多轮与 EOS</h3>
+<p>加入 system“只答颜色”和第二轮“问蓝 → 蓝”，目标位置与 span 是什么？空
+assistant 正文是否必然有零个目标？</p>
+<p><strong>参考答案：</strong> 目标位置为 12、13、19、20；span 为
+<code>[12,14)</code>、<code>[19,21)</code>，总计四个。空正文仍有一个 EOS
+目标。对应 <code>test_multi_turn_system_and_both_assistant_eos</code> 和
+<code>test_empty_answer_still_supervises_stop</code>。</p>
+<h3 id="题-3截断到-14">题 3：截断到 14</h3>
+<p>没有 system 的两轮对话长 15；max_length=14、15、7
+各怎样处理？为什么不在长度 14 的位置强加 EOS？</p>
+<p><strong>参考答案：</strong> 14 只保留完整第一轮，得到 8 个输入、2
+个目标；15 保留两轮、4 个目标；7 报错。强加 EOS
+会把被截掉的未完答案改成结束示范。对应
+<code>test_truncation_exact_fit_and_all_boundaries</code>，测试逐一遍历边界，不只抽查
+14。</p>
+<h3 id="题-4lora-的参数账">题 4：LoRA 的参数账</h3>
+<p>4096×4096 的层用 r=8，A/B 有多少参数？本章两个 16×16 投影用 r=2
+又有多少？是否可以说本章模型只剩 128 个参数？</p>
+<p><strong>参考答案：</strong> 前者 65,536，相对原矩阵 16,777,216 是
+1/256；后者每层 64，共 128。不能说模型只有 128 个参数，它还保存 3,760
+个被冻结的基础参数，总计 3,888。对应参数算术测试和真实训练报告测试。</p>
+<h3 id="题-5矩阵与合并">题 5：矩阵与合并</h3>
+<p>使用 P21.6 的 W0、A、B、x，算出输出与合并权重；若忘记
+alpha/r，结果还能一样吗？</p>
+<p><strong>参考答案：</strong> 输出 <code>[19.5,0]</code>，合并权重
+<code>[[7,2,15],[2,5,2]]</code>。忘记系数 2 会得到错误输出
+<code>[10.5,3]</code>。矩阵 oracle
+直接检查手算答案；实际删掉缩放的变异代码会被拒绝，不只是口头说“应该测”。</p>
+<h3 id="题-6梯度到哪里">题 6：梯度到哪里</h3>
+<p>仍用该例子，令 L=y₁+y₂，求 A、B、x 的梯度。为什么冻结 W0 后 x
+仍可能有梯度？</p>
+<p><strong>参考答案：</strong> A 梯度 <code>[8,-4,2]</code>，B 梯度
+<code>[6,6]</code>，x 梯度 <code>[9,7,17]</code>；固定 W0
+不等于切断对输入的导数。<code>test_lora_gradients_match_manual_chain_rule</code>
+逐项核对。另一个测试验证 user 内容虽然不被当成标签，仍可通过上下文影响
+loss。</p>
+<h3 id="题-7两个零是否一样">题 7：两个“零”是否一样</h3>
+<p>B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽略时，loss
+返回零再更新是否合适？</p>
+<p><strong>参考答案：</strong> 前者不一定是 bug：B 先获得梯度，更新后 A
+也能获得梯度。后者不合适：有效目标数为零，平均 loss
+未定义；本代码在更新前报错，并验证参数完全不变。对应两步初始化梯度测试和
+all-ignored 测试。</p>
+<h3 id="题-8什么叫验证过">题 8：什么叫“验证过”</h3>
+<p>默认 CLI 打印了手算 loss，能说 SFT 训练通过了吗？LoRA 的训练 loss
+更低，能说 LoRA 比全量微调更好吗？</p>
+<p><strong>参考答案：</strong> 都不能。默认命令明确输出 NOT RUN，缺
+Torch 的 <code>--train</code> 以退出码 2 结束；测试用无 site-packages
+的独立进程实际核对。LoRA
+是从全量阶段终点继续训练同一批数据，不是同起点对比；报告明确没有
+held-out 质量评估。</p>
+<h3 id="本章的反例不是注释">本章的反例不是注释</h3>
+<p>测试在内存中真正修改并运行 12 种语义错误：监督 user、漏掉 assistant
+EOS、误监督 role header、截断等号边界错误、错移 logits、错误 loss
+分母、丢掉 LoRA 缩放、缩放漏除 rank、合并漏缩放、基础层未冻结、B
+初始非零、移除 causal
+mask。每种都要求独立参考或明确的边界契约拒绝它，且不修改仓库文件。测试因此不是只证明“两个一起写错的实现彼此相同”。</p>
+<p>本次有 PyTorch 环境中 28 个测试通过；无 PyTorch 路线执行 13
+个标准库测试，另外 15
+个明确跳过。未来修改后应重新运行，不应把这些数字当成永远有效的标签。</p>
+<h2 id="本章小结与来源边界">本章小结与来源边界</h2>
+<p>SFT 的第一步不是选显卡，而是确定“谁的哪几个 token
+在被学习”。模板决定输入，causal shift 决定预测对齐，label mask
+决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩
+A/B 表示允许学习的更新。参数更少不代表模型更小到只剩
+adapter，也不代表数据更可靠。</p>
+<p>来源按 <strong>2026-10-19</strong> 核验，固定版本而非追随
+latest：</p>
+<ul>
+<li><a
+href="https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating">Transformers
+4.51.3 chat templates</a>：模板、生成前缀、特殊 token
+重复的注意事项。</li>
+<li><a
+href="https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py">TRL
+0.18.2 SFTTrainer 源码</a>：框架职责参照，未在本章运行。</li>
+<li><a
+href="https://arxiv.org/abs/2106.09685v2">LoRA，arXiv:2106.09685v2，2021-10-16</a>：冻结基础层、低秩更新与合并思想。手算矩阵、数据、代码和测试是本章独立教学实例。</li>
+<li><a
+href="https://huggingface.co/docs/peft/v0.15.0/package_reference/lora">PEFT
+0.15.0 LoRA 配置参考</a>：参数与初始化概念参照，未运行 PEFT。</li>
+<li><a
+href="https://arxiv.org/abs/2305.14314v1">QLoRA，arXiv:2305.14314v1，2023-05-23</a>：量化基础模型与低秩适配，本文仅作机制说明，不把论文硬件或质量数字当成本实验结果。</li>
+</ul>
+<p>下一步进入
+P22：从示范答案转向偏好对与奖励，先区分目标，再看更新方法。</p>
+<hr />
+<h1 id="p22-preference">训练进阶（P22）：RLHF、DPO 与 GRPO</h1>
+<p><a href="#p21-sft">P21：SFT、LoRA 与对话数据</a>
+教模型“照着好答案写”。但有时我们只有两份答案的比较，或者只能在答案写完后判断对错。怎样把这种反馈变成参数更新？</p>
+<p>想象一位学徒练习做菜。SFT
+是跟着师傅的菜谱做；偏好数据是品尝者说“这盘比那盘好”；奖励是为一盘菜打分。<strong>比较、打分、学习如何做菜，是三件不同的事。</strong>
+品尝者也可能偏爱摆盘，评分器也可能漏查食材。分数上涨不等于真的做得更好。这是本章最重要的边界。</p>
+<p>本章不从几十个训练参数开始。先补齐对数概率和期望，再手算一批
+DPO、一个 GRPO 组，最后让 CPU 真正改变六个参数。配套 <a
+href="code/23_preference_optimization.py">code/23_preference_optimization.py</a>
+有两层：</p>
+<ul>
+<li>标准库路径：DPO 数值、组内优势、精确离散 KL，不需要安装
+PyTorch。</li>
+<li>PyTorch 路径：两道合成题、每题三个固定答案的策略，实际运行
+SFT，以及从同一 SFT 起点分出的 DPO / GRPO
+两条更新路线；另有语言模型式变长 token 概率与 mask 测试。</li>
+</ul>
+<p><strong>六参数策略不是
+Transformer，不生成任意文本，不学习算术规则；TRL
+配置只讲解，未运行。</strong> 本章既不复现 InstructGPT、DeepSeekMath 或
+R1，也不提供大模型训练速度、显存或质量结论。</p>
+<h2 id="p22.1-先把几个名字放回各自的位置">P22.1
+先把几个名字放回各自的位置</h2>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>名称</th>
+<th>它主要回答的问题</th>
+<th>本章的边界</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SFT</td>
+<td>给定示范，应该提高哪些 token 的概率？</td>
+<td>常见后训练起点，不是所有 RL 路线的必需前置</td>
+</tr>
+<tr>
+<td>人类偏好数据</td>
+<td>同一问题的两个答案，哪个更好？</td>
+<td>可能有分歧、噪声与评价偏差</td>
+</tr>
+<tr>
+<td>奖励模型</td>
+<td>用模型预测一个答案的评分</td>
+<td>拟合人的判断，不是真理检测器</td>
+</tr>
+<tr>
+<td>PPO 式 RLHF</td>
+<td>用人类反馈训练的奖励信号，怎样更新生成策略？</td>
+<td>一条常见 RLHF 流程，不代表所有 RLHF</td>
+</tr>
+<tr>
+<td>DPO</td>
+<td>怎样直接用偏好对优化策略？</td>
+<td>标准离线形式不需要单独训练奖励模型，也不需要在线 rollout</td>
+</tr>
+<tr>
+<td>GRPO</td>
+<td>同题采样多份答案，怎样用组内比较更新策略？</td>
+<td>奖励可来自模型或可验证规则；并不天然等于“人类反馈”</td>
+</tr>
+</tbody>
+</table></div>
+<p>“策略”在这里就是生成答案的概率分布，记为 π。θ 是可训练参数，x
+是问题，y 是答案。对语言模型，选择下一个 token 是一次动作；本章 CPU
+玩具则把选择一整份预置答案当作一次动作。两者都能解释概率更新，但不能混淆动作空间。</p>
+<figure>
+<a href="assets/rendered/p22-preference.svg"
+title="点击查看原尺寸图"><img src="assets/rendered/p22-preference.svg"
+class="book-diagram" width="712"
+alt="从 SFT 起点分出 PPO 式 RLHF、DPO 和 GRPO；奖励全相同的组优势为零；固定参考与采样旧策略职责不同" /></a>
+<figcaption>从 SFT 起点分出 PPO 式 RLHF、DPO 和
+GRPO；奖励全相同的组优势为零；固定参考与采样旧策略职责不同</figcaption>
+</figure>
+<p>图中的三条路线是对照，不是要求读者先做 PPO，再做 DPO，最后做
+GRPO。代码中 DPO 与 GRPO 都从同一份 SFT
+参数复制，便于看清各自的作用。</p>
+<h2 id="p22.2-补课log-probability期望与-kl">P22.2 补课：log
+probability、期望与 KL</h2>
+<h3 id="概率相乘对数相加">概率相乘，对数相加</h3>
+<p>假设在已有问题和前文条件下，两个答案 token 的概率依次是
+0.5、0.25。那么这条答案的条件概率是：</p>
+<p><span class="math display">\[
+\pi(y\mid x)=0.5\times0.25=0.125.
+\]</span></p>
+<p>使用自然对数 ln，有：</p>
+<p><span class="math display">\[
+\log\pi(y\mid x)=\log0.5+\log0.25\approx-2.07944.
+\]</span></p>
+<p>这里的第二个概率已经以第一个 token 为条件，<strong>不是假设 token
+彼此独立</strong>。对数把很长的概率连乘变成相加，数值上更方便。概率在 0
+到 1 之间，对数概率通常为负；从 −3 提高到 −2，是概率增加，不是下降。</p>
+<p>在 P09 的交叉熵里，我们最小化负对数概率；在 DPO
+中，我们比较两个答案的对数概率。注意区分：</p>
+<ul>
+<li>完整答案的 log probability：对有效答案 token 求和，包括真正生成的
+EOS。</li>
+<li>每 token 平均 log probability：再除以答案长度，是另一种量。</li>
+<li>原始 logits：尚未归一化的分数，不能直接当 log probability。</li>
+</ul>
+<p>例如两个 token 都为 −1，序列和是 −2，均值是
+−1。偷偷把和换成均值，不是“只优化实现”，而是改变目标和长度效应。</p>
+<h3
+id="期望是按概率加权不是总取最好的一项">期望是按概率加权，不是总取最好的一项</h3>
+<p>三个答案的概率为 [0.5, 0.3, 0.2]，奖励为 [1, 0, 0]。期望奖励为：</p>
+<p><span class="math display">\[
+\mathbb E_{y\sim\pi}[r(y)]
+=\sum_y\pi(y)r(y)=0.5.
+\]</span></p>
+<p>符号 y∼π
+表示按策略抽样。多抽几次再取奖励均值，可以估计这个期望，但有限样本有波动。贪心只选最大概率答案，不是在进行同一种抽样。本章
+<code>sample_rollouts</code> 用固定种子的有放回抽样，temperature=1，不做
+top-k / top-p 截断。</p>
+<h3 id="kl-比较两份完整分布">KL 比较两份完整分布</h3>
+<p>参考策略 π_ref
+像一张固定的起点照片。我们希望提高奖励，又不无节制地偏离它。一种约束量是：</p>
+<p><span class="math display">\[
+D_{\rm KL}(\pi_\theta\Vert\pi_{\rm ref})
+=\sum_y\pi_\theta(y)
+\left[\log\pi_\theta(y)-\log\pi_{\rm ref}(y)\right].
+\]</span></p>
+<p>两份分布相同时 KL=0；一般不对称，不能调换左右。代码在有限 logits 上用
+log-softmax，枚举所有动作计算。手算
+p=[0.6,0.3,0.1]、q=[0.2,0.5,0.3]，得到约 0.396058 nats。它不是“只看
+chosen 的概率变化”，也不是两个 logits 的欧氏距离。</p>
+<p>对真正的自回归模型，在一个固定前缀上枚举词表，得到的是<strong>该前缀下的条件下一
+token
+KL</strong>。对旧策略采到的若干前缀取平均，并不自动成为完整答案分布的精确
+KL。本章后面打印的“精确答案
+KL”之所以成立，是因为玩具策略只有三个完整答案，能够全部枚举。</p>
+<h2 id="p22.3-经典流程sft-奖励模型-ppo-式-rlhf">P22.3 经典流程：SFT →
+奖励模型 → PPO 式 RLHF</h2>
+<p><a href="https://arxiv.org/abs/2203.02155v1">InstructGPT
+论文，2022-03-04</a>
+展示了示范微调、答案比较、强化学习三个阶段。这里解释数据怎样流动，不运行这套完整系统。</p>
+<ol type="1">
+<li>收集示范答案，做 SFT。这样策略已经具备基本的回答方式。</li>
+<li>对同一个问题生成多个答案，请标注者比较，得到 chosen /
+rejected。</li>
+<li>训练奖励模型 r_φ(x,y)，让 chosen 的评分倾向于更高。</li>
+<li>用当前策略回答新的一批问题，奖励模型为这些 rollout 打分。</li>
+<li>使用 PPO
+等策略优化方法更新生成模型，同时控制它与参考策略的偏离。</li>
+</ol>
+<p>奖励模型可以用成对损失：</p>
+<p><span class="math display">\[
+\mathcal L_{\rm RM}
+=-\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big),
+\qquad \sigma(z)=\frac{1}{1+e^{-z}}.
+\]</span></p>
+<p>w 表示较受偏好的答案，l
+表示较不受偏好的答案。只比较差值，所以对同一问题把两个评分都加
+100，并不改变偏好概率。评分没有天然的“满分 100”含义。</p>
+<p>常见 PPO 式语言模型训练还会用价值函数 V
+来估计未来回报，并计算“比预期好多少”的优势
+A。<strong>奖励模型负责评价输出；价值函数负责估计回报基线。</strong>
+它们可能都是神经网络，却不是同一个职责。</p>
+<p>PPO 的 clipped surrogate
+抑制一批旧样本上的过大更新。它比较当前策略与生成这批样本的旧策略，不是把所有参数硬裁剪到一个范围。<a
+href="https://arxiv.org/abs/1707.06347v2">PPO 原论文 v2，2017-08-28</a>
+给出了这一目标。我们在 GRPO 小节继续拆开其中的概率比与 clip。</p>
+<p>特别记住两份快照：</p>
+<ul>
+<li>π_ref：本章固定为 SFT
+起点，用于衡量偏离，整个偏好优化期间不更新。</li>
+<li>π_old：生成当前这批 rollout
+时的策略快照，同一批的多次更新期间不变；换批采样时可以刷新。</li>
+</ul>
+<p>把 old 和 ref 互换，会改变概率比或惩罚项；每一步都把 old
+改成正在训练的策略，也会让概率比失去“相对于采样时”的含义。成熟训练系统的生命周期更复杂，本章先把这两种职责分开。</p>
+<h2 id="p22.4-dpo直接学习相对起点更偏向哪份答案">P22.4
+DPO：直接学习“相对起点，更偏向哪份答案”</h2>
+<p>一条偏好样本必须是同一问题的三元组 (x,y_w,y_l)。不能把“1+1=?”
+的好答案和“2+1=?” 的坏答案随意凑成一对，也不能让两侧使用不同的 chat
+template。</p>
+<p>标准 DPO 的每对损失为：</p>
+<p><span class="math display">\[
+\begin{aligned}
+\Delta_\theta &amp;= \log\pi_\theta(y_w\mid x)-\log\pi_\theta(y_l\mid
+x),\\
+\Delta_{\rm ref} &amp;= \log\pi_{\rm ref}(y_w\mid x)-\log\pi_{\rm
+ref}(y_l\mid x),\\
+z &amp;= \beta(\Delta_\theta-\Delta_{\rm ref}),\\
+\mathcal L_{\rm DPO} &amp;= -\log\sigma(z)=\operatorname{softplus}(-z).
+\end{aligned}
+\]</span></p>
+<p>来源是 <a href="https://arxiv.org/html/2305.18290v3#S4">DPO 论文
+v3，式 (7)，2024-07-29</a>。直觉是：不只问策略是否喜欢
+chosen，而是问它<strong>相对于原来，更偏向 chosen 了吗？</strong>
+参考策略可能本来就偏爱某个答案，减掉参考差值可以把这一点纳入目标。</p>
+<p>DPO 的推导把 KL
+正则化奖励最大化与特定偏好模型联系起来，再将奖励重新参数化。标准离线 DPO
+不单独拟合 reward
+model，也不必在每个优化步在线生成答案。它仍然依赖偏好数据、参考策略和假设，<strong>不能因此说“DPO
+就是全部强化学习”，更不能说任何 DPO 数据都等价于任意 RL
+问题</strong>。</p>
+<h3 id="手算一个两对答案的-batch">手算一个两对答案的 batch</h3>
+<p>取 β=0.5。表中只列 chosen / rejected
+的概率，其余概率质量属于其他答案。</p>
+<div class="table-wrapper"><table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>样本</th>
+<th>当前 chosen / rejected</th>
+<th>参考 chosen / rejected</th>
+<th>相对 margin</th>
+<th>z</th>
+<th>loss</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>0.6 / 0.2</td>
+<td>0.4 / 0.4</td>
+<td>ln 3 ≈ 1.098612</td>
+<td>0.549306</td>
+<td>0.455746</td>
+</tr>
+<tr>
+<td>B</td>
+<td>0.2 / 0.5</td>
+<td>0.1 / 0.5</td>
+<td>ln 2 ≈ 0.693147</td>
+<td>0.346574</td>
+<td>0.534800</td>
+</tr>
+</tbody>
+</table></div>
+<p>batch 对两对样本取平均，结果约 0.495273。B 的 chosen 概率仍小于
+rejected，但相对参考已经改善，所以 z
+仍为正。如果当前策略和参考完全相同，每对 loss 都是 ln
+2≈0.693147，而不是零。</p>
+<p>对应的核心代码只有几行：</p>
+<div class="sourceCode" id="cb150"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb150-1"><a href="#cb150-1" aria-hidden="true" tabindex="-1"></a>margin <span class="op">=</span> (chosen <span class="op">-</span> rejected) <span class="op">-</span> (</span>
+<span id="cb150-2"><a href="#cb150-2" aria-hidden="true" tabindex="-1"></a>    ref_chosen.detach() <span class="op">-</span> ref_rejected.detach()</span>
+<span id="cb150-3"><a href="#cb150-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb150-4"><a href="#cb150-4" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.nn.functional.softplus(<span class="op">-</span>beta <span class="op">*</span> margin).mean()</span></code></pre></div>
+<p>四个输入都是 [B] 的<strong>答案 log probability</strong>，不是 token
+ID，也不是 reward。detach 切断参考分支的梯度；参考参数本身也不应交给
+optimizer。softplus 的稳定实现避免先算巨大的 exp 再溢出。</p>
+<p>单对 loss 对 chosen log probability 的导数是 −βσ(−z)，对 rejected
+则为 +βσ(−z)。梯度下降倾向于增加相对
+margin。共享神经网络参数会同时影响其他答案，不保证每条 chosen
+的绝对概率在每一步都上涨。</p>
+<h3 id="β-不是越大越听话的旋钮">β 不是“越大越听话”的旋钮</h3>
+<p>在 DPO 的推导中，β 与对参考策略的约束强度有关。落实到这条损失，β
+同时影响 sigmoid 的输入与梯度尺度；例如起点 z=0 时，梯度大小与 β
+成正比。因此不能只凭“β
+大”就断言实际训练每步更小，或者最终一定更好。应固定数据、学习率等条件，比较偏好评估、KL
+和其他能力变化。</p>
+<p>原始 DPO 用答案 token log probability 的和。改成长度平均、删掉
+reference、把乘 β 写成除
+β，都是不同目标或错误实现，不能仍声称与这条公式相同。</p>
+<h2 id="p22.5-从变长-token-到一对概率形状不能代替对齐">P22.5 从变长
+token 到一对概率：形状不能代替对齐</h2>
+<p>语言模型 logits 为 [B,T,V]，input_ids 和 attention_mask 为
+[B,T]。本章的 <code>completion_log_probs</code> 做三步：</p>
+<div class="sourceCode" id="cb151"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb151-1"><a href="#cb151-1" aria-hidden="true" tabindex="-1"></a>next_logps <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>].log_softmax(dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb151-2"><a href="#cb151-2" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> input_ids[:, <span class="dv">1</span>:]</span>
+<span id="cb151-3"><a href="#cb151-3" aria-hidden="true" tabindex="-1"></a>selected <span class="op">=</span> next_logps.gather(<span class="op">-</span><span class="dv">1</span>, targets.unsqueeze(<span class="op">-</span><span class="dv">1</span>)).squeeze(<span class="op">-</span><span class="dv">1</span>)</span></code></pre></div>
+<p>这就是一次 causal shift：输入位置 t 预测 token
+t+1。然后根据每行实际的 prompt 长度和 padding mask，只保留答案目标：</p>
+<div class="sourceCode" id="cb152"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb152-1"><a href="#cb152-1" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> attention_mask[:, <span class="dv">1</span>:].<span class="bu">bool</span>() <span class="op">&amp;</span> (positions <span class="op">&gt;=</span> starts)</span>
+<span id="cb152-2"><a href="#cb152-2" aria-hidden="true" tabindex="-1"></a>sequence_logps <span class="op">=</span> (selected <span class="op">*</span> mask).<span class="bu">sum</span>(dim<span class="op">=-</span><span class="dv">1</span>)</span></code></pre></div>
+<p>positions 是原序列中目标的位置 1…T−1，starts
+是该行答案开始的位置。<strong>最后一个 prompt token 的 logits
+要参与预测第一个答案 token</strong>，不能把“输入来自 prompt”误解成“这行
+logits 一定不算 loss”。</p>
+<p>例如 T=5，第一行 prompt 长 2、真实总长 4，第二行 prompt 长
+1、真实总长 5。shift 后的答案 mask 为：</p>
+<pre class="text"><code>第一行：[False, True, True, False]   两个答案目标，末尾 PAD 不算
+第二行：[True,  True, True, True ]   四个答案目标</code></pre>
+<p>EOS 如果确实属于答案，应当计入；PAD 不计入。这个 helper 只支持右
+padding、有至少一个 prompt token 和一个答案 token 的输入，遇到左
+padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 tokenizer
+拼接边界，调用方还要保证 chosen / rejected 共用同一 prompt
+和一致的结束规则。</p>
+<p>测试不仅比较
+loss，还逐元素检查梯度：无效位置应为零，有效位置应等于“目标指示值减去该
+token 的概率”。修改被排除位置的
+logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。</p>
+<h2 id="p22.6-grpo同一道题先比较一组答案">P22.6
+GRPO：同一道题，先比较一组答案</h2>
+<p><a href="https://arxiv.org/html/2402.03300v3#S4.SS1">DeepSeekMath
+v3，第 4.1 节，2024-04-27</a> 引入
+GRPO：对同一个问题采样一组答案，用组内奖励建立相对基线，不必另外训练 PPO
+式价值网络。本章讲 <strong>outcome
+reward</strong>：每份完整答案得到一个分数，同一答案的有效 token
+共用一个优势值；不是逐步过程奖励。</p>
+<p>设一个问题采样 G 份答案，奖励为
+r₁…r_G。本章明确选择总体标准差，即分母为 G：</p>
+<p><span class="math display">\[
+\bar r=\frac1G\sum_i r_i,\qquad
+s=\sqrt{\frac1G\sum_i(r_i-\bar r)^2},\qquad
+A_i=\frac{r_i-\bar r}{s+\delta},\quad\delta=10^{-8}.
+\]</span></p>
+<p>δ
+放在平方根<strong>外面</strong>。这里的选择用于手算和可重复的教学实现，不意味着所有
+GRPO 实现都采用同一个标准差、epsilon 或归一化方式。</p>
+<h3 id="手算一组-0112">手算一组 [0,1,1,2]</h3>
+<p>平均奖励为 1，方差为 (1+0+0+1)/4=0.5，标准差约 0.707107。忽略很小的 δ
+后，优势约为：</p>
+<pre class="text"><code>奖励：  0          1       1       2
+优势： -1.414214   0       0      +1.414214</code></pre>
+<p>相对本组平均更好的是最后一份答案；第一份较差。这里没有给另一道更难的题“借用平均值”。代码按
+prompt_id 分组，即使样本交错排列也不会混组。每组要求至少两份答案。</p>
+<p>如果一组奖励为 [2,2,2,2]，减去平均后全为 0，分母为 δ，优势正好全为
+0，不会产生
+NaN。它可能表示全部答对、全部答错，或者评分器太粗糙；<strong>仅凭零优势无法知道是哪一种</strong>。这组没有奖励比较带来的策略梯度，但若策略已经偏离
+reference，非零 KL 惩罚仍可能产生梯度。</p>
+<h3 id="概率比clip-和最小化符号">概率比、clip 和最小化符号</h3>
+<p>对第 i 份答案的第 t 个有效 token，记当前与采样旧策略的概率比为：</p>
+<p><span class="math display">\[
+\rho_{i,t}
+=\exp\left(\log\pi_\theta(y_{i,t}\mid x,y_{i,&lt;t})
+-\log\pi_{\rm old}(y_{i,t}\mid x,y_{i,&lt;t})\right).
+\]</span></p>
+<p>本章使用 clip
+ε=0.2，并把“最大化收益”写成优化器常用的“最小化负收益”：</p>
+<p><span class="math display">\[
+\mathcal L=
+\frac1N\sum_{i=1}^{N}\frac1{L_i}
+\sum_{t=1}^{L_i}
+\left[-\min\left(\rho_{i,t}A_i,
+\operatorname{clip}(\rho_{i,t},0.8,1.2)A_i\right)
++\beta K_{i,t}\right].
+\]</span></p>
+<p>N 是这批答案总数，L_i 是第 i 份答案的有效长度，K 是该前缀的 KL
+项。本章各题采样数相同，因此对答案均权也使题目均权。不同组大小时还需明确是否要对题目再次加权。</p>
+<p>两个检查符号的例子：</p>
+<ul>
+<li>A=+1、ρ=1.4：收益取
+min(1.4,1.2)=1.2，不再鼓励这项收益无限上涨。</li>
+<li>A=−1、ρ=0.6：收益取 min(−0.6,−0.8)=−0.8，不能错误地取 max。</li>
+</ul>
+<p>clip
+的作用依赖优势符号和更新方向，并不是所有范围外的概率比都“没有梯度”；它也不保证实际
+KL 永远小于一个固定值。更新后的概率仍需检查。</p>
+<h3 id="本章的-kl-和长度归约刻意写清楚">本章的 KL
+和长度归约，刻意写清楚</h3>
+<p><code>grpo_loss</code> 输入
+logits/reference=[N,L,V]，targets/old_logps/mask=[N,L]，advantages=[N]。old、reference、advantages
+都停止梯度；当前 logits 保留梯度。mask 中每行至少一个 True。有限的 log
+probability 不保证 exp 后仍然有限；如果概率比、逐 token loss 或归约超出
+dtype 的有限范围，代码明确报错，不用 clip 掩盖溢出，也不让 0×∞ 静默变成
+NaN。</p>
+<p>本章词表很小，K 使用枚举整个词表的精确条件
+KL，而不是采样估计。原论文使用的一个逐 token KL 估计写成：</p>
+<p><span class="math display">\[
+k=\frac{\pi_{\rm ref}(a\mid s)}{\pi_\theta(a\mid s)}
+-\log\frac{\pi_{\rm ref}(a\mid s)}{\pi_\theta(a\mid s)}-1.
+\]</span></p>
+<p>若动作 a 真按当前 π_θ 抽样，且支持集条件满足，它的期望等于相应
+KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与
+old 不同，也不能不加说明地把旧样本均值称为精确
+KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 K
+的教学目标说成原论文代码逐行复现。</p>
+<p>长度归约先做“每个答案内 token 平均”，再对答案平均。若答案长度分别为 2
+和 4，每份答案总权重都是 1/2；若改成六个 token
+统一平均，两份答案的总权重则为 1/3 和 2/3。两者都能写成
+loss，但不是同一个目标。测试刻意使用不同长度，以免相同长度掩盖错误。</p>
+<h2 id="p22.7-真正跑一次参数概率和-kl-都由更新得到">P22.7
+真正跑一次：参数、概率和 KL 都由更新得到</h2>
+<p>从仓库根目录运行：</p>
+<div class="sourceCode" id="cb155"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb155-1"><a href="#cb155-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库手算，不导入 torch</span></span>
+<span id="cb155-2"><a href="#cb155-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py</span>
+<span id="cb155-3"><a href="#cb155-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb155-4"><a href="#cb155-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 安装仓库基线依赖后，实际 CPU 更新</span></span>
+<span id="cb155-5"><a href="#cb155-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py <span class="at">--torch</span></span>
+<span id="cb155-6"><a href="#cb155-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb155-7"><a href="#cb155-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 独立数值与梯度测试</span></span>
+<span id="cb155-8"><a href="#cb155-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_preference_optimization.py <span class="at">-v</span></span></code></pre></div>
+<p>缺少 PyTorch 时默认手算正常退出；显式请求 <code>--torch</code> 会打印
+<code>SKIP</code> 并以状态码 2 退出，不能把“没有运行”当成训练成功。可用
+<code>python -S</code> 模拟不加载第三方包；测试中 PyTorch
+项会明确跳过，标准库项仍执行。</p>
+<h3 id="一个非常小但真实更新的策略">一个非常小，但真实更新的策略</h3>
+<p>问题只有 “1+1=?” 和 “2+1=?”；答案动作都为 [“2”, “我猜是 0”,
+“3”]。每题各有三个可训练 logits，共六个 float64
+参数。从全零开始，先用正确答案做 4 次 SFT SGD 更新，学习率 0.4。</p>
+<p>之后复制两份策略：</p>
+<ul>
+<li>DPO：chosen 为各题正确答案，rejected 都是“我猜是 0”，β=0.5，学习率
+0.4，更新 6 次。</li>
+<li>GRPO：每题从 SFT 策略有放回采样 8 个动作，精确匹配正确答案得
+1，否则得 0；保存 old 概率，同一批更新 3 次，学习率 0.2，β=0.04，clip
+ε=0.2。</li>
+</ul>
+<p>GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我猜是
+0”虽然字符更多，也不是多个策略动作。语言模型变长 token
+的实现契约在前面和测试中单独验证。不要把这两层混写成“已经训练了一个生成式小
+LLM”。</p>
+<p>2026-10-19，在 CPU、PyTorch 2.14.1+cpu、seed=22、单线程下实测：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>SFT 起点</th>
+<th>DPO 后</th>
+<th>GRPO 后</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>两题平均的精确期望奖励</td>
+<td>0.506496</td>
+<td>0.608010</td>
+<td>0.560679</td>
+</tr>
+<tr>
+<td>对 SFT 的精确答案 KL，题 0</td>
+<td>0</td>
+<td>0.024651</td>
+<td>0.006216</td>
+</tr>
+<tr>
+<td>对 SFT 的精确答案 KL，题 1</td>
+<td>0</td>
+<td>0.024651</td>
+<td>0.006595</td>
+</tr>
+<tr>
+<td>DPO 固定偏好对 loss</td>
+<td>0.693147</td>
+<td>0.562092</td>
+<td>不作跨目标对照</td>
+</tr>
+</tbody>
+</table></div>
+<p>例如题 0 的三个 logits 从 [0.479421,−0.239710,−0.239710] 变为 DPO 的
+[0.761335,−0.521624,−0.239710]；这些数字来自 backward 和
+SGD，而不是为了展示方向手写的“更新后概率”。reference 保持原值。</p>
+<p>这不是 DPO 优于 GRPO
+的实验：优化步数、目标、样本和学习率都不同，数据只有两道训练题。精确期望奖励也不是独立测试集准确率。两题各用一行独立参数，没有任何跨题泛化能力。我们只证明目标、梯度、数据对齐、采样和参数更新构成了可检验闭环。</p>
+<h3 id="reward-对齐不能只靠-zip">reward 对齐不能只靠 zip</h3>
+<p>一次采样保存 sample_id、prompt_id、action_id 和
+completion；奖励保存对应 sample_id、prompt_id 和
+value。<code>aligned_rewards</code> 在转 tensor
+前检查条数、ID、顺序、题号、动作与文本一致性、有限奖励。</p>
+<p>“2” 对题 0 正确，对题 1
+错误。把奖励列表交换顺序，虽然形状完全相同，仍会把错误行为加强。代码遇到这种错配会报错，而不是悄悄
+zip
+截断或继续训练。实际数据流水线也应保留能追溯到样本的标识，不要在排序、截断、异步打分后丢失对应关系。</p>
+<h2 id="p22.8-接到-trl固定版本配置阅读明确未运行">P22.8 接到
+TRL：固定版本配置阅读，明确未运行</h2>
+<p>本节核对的是 <strong>TRL 0.16.1</strong> 的 <a
+href="https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py">DPOConfig
+源码</a> 与 <a
+href="https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py">GRPOConfig
+源码</a>，核验日期为
+2026-10-19。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。</p>
+<p>下面只是一份<strong>未执行的配置示意</strong>，不包含模型下载、Trainer
+构造或 train 调用：</p>
+<div class="sourceCode" id="cb156"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb156-1"><a href="#cb156-1" aria-hidden="true" tabindex="-1"></a><span class="co"># NOT RUN：仅供阅读，需在单独环境核对完整依赖。</span></span>
+<span id="cb156-2"><a href="#cb156-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> GPT2Config</span>
+<span id="cb156-3"><a href="#cb156-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> trl <span class="im">import</span> DPOConfig, GRPOConfig</span>
+<span id="cb156-4"><a href="#cb156-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb156-5"><a href="#cb156-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 若开展框架实验，可从这个结构创建随机本地模型；不是预训练权重。</span></span>
+<span id="cb156-6"><a href="#cb156-6" aria-hidden="true" tabindex="-1"></a>tiny_architecture <span class="op">=</span> GPT2Config(</span>
+<span id="cb156-7"><a href="#cb156-7" aria-hidden="true" tabindex="-1"></a>    vocab_size<span class="op">=</span><span class="dv">12</span>, n_positions<span class="op">=</span><span class="dv">32</span>, n_ctx<span class="op">=</span><span class="dv">32</span>,</span>
+<span id="cb156-8"><a href="#cb156-8" aria-hidden="true" tabindex="-1"></a>    n_embd<span class="op">=</span><span class="dv">16</span>, n_layer<span class="op">=</span><span class="dv">1</span>, n_head<span class="op">=</span><span class="dv">2</span>, n_inner<span class="op">=</span><span class="dv">32</span>,</span>
+<span id="cb156-9"><a href="#cb156-9" aria-hidden="true" tabindex="-1"></a>    resid_pdrop<span class="op">=</span><span class="fl">0.0</span>, embd_pdrop<span class="op">=</span><span class="fl">0.0</span>, attn_pdrop<span class="op">=</span><span class="fl">0.0</span>,</span>
+<span id="cb156-10"><a href="#cb156-10" aria-hidden="true" tabindex="-1"></a>    bos_token_id<span class="op">=</span><span class="dv">2</span>, eos_token_id<span class="op">=</span><span class="dv">3</span>, pad_token_id<span class="op">=</span><span class="dv">0</span>,</span>
+<span id="cb156-11"><a href="#cb156-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb156-12"><a href="#cb156-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb156-13"><a href="#cb156-13" aria-hidden="true" tabindex="-1"></a>dpo_config <span class="op">=</span> DPOConfig(</span>
+<span id="cb156-14"><a href="#cb156-14" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-dpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb156-15"><a href="#cb156-15" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">2</span>, max_steps<span class="op">=</span><span class="dv">2</span>,</span>
+<span id="cb156-16"><a href="#cb156-16" aria-hidden="true" tabindex="-1"></a>    max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>, max_length<span class="op">=</span><span class="dv">16</span>,</span>
+<span id="cb156-17"><a href="#cb156-17" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.1</span>, loss_type<span class="op">=</span><span class="st">&quot;sigmoid&quot;</span>,</span>
+<span id="cb156-18"><a href="#cb156-18" aria-hidden="true" tabindex="-1"></a>    fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>, gradient_checkpointing<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb156-19"><a href="#cb156-19" aria-hidden="true" tabindex="-1"></a>    report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
+<span id="cb156-20"><a href="#cb156-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb156-21"><a href="#cb156-21" aria-hidden="true" tabindex="-1"></a>grpo_config <span class="op">=</span> GRPOConfig(</span>
+<span id="cb156-22"><a href="#cb156-22" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-grpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb156-23"><a href="#cb156-23" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">4</span>, num_generations<span class="op">=</span><span class="dv">4</span>,</span>
+<span id="cb156-24"><a href="#cb156-24" aria-hidden="true" tabindex="-1"></a>    max_steps<span class="op">=</span><span class="dv">2</span>, max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>,</span>
+<span id="cb156-25"><a href="#cb156-25" aria-hidden="true" tabindex="-1"></a>    temperature<span class="op">=</span><span class="fl">1.0</span>, top_p<span class="op">=</span><span class="fl">1.0</span>, top_k<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb156-26"><a href="#cb156-26" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.04</span>, epsilon<span class="op">=</span><span class="fl">0.2</span>, num_iterations<span class="op">=</span><span class="dv">2</span>,</span>
+<span id="cb156-27"><a href="#cb156-27" aria-hidden="true" tabindex="-1"></a>    use_vllm<span class="op">=</span><span class="va">False</span>, fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb156-28"><a href="#cb156-28" aria-hidden="true" tabindex="-1"></a>    gradient_checkpointing<span class="op">=</span><span class="va">False</span>, report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
+<span id="cb156-29"><a href="#cb156-29" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<p>先读懂这些设置，再谈运行：</p>
+<ul>
+<li>12 项词表、16 维、1 层、2 个头把模型结构限制在小规模；tokenizer 的
+ID 必须一致。输入最多 8+8 个 token，不超出 32 个位置。</li>
+<li>DPO 数据需要同题 prompt / chosen /
+rejected；<code>loss_type="sigmoid"</code>
+指向本章讨论的标准形式，不能随意换成另一个 loss
+名称再声称目标未变。</li>
+<li>GRPO 的每题生成数是 4。该固定版本要求总 batch size
+可被它整除；这里单进程
+batch=4，符合算术约束，不意味着已经验证训练能启动。</li>
+<li>GRPO
+需要与样本对应的奖励函数或奖励模型，还需要模板、padding、EOS、生成截断和
+reward
+解析测试。一个随机模型可能所有输出都得零分，配置合法不等于学习有效。</li>
+<li><code>use_cpu=True</code>、关闭半精度和
+vLLM、<code>report_to=[]</code>
+只表达运行意图。没有安装并运行完整框架，就没有 CPU
+兼容性、性能或训练结果。</li>
+</ul>
+<p>尤其不能预期 TRL 与教学脚本逐数相同。<a
+href="https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_trainer.py">该版本
+GRPOTrainer 源码</a> 的具体实现使用组内 <code>std</code>
+默认修正，即样本标准差，分母为 G−1；奖励标准化稳定项为 10⁻⁴；loss 按全
+batch 的有效 token 数归约，并使用采样 KL
+估计。本章则采用总体标准差、10⁻⁸、每答案均权、精确条件
+KL。<strong>名字相同不保证变体相同，源代码与版本才是复现账本的一部分。</strong></p>
+<p>未来要运行 TRL，应新建独立环境锁定整套依赖，不要为这段未运行配置改变
+P20
+已验证的环境。至少保存：完整版本、随机种子、数据和模板、采样参数、每组奖励、mask、旧策略保存时点、有效长度、KL
+的方向与估计方式、参数更新证据。只有真正跑完，才能把 NOT RUN 改成
+EXECUTED。</p>
+<h2 id="p22.9-奖励投机学会拿分不等于学会任务">P22.9
+奖励投机：学会拿分，不等于学会任务</h2>
+<p>把奖励设计为“输出中含数字 2 就得分”，那么“答案不是 2，其实是
+999”也能拿分；如果奖励只检查格式，模型可能输出漂亮的格式和错误的内容。把答案写长当作奖励，则可能得到冗长重复。这里的问题不一定出在优化器，往往出在目标与真正需求之间的缝隙。</p>
+<p>本章精确匹配答案规避了上述“包含即可”的漏洞，却也有局限：“二”与“2”可能表达同一个数，严格字符串匹配却不同。更复杂的数学、代码、事实问题还涉及等价表达、执行隔离、超时、测试覆盖和标注争议，不能用两题匹配器替代。</p>
+<p>做评估时至少分开记录：</p>
+<ol type="1">
+<li>训练奖励及其各组成部分，而不只看总分。</li>
+<li>未用于训练与挑参数的题目上的正确率或盲评偏好率。</li>
+<li>不同任务、长度、语言、难度上的退化情况。</li>
+<li>答案长度、重复、格式通过率、无效输出率及采样设置。</li>
+<li>KL、奖励方差、零方差组比例、clip 比例，并说明各自统计口径。</li>
+<li>多个种子的变化和评价者不确定性；对奖励模型，还需关注它是否在训练分布之外被利用。</li>
+</ol>
+<p>比较方法时固定题集、token 预算与采样预算。某方法尝试 64
+次后选出最好答案，不能直接与另一个方法只答一次的正确率并列作公平结论。小样本奖励变好值得继续检查，不是宣告“已对齐”或“会推理”。</p>
+<h2 id="p22.10-自测与可执行验证">P22.10 自测与可执行验证</h2>
+<p>配套 <code>tests/test_preference_optimization.py</code>
+将题目中的关键契约变成测试。不是让实现调用自己再比较，而是使用独立的标量公式、闭式导数和有限差分：</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>自测题</th>
+<th>应当得到的结论</th>
+<th>自动检查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>当前策略等于参考，DPO loss 是多少？</td>
+<td>每对 ln 2，不是 0</td>
+<td>标准库手算与 PyTorch 梯度</td>
+</tr>
+<tr>
+<td>B 样本 chosen 仍低于 rejected，为什么 z&gt;0？</td>
+<td>与参考相比的相对概率已经改善</td>
+<td>两对独立概率比公式</td>
+</tr>
+<tr>
+<td>对数概率求和能换成平均吗？</td>
+<td>不能冒称仍是原始序列 DPO</td>
+<td>变长 mask、shift、求和突变</td>
+</tr>
+<tr>
+<td>[0,1,1,2] 用总体标准差怎么算？</td>
+<td>约 [−√2,0,0,√2]；epsilon 略缩放</td>
+<td>交错 prompt 分组与标准差突变</td>
+</tr>
+<tr>
+<td>所有奖励一样时一定没有任何更新吗？</td>
+<td>奖励优势为零；非零 KL 仍可更新</td>
+<td>β=0 与 β&gt;0 的梯度对照</td>
+</tr>
+<tr>
+<td>为何负优势 clip 要取 min 而非 max？</td>
+<td>最大化目标必须保留较保守收益</td>
+<td>正负优势、多 ratio 分段标量 oracle</td>
+</tr>
+<tr>
+<td>长 2 与长 4 的答案权重是多少？</td>
+<td>本章各 1/2，不是按 token 数加权</td>
+<td>不同长度 loss 与有限差分</td>
+</tr>
+<tr>
+<td>同一文本在不同题目的奖励能否交换？</td>
+<td>不能；sample/prompt/reward 一起对齐</td>
+<td>错序、漏项、错题号与重复 ID 拒绝</td>
+</tr>
+<tr>
+<td>KL 为何不只看采到的动作？</td>
+<td>精确分布 KL 需要所有动作及概率权重</td>
+<td>独立 KL 值、方向与闭式梯度</td>
+</tr>
+<tr>
+<td>参数真的按这些目标更新了吗？</td>
+<td>SFT、DPO、GRPO 的最终 logits 可独立复算</td>
+<td>标量 SGD 与完整 GRPO 有限差分复算</td>
+</tr>
+</tbody>
+</table></div>
+<p>测试还将错误真正注入可执行源码：翻转 DPO 符号、反转
+β、删参考、混组、错标准差、漏对齐、错误 shift / mask /
+长度平均、反转或丢掉 KL 权重、让 old 每步跟随 current、错误 clip、全
+token
+归约等。测试必须抓住这些行为改变，不能只检查源码里有没有某个词。</p>
+<p>在上面的基线环境实测，19 个测试通过；不加载第三方包时，7
+个标准库测试通过、12 个 PyTorch
+测试明确跳过。测试通过说明这份微型实现满足所声明的契约，不说明 RLHF
+安全性、真实人类偏好或大模型能力已被验证。</p>
+<p>本章可以带走的一句话是：<strong>偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。</strong>
+下一章会把这一框架接到推理预算、MTP
+和投机解码，并继续区分训练目标与推理时计算。</p>
+<hr />
+<h1 id="p23-mtp">训练与应用（P23）：推理模型、MTP 与投机解码</h1>
+<p>做一道算术题，可以把草稿写得更长，可以换一种解题方法，也可以让同桌先写几个候选步骤、再由你检查。这三件事听起来都像“多想一点”，其实改变的是不同东西。</p>
+<p>本章先把它们拆开，再接上 <a href="#p18-moe">S5 的教学
+MoE</a>：<strong>训练时怎样给未来 token
+增加监督，生成时怎样验证草稿，评估时怎样把计算预算与正确率分开记录。</strong>
+我们不训练一个
+R1，不下载大模型，也不把会输出很长文字的小模型称为“推理模型”。</p>
+<p>配套 <a
+href="code/24_reasoning_mtp.py">code/24_reasoning_mtp.py</a>，测试为
+<code>tests/test_reasoning_mtp.py</code>。CPU
+主线包含可核验算术、可关闭的 S6 教学 MTP 旁路、贪心
+draft/verify。<strong>随机投机采样没有实现，不声称其分布保持。</strong></p>
+<h2 id="p23.1-四个问题别挤进同一个名词">P23.1
+四个问题，别挤进同一个名词</h2>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>问题</th>
+<th>改变什么</th>
+<th>本章对应内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>怎样让模型学会更有效地解题？</td>
+<td>数据、奖励、优化目标与训练流程</td>
+<td>R1 式后训练路线</td>
+</tr>
+<tr>
+<td>同一个隐藏位置还能接受哪些监督？</td>
+<td>训练标签与预测模块</td>
+<td>MTP 辅助目标</td>
+</tr>
+<tr>
+<td>已经训练好的目标模型，能否少做几次串行调用？</td>
+<td>生成算法与执行安排</td>
+<td>投机解码</td>
+</tr>
+<tr>
+<td>测试时多给计算，答案是否更好？</td>
+<td>单题计算预算与评估方式</td>
+<td>预算—正确率曲线</td>
+</tr>
+</tbody>
+</table></div>
+<p>MTP 是 <strong>Multi-Token Prediction，多 token
+预测</strong>；speculative decoding
+是<strong>投机解码</strong>。前者可以为后者提供草稿，但不是同义词。没有
+MTP 的小模型也能做 drafter；有 MTP
+辅助损失的模型也可以只用普通自回归生成。</p>
+<p>同桌类比也有限：计算机的“检查”不是凭感觉觉得通顺，而是执行明确的接受规则。我们要保持的是<strong>目标模型原来的生成规则</strong>，不是“只要答案差不多就行”。目标模型本身可能算错题，投机解码不会自动纠正它的知识或算术能力。</p>
+<figure>
+<a href="assets/rendered/p23-mtp.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/p23-mtp.svg" class="book-diagram" width="592"
+alt="S6 教学旁路在同一隐藏状态上预测不同未来标签；贪心验证保留正确前缀并删除错误后缀；预算增加的收益必须由固定题目和独立检查器测量" /></a>
+<figcaption>S6
+教学旁路在同一隐藏状态上预测不同未来标签；贪心验证保留正确前缀并删除错误后缀；预算增加的收益必须由固定题目和独立检查器测量</figcaption>
+</figure>
+<h2 id="p23.2-r1-式训练不是给答案加一个思考标题">P23.2 R1
+式训练：不是给答案加一个“思考”标题</h2>
+<p>先回忆前两章：SFT
+用示例告诉模型哪些输出应提高概率；偏好或强化学习使用另一个评价信号调整策略。它们可以组成多阶段流程，不能仅凭最终文本的样式识别训练方法。</p>
+<p>这里固定讨论 <strong>DeepSeek-R1 技术报告
+v1</strong>，不把后续所有同名更新混在一起：</p>
+<ul>
+<li><strong>R1-Zero</strong> 从基础模型直接进行 RL，不先做冷启动
+SFT。这是一条特定实验路线，不等于“模型从零知识学会推理”。</li>
+<li><strong>R1</strong> 先用少量较可读的长解答做冷启动
+SFT，再做面向推理任务的 RL。</li>
+<li>随后从训练后的模型收集候选解答、筛选数据，并混入非推理数据做新一轮
+SFT；再进行覆盖更多场景的 RL。</li>
+<li>报告中的小模型蒸馏使用教师生成并筛选的数据进行
+SFT，不应写成“小模型完整重跑了教师的 RL 流程”。<a
+href="https://arxiv.org/html/2501.12948v1">DeepSeek-R1
+v1，§2.2–2.4</a></li>
+</ul>
+<p>这里的 <strong>cold start（冷启动）</strong> 是给后续 RL
+提供一个起点；<strong>rejection sampling（拒绝采样筛选）</strong>
+在该训练阶段用于保留合格的数据样本。它不是下文为了保持目标生成规则而进行的“草稿接受／拒绝”，两者的目的、输出和正确性要求不同。</p>
+<p>把训练路线翻译成读者可以检查的问题：</p>
+<ol type="1">
+<li>起点是什么模型，已经会什么？</li>
+<li>监督数据来自哪里，筛选是否可信，验证集有没有混进去？</li>
+<li>奖励衡量答案正确、格式合规，还是人的偏好？这些不能相互替代。</li>
+<li>最后评估的是未见题目的正确率，还是只看输出变长、训练奖励变高？</li>
+</ol>
+<p>给每道题奖励“写得长”，可能学到重复；给格式奖励，可能学到包装错误答案。即便正确率提高，也需要固定题集、预算和采样方式后才能比较。<strong>“R1
+式”是一条需要证据的训练路线，不是“多说几句话”的产品开关。</strong></p>
+<h2 id="p23.3-先用可验证算术理解计算预算">P23.3
+先用可验证算术理解计算预算</h2>
+<p>为了让“多花了多少计算”不被语言风格干扰，本章暂时不用语言模型，改用一个故意可中断的竖式加法器。它每处理一个十进制数位，消耗一个预算单位。没算到的高位先留为零；只有全部输入位处理完，才把最后的进位写入答案。</p>
+<p>这不是拟人化的思维过程，也不是 R1
+复现。它是一台我们能逐步检查的算法，用来建立<strong>输入相同、预算可控、检查器独立</strong>的实验习惯。</p>
+<h3 id="手算-48-37">手算 48 + 37</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>当前列</th>
+<th>输入进位</th>
+<th>当前合计</th>
+<th>写下</th>
+<th>传给下一列</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>个位：8 + 7</td>
+<td>0</td>
+<td>15</td>
+<td>5</td>
+<td>1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>十位：4 + 3</td>
+<td>1</td>
+<td>8</td>
+<td>8</td>
+<td>0</td>
+</tr>
+</tbody>
+</table></div>
+<p>预算 1 时只算出低位，临时答案是 5；预算 2 时答案是
+85。不能把两步中的进位忘掉，也不能在预算 1
+时偷偷读取真实答案补上十位。</p>
+<p>代码中 <code>column_add</code> 只执行逐列计算；外层
+<code>arithmetic_curve</code> 用 Python 整数加法 <code>a + b</code>
+判断最终答案。求解器没有拿检查器的答案来选择输出。比如 999+1，预算 2
+的临时答案仍是 0；预算 3 完成三列后，把最后进位加上，得到 1000。</p>
+<p>固定六道题：2+3、12+23、48+37、105+207、999+1、1234+8765。每个预算都跑完全相同的题，结果如下：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>每题允许的最多列数</th>
+<th>正确题数</th>
+<th>正确率</th>
+<th>每题实际平均处理列数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0/6</td>
+<td>0%</td>
+<td>0</td>
+</tr>
+<tr>
+<td>1</td>
+<td>1/6</td>
+<td>16.7%</td>
+<td>1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>3/6</td>
+<td>50.0%</td>
+<td>11/6，约 1.833</td>
+</tr>
+<tr>
+<td>3</td>
+<td>5/6</td>
+<td>83.3%</td>
+<td>14/6，约 2.333</td>
+</tr>
+<tr>
+<td>4</td>
+<td>6/6</td>
+<td>100%</td>
+<td>15/6，即 2.5</td>
+</tr>
+</tbody>
+</table></div>
+<p>“允许 4 列”不等于每题真的用了 4 列：2+3
+只需一列。脚本同时打印预算与实际使用量。这个人为选择的六题数据集和正确的竖式算法自然形成阶梯，<strong>不能据此推出真实语言模型的正确率会随
+token 预算单调上升</strong>。</p>
+<p>把方法迁移到模型评估，还要固定模型版本、题集、提示、采样参数和检查器，并分别报告：</p>
+<ul>
+<li>单个答案的质量与实际生成 token 数；超时、截断答案也计入分母。</li>
+<li>同题多次采样的总成本。一次答对与十次中选出一次答对不是同一个指标。</li>
+<li>是否有选择器或可验证检查器，以及选择本身的计算成本。</li>
+<li>若修改预算后答案更啰嗦但没更正确，明确记录“没有测到质量收益”。</li>
+</ul>
+<p>本节只运行确定性算法，没有训练／验证泄漏的模型实验，也没有未披露的教师模型调用。</p>
+<h2 id="p23.4-mtp在同一位置多问几个未来问题">P23.4
+MTP：在同一位置多问几个未来问题</h2>
+<p>普通 next-token prediction 在位置 t 的隐藏向量 h_t 上，预测下一个
+token x_{t+1}。S6 的教学旁路另外增加独立线性 head，用<strong>同一个
+h_t</strong> 预测 x_{t+2}、x_{t+3}……。</p>
+<p>设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon h：</p>
+<p><span class="math display">\[
+z_t^{(1)}=W_1h_t,\qquad
+z_t^{(h)}=W_hh_t\quad(h=2,\ldots,D+1).
+\]</span></p>
+<p>主 head 是 S5 原来的 head，不是再复制一个。h_t
+只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token
+偷塞进 h_t。</p>
+<h3 id="五个-token把标签写出来">五个 token，把标签写出来</h3>
+<p>输入为 <code>[1,2,3,4,5]</code>，D=2。这里的整数是 token
+ID，不是它们的数值大小。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>隐藏位置的输入 token</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主 head：h=1</td>
+<td>2</td>
+<td>3</td>
+<td>4</td>
+<td>5</td>
+<td>忽略</td>
+</tr>
+<tr>
+<td>旁路 head 0：h=2</td>
+<td>3</td>
+<td>4</td>
+<td>5</td>
+<td>忽略</td>
+<td>忽略</td>
+</tr>
+<tr>
+<td>旁路 head 1：h=3</td>
+<td>4</td>
+<td>5</td>
+<td>忽略</td>
+<td>忽略</td>
+<td>忽略</td>
+</tr>
+</tbody>
+</table></div>
+<p>最后几格不是“答案是 0”，而是窗口里已经没有对应标签。实现使用
+<code>-100</code> 表示<strong>不计损失</strong>。不要 <code>roll</code>
+后忘记遮住尾部，否则最后一个位置会被要求预测窗口开头，制造不存在的循环文本。</p>
+<p>张量账本如下：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>形状</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>token ID、每个 horizon 的 labels</td>
+<td>[B,T]</td>
+</tr>
+<tr>
+<td>归一化后的隐藏状态</td>
+<td>[B,T,D_model]</td>
+</tr>
+<tr>
+<td>每个 head 的权重</td>
+<td>[V,D_model]</td>
+</tr>
+<tr>
+<td>每个 horizon 的 logits</td>
+<td>[B,T,V]</td>
+</tr>
+<tr>
+<td>每个 horizon 的 CE</td>
+<td>标量</td>
+</tr>
+</tbody>
+</table></div>
+<p>这里 D 表示“额外预测 head 数”，D_model 表示隐藏宽度，V
+表示词表大小。代码特意用 <code>depth</code> 与
+<code>config.d_model</code> 区分，避免把两个 D 混写。</p>
+<h3 id="这是教学并行旁路不是完整-v3-mtp">这是教学并行旁路，不是完整 V3
+MTP</h3>
+<p>DeepSeek-V3 的版本化报告描述的是<strong>串行</strong> MTP
+模块：结合前一深度的表示和对应 token embedding，经过额外
+Transformer，并共享 embedding／输出
+head。训练辅助目标与推理时如何利用它是两个层面。<a
+href="https://arxiv.org/html/2412.19437v2">DeepSeek-V3 v2，§2.2</a></p>
+<p>S6
+没有实现那条串行结构，也没有复现其权重共享、训练规模或生产性能。我们选独立线性
+head，是为了用最小改动看清标签对齐和梯度。多个 head
+从同一前缀预测未来边际结果，也不等于它们已经正确建模了“先生成第一个草稿，再条件于它生成第二个”的联合链条。</p>
+<h2 id="p23.5-损失先算哪些格再决定怎么平均">P23.5
+损失：先算哪些格，再决定怎么平均</h2>
+<p>对 horizon h 的有效位置集合 M_h，本章定义：</p>
+<p><span class="math display">\[
+L_h=-\frac{1}{|M_h|}\sum_{(b,t)\in M_h}
+\log\operatorname{softmax}(z_{b,t}^{(h)})[x_{b,t+h}].
+\]</span></p>
+<p>若 M_h 为空，令
+L_h=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到
+NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。</p>
+<p>S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 D 个额外 head
+的损失取平均：</p>
+<p><span class="math display">\[
+L=L_1+\frac{\lambda}{D}\sum_{h=2}^{D+1}L_h+L_{MoE}\quad(D&gt;0).
+\]</span></p>
+<p>D=0 时省略中间项；L_MoE 是 S5
+已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon
+没有标签时，其 CE 为零，但<strong>整项训练损失未必为零</strong>，因为
+MoE 辅助项可能仍存在。把所有 horizon
+的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。</p>
+<h3
+id="两个有效位置手算交叉熵与梯度">两个有效位置，手算交叉熵与梯度</h3>
+<p>假设三分类概率在第一个有效位置为
+<code>[1/6,2/6,3/6]</code>，标签是类别 2；另一个有效位置为
+<code>[3/6,2/6,1/6]</code>，标签是类别 1。两者中间有一个忽略位置：</p>
+<p><span class="math display">\[
+L=\frac{-\log(3/6)-\log(2/6)}{2}
+=\frac{\log 2+\log 3}{2}.
+\]</span></p>
+<p>对第一个位置的 logits，梯度是 <code>(概率 − one_hot)/2</code>，即
+<code>[1/12,1/6,-1/4]</code>。第二个有效位置为
+<code>[1/4,-1/3,1/12]</code>；忽略位置的三个梯度全为
+0。测试既检查这个数值，也检查梯度，不只判断 loss 是否“看起来正常”。</p>
+<h3 id="三种-mask-不要混用">三种 mask 不要混用</h3>
+<p><code>future_labels</code> 接受三个可选输入，形状都是 [B,T]：</p>
+<ul>
+<li><code>valid</code>：这个 token 是否真实存在，而不是 padding。跨度 t
+到 t+h 中的<strong>每个位置</strong>都必须有效。</li>
+<li><code>segments</code>：文档段编号。跨度中所有位置必须属于同一段，不能跨边界预测；即使编号后来又重复，也不能跳过中间另一段。</li>
+<li><code>supervise</code>：哪些目标位置应计入损失，例如只监督 assistant
+token。检查的是 t+h，<strong>不是 t</strong>。最后一个 prompt token
+预测第一个 assistant token 正是合法监督。</li>
+</ul>
+<p>重要边界：这些是<strong>标签 mask，不是 attention mask</strong>。S5
+的主干仍是普通因果注意力；给两篇文档编号不会自动禁止后一篇读取前一篇。需要隔离上下文时，本示例用不同样本行，不声称实现了
+packed block-diagonal attention。教学 MoE
+的负载辅助项也没有改成只统计有效标签，所以应使用无 padding
+的等长小样本，或单独定义并验证完整的 padding 处理。</p>
+<h2 id="p23.6-s6-怎样接在-s5-旁边">P23.6 S6 怎样接在 S5 旁边</h2>
+<p><code>MTPGPT</code> 继承 S5，只注册额外 head，不修改
+<code>code/19_moe.py</code>。有三条清楚分开的调用路径：</p>
+<ol type="1">
+<li><code>model(tokens, targets)</code>：完全沿用 S5 的普通
+forward，targets 仍按 S5 的约定由调用者对齐；不会执行旁路 head。</li>
+<li><code>model.forward_mtp(tokens, ..., weight=0.2)</code>：接收<strong>尚未右移的完整序列</strong>，自己为每个
+horizon 创建 labels，并返回 <code>MTPResult</code>。</li>
+<li><code>s5.cached_forward(model, chunk, cache)</code>：沿用 S5/S4 的
+compact GQA cache，只走主模型；生成时不反向传播。</li>
+</ol>
+<p>不要把第二种调用与第一种目标格式混用。<code>forward_mtp</code>
+返回每个 horizon 的 logits、labels、CE，以及合计 loss 和单列的 MoE
+辅助项，方便看清训练信号从哪里来。</p>
+<p>沿源码阅读 <code>mtp_logits</code>：</p>
+<ul>
+<li><code>tok_emb(idx)</code> 把 [B,T] 转成 [B,T,D_model]。</li>
+<li>依次经过 S5 原来的 blocks，继续保留因果注意力和 MoE。</li>
+<li><code>ln_f(hidden)</code> 得到各个 head 共用的表示。</li>
+<li>原 head 生成 horizon 1 的 logits，额外线性层分别生成 horizon
+2、3……。</li>
+</ul>
+<p>所有额外 head 都连接主干，没有
+<code>detach</code>。因此辅助损失也会训练 embedding 和
+Transformer；它不是冻结教师的蒸馏。若想研究“冻结主干”的另一种训练法，必须另开消融，不能只改解释文字。</p>
+<p><code>depth=0</code> 不添加参数、不额外消耗随机初始化数；同种子下，S5
+与 S6 的 state_dict、参数数量、普通 logits、普通 loss
+和缓存数值完全相同。不同模型实例的 cache 仍有不同
+owner，不能互换。<code>depth=2</code> 时增加的参数正好是
+<code>2 × V × D_model</code>，不是完整模型参数翻倍。</p>
+<p><code>weight=0</code>
+只是关闭辅助损失的系数，<strong>不删除已经创建的 head，也不省掉显式
+<code>forward_mtp</code> 里的 head
+计算</strong>。若要结构上关闭旁路，构造
+<code>depth=0</code>；若只做普通推理，调用普通 forward／cache
+路径即可。重新训练后的主干权重变了，不能再要求它与训练前的 S5
+输出相同。</p>
+<p>本章验证 CPU float32 演示与 float64 数值对照；没有验证
+autocast、混合精度、大批量 ragged 请求、GPU kernel
+或多机缓存。不要将本例的数值容差直接搬去低精度服务。</p>
+<h2 id="p23.7-贪心-draftverify只信目标模型的那一票">P23.7 贪心
+draft/verify：只信目标模型的那一票</h2>
+<p><strong>贪心生成</strong>每步选择目标 logits 最大的 token；本实现用
+PyTorch
+<code>argmax</code>，平局时选编号最小者。草稿可以不完美，但已提交的结果必须遵守这个规则。</p>
+<p>设已有前缀为 P，草稿提出 <code>[B,X,Y]</code>。目标模型在一个带因果
+mask 的块里计算出：</p>
+<ul>
+<li>P 后应该是 B：接受 B。</li>
+<li>P+B 后应该是 C，而不是 X：拒绝 X，提交 C。</li>
+<li>丢弃 X 之后的全部草稿，以及以错误 X 为条件计算的后续结果。</li>
+</ul>
+<p>本轮实际输出 <code>[B,C]</code>。不是把 X 单独改为 C 后继续相信
+Y，因为 Y 的验证前缀已经错了。</p>
+<p>如果草稿 <code>[B,C,D]</code> 全部与目标贪心选择一致，目标在 P+B+C+D
+后还给出了下一个位置的 logits。可再提交一个<strong>额外 token（bonus
+token）</strong>。本轮最多得到“草稿长度 + 1”个
+token，而不是最后一个草稿输出两遍。</p>
+<p>为什么这保持贪心序列？用归纳法即可：假设当前已提交前缀与基线相同；接受的每个
+token 都等于目标在这个正确前缀上的
+argmax。第一次不匹配时，改用同一位置的目标 argmax 并停止本轮。全接受时的
+bonus 也在正确前缀上计算。因此下一轮仍从相同的已提交前缀开始。</p>
+<p>这是数学算法的不变量。实际浮点矩阵运算的分块顺序可能产生微小误差；近乎并列的
+logits 可能因此改变 argmax。测试使用固定种子、小张量、float64
+对照，同时比较 logits 与 K/V，而不是宣称任意硬件精度都能逐位相同。</p>
+<h2 id="p23.8-kv-cache-最容易错的地方最后一个-token-还没喂进去">P23.8 KV
+cache 最容易错的地方：最后一个 token 还没喂进去</h2>
+<p>生成一个 token 和把它送进模型，是两件事。为避免每轮为了
+correction／bonus 额外调用一次目标模型，本实现维护如下不变量：</p>
+<ul>
+<li><code>tokens</code>：已经提交给用户的 prompt 与生成序列。</li>
+<li><code>cache</code>：缓存
+<code>tokens[:, :-1]</code>，即还没包含最后一个已生成 token。</li>
+<li><code>pending</code>：<code>tokens[:, -1:]</code>，下轮才喂入目标模型。</li>
+</ul>
+<p>先对完整 prompt 做一次 prefill，取末行 logits 的 argmax，输出第一个
+token。此时 cache 恰好装着 prompt，第一个新 token 成为 pending。</p>
+<h3 id="带具体位置的拒绝例子">带具体位置的拒绝例子</h3>
+<p>使用一个便于手算的目标规则：“下一个 ID 等于当前 ID 加 1”。prompt 是
+<code>[1,2]</code>，prefill 先生成 3：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>状态</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>tokens</td>
+<td><code>[1,2,3]</code></td>
+</tr>
+<tr>
+<td>cache</td>
+<td><code>[1,2]</code></td>
+</tr>
+<tr>
+<td>pending</td>
+<td><code>[3]</code></td>
+</tr>
+<tr>
+<td>本轮草稿</td>
+<td><code>[4,9,8]</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>目标调用一次，新增输入是
+<strong><code>[3,4,9,8]</code></strong>，而不是重复输入
+prompt。以位置编号从 0 开始：</p>
+<ul>
+<li><code>verify[0]</code> 是“看到 3 后”的 logits，预测
+4，用来验证草稿第 0 项。</li>
+<li><code>verify[1]</code> 是“看到 4 后”的 logits，预测
+5，用来验证草稿第 1 项；9 错了。</li>
+<li>后面的行使用了错误草稿前缀，不能继续提交。</li>
+</ul>
+<p>接受 4，修正为 5 后，tokens 成为 <code>[1,2,3,4,5]</code>。cache
+应裁成 <code>[1,2,3,4]</code>，pending 是 <code>[5]</code>。不能留下 9
+的 K/V，也不能提前把 5 当作已经存在的 cache 位置。</p>
+<p>源码中若旧 cache 长度为 P，本轮一共提交 s 个新 token，则新 cache
+长度为 <code>P+s</code>。因为本次调用喂入了旧 pending，但留下新 pending
+未喂入。<code>trim_cache</code> 对每层 K/V 的时间维度取前缀并复制，保留
+owner 与权重版本，不修改原 cache。</p>
+<h3 id="eos-与预算必须一起守住">EOS 与预算必须一起守住</h3>
+<ul>
+<li>prompt 最后已经是 EOS，或者
+<code>max_new_tokens=0</code>：返回原序列，不做 target 调用、不创建
+cache。</li>
+<li>prefill 生成 EOS：立即结束，EOS 留作最后的 pending。</li>
+<li>接受的草稿中出现 EOS：在它那里结束，不提交后缀或 bonus。</li>
+<li>草稿出现 EOS
+但目标不同意：它只是一个被拒绝的提案，不能让请求提前结束。</li>
+<li>correction 或 bonus 是 EOS：提交它，然后结束。</li>
+<li>每轮最多提议 <code>min(draft_tokens, remaining-1)</code> 个
+token，预留一个 correction／bonus
+位置。只剩一个输出名额时，不征求草稿，普通前向一步。</li>
+</ul>
+<p>因此最后一轮不会越过 <code>max_new_tokens</code>。本例保守要求
+<code>prompt 长度 + 生成预算 &lt;= max_seq_len</code>，不实现滑动截断；若模型权重或影响缓存的设置改变，必须重新开始请求。</p>
+<h2 id="p23.9-为什么不能把贪心验收拿去冒充随机采样">P23.9
+为什么不能把贪心验收拿去冒充随机采样</h2>
+<p>贪心只需要知道最大项是谁；随机采样必须保持<strong>整个概率分布</strong>。若目标为
+p、草稿为 q，在同一条件前缀和同一采样变换下，经典投机采样对从 q 抽出的
+token x 使用：</p>
+<p><span class="math display">\[
+\alpha(x)=\min(1,p(x)/q(x)).
+\]</span></p>
+<p>拒绝时不能随意重抽，也不能直接选目标最大项，而应从归一化的正差分布抽取：</p>
+<p><span class="math display">\[
+r(x)=\frac{\max(0,p(x)-q(x))}
+{\sum_y\max(0,p(y)-q(y))}.
+\]</span></p>
+<p>这套接受与校正规则的依据见 <a
+href="https://arxiv.org/html/2211.17192v2">Fast Inference from
+Transformers via Speculative Decoding v2，§2.3 与附录 A</a>。若
+q(x)=0，正常从 q 采样不会得到该 x；p=q
+时拒绝概率为零，不应去归一化一个全零残差。涉及 temperature
+或截断采样时，要使用相应处理后的分布，不能混用原始 logits
+和修改后的概率。</p>
+<p>手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B
+的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4
+的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到
+[0.6,0.4]。</p>
+<p><strong>本章只对这个概率恒等式做精确分数验算，没有随机投机采样器。</strong>
+代码中的 <code>greedy_decode</code> 不接受 temperature、top-p 或随机
+generator，也没有概率校正实现。不要删除这条边界，再把“贪心序列相同”写成“随机采样分布保持”。</p>
+<h2 id="p23.10-运行结果少几次-target-调用不等于真的快了">P23.10
+运行结果：少几次 target 调用，不等于真的快了</h2>
+<p>在仓库根目录运行：</p>
+<div class="sourceCode" id="cb157"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb157-1"><a href="#cb157-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/24_reasoning_mtp.py</span>
+<span id="cb157-2"><a href="#cb157-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_reasoning_mtp.py <span class="at">-v</span></span></code></pre></div>
+<p>已验证环境为 CPU、PyTorch <code>2.14.1+cpu</code>、单线程、种子
+230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装
+<code>requirements.txt</code> 的提示并以状态 2
+退出；测试按仓库的兼容版本闸门友好跳过，<strong>跳过不是通过</strong>。</p>
+<p>固定 demo 使用词表 11、隐藏宽度 16、1 层教学 MoE、2 个额外
+head、长度为 2 的 prompt，生成 10 个
+token。模型只随机初始化并做一次反向检查，没有训练质量结论。本次输出包括：</p>
+<pre class="text"><code>greedy tokens equal: True
+generated IDs: [[5, 6, 3, 1, 9, 2, 5, 6, 3, 1]]
+target calls: ordinary=10, draft/verify=6
+target input tokens: ordinary=11, draft/verify=18
+drafter full-prefix calls=4; input tokens=24
+accepted/proposed=4/11; rejected rounds=4; bonuses=0</code></pre>
+<p>计数在实际 <code>forward</code> 调用处累加，包含
+prefill，不是用“输出长度÷草稿长度”推算。<code>target_tokens</code>
+也计入后来丢弃的草稿输入。<code>draft_requests</code>
+是请求草稿的次数，不能假定它等于任意草稿器内部的 forward 次数；本例
+<code>MTPDraft</code> 自己另外记录了真实完整前缀 forward 和输入量。</p>
+<p>看起来 10 次 target 调用变成 6 次，但 target 处理的位置由 11 增至
+18，drafter 又完整计算了 24 个前缀 token。这里的 MTPDraft
+为了易读，每次都重算完整前缀，也复用了目标主干，<strong>不是低成本的生产草稿器，不应宣布加速</strong>。本章没有测墙钟延迟、TTFT、TPOT
+或 GPU 吞吐。</p>
+<p>定义本章的草稿接受比例为
+<code>accepted / proposed</code>：分母包括因前面出错而被整体丢弃的后续提案。这是清楚可复算的保留比例，不是所有论文相同名称的统计口径。还应看每轮提交多少
+token、草稿耗时、目标 chunk 成本以及缓存搬运；只报一个高接受率不够。</p>
+<p>独立测试另有一个“完美草稿”的标量目标：生成 10 个 token，target 调用从
+10 次变成 4 次，处理位置都为 11，且有两个
+bonus。它证明计数与流程按规则工作，不证明神经模型能够免费拿到完美草稿。</p>
+<h2 id="p23.11-蒸馏与跨版本比较到这里划边界">P23.11
+蒸馏与跨版本比较：到这里划边界</h2>
+<p><strong>蒸馏</strong>可以把大模型生成的优质示例用于训练小模型；也有使用教师概率的其他方案。必须说明具体知识如何传递，不能只凭“小模型效果像大模型”推断训练方法。数据蒸馏、冻结主干的草稿模块训练、MTP
+共享主干辅助学习，是三种不同设置。</p>
+<p>本章只解释这个区别，没有实现蒸馏流水线、教师服务、数据筛选系统或新扩展项目。S6
+的辅助梯度进入主干，不能将其命名为 R1 蒸馏复现。</p>
+<p>截至
+2026-10-19，本章只依据官方版本化报告作如下跨版本提醒：<strong>DeepSeek-V4.1-Flash
+的 DSpark 不能直接贴上 V3 MTP 的标签。</strong> 官方报告 §2.4.3
+描述了半自回归草稿和基于置信度安排验证的方案；它在预训练后专门训练，起初冻结
+backbone，后训练中其目标也不向 backbone
+反传。不要从“都是投机解码”推断两者采用同一训练目标或参数共享设计。<a
+href="https://arxiv.org/html/2609.19969v1">DeepSeek-V4.1-Flash
+v1</a></p>
+<p>我们没有运行 DSpark、R1 或 V3
+官方权重，没有复现其质量或速度。读到新版本时应重新核对明确对象与版本，而不是沿用旧名词填满组件表。</p>
+<h2 id="p23.12-自测每个问题都有一个可运行的检查">P23.12
+自测：每个问题都有一个可运行的检查</h2>
+<p>先独立作答，再对照以下结果；对应测试名可以在
+<code>tests/test_reasoning_mtp.py</code> 中搜索。</p>
+<ol type="1">
+<li>输入 <code>[1,2,3,4,5]</code>，horizon=3 的标签是什么？是
+<code>[4,5,-100,-100,-100]</code>，不能把 1、2 循环补到尾部。检查
+<code>test_hand_labels_and_no_circular_roll</code>。</li>
+<li>源位置属于 prompt、目标位置属于
+assistant，应不应该监督？应检查目标位置；若跨度穿过 padding
+或文档边界则仍应忽略。检查
+<code>test_label_masks_match_scalar_oracle_including_intermediate_boundaries</code>。</li>
+<li>有效概率为 1/2 与 1/3，中间一个位置忽略，CE 分母是什么？是 2，loss
+为 <code>(log 2 + log 3)/2</code>；忽略位置梯度为零。检查
+<code>test_masked_ce_scalar_and_analytic_gradients</code>。</li>
+<li><code>depth=0</code> 与 <code>weight=0</code>
+是否都删除了旁路参数？只有前者从构造上不创建额外参数；普通 forward
+即使存在旁路也不调用它。检查
+<code>test_disabled_is_exact_s5_parameters_rng_logits_losses_and_cache</code>
+与
+<code>test_enabled_sideheads_do_not_change_ordinary_s5_path</code>。</li>
+<li>草稿第二项错误，能不能保留第三项，只替换第二项？不能；错误前缀之后的验证结果要丢弃。检查
+<code>test_every_rejection_position_and_subsequent_cache_positions</code>。</li>
+<li><code>[1,2,3]</code> 中 3 为 pending，接受 4 后修正为 5，cache
+是什么？是 <code>[1,2,3,4]</code>，5 仍未喂入。检查同一拒绝测试及
+<code>test_real_s5_full_context_oracle_and_cache_logits</code>。</li>
+<li>只剩一个输出名额，能否再提交三个草稿与一个 bonus？不能；草稿长度降为
+0，只生成一个 token。EOS 也不能越过。检查
+<code>test_short_empty_drafts_and_budget_boundaries</code> 与
+<code>test_eos_prompt_first_accepted_corrected_rejected_and_bonus</code>。</li>
+<li>预算 2 的 999+1 是什么临时答案？是 0；预算 3 完成后才得到
+1000。预算曲线为什么不是语言模型能力曲线？它来自已写好的竖式算法与固定六题。检查
+<code>test_arithmetic_curve_and_carry_by_independent_integer_oracle</code>。</li>
+<li>p=[0.6,0.4]、q=[0.2,0.8] 时，拒绝的概率质量如何补回？0.4 全补到
+A；这是数学例子，不是随机采样实现。检查
+<code>test_hand_sampling_correction_is_math_only_not_a_sampler_claim</code>。</li>
+</ol>
+<p>测试不只让两个共享代码的函数互相证明。它使用 Python 标量标签
+oracle、显式 log-sum-exp、解析 logits 梯度与权重有限差分、独立
+token-history 目标、真实 S5 完整前缀 logits／逐层 K/V
+对照；还实际执行十种错误变体，确认错位标签、错误分母、错误接受、缓存偏一、漏停
+EOS、越过预算等会被拦住。</p>
+<p>读完本章，应能清楚说出：<strong>推理能力要靠任务评估，MTP
+是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。</strong>
+把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。</p>
+<h2 id="资料版本与复现边界">资料版本与复现边界</h2>
+<p>核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。</p>
+<ul>
+<li><a
+href="https://arxiv.org/html/2501.12948v1">DeepSeek-R1，arXiv:2501.12948v1</a>：§2.2–2.4，Zero／冷启动／RL／数据筛选／SFT／蒸馏的区别。</li>
+<li><a href="https://arxiv.org/html/2412.19437v2">DeepSeek-V3 Technical
+Report，arXiv:2412.19437v2</a>：§2.2，串行 MTP
+模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。</li>
+<li><a href="https://arxiv.org/html/2211.17192v2">Fast Inference from
+Transformers via Speculative Decoding，arXiv:2211.17192v2</a>：§2 与附录
+A，草稿验证和随机采样校正的原始依据。本章实现仅为贪心。</li>
+<li><a
+href="https://arxiv.org/html/2609.19969v1">DeepSeek-V4.1-Flash，arXiv:2609.19969v1</a>：§2.4.3，仅用于核对
+DSpark 与 V3 MTP 的差异；不把不同版本的训练方案拼接成一个实现。</li>
 </ul>
 <hr />
 <h1 id="第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典

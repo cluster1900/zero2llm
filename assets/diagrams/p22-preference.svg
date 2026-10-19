@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="850" viewBox="0 0 1080 850" role="img" aria-labelledby="p22-title p22-desc">
+  <title id="p22-title">从 SFT 到偏好与奖励优化的三条路线</title>
+  <desc id="p22-desc">从 SFT 策略分出三条路线：PPO 式 RLHF 用人类比较训练奖励模型，再配合价值基线与策略更新；DPO 直接用同题偏好对及固定参考优化相对对数概率；GRPO 对同题采样一组答案，打分后计算组内优势并使用旧策略概率比、裁剪和 KL 惩罚。参考策略固定为 SFT 起点，旧策略只固定于当前采样批次。奖励零、一、一、二的总体标准差约为零点七零七，对应优势约负根号二、零、零、根号二；奖励全相同则优势全零。底部注明本章只实际更新六参数有限动作策略，精确枚举三个答案的 KL，不是大语言模型或 TRL 训练。</desc>
+  <defs>
+    <marker id="p22-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#475569"/></marker>
+    <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#172033}.title{font-size:25px;font-weight:700}.heading{font-size:21px;font-weight:700}.label{font-size:18px}.small{font-size:16px}.arrow{stroke:#475569;stroke-width:2;fill:none;marker-end:url(#p22-arrow)}</style>
+  </defs>
+  <rect x="1" y="1" width="1078" height="848" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="540" y="39" text-anchor="middle" class="title">偏好是数据，奖励是信号，策略才是被更新的对象</text>
+  <rect x="300" y="60" width="480" height="72" rx="10" fill="#e0e7ff" stroke="#a5b4fc"/>
+  <text x="540" y="90" text-anchor="middle" class="heading">SFT 起点：先学示范答案</text>
+  <text x="540" y="117" text-anchor="middle" class="small">复制可训练策略；另留一份固定 reference</text>
+  <path class="arrow" d="M400 132V151H188V173"/>
+  <path class="arrow" d="M540 132V173"/>
+  <path class="arrow" d="M680 132V151H892V173"/>
+
+  <rect x="20" y="179" width="336" height="315" rx="12" fill="#eff6ff" stroke="#93c5fd"/>
+  <text x="188" y="214" text-anchor="middle" class="heading">PPO 式 RLHF</text>
+  <text x="188" y="248" text-anchor="middle" class="label">同题人类比较</text>
+  <path class="arrow" d="M188 260V278"/>
+  <text x="188" y="305" text-anchor="middle" class="label">训练奖励模型</text>
+  <path class="arrow" d="M188 317V335"/>
+  <text x="188" y="361" text-anchor="middle" class="label">策略采样 → 奖励打分</text>
+  <text x="188" y="391" text-anchor="middle" class="small">价值函数提供回报基线</text>
+  <path class="arrow" d="M188 403V421"/>
+  <text x="188" y="449" text-anchor="middle" class="label">PPO 更新 + 偏离约束</text>
+  <text x="188" y="477" text-anchor="middle" class="small">本章解释流程，不运行完整系统</text>
+
+  <rect x="372" y="179" width="336" height="315" rx="12" fill="#f0fdf4" stroke="#86efac"/>
+  <text x="540" y="214" text-anchor="middle" class="heading">DPO</text>
+  <text x="540" y="248" text-anchor="middle" class="label">同题 chosen / rejected</text>
+  <path class="arrow" d="M540 260V278"/>
+  <text x="540" y="305" text-anchor="middle" class="label">当前与参考的答案 logp</text>
+  <text x="540" y="335" text-anchor="middle" class="small">只求答案 token 的和</text>
+  <path class="arrow" d="M540 347V365"/>
+  <text x="540" y="393" text-anchor="middle" class="label">比较相对参考的偏好差</text>
+  <text x="540" y="423" text-anchor="middle" class="small">softplus(−β × margin)</text>
+  <text x="540" y="449" text-anchor="middle" class="label">直接更新策略参数</text>
+  <text x="540" y="477" text-anchor="middle" class="small">标准离线形式不单训奖励模型</text>
+
+  <rect x="724" y="179" width="336" height="315" rx="12" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="892" y="214" text-anchor="middle" class="heading">GRPO</text>
+  <text x="892" y="248" text-anchor="middle" class="label">同题采样 G 份答案</text>
+  <path class="arrow" d="M892 260V278"/>
+  <text x="892" y="305" text-anchor="middle" class="label">模型 / 规则奖励</text>
+  <path class="arrow" d="M892 317V335"/>
+  <text x="892" y="361" text-anchor="middle" class="label">组内比较 → 优势 A</text>
+  <text x="892" y="391" text-anchor="middle" class="small">省去单独训练价值网络</text>
+  <path class="arrow" d="M892 403V421"/>
+  <text x="892" y="449" text-anchor="middle" class="label">old 概率比 + clip + KL</text>
+  <text x="892" y="477" text-anchor="middle" class="small">不把其他问题混进同一组</text>
+
+  <rect x="20" y="514" width="1040" height="66" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="540" y="541" text-anchor="middle" class="label" font-weight="700">两种快照不能互换</text>
+  <text x="540" y="566" text-anchor="middle" class="small">reference：固定 SFT 锚点，约束偏离　　old：当前这批答案的采样策略，形成概率比</text>
+
+  <rect x="20" y="600" width="510" height="124" rx="10" fill="#fff" stroke="#cbd5e1"/>
+  <text x="40" y="630" class="heading">手算一组：总体标准差</text>
+  <text x="40" y="661" class="label">奖励 [0, 1, 1, 2] → 均值 1，std ≈ 0.707</text>
+  <text x="40" y="692" class="label">优势 ≈ [−1.414, 0, 0, +1.414]</text>
+  <text x="40" y="714" class="small">分母为 std + 1e-8，不是跨题归一化</text>
+  <rect x="550" y="600" width="510" height="124" rx="10" fill="#fff" stroke="#cbd5e1"/>
+  <text x="570" y="630" class="heading">奖励全相同：没有相对高低</text>
+  <text x="570" y="661" class="label">奖励 [2, 2, 2, 2] → 优势 [0, 0, 0, 0]</text>
+  <text x="570" y="692" class="label">奖励优势不推动更新；KL 仍可能推动</text>
+  <text x="570" y="714" class="small">不能据此区分全对、全错或评分器失效</text>
+
+  <text x="540" y="762" text-anchor="middle" class="heading">实际运行：2 道题 × 3 个固定答案 = 6 个可训练 logits</text>
+  <text x="540" y="795" text-anchor="middle" class="label">完整答案视为一个动作；枚举全部 3 个答案，计算精确分布 KL</text>
+  <text x="540" y="826" text-anchor="middle" class="small">不是 Transformer / LLM 训练，不复现 R1；变长 token 契约另测，TRL 配置未执行。</text>
+</svg>

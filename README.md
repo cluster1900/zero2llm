@@ -17,21 +17,22 @@
 [扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
 
 - **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
-- **当前可读**：23 个章节文件（含前言、插入的第 1A 章与附录），21 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
+- **当前可读**：26 个章节文件（含前言、插入的第 1A 章与附录），24 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
 - **P03–P05 正文与 CPU 示例已实现**：注意力动机、QKV/稳定 Softmax/掩码、多头张量账本；因果性、padding/全 mask 行、形状与参考实现回归。验收记录见[第二批验证](docs/batch2-validation.md)。
 - **P06–P08 正文与 CPU 示例已实现**：位置编码、残差/LayerNorm/FFN、三类架构与生成循环；保留手算表，增加数值、自测和变异回归。见[第三批验证](docs/batch3-validation.md)。
 - **P09–P11 正文与 CPU 示例已实现**：训练最小闭环、Baby-GPT S0 基线和 S1 KV cache；训练/留出边界、checkpoint、完整/增量 logits 对齐与内存账。见[第四批验证](docs/batch4-validation.md)。
 - **P12–P14 正文与 CPU 示例已实现**：S2 RoPE 与长上下文边界、S3 RMSNorm/SwiGLU、S4 GQA 与独立 MLA 小矩阵；各阶段全量/增量对齐、数值和参数/缓存账。YaRN 是论文机制导读，不宣称完整复现其训练。见[第五批验证](docs/batch5-validation.md)。
 - **P15–P17 正文与独立 CPU 实验已实现**：分块在线 Softmax、分页缓存与调度账本，SWA / 线性递推，以及官方 CED 数据流的教学模型。三个实验不改变 S4 主线，不代表 CUDA kernel、生产服务或真实 DeepSeek 权重复现。见[第六批验证](docs/batch6-validation.md)。
 - **P18–P20 正文与 CPU 实验已实现**：S5 教学 MoE、预训练数据与恢复训练、Transformers 小模型 CPU 对照与分片内存账本；TRL/DeepSpeed/Megatron 的角色及未运行多卡边界另行说明。见[第七批验证](docs/batch7-validation.md)。
-- **尚未按扩展大纲实现**：P21–P28；旧第 9–10 章仍保留可读，但不代表新专题已完成。
-- **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE；每批审核后才继续，不把路线图当成已有功能。
+- **P21–P23 正文与 CPU 实验已实现**：对话 SFT / assistant-only loss / LoRA，DPO / GRPO 手算与策略更新，以及 S6 教学 MTP、可验证预算和草稿验证。教学模型、框架配置与真实生产训练严格区分。见[第八批验证](docs/batch8-validation.md)。
+- **尚未按扩展大纲实现**：P24–P28；旧第 9–10 章仍保留可读，但不代表新专题已完成。
+- **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP；每批审核后才继续，不把路线图当成已有功能。
 
-为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，P15–P17 以 08e/08f/08g 插入，P18–P20 以 08h/08i/08j 插入，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)、[第五批记录](docs/batch5-validation.md)、[第六批记录](docs/batch6-validation.md)与[第七批记录](docs/batch7-validation.md)。
+为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，P15–P17 以 08e/08f/08g 插入，P18–P20 以 08h/08i/08j 插入，P21–P23 以 08k/08l/08m 插入，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)、[第五批记录](docs/batch5-validation.md)、[第六批记录](docs/batch6-validation.md)、[第七批记录](docs/batch7-validation.md)与[第八批记录](docs/batch8-validation.md)。
 
 ## 📖 当前版本目录导航
 
-当前版本包含 23 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
+当前版本包含 26 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
 
 | 章节与标题 | 核心生活类比 / 几何直觉 | 用到的数学知识 | 配套可运行代码 |
 | :--- | :--- | :--- | :---: |
@@ -56,16 +57,19 @@
 | [**P18. MoE 专家与路由**](chapters/08h_moe.md) | 分流工作与共享知识 | top-k 权重、负载、容量与参数预算 | [`code/19_moe.py`](code/19_moe.py) |
 | [**P19. 预训练数据与恢复训练**](chapters/08i_pretraining_pipeline.md) | 整理资料与保存练习进度 | 去重切分、文档边界、损失归约与状态恢复 | [`code/20_pretraining_pipeline.py`](code/20_pretraining_pipeline.py) |
 | [**P20. 训练框架与分片账本**](chapters/08j_training_frameworks.md) | 手写步骤与框架分工 | 标签错位、模型状态、数据并行与分片字节数 | [`code/21_training_frameworks.py`](code/21_training_frameworks.py) |
+| [**P21. SFT、LoRA 与对话数据**](chapters/08k_sft_lora.md) | 对话练习与小幅参数修正 | assistant-only 标签、低秩矩阵、冻结与合并 | [`code/22_sft_lora.py`](code/22_sft_lora.py) |
+| [**P22. RLHF、DPO 与 GRPO**](chapters/08l_preference_optimization.md) | 偏好比较与组内评分 | 对数概率、优势、KL 与策略更新 | [`code/23_preference_optimization.py`](code/23_preference_optimization.py) |
+| [**P23. 推理、MTP 与投机解码**](chapters/08m_reasoning_mtp.md) | 多步练习与草稿复核 | 多目标标签、预算、接受校正 | [`code/24_reasoning_mtp.py`](code/24_reasoning_mtp.py) |
 | [**09. 走向现代大模型 (LLMs)**](chapters/09_modern_llms.md) | RoPE 旋转位置编码、RMSNorm、SwiGLU、DeepSeek MoE | 复数平面旋转、均方根、尺度定律与涌现 | - |
 | [**10. 附录与黑话词典**](chapters/10_appendix.md) | 数学公式速查卡、深度学习黑话翻译大白话词典 | 全书数理汇总 | - |
 
 ---
 
-## 💻 21 个配套代码实验（含可选框架对照）
+## 💻 24 个配套代码实验（含可选框架对照）
 
-历史第二批验证了当时的 9 个编号示例；当前共有 21 个，最新执行环境与结果见[第七批记录](docs/batch7-validation.md)。
+历史第二批验证了当时的 9 个编号示例；当前共有 24 个，最新执行环境与结果见[第八批记录](docs/batch8-validation.md)。
 
-原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10、16 个，以及第 21 个的默认账本模式只依赖标准库；第 3～7、12～15、17～19 个需要 PyTorch；第 11 个的 --scalar-only、第 20 个的 --data-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4；第 21 个 --hf 对照另需 requirements-frameworks.txt 中固定的依赖。
+原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10、16 个，以及第 21 个的默认账本、第 22/23 个的默认手算模式只依赖标准库；第 3～7、12～15、17～19、24 个需要 PyTorch；第 11 个的 --scalar-only、第 20 个的 --data-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4；第 21 个 --hf 对照另需 requirements-frameworks.txt 中固定的依赖；第 22 个 --train 和第 23 个 --torch 才运行真实 PyTorch CPU 更新，默认手算退出成功不等于训练已运行。
 
 1. **[`code/01_vector_similarity.py`](code/01_vector_similarity.py)**：纯 Python 手写向量内积与余弦相似度，验证水果空间距离与国王-女王向量平移。
 2. **[`code/02_manual_attention.py`](code/02_manual_attention.py)**：纯 Python 零依赖手算 3 个字（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化。
@@ -94,6 +98,10 @@
 19. **[`code/19_moe.py`](code/19_moe.py)**：S5 教学 MoE 路由、共享专家、负载与缓存对照。
 20. **[`code/20_pretraining_pipeline.py`](code/20_pretraining_pipeline.py)**：合成数据清理、packing 边界与可恢复 CPU 训练。
 21. **[`code/21_training_frameworks.py`](code/21_training_frameworks.py)**：标准库分片账本与可选固定版本 Transformers CPU smoke；不下载大模型权重。
+
+22. **[`code/22_sft_lora.py`](code/22_sft_lora.py)**：合成多轮对话、assistant-only 目标、CPU SFT 与 LoRA 参数/合并对照。
+23. **[`code/23_preference_optimization.py`](code/23_preference_optimization.py)**：DPO/GRPO 手算和有限动作策略更新；TRL 配置不冒充框架实测。
+24. **[`code/24_reasoning_mtp.py`](code/24_reasoning_mtp.py)**：S6 教学 MTP、算术预算与草稿验证，不代表生产推理性能。
 
 ### CPU 快速验证
 
@@ -191,7 +199,7 @@ npm run check:layout  # 检查手机、平板、横屏下的图表尺寸，输�
 
 ```bash
 .venv/bin/python -m pip install -r requirements-build-static.txt
-.venv/bin/python scripts/build_without_browser.py --baseline 66dbeb94dd9935046af0e859a223775b7adf4e0e
+.venv/bin/python scripts/build_without_browser.py --baseline 9c4c9e34de9d6d394e45781b4ab115ee9e196f8d
 ```
 
 此路径仅复用与基准原稿**逐字一致**的 Mermaid 预渲染图片，新/修改的静态 SVG 由固定版本 CairoSVG 转 PNG。遇到改动的 Mermaid 会失败，要求回到正常 Chromium 构建，绝不会用旧图冒充新图。它不代替浏览器布局检查；正常构建方式仍是 `python3 build.py`。
