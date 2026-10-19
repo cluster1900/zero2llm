@@ -12,23 +12,26 @@
 
 ---
 
-## 🚧 前沿大模型扩展计划（大纲待审核）
+## 🚧 前沿大模型扩展进度
 
-正在按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 设计扩展版，先审核[逐章大纲与实验路线](docs/expansion-outline.md)，再按每批 2–3 章撰写。
+[扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
 
-- **当前已存在**：下面的 11 个章节文件与 7 个代码示例；现有 HTML / EPUB 仍是这一版。
-- **规划中，尚未实现的专题扩展与配套实验**：Tokenizer、KV Cache、RoPE / YaRN、GQA / MLA、FlashAttention / PagedAttention、MoE、CED、训练与对齐、量化、主流框架及 DeepSeek / Qwen3 案例。旧版已有部分概念简介，不等于这些完整专题和新实验已完成。
-- **代码升级路线待审核**：现有 Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE；新实验不会被写成现有功能。
-- **前沿事实核验**：CED 的官方依据、适用模型及未复现边界见大纲。每批实现时同步更新 README、目录、代码和阅读成品。
+- **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
+- **当前可读**：12 个章节文件（含前言、插入的第 1A 章与附录），9 个示例脚本；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
+- **尚未按扩展大纲实现**：P03–P28；旧第 2–10 章仍保留可读，但不代表新专题已完成。
+- **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE；每批审核后才继续，不把路线图当成已有功能。
+
+本批为保持旧链接，把 Tokenizer 插为第 1A 章，没有重编号其他文件。验证条件和结果见[批次实验记录](docs/batch1-validation.md)。
 
 ## 📖 当前版本目录导航
 
-当前版本包含 11 个章节文件（含前言与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
+当前版本包含 12 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
 
 | 章节与标题 | 核心生活类比 / 几何直觉 | 用到的数学知识 | 配套可运行代码 |
 | :--- | :--- | :--- | :---: |
 | [**00. 前言与阅读指南**](chapters/00_preface.md) | 大模型的黑盒魔法与探索路线图 | 初等代数与逻辑 | - |
 | [**01. 从词语到空间向量**](chapters/01_word_embedding.md) | 水果特征打分坐标系、“国王 - 男人 + 女人 = 女王” | 平面向量、模长、点积、夹角余弦 | [`code/01_vector_similarity.py`](code/01_vector_similarity.py) |
+| [**01A. Tokenizer：字符、字节与 BPE**](chapters/01a_tokenizer.md) | 由小积木合成频繁片段；编码与理解的区别 | 频数统计、字节、确定性合并 | [`code/08_byte_bpe.py`](code/08_byte_bpe.py)<br>[`code/09_hf_tokenizer.py`](code/09_hf_tokenizer.py)（选修） |
 | [**02. 注意力机制的直觉**](chapters/02_why_attention.md) | 传话游戏、鸡尾酒会聚光灯、一词多义危机 | 矩阵并行 vs 串行路径 | - |
 | [**03. 拆解注意力三剑客 Q、K、V**](chapters/03_qkv_self_attention.md) | 图书馆借书标签检索、为什么除以 $\sqrt{d_k}$ | 向量数量积、方差爆炸、Softmax 归一化 | [`code/02_manual_attention.py`](code/02_manual_attention.py)<br>[`code/03_scaled_dot_product.py`](code/03_scaled_dot_product.py) |
 | [**04. 多头注意力机制**](chapters/04_multi_head_attention.md) | 三个臭皮匠诸葛亮、低维空间切片魔术 | 空间投影、张量维度切分与拼接 | [`code/04_multi_head_attention.py`](code/04_multi_head_attention.py) |
@@ -41,9 +44,9 @@
 
 ---
 
-## 💻 7 个配有详细讲解的代码实验
+## 💻 9 个配套代码实验（含 1 个选修）
 
-代码在 Python 3.12 与 PyTorch 2.14.1 环境中验证过，并带有中文注释与可视化输出。第 1、2 个实验只依赖 Python 标准库；第 3～7 个实验需要 PyTorch：
+原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。本批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8 个只依赖标准库；第 3～7 个需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4。
 
 1. **[`code/01_vector_similarity.py`](code/01_vector_similarity.py)**：纯 Python 手写向量内积与余弦相似度，验证水果空间距离与国王-女王向量平移。
 2. **[`code/02_manual_attention.py`](code/02_manual_attention.py)**：纯 Python 零依赖手算 3 个字（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化。
@@ -52,6 +55,21 @@
 5. **[`code/05_positional_encoding.py`](code/05_positional_encoding.py)**：正弦余弦位置编码矩阵计算与控制台 ASCII 字符波浪热力图打印。
 6. **[`code/06_transformer_block.py`](code/06_transformer_block.py)**：Pre-LN Transformer 积木块拼装（LayerNorm + MHA + 残差 + FFN）。
 7. **[`code/07_baby_gpt.py`](code/07_baby_gpt.py)**：三首诗分开训练的微型自回归模型。种子 42 时，损失从约 4.13 降到 0.0009，能从真实开头背出三首诗；提示“明月”则不会接回《静夜思》。
+
+8. **[`code/08_byte_bpe.py`](code/08_byte_bpe.py)**：确定性字节 BPE，中文、emoji 与未见文本的往返验证；无需模型下载。
+9. **[`code/09_hf_tokenizer.py`](code/09_hf_tokenizer.py)**（选修）：固定 HF Tokenizers 0.21.4，在相同合成语料上对照；不要求两种实现的 ID 相同。
+
+### 本批 CPU 快速验证
+
+```bash
+python3 code/01_vector_similarity.py
+python3 code/08_byte_bpe.py
+python3 -m unittest discover -s tests -v
+# 可选 HF 对照：在虚拟环境内安装，不需要 GPU 或模型权重
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-tokenizer.txt
+.venv/bin/python code/09_hf_tokenizer.py
+```
 
 ### 快速运行代码：
 
@@ -116,6 +134,15 @@ python3 build.py       # 生成 EPUB / HTML，并检查图表、资源和链接
 npm run check         # 单独检查已有成品
 npm run check:layout  # 检查手机、平板、横屏下的图表尺寸，输出预览截图
 ```
+
+若构建机不能启动 Chromium，可使用本批提供的受限静态构建路径（需要支持 `alerts` 的 Pandoc；本批使用 3.9，及本地完整 Git 历史）：
+
+```bash
+.venv/bin/python -m pip install -r requirements-build-static.txt
+.venv/bin/python scripts/build_without_browser.py --baseline 72c39df44d05032edca7f0509bab6b765c35f48b
+```
+
+此路径仅复用与基准原稿**逐字一致**的 Mermaid 预渲染图片，新/修改的静态 SVG 由固定版本 CairoSVG 转 PNG。遇到改动的 Mermaid 会失败，要求回到正常 Chromium 构建，绝不会用旧图冒充新图。它不代替浏览器布局检查；正常构建方式仍是 `python3 build.py`。
 
 Linux 构建机需要中文字体（例如 `fonts-noto-cjk`）。已有 Chrome 时，可以设置
 `PUPPETEER_EXECUTABLE_PATH` 指向其可执行文件；安装依赖时可设置 `PUPPETEER_SKIP_DOWNLOAD=true`。

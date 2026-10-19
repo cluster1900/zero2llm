@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 
-def prepare_documents(merged_md, temp_dir, base_dir, markdown_format):
+def prepare_documents(merged_md, temp_dir, base_dir, markdown_format, renderer=None):
     base = Path(base_dir)
     tmp = Path(temp_dir)
     parsed = subprocess.run(
@@ -45,7 +45,10 @@ def prepare_documents(merged_md, temp_dir, base_dir, markdown_format):
     jobs_path = tmp / 'diagrams.json'
     jobs_path.write_text(json.dumps(jobs, ensure_ascii=False), encoding='utf-8')
     output = base / 'dist/assets/rendered'
-    subprocess.run(['node', str(base / 'scripts/render_diagrams.mjs'), str(jobs_path), str(output)], cwd=base, check=True)
+    if renderer is None:
+        subprocess.run(['node', str(base / 'scripts/render_diagrams.mjs'), str(jobs_path), str(output)], cwd=base, check=True)
+    else:
+        renderer(jobs, output)
     sizes = json.loads((output / 'dimensions.json').read_text())
 
     def image(diagram_id, title, description, epub):
