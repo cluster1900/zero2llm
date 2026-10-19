@@ -94,6 +94,44 @@ class QuantizationTests(unittest.TestCase):
                     self.assertAlmostEqual(actual, expected)
                 self.assertEqual(p.dequantize(p.quantize([0.], pp), pp), [0.])
 
+    def test_all_negative_affine_ranges_include_zero_independent_oracle(self):
+        # Literal scale/code/reconstruction oracles, not a second fit_params call.
+        # Constant-only roundtrip can pass with a wrong scale, so pin metadata too.
+        cases = [
+            ([-3., -3.], 1 / 85, [-128, -128, 127], [-3., -3., 0.]),
+            ([-255., -170., -85.], 1., [-128, -43, 42, 127], [-255., -170., -85., 0.]),
+            ([-1., -2.], 2 / 255, [-1, -128, 127], [-256 / 255, -2., 0.]),
+        ]
+        for calibration, scale, expected_codes, expected_values in cases:
+            with self.subTest(calibration=calibration):
+                params = p.fit_params(calibration, symmetric=False)
+                self.assertAlmostEqual(params.scale, scale, places=15)
+                self.assertEqual((params.zero_point, params.qmin, params.qmax), (127, -128, 127))
+                codes = p.quantize(calibration + [0.], params)
+                self.assertEqual(codes, expected_codes)
+                for actual, expected in zip(p.dequantize(codes, params), expected_values):
+                    self.assertAlmostEqual(actual, expected, places=14)
+
+    def test_all_zero_scale_is_one_in_both_modes(self):
+        # Zero roundtrip alone cannot distinguish scale=1 from any positive scale.
+        for symmetric, expected_zero, expected_low in [(True, 0, -127), (False, -128, -128)]:
+            with self.subTest(symmetric=symmetric):
+                params = p.fit_params([0., 0., 0.], symmetric=symmetric)
+                self.assertEqual(params.scale, 1.)
+                self.assertEqual((params.zero_point, params.qmin, params.qmax),
+                                 (expected_zero, expected_low, 127))
+                codes = p.quantize([0., 0., 0.], params)
+                self.assertEqual(codes, [expected_zero] * 3)
+                self.assertEqual(p.dequantize(codes, params), [0., 0., 0.])
+
+    def test_error_metrics_uses_absolute_magnitude_for_negative_errors(self):
+        # Signed errors are [-2,-5]; max(errors)=-2 is NOT max absolute error=5.
+        self.assertEqual(p.error_metrics([0., 0.], [2., 5.]),
+                         {"max_abs": 5., "mse": 29 / 2})
+        # Also cover mixed signs with the largest magnitude on the negative side.
+        self.assertEqual(p.error_metrics([0., 0.], [5., -1.]),
+                         {"max_abs": 5., "mse": 13.})
+
     def test_zero_point_added_after_ties_even_rounding(self):
         params = p.QParams(.25, 3, -128, 127)
         xs = [-.375, -.125, .125, .375]
@@ -229,6 +267,40 @@ class StreamTests(unittest.TestCase):
         captured = p.collect_completion(raw[i:i + 7] for i in range(0, len(raw), 7))
         self.assertEqual(captured, {"text": "\x11" * 4, "finish_reason": "length", "content_events": 4})
 
+    def test_multiline_sse_payload_preserves_newlines(self):
+        # JSON ignores separator whitespace; inspect SSE payloads directly instead.
+        for raw, expected in [
+            (b"data: first\ndata: second\n\n", "first\nsecond"),
+            (b"data: first\r\ndata:\r\ndata: third\r\n\r\n", "first\n\nthird"),
+        ]:
+            with self.subTest(raw=raw):
+                self.assertEqual(list(p.sse_data([raw])), [expected])
+                self.assertEqual(list(p.sse_data(bytes([byte]) for byte in raw)), [expected])
+
+    def test_incomplete_event_at_eof_is_rejected_at_sse_layer(self):
+        prefix = b"data: complete\n\n"
+        self.assertEqual(list(p.sse_data([prefix])), ["complete"])
+        # Exercise buffer-only, data-only and both-pending EOF states. Calling the
+        # SSE layer avoids collect_completion's missing-[DONE] check masking this.
+        for tail in [b"data: pending", b"data: pending\n", b"data: first\ndata: pending"]:
+            with self.subTest(tail=tail):
+                reader = p.sse_data([prefix, tail])
+                self.assertEqual(next(reader), "complete")
+                with self.assertRaisesRegex(ValueError, "^truncated SSE event at EOF$"):
+                    list(reader)
+
+    def test_tools_and_error_objects_are_rejected_before_completion(self):
+        # Every fixture can otherwise complete normally: a specific guard, not a
+        # later "incomplete response" error, must reject it.
+        for key in ("tool_calls", "function_call"):
+            value = {"choices": [{"delta": {key: []}, "finish_reason": "stop"}]}
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, "^only text deltas"):
+                p.collect_completion([event(value), b"data: [DONE]\n\n"])
+        error = {"error": {"message": "busy"},
+                 "choices": [{"text": "not a valid answer", "finish_reason": "stop"}]}
+        with self.assertRaisesRegex(ValueError, "^server error"):
+            p.collect_completion([event(error), b"data: [DONE]\n\n"])
+
     def test_empty_text_is_not_a_token_and_stream_finish_is_explicit(self):
         raw = event({"choices": [{"delta": {"content": None}, "finish_reason": "stop"}]}) + b"data: [DONE]\n\n"
         self.assertEqual(p.collect_completion([raw]), {"text": "", "finish_reason": "stop", "content_events": 0})
@@ -238,9 +310,8 @@ class StreamTests(unittest.TestCase):
             with self.subTest(raw=raw), self.assertRaises(ValueError):
                 p.collect_completion([raw])
 
-    def test_errors_tools_malformed_choices_and_post_finish_rejected(self):
-        for value in [{"error": {"message": "busy"}}, [], {"choices": []},
-                      {"choices": [{"delta": {"tool_calls": []}}]},
+    def test_malformed_choices_and_post_finish_rejected(self):
+        for value in [[], {"choices": []},
                       {"choices": [{"delta": {"content": 12}}]},
                       {"choices": [{"text": "ok", "finish_reason": 2}]}]:
             with self.assertRaises(ValueError):
@@ -292,6 +363,89 @@ class ActualMutationTests(unittest.TestCase):
         self.assertEqual(p.collect_completion(bytes([b]) for b in raw)["text"], "春风🌱")
         with self.assertRaises(UnicodeDecodeError):
             mutant.collect_completion(bytes([b]) for b in raw)
+
+
+    def test_affine_hi_excluding_zero_mutant_is_killed(self):
+        values = [-255., -170., -85.]
+        expected = [-255., -170., -85., 0.]
+
+        def roundtrip(module):
+            params = module.fit_params(values, symmetric=False)
+            return module.dequantize(module.quantize(values + [0.], params), params)
+
+        self.assertEqual(roundtrip(p), expected)
+        mutant = load_mutant("max(0., max(values))", "max(values)", "affine_excludes_zero")
+        wrong = roundtrip(mutant)  # must run successfully, not fail by exception
+        self.assertAlmostEqual(wrong[0], -170., places=12)  # wrongly clips -255 to about -170
+        self.assertNotEqual(wrong, expected)
+        correct_constant = p.fit_params([-3., -3.], symmetric=False)
+        self.assertEqual((correct_constant.scale, correct_constant.zero_point), (1 / 85, 127))
+        wrong_constant = mutant.fit_params([-3., -3.], symmetric=False)
+        self.assertNotEqual((wrong_constant.scale, wrong_constant.zero_point), (1 / 85, 127))
+
+    def test_all_zero_default_scale_mutants_are_killed(self):
+        cases = [
+            (True, "bound / 127 if bound else 1.", "bound / 127 if bound else 2.", "symmetric_zero_scale"),
+            (False, "hi / 255 - lo / 255 if hi != lo else 1.",
+             "hi / 255 - lo / 255 if hi != lo else 2.", "affine_zero_scale"),
+        ]
+        for symmetric, old, new, name in cases:
+            with self.subTest(symmetric=symmetric):
+                self.assertEqual(p.fit_params([0., 0.], symmetric=symmetric).scale, 1.)
+                mutant = load_mutant(old, new, name)
+                wrong = mutant.fit_params([0., 0.], symmetric=symmetric)
+                self.assertEqual(wrong.scale, 2.)
+                self.assertNotEqual(wrong.scale, 1.)
+                # The old roundtrip-only check would accept this wrong contract.
+                self.assertEqual(mutant.dequantize(mutant.quantize([0., 0.], wrong), wrong), [0., 0.])
+
+    def test_signed_maximum_error_mutant_is_killed(self):
+        expected = {"max_abs": 5., "mse": 29 / 2}
+        self.assertEqual(p.error_metrics([0., 0.], [2., 5.]), expected)
+        mutant = load_mutant('"max_abs": max(abs(x) for x in errors)',
+                             '"max_abs": max(errors)', "signed_max_error")
+        wrong = mutant.error_metrics([0., 0.], [2., 5.])
+        self.assertEqual(wrong, {"max_abs": -2., "mse": 29 / 2})
+        self.assertNotEqual(wrong, expected)
+
+    def test_incomplete_sse_event_drop_mutant_is_killed(self):
+        prefix = b"data: complete\n\n"
+        tails = [b"data: pending", b"data: pending\n", b"data: first\ndata: pending"]
+        for tail in tails:
+            with self.subTest(tail=tail), self.assertRaisesRegex(ValueError, "^truncated SSE event at EOF$"):
+                list(p.sse_data([prefix, tail]))
+        mutant = load_mutant("if buffer or data:", "if False and (buffer or data):", "discard_incomplete_event")
+        for tail in tails:
+            with self.subTest(tail=tail):
+                # The mutant silently succeeds and drops the pending event.
+                self.assertEqual(list(mutant.sse_data([prefix, tail])), ["complete"])
+
+    def test_multiline_sse_separator_mutant_is_killed(self):
+        raw = b"data: first\ndata:\ndata: third\n\n"
+        self.assertEqual(list(p.sse_data([raw])), ["first\n\nthird"])
+        mutant = load_mutant('yield "\\n".join(data)', 'yield "".join(data)', "missing_data_newline")
+        self.assertEqual(list(mutant.sse_data([raw])), ["firstthird"])
+        self.assertNotEqual(list(mutant.sse_data([raw])), ["first\n\nthird"])
+
+    def test_tool_calls_and_error_guards_mutants_are_killed(self):
+        cases = [
+            (' or "tool_calls" in delta', "tool_calls_guard", "^only text deltas",
+             {"choices": [{"delta": {"tool_calls": []}, "finish_reason": "stop"}]},
+             {"text": "", "finish_reason": "stop", "content_events": 0}),
+            (' or "error" in event', "server_error_guard", "^server error",
+             {"error": {"message": "busy"},
+              "choices": [{"text": "not a valid answer", "finish_reason": "stop"}]},
+             {"text": "not a valid answer", "finish_reason": "stop", "content_events": 1}),
+        ]
+        for old, name, reason, value, incorrectly_accepted in cases:
+            with self.subTest(name=name):
+                raw = event(value) + b"data: [DONE]\n\n"
+                with self.assertRaisesRegex(ValueError, reason):
+                    p.collect_completion([raw])
+                mutant = load_mutant(old, "", name)
+                # With the guard removed this must actually accept the stream,
+                # proving neither malformed JSON nor missing finish masks it.
+                self.assertEqual(mutant.collect_completion([raw]), incorrectly_accepted)
 
 
 class FixtureTests(unittest.TestCase):

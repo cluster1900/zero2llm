@@ -252,6 +252,36 @@ class ShapeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'same compression ratio'):
             m.csa2_schedule(bad)
 
+    def test_swa_sources_rejected_and_markdown_cells_escaped(self):
+        def swa_contract(module):
+            for field in ('kv_source_layers', 'index_source_layers'):
+                bad = copy.deepcopy(self.config)
+                # Layer zero is SWA-only. Keep both lists otherwise consistent
+                # so an unrelated subset/ordering validation cannot mask C05.
+                bad['index_source_layers'] = [0] + bad['index_source_layers']
+                if field == 'kv_source_layers':
+                    bad[field] = [0] + bad[field]
+                with self.assertRaisesRegex(ValueError, 'SWA-only layer'):
+                    module.csa2_schedule(bad)
+        def pipe_contract(module):
+            row = dict(component='a|b', chapters='P26', support='paper',
+                       status='reviewed', source='https://example.org',
+                       location='section', statement='x|y', boundary='line\nend')
+            rendered = module.render_matrix([row])
+            self.assertIn(r'a\|b', rendered)
+            self.assertIn(r'x\|y', rendered)
+            self.assertIn('line end', rendered)
+            self.assertEqual(len(rendered.splitlines()), 3)
+        swa_contract(m)
+        pipe_contract(m)
+        broken_swa = mutant('if layer in sources or layer in indexes:', 'if False:')
+        with self.assertRaises(AssertionError):
+            swa_contract(broken_swa)
+        broken_pipe = mutant("text.replace('|', '\\\\|').replace('\\n', ' ')",
+                             "text.replace('\\n', ' ')")
+        with self.assertRaises(AssertionError):
+            pipe_contract(broken_pipe)
+
     def test_unshuffle_coordinate_oracle_padding_channels_and_conservation(self):
         for height, width, channels, ratio in ((6, 6, 2, 3), (4, 5, 2, 3),
                                                (1, 1, 3, 3), (3, 4, 2, 1), (4, 4, 1, 2)):

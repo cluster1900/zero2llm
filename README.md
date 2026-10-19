@@ -17,7 +17,7 @@
 [扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
 
 - **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
-- **当前可读**：28 个章节文件（含前言、插入的第 1A 章与附录），27 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
+- **当前可读**：28 个章节文件（含前言、插入的第 1A 章与附录），27 个编号示例脚本及共享 attention_core.py 辅助模块；HTML / EPUB 随源码同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
 - **P03–P05 正文与 CPU 示例已实现**：注意力动机、QKV/稳定 Softmax/掩码、多头张量账本；因果性、padding/全 mask 行、形状与参考实现回归。验收记录见[第二批验证](docs/batch2-validation.md)。
 - **P06–P08 正文与 CPU 示例已实现**：位置编码、残差/LayerNorm/FFN、三类架构与生成循环；保留手算表，增加数值、自测和变异回归。见[第三批验证](docs/batch3-validation.md)。
 - **P09–P11 正文与 CPU 示例已实现**：训练最小闭环、Baby-GPT S0 基线和 S1 KV cache；训练/留出边界、checkpoint、完整/增量 logits 对齐与内存账。见[第四批验证](docs/batch4-validation.md)。
@@ -25,7 +25,7 @@
 - **P15–P17 正文与独立 CPU 实验已实现**：分块在线 Softmax、分页缓存与调度账本，SWA / 线性递推，以及官方 CED 数据流的教学模型。三个实验不改变 S4 主线，不代表 CUDA kernel、生产服务或真实 DeepSeek 权重复现。见[第六批验证](docs/batch6-validation.md)。
 - **P18–P20 正文与 CPU 实验已实现**：S5 教学 MoE、预训练数据与恢复训练、Transformers 小模型 CPU 对照与分片内存账本；TRL/DeepSpeed/Megatron 的角色及未运行多卡边界另行说明。见[第七批验证](docs/batch7-validation.md)。
 - **P21–P23 正文与 CPU 实验已实现**：对话 SFT / assistant-only loss / LoRA，DPO / GRPO 手算与策略更新，以及 S6 教学 MTP、可验证预算和草稿验证。教学模型、框架配置与真实生产训练严格区分。见[第八批验证](docs/batch8-validation.md)。
-- **P24–P26 本分支正文与 CPU 实验（待审核）**：量化与推理框架路线、固定 revision 的 Qwen3 配置案例，以及 DeepSeek V3/R1/V4.1 的组件与证据地图。官方报告、教学实验和未运行硬件路线分别标明，见[第九批验证](docs/batch9-validation.md)。本地实现/验证不等于已审核合并，正式状态以对应 PR 为准。
+- **P24–P26 正文与 CPU 实验已实现**：量化与推理框架路线、固定 revision 的 Qwen3 配置案例，以及 DeepSeek V3/R1/V4.1 的组件与证据地图。官方报告、教学实验和未运行硬件路线分别标明，见[第九批验证](docs/batch9-validation.md)。实现与验证范围见记录，审核和发布状态以对应 PR / Release 为准。
 - **尚未按扩展大纲实现**：P27–P28；旧附录仍保留可读，不代表新附录方案已完成。
 - **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP；每批审核后才继续，不把路线图当成已有功能。
 

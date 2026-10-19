@@ -37,6 +37,39 @@ def mutant(old, new):
     return module
 
 
+
+# Three real, shape-compatible substitutions that all-one norm gains can hide.
+NORM_MUTATIONS = (
+    ('B24 K uses Q gain',
+     'k = self.k_norm(self.k_proj(x).view(B, T, K, d)).transpose(1, 2)',
+     'k = self.q_norm(self.k_proj(x).view(B, T, K, d)).transpose(1, 2)'),
+    ('B35 input/post-attention norms swapped',
+     'y, cache = self.self_attn(self.input_layernorm(x), old, offset)\n'
+     '            x = x + y\n'
+     '            return x + self.mlp(self.post_attention_layernorm(x)), cache',
+     'y, cache = self.self_attn(self.post_attention_layernorm(x), old, offset)\n'
+     '            x = x + y\n'
+     '            return x + self.mlp(self.input_layernorm(x)), cache'),
+    ('B36 final norm uses wrong module',
+     'return self.lm_head(self.norm(x)), TinyCache(tuple(pairs), self, self.signature())',
+     'return self.lm_head(self.layers[-1].post_attention_layernorm(x)), TinyCache(tuple(pairs), self, self.signature())'),
+)
+
+
+def randomize_norm_gains(model):
+    """Independent, nontrivial gains for every norm, without changing other weights.
+
+    A local seeded generator makes gains reproducible across test order. This is
+    a test fixture, not a change to the production model's initialization.
+    """
+    generator = torch.Generator(device='cpu').manual_seed(251)
+    with torch.no_grad():
+        for name, parameter in model.named_parameters():
+            if name.endswith('norm.weight') and parameter.ndim == 1:
+                parameter.uniform_(0.5, 1.5, generator=generator)
+    return model
+
+
 def scalar_linear(x, weight):
     return [sum(a*b for a, b in zip(x, row)) for row in weight.tolist()]
 
@@ -145,6 +178,21 @@ class MetadataTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'revision'):
                 m.load_checkpoint('dense', root)
 
+    def test_same_length_valid_json_corruption_fails_exact_sha_integrity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)/'qwen3'
+            shutil.copytree(m.DATA, root)
+            target = root/'dense/config.json'
+            original = target.read_bytes()
+            self.assertEqual(original.count(b'"hidden_size": 1024'), 1)
+            corrupted = original.replace(b'"hidden_size": 1024', b'"hidden_size": 1025')
+            self.assertEqual(len(corrupted), len(original))
+            self.assertNotEqual(corrupted, original)
+            self.assertEqual(json.loads(corrupted)['hidden_size'], 1025)
+            target.write_bytes(corrupted)
+            with self.assertRaisesRegex(ValueError, r'^fixture integrity failure: dense/config\.json$'):
+                m.load_checkpoint('dense', root)
+
     def test_exact_real_parameter_totals_independent_hand_arithmetic(self):
         # All constants independently transcribed from pinned config/source shapes.
         dense = 151936*1024 + 28*(2*1024*16*128 + 2*1024*8*128 + 2*128 + 2*1024 + 3*1024*3072) + 1024
@@ -224,6 +272,14 @@ class MetadataTests(unittest.TestCase):
             with self.assertRaises(ValueError): m.completion_budget(ids,limit)
         self.assertEqual(m.completion_budget([],0)['answer_ids'],0)
 
+    def test_nonthinking_control_ids_are_counted_in_answer_budget(self):
+        # The mode is supplied by the caller; control-looking output IDs do not
+        # retroactively turn non-thinking accounting into thinking parsing.
+        ids = [151667, 7, 151668, 151645, 151643]
+        self.assertEqual(m.completion_budget(ids, 6, False),
+                         dict(reasoning_ids=0, closing_ids=0, answer_ids=5,
+                              generated_ids=5, remaining=1, thinking_closed=True))
+
     def test_accounting_semantic_mutants_are_executed_and_killed(self):
         def assert_total(module):
             self.assertEqual(module.parameter_budget(module.load_checkpoint('dense')['config'])['unique_total'],596049920)
@@ -289,7 +345,8 @@ class TinyTests(unittest.TestCase):
         torch.manual_seed(250)
 
     def make(self,kind='dense',module=m):
-        return module.build_tiny_model(module.tiny_config(kind)).double().eval()
+        model=module.build_tiny_model(module.tiny_config(kind)).double().eval()
+        return randomize_norm_gains(model)
 
     def assert_scalar_model(self,module,kind='dense'):
         model=self.make(kind,module)
@@ -302,6 +359,30 @@ class TinyTests(unittest.TestCase):
                 for side in (0,1):
                     torch.testing.assert_close(cache.layers[layer][side][batch],torch.tensor(kv[layer][side],dtype=torch.float64),atol=1e-11,rtol=1e-11)
         return model
+
+    def test_every_norm_has_deterministic_distinct_nonunit_gain(self):
+        for kind in m.PINS:
+            first, second = self.make(kind), self.make(kind)
+            gains = {name:p.detach() for name,p in first.named_parameters()
+                     if name.endswith('norm.weight') and p.ndim == 1}
+            self.assertEqual(len(gains), 4*first.config['num_hidden_layers']+1)
+            other = dict(second.named_parameters())
+            for name,gain in gains.items():
+                self.assertTrue(torch.equal(gain, other[name]))
+                self.assertTrue(((gain >= 0.5) & (gain < 1.5)).all())
+                self.assertFalse(torch.equal(gain, torch.ones_like(gain)))
+            values = list(gains.values())
+            for i,left in enumerate(values):
+                for right in values[i+1:]:
+                    if left.shape == right.shape:
+                        self.assertFalse(torch.equal(left, right))
+
+    def test_scalar_reference_rejects_norm_module_substitutions(self):
+        for label,old,new in NORM_MUTATIONS:
+            bad = mutant(old,new)
+            for kind in m.PINS:
+                with self.subTest(mutant=label,kind=kind), self.assertRaises(AssertionError):
+                    self.assert_scalar_model(bad,kind)
 
     def test_scalar_oracle_dense_and_moe_full_logits_and_compact_cache(self):
         for kind in m.PINS:
@@ -360,7 +441,11 @@ class TinyTests(unittest.TestCase):
             a,_=model(x)
             x[:,-2:]=torch.tensor([[7,8]])
             b,_=model(x)
-            torch.testing.assert_close(a[:,:3],b[:,:3],atol=0,rtol=0)
+            # MoE changes expert minibatch shapes when future routing changes;
+            # harmless CPU GEMM rounding can differ despite causal independence.
+            # Dense keeps the exact check; no relative tolerance is allowed.
+            torch.testing.assert_close(a[:,:3],b[:,:3],
+                                       atol=1e-12 if kind=='moe' else 0,rtol=0)
 
     def test_cache_owner_weights_shape_dtype_context_and_config_guards(self):
         model=self.make(); ids=torch.tensor([[1,2]])
@@ -428,33 +513,44 @@ except importlib.metadata.PackageNotFoundError:
 @unittest.skipUnless(READY and HF_VERSION == '4.51.3',
                      'optional official comparator requires isolated Transformers 4.51.3 and stable torch 2.14.x; skip is not pass')
 class OptionalOfficialTests(unittest.TestCase):
-    def test_random_tiny_official_dense_and_moe_shapes_logits_and_cache(self):
+    def assert_official_reference(self, module, kind):
         # Constructors only: no from_pretrained, network, tokenizer or weights.
         from transformers import Qwen3Config, Qwen3ForCausalLM, Qwen3MoeConfig, Qwen3MoeForCausalLM
         torch.set_num_threads(1)
-        for kind, Config, Model in [('dense',Qwen3Config,Qwen3ForCausalLM),
-                                     ('moe',Qwen3MoeConfig,Qwen3MoeForCausalLM)]:
+        Config,Model = ((Qwen3Config,Qwen3ForCausalLM) if kind=='dense' else
+                        (Qwen3MoeConfig,Qwen3MoeForCausalLM))
+        torch.manual_seed(89)
+        c=module.tiny_config(kind)
+        toy=randomize_norm_gains(module.build_tiny_model(c).float().eval())
+        cfg=Config(**c)
+        cfg._attn_implementation='eager'
+        official=Model(cfg).float().eval()
+        mapped={(key if key.startswith('lm_head.') else 'model.'+key):value
+                for key,value in toy.state_dict().items()}
+        official.load_state_dict(mapped,strict=True)
+        self.assertEqual(sum(p.numel() for p in official.parameters()),
+                         1536 if kind=='dense' else 2312)
+        ids=torch.tensor([[1,2,3,4,5],[5,2,6,1,8]])
+        with torch.no_grad():
+            actual,cache=toy(ids)
+            reference=official(ids,use_cache=True)
+        torch.testing.assert_close(actual,reference.logits,rtol=3e-6,atol=3e-6)
+        for layer,pair in enumerate(cache.layers):
+            for side in (0,1):
+                torch.testing.assert_close(pair[side],reference.past_key_values[layer][side],
+                                           rtol=3e-6,atol=3e-6)
+
+    def test_random_tiny_official_dense_and_moe_shapes_logits_and_cache(self):
+        for kind in m.PINS:
             with self.subTest(kind=kind):
-                torch.manual_seed(89)
-                c=m.tiny_config(kind)
-                toy=m.build_tiny_model(c).float().eval()
-                cfg=Config(**c)
-                cfg._attn_implementation='eager'
-                official=Model(cfg).float().eval()
-                mapped={(key if key.startswith('lm_head.') else 'model.'+key):value
-                        for key,value in toy.state_dict().items()}
-                official.load_state_dict(mapped,strict=True)
-                self.assertEqual(sum(p.numel() for p in official.parameters()),
-                                 1536 if kind=='dense' else 2312)
-                ids=torch.tensor([[1,2,3,4,5],[5,2,6,1,8]])
-                with torch.no_grad():
-                    actual,cache=toy(ids)
-                    reference=official(ids,use_cache=True)
-                torch.testing.assert_close(actual,reference.logits,rtol=3e-6,atol=3e-6)
-                for layer,pair in enumerate(cache.layers):
-                    for side in (0,1):
-                        torch.testing.assert_close(pair[side],reference.past_key_values[layer][side],
-                                                   rtol=3e-6,atol=3e-6)
+                self.assert_official_reference(m,kind)
+
+    def test_official_reference_rejects_norm_module_substitutions(self):
+        for label,old,new in NORM_MUTATIONS:
+            bad=mutant(old,new)
+            for kind in m.PINS:
+                with self.subTest(mutant=label,kind=kind), self.assertRaises(AssertionError):
+                    self.assert_official_reference(bad,kind)
 
 
 if __name__=='__main__':

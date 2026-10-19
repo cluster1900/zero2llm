@@ -287,7 +287,7 @@ tiny moe:   params=2312; shape=(1, 5, 17); cache_bytes=1280
 pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 ```
 
-脚本还报告完整输入与 `[2,3]` 分块输入之间的最大 logits 误差，本次分别约 `1.776e-15`、`2.220e-16`，测试阈值为 `1e-10`，不把浮点末位作为跨机器固定输出。1280 字节按 float64 的每元素 8 字节计算，不要拿它与上一节 BF16 的结果混比。
+脚本还报告完整输入与 `[2,3]` 分块输入之间的最大 logits 误差；`max_cache_error` 的具体值以本次运行日志为准，检查阈值为 `1e-10`。CPU 架构、BLAS kernel 与矩阵分块可能改变浮点末位，因此不把某台机器上的误差数值或恰好为零当作跨平台保证。1280 字节按 float64 的每元素 8 字节计算，不要拿它与上一节 BF16 的结果混比。
 
 这个 probe 支持等长、无 padding 的 eval 批次，并保护缓存 owner、参数版本、形状、dtype 和上下文边界。缓存应由调用者视为只读；手工修改 tensor 内容或用 `.data` 绕过 PyTorch 版本跟踪不属于支持的流程。它没有训练目标、量化、fused attention、分布式路由或预训练 state 加载，不能作为真实服务的替代品。
 
@@ -295,14 +295,14 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 
 测试分成四层：
 
-1. **来源与算术。** 固定仓库、完整 revision、关键哈希；用独立手写乘法表达式检查真实参数总数，用明确字节数检查两份真实 KV 预算。修改快照或 revision 必须失败。
+1. **来源与算术。** 固定仓库、完整 revision、关键哈希；用独立手写乘法表达式检查真实参数总数，用明确字节数检查两份真实 KV 预算。修改快照或 revision 必须失败。另把 `hidden_size` 的 1024 改为 1025：字节数不变、JSON 仍合法，也必须得到精确的文件完整性错误，才能证明不是只有长度检查在起作用。
 2. **实际结构。** 用 `named_parameters()` 比对微型模型所有名字、形状、绑定去重后的总数；不是只比较两个计数公式。
-3. **独立数值。** Python 标量 oracle 从每个权重元素出发，自己做线性层、RMSNorm、split-half RoPE、因果注意力、SwiGLU 和专家混合，不调用生产 helper 或 tensor matmul。它同时对照 dense/MoE 的最终 logits 与每层真实 K/V。
-4. **行为与反例。** 比较任意分块与完整前缀，改未来 token 后确认过去输出不变；检查 sparse dispatch 真正只调用选中的专家；校验坏缓存和预算边界。
+3. **独立数值。** Python 标量 oracle 从每个权重元素出发，自己做线性层、RMSNorm、split-half RoPE、因果注意力、SwiGLU 和专家混合，不调用生产 helper 或 tensor matmul。它同时对照 dense/MoE 的最终 logits 与每层真实 K/V。测试把所有 Q/K、input/post-attention 和最终 norm gain 用独立种子 251 均匀抽到 `[0.5,1.5)`，每个模块都不同；否则全为 1 的初始化会掩盖用错同宽度 norm 的错误。这只改变测试样本，不改变生产代码的初始化。
+4. **行为与反例。** 比较任意分块与完整前缀，改未来 token 后确认过去输出保持因果独立。dense 使用零误差检查；MoE 仅允许绝对误差 `1e-12`、相对误差 0，因为未来路由可以改变某专家的 minibatch 形状，进而使 CPU 矩阵乘法末位出现舍入差异，并非放宽注意力掩码规则。还检查 sparse dispatch 真正只调用选中的专家，以及坏缓存、预算边界和 non-thinking 下控制 ID 也计入答案段的约定。
 
-还实际执行 **12 个语义错误变体**，并要求独立断言能抓住它们：重复计算绑定 head、用 D/Hq 代替显式 d、漏掉 QK norm 参数、漏计闭合 token、把未闭合思考误作答案、错排 GQA 头、丢失缓存 offset、错用相邻 RoPE 配对、跳过 Q norm、取消选中权重归一化、计算全部专家、再次旋转旧 K。不是在注释里列出错误后就算“做过负例”。
+还实际执行 **15 个语义错误变体**，并要求独立断言能抓住它们：重复计算绑定 head、用 D/Hq 代替显式 d、漏掉 QK norm 参数、漏计闭合 token、把未闭合思考误作答案、错排 GQA 头、丢失缓存 offset、错用相邻 RoPE 配对、跳过 Q norm、取消选中权重归一化、计算全部专家、再次旋转旧 K、K 错用 Q 的 norm gain、交换 input/post-attention norm、最终输出错用层内 norm。最后三种是形状仍合法的真实源码替换，独立标量参考和可选官方参考都在 dense／MoE 两条路径上拒绝它们。不是在注释里列出错误后就算“做过负例”。
 
-此外，利用已有的独立环境，实际运行了可选官方参照测试 `test_random_tiny_official_dense_and_moe_shapes_logits_and_cache`：Transformers 4.51.3、PyTorch 2.14.1+cpu、CPU float32、种子 89、eager attention，分别构造官方随机 tiny dense／MoE 模型，严格加载同一套微型随机参数。两者参数数目匹配；本次 dense logits 最大差为 0，MoE 约为 `2.384e-7`，逐层 K/V 在 `atol=rtol=3e-6` 下通过。测试不调用 `from_pretrained`，没有下载模型或 tokenizer；缺少这组独立环境时明确跳过，不能算通过。仓库基线环境本次 21 项通过、该可选项跳过；独立环境 22 项全部通过。
+此外，利用已有的独立环境，实际运行了可选官方参照测试 `test_random_tiny_official_dense_and_moe_shapes_logits_and_cache`：Transformers 4.51.3、PyTorch 2.14.1+cpu、CPU float32、种子 89、eager attention，分别构造官方随机 tiny dense／MoE 模型，严格加载同一套微型随机参数。同样先用种子 251 将所有 norm gain 独立抽到 `[0.5,1.5)`，再把这整套权重加载到官方模型。两者参数数目匹配，logits 与逐层 K/V 在 `atol=rtol=3e-6` 下通过；不以全一 gain 或某次误差恰好为零作为等价证据。测试不调用 `from_pretrained`，没有下载模型或 tokenizer；缺少这组独立环境时明确跳过，不能算通过。本次共发现 27 项测试：仓库基线环境 25 项通过、2 项官方参考测试明确跳过；无 PyTorch/Jinja2 的标准库环境 13 项通过、14 项明确跳过；独立官方环境 27 项全部通过。
 
 这个交叉检查只验证小型结构和数值路径，不表示已经加载或运行上述真实 checkpoint。
 

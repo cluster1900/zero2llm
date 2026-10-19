@@ -1,6 +1,6 @@
 # P24–P26：量化与模型案例验证记录
 
-核验日期：2026-10-19。基准 main `82d6c84db13a4089f93e06f1b2e8174f5a14ad59`；独立分支 `dot/batch9-p24-p26`。本批已撰写并完成下列本地验证，仍待 PR 审核，不表示已合并或新 head 浏览器验收通过。
+首稿核验日期：2026-10-19（head `45ecf45`，以下至返修节为当时本机记录）。基准 main `82d6c84db13a4089f93e06f1b2e8174f5a14ad59`；独立分支 `dot/batch9-p24-p26`。本批已撰写并完成下列本地验证，仍待 PR 审核，不表示已合并或新 head 浏览器验收通过。
 
 ## 范围与可复现入口
 
@@ -41,3 +41,31 @@ P25 可选 Transformers 4.51.3 eager 对照使用相同随机权重映射，两�
 三张新 SVG 已查看真实中文 PNG 像素，未见乱码、裁切或重叠。HTML、EPUB 与 Markdown 同步；`check_book.py` 通过，35 个 EPUB XML/XHTML/OPF/NCX 容器可解析，46 个 code 数据/脚本文件和 26 张 SVG 与源逐字相同。15 个旧锚点在 HTML 唯一存在、在 EPUB 可定位。顺手修复 P22 历史公式的 `\rm` 为等义 `\mathrm`，避免 EPUB 降级为原始 TeX；没有改动其数值公式。
 
 本报告不把历史 PR9 的 78 项浏览器布局通过记录移用到本批；GPU、分布式、真实模型质量、吞吐和显存收益均未实测。
+
+
+## PR10 复审返修（2026-10-19）
+
+[Normal Work review 5576213837](https://github.com/cluster1900/zero2llm/pull/10#pullrequestreview-5576213837) 对首稿独立验证了 27 CLI、5 个选修入口、来源/数表、正常构建和 84/84 布局；其 HF 环境实际为 460 pass / 1 fail。失败是 MoE 因果不变性断言把约 2.22e-16 的平台累加差异误判为泄漏，不能用本机原先的 461 pass 覆盖该结果。
+
+本次没有改变任何 `code/` 数值实现：
+
+1. dense 因果断言继续要求精确相等，MoE 只给 1e-12 绝对容差、相对容差 0；正文解释按专家聚合的 GEMM 行数影响末位累加。
+2. 测试给每个 RMSNorm gain 独立、固定种子的非单位值；标量参考和官方 Transformers 对照都用这套参数。新增 Q/K gain 混用、block norm 交换、final norm 错用的实际源码变异，不用自一致比较代替独立 oracle。
+3. 全负仿射、SSE 明确拒绝原因、同长度 SHA 篡改，以及相邻零 scale/负误差/EOF/多行数据/non-thinking 控制 ID/SWA 来源/Markdown 转义契约均补回归。
+4. README/前言/大纲改为中性“已实现”，并明确实现覆盖不等于审核发布；本历史验证记录保留首次审核状态。`.gitattributes` 仅对 SSE 协议文件关闭 `blank-at-eof` 检查，其余 whitespace 规则不变。
+
+返修最终结果：
+
+| 环境 | 总数 | 通过 | 跳过 |
+|---|---:|---:|---:|
+| 隔离 HF + 官方 llama.cpp CPU | 479 | 479 | 0 |
+| 基线 CPU Torch | 479 | 468 | 11 |
+| 系统 NumPy / 无 Torch | 479 | 207 | 272 |
+
+P24 为 35 tests / 15 实际变异，P25 为 27 tests / 15 实际变异，P26 为 17 tests / 8 实际变异，共 38 个不同源码变异；P25 同一 norm 变异在 scalar 与 HF、dense 与 MoE 下重复验证，不重复计数。基线 11 项 skip 为原 8 HF + P25 两项官方对照 + P24 实际引擎入口。状态文本回归 4 项通过；27 个默认 CLI、5 个选修入口、3 个 Node tests 与 compileall 全部重新运行通过。
+
+独立审校重新运行三个章节及全部新增行为，另验证 B24/B35/B36 错误结果有限而显著偏离、SHA 校验删除后同长度篡改被错误接受、负区间缩放和 187 个 SSE 分片切点。生产 `code/` 与首稿逐字不变。
+
+正常构建/布局本次再尝试仍报 Chromium `socket() failed: Operation not permitted (1)`，未改安全设置。备用构建以源码精确匹配的 `45ecf45` 为基准，10 Mermaid + 26 SVG 均复用已审图，正文重建，Pandoc 无 warning；check_book 通过，35 XML、46 代码/数据文件、26 SVG、15 兼容 ID 全部核验。没有新增图，也没有把首稿 84 项布局通过结果冒充返修 head 验收。请 Normal Work 在新 head 再跑正常浏览器布局。
+
+`.gitattributes` 后 `git diff --check` 无需人工排除 SSE；不修改原始协议字节，不停用其他 whitespace 检查。

@@ -6,7 +6,7 @@ P12–P14 正文与 S2/S3/S4 CPU 示例已实现，见[第五批验证](batch5-v
 P15–P17 正文与独立 CPU 机制实验已实现，见[第六批验证](batch6-validation.md)；不把教学模拟、官方激活参数口径或路径计数当成 GPU 性能或真实 CED 权重复现。新增 08e/08f/08g，S4 主线不变。
 P18–P20 正文与 CPU 实验已实现，见[第七批验证](batch7-validation.md)。S5 为教学 MoE；框架/多卡的实际验证边界见记录，不将安装说明视为运行结果。新增 08h/08i/08j。
 P21–P23 正文与 CPU 实验已实现，见[第八批验证](batch8-validation.md)。S6 为可选教学 MTP；SFT/LoRA/偏好优化与草稿验证均限定实际测试范围。新增 08k/08l/08m。
-P24–P26 为本分支已撰写的待审批次，实际 CPU 验证与未运行范围见[第九批验证](batch9-validation.md)。新增 08n/08o，P26 改写旧 09 并保留旧链接；固定官方配置、教学实验与未运行框架路线分别标明。
+P24–P26 正文与 CPU 实验已实现，实际 CPU 验证与未运行范围见[第九批验证](batch9-validation.md)。新增 08n/08o，P26 改写旧 09 并保留旧链接；固定官方配置、教学实验与未运行框架路线分别标明。
 任务：[bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14)；对照[原目录快照](https://github.com/cluster1900/bot-hub/blob/main/materials/14/current-toc.md)。
 Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1#issuecomment-6246985285)通过大纲。按每批 2–3 章撰写并逐批审核；本文保留设计方案，实际进度以 [README](../README.md) 为准。
 
