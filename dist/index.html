@@ -4673,9 +4673,10 @@ EOS”，最后一个位置预测停止符。</li>
 已可选出“明”；再将“明”作为下一次条件输入。我们的示例是全前缀重算，不是
 KV 缓存实现。</li>
 </ol>
-<p>下一章保留现有 Baby-GPT
-训练实践。扩展大纲的训练闭环与评估章节将另批完成，本章不把固定 logits
-演示当成它们已经落地。</p>
+<p>下一单元
+P09（训练基础，07a）把数据切分、交叉熵、梯度更新与评估串成训练闭环，再进入第
+8 章 Baby-GPT 实践。本章的固定 logits
+演示仍只是生成控制流程，不等于训练模型。</p>
 <h2 id="原始来源与版本">原始来源与版本</h2>
 <ul>
 <li><a href="https://arxiv.org/html/1706.03762v7">Attention Is All You
@@ -4697,7 +4698,7 @@ href="https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation">Tra
 <p><strong>读完你应该能回答：这一批题从哪里来，答案对齐哪一格，错多少，谁计算梯度，谁修改参数，以及凭什么说模型变好了。</strong>
 先懂 Python 切片与前几章的 <code>[B,T,C]</code>
 就够了；导数只用“向哪个方向微调”的直觉。</p>
-<h2 id="练习册答题纸与考试卷">1. 练习册、答题纸与考试卷</h2>
+<h2 id="p09.1-练习册答题纸与考试卷">P09.1 练习册、答题纸与考试卷</h2>
 <p>训练像练习默写：模型交一份答题纸，损失函数评分，梯度告诉我们怎样微调，优化器实施调整。类比的边界是：模型没有老师式理解；一次更新是数值计算，不保证每道题都改对，也不保证下一次总分必然更好。</p>
 <pre class="text"><code>原文 -&gt; 按文档分组 -&gt; 训练文档 -&gt; 抽一个 batch
                          |           |
@@ -4717,7 +4718,8 @@ href="https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation">Tra
 <strong>transductive（利用了保留数据的词汇信息）设置</strong>，不是严格训练集独立构建的
 tokenizer。更严格的方案要预先固定词表，或只在训练文档建词表并明确未知字符策略。即使知道字符
 ID，模型也没有学到这些字符在第三首中的顺序。</p>
-<h2 id="输入与标签只错开一个位置">2. 输入与标签只错开一个位置</h2>
+<h2 id="p09.2-输入与标签只错开一个位置">P09.2
+输入与标签只错开一个位置</h2>
 <p>假设文本是“床前明月光”，取长度 <code>T=4</code>，需要先取 <strong>5
 个字符</strong>：</p>
 <div class="table-wrapper"><table>
@@ -4772,7 +4774,8 @@ ID，模型也没有学到这些字符在第三首中的顺序。</p>
 </ul>
 <p>一个漂亮的 loss 可以来自一道错误的题。因果掩码不能修好
 <code>y=x</code>，因为当前格本来就允许看见自己。</p>
-<h2 id="损失到底在罚什么手算交叉熵">3. 损失到底在罚什么：手算交叉熵</h2>
+<h2 id="p09.3-损失到底在罚什么手算交叉熵">P09.3
+损失到底在罚什么：手算交叉熵</h2>
 <p>模型输出的是任意实数分数 logits，不必为正，也不要求总和为 1。softmax
 将分数变成概率；交叉熵取正确答案概率的负自然对数：<code>loss = -ln(p_correct)</code>。正确答案概率越小，罚得越重。对数底数为
 e，单位可称 nats。</p>
@@ -4851,8 +4854,8 @@ e，单位可称 nats。</p>
 时，分母应是有效标签数，不能把 padding
 算进去。评估多份长度不同的文档时，也要按预测 token
 数加权，不是把每份文档的平均 loss 再简单平均。</p>
-<h2 id="backward-不更新参数step-才更新">4. backward 不更新参数，step
-才更新</h2>
+<h2 id="p09.4-backward-不更新参数step-才更新">P09.4 backward
+不更新参数，step 才更新</h2>
 <p>先把模型缩到最小：只有两个可训练分数
 <code>z=[ln(3),0]</code>，正确答案 A。此时梯度是“预测概率减真实
 one-hot”：</p>
@@ -4892,8 +4895,8 @@ SGD；不要把 SGD 的一步公式当成 AdamW 的精确公式。</li>
 会变成 <code>[-0.5,0.5]</code>。有意积累多个 micro-batch
 可以节省显存，但需要设计缩放和更新时机；本实验每 batch
 更新一次，不需要跨 batch 积累。</p>
-<h2 id="traineval-与-no_grad-是三件不同的事">5. train、eval 与 no_grad
-是三件不同的事</h2>
+<h2 id="p09.5-traineval-与-no_grad-是三件不同的事">P09.5 train、eval 与
+no_grad 是三件不同的事</h2>
 <p><code>eval()</code> 影响 Dropout、BatchNorm
 等有模式差异的层，<strong>不禁止梯度</strong>；<code>no_grad()</code>
 不记录求导图，<strong>不自动切成 eval
@@ -4914,7 +4917,8 @@ Dropout/BatchNorm，因此切换模式可能不改变它的数值输出；测试
 时，保留诗的前面字符作为已知前缀是允许的，这是条件概率评分；没有用其标签更新参数。不要把“不给梯度”误写为“连保留文档都不能前向读取”。不过，反复根据这个
 loss
 挑种子、调步数，会让它成为调参验证集，不能再声称是从未碰过的最终测试。</p>
-<h2 id="cpu-实验同一个种子再跑一次">6. CPU 实验：同一个种子再跑一次</h2>
+<h2 id="p09.6-cpu-实验同一个种子再跑一次">P09.6 CPU
+实验：同一个种子再跑一次</h2>
 <p>从仓库根目录执行。无需下载模型、无需 GPU，也不写 checkpoint：</p>
 <div class="sourceCode" id="cb61"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/11_training_loop.py <span class="at">--scalar-only</span></span>
@@ -4928,9 +4932,12 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb61-1"><a href=
 个窗口；共消费 40×4×8=1280 个预测位置，<strong>包含重复，不等于 1280
 个独立样本</strong>。每次运行重新初始化模型与优化器，同时固定 Python
 抽样 RNG 和 PyTorch 种子，并开启确定性算法。</p>
-<p>下面是 2026-10-19、PyTorch 2.14.1+cpu 实际输出的四舍五入值。训练/保留
-loss 都用整首诗的所有下一字位置评分，和训练时长度 8
-的随机窗口口径不同：</p>
+<p>下面是 2026-10-19、PyTorch 2.14.1+cpu
+的复核记录，显示到六位小数。seed 11 保留后值采用独立审核环境的
+4.397413730…，四舍五入为 4.397414；本地复跑为 4.397413254…，相差一个
+float32 ULP。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU
+数值差异，而不容许学习率改变造成的偏移。训练/保留 loss
+都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -4957,18 +4964,74 @@ loss 都用整首诗的所有下一字位置评分，和训练时长度 8
 <td>seed 11</td>
 <td>4.219005</td>
 <td>4.189975 → 3.263426</td>
-<td>3.923873 → 4.397413</td>
+<td>3.923873 → 4.397414</td>
 </tr>
 </tbody>
 </table></div>
-<p>模型更适应练习材料，保留诗的 loss
-却上升了。这与过拟合现象一致，<strong>不是证明所有设置下都会这样，也不是语言能力排行榜</strong>。第三首存在训练中没学过的字符，且评估上下文长度不同，不能把全部差异都归因于单一原因。同种子同环境重复是复现实验的检查，不是跨硬件/版本逐位相同的承诺；换种子也不是新增独立测试语料。</p>
+<h3 id="先检查标签分布再解释-loss">先检查标签分布，再解释 loss</h3>
+<p>这里“训练见过”严格指两首训练诗的<strong>下一字标签集合</strong>，即各自
+<code>encode(doc)[1:]</code>
+的并集，不是全部输入字符，更不是预先定义的全语料词表。留出诗有 23
+个目标位置，其中 19 个目标从未作为训练答案出现；共有的 4
+个目标只包括“，”和“。”各两次。计数按出现次数，不按不同字符数。</p>
+<p><code>evaluate_strata</code>
+逐位置计算不归约的交叉熵，再按这个集合分组；训练前后都输出
+count、loss_sum 和 mean loss：</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>运行</th>
+<th>训练标签见过的目标数</th>
+<th>见过组 loss 前→后</th>
+<th>未见过的目标数</th>
+<th>未见组 loss 前→后</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>seed 7（重复相同）</td>
+<td>4 / 23</td>
+<td>4.266185 → 3.506729</td>
+<td>19 / 23</td>
+<td>4.542207 → 5.124327</td>
+</tr>
+<tr>
+<td>seed 11</td>
+<td>4 / 23</td>
+<td>4.072877 → 3.441714</td>
+<td>19 / 23</td>
+<td>3.892503 → 4.598613</td>
+</tr>
+</tbody>
+</table></div>
+<p>两组不是各占一半：整体均值应是
+<code>(4 × 见过组 loss + 19 × 未见组 loss) / 23</code>。测试检查这个重组合等于总体
+loss（允许 float32 归约误差）。共有目标的 loss
+实际下降；整体上升主要来自那 19 个从未作为训练答案的目标。在训练 softmax
+分类时，这些类别没有正目标奖励，但仍出现在分母里，其分数可能被相对压低。<strong>这次留出
+loss 上升主要反映标签分布不匹配，本实验不能证明过拟合。看到留出 loss
+上升，先检查留出标签是否见过。</strong> 只有 4
+个共有标点变好，也不能据此推断词汇或语言泛化变好。</p>
+<p>过拟合指模型过度适应训练材料、在可比的新样本上表现变差；训练 loss
+下降而验证 loss
+上升只是需要诊断的现象，不是自动成立的结论。若要演示它，需要另设词汇覆盖可比、来源独立的留出材料，固定评估口径并跟踪训练过程，例如检查验证
+loss
+是否先下降后上升。本批只讨论过拟合概念，<strong>没有演示或证实过拟合</strong>，也不将不匹配的两组数据包装成过拟合实验。</p>
+<p>同种子同环境重复是复现实验的检查，不是跨硬件/版本逐位相同的承诺；换种子也不是新增独立测试语料。</p>
 <p>下一章的 S0 会在三首诗上训练并检查背诵，它是
 <strong>同语料记忆/工程基线</strong>。本章两首训练、一首保留是另一种评估演示，不要把两个
 loss
 混在同一条曲线上。生成检查能发现乱码、循环、提示词接不上等直观问题，但背出训练诗并不证明新诗写作或通用语言能力。只有
 loss 和生成片段一起看，再核对数据来源，才不会被“出口成章”迷惑。</p>
-<h2 id="自测先答再看后面的答案">7. 自测：先答，再看后面的答案</h2>
+<h2 id="p09.7-自测先答再看后面的答案">P09.7
+自测：先答，再看后面的答案</h2>
 <ol type="1">
 <li>对 ID <code>[4,7,1,9,3]</code>，start=1、T=3，x/y 各是什么？把 y
 设为 x，因果掩码能否补救？</li>
@@ -4979,7 +5042,7 @@ loss 和生成片段一起看，再核对数据来源，才不会被“出口成
 <li>不调用 step，连续 backward 同一道题两次会怎样？在哪一行清零？</li>
 <li><code>eval()</code> 是否关闭 autograd？<code>no_grad()</code>
 是否关闭 Dropout？当前 BabyGPT 切换模式为什么可能没有数值变化？</li>
-<li>把同诗重叠窗口分到训练和验证有什么问题？本实验整首保留后，为什么仍不能据此声称通用语言能力？</li>
+<li>把同诗重叠窗口分到训练和验证有什么问题？本实验整首保留后，为什么仍不能据此声称通用语言能力或证明过拟合？</li>
 </ol>
 <h3 id="参考答案与可执行测试对应">参考答案与可执行测试对应</h3>
 <ol type="1">
@@ -4999,14 +5062,24 @@ loss 会被实际计算出来。</li>
 <code>test_gradient_accumulation_and_clear</code>；<code>test_train_step_rejects_zero_grad_omission_numerically</code>
 另跑不清零的错误循环，确认其参数偏离正确参考，避免仅靠搜一行源码“证明正确”。</li>
 <li>两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。对应
-<code>test_eval_no_grad_and_restore_mode</code>：确认梯度、权重、恢复模式，并用
-Dropout 对照。</li>
-<li>重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；下一章
+<code>test_eval_no_grad_and_restore_mode</code>：用真实
+<code>evaluate</code> 前向的 pre-hook 确认 <code>training=False</code>
+与 <code>is_grad_enabled=False</code>，另检查权重不变、模式恢复，并用
+Dropout
+对照。<code>test_evaluate_unequal_documents_token_weighted</code> 使用 1
+个与 4 个目标的不等长文档，核对 token 加权 3.4，而不是文档均值
+2.5。</li>
+<li>重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23
+个留出目标未在训练标签中出现，4 个共有标点的 loss
+反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本批未演示过拟合。下一章
 S0 更只是同语料记忆。对应
 <code>test_split_and_leakage_mutation</code>：将训练文档混入保留集合会报错；<code>test_fixed_seed_repeat_and_heldout_report</code>
-检查报告与重复运行，不断言“训练必能改善保留 loss”。</li>
+检查重复运行；<code>test_40_step_snapshots_and_label_strata</code>
+固定种子 7/11 的 40 步结果、实际学习率、19/23
+计数、共有组下降方向及两组重组合，不断言“训练必能改善整体保留
+loss”。</li>
 </ol>
-<h2 id="来源与边界">来源与边界</h2>
+<h2 id="p09.8-来源与边界">P09.8 来源与边界</h2>
 <p>核验日期：2026-10-19。API 依据锁定为 PyTorch 2.14 文档，运行数值使用
 2.14.1+cpu：</p>
 <ul>
@@ -5483,7 +5556,7 @@ logits
 <p>配套 <a href="code/12_kv_cache.py">code/12_kv_cache.py</a>
 直接使用 S0 的模型模块，不另训一份近似模型。实验是 CPU、float32、无
 dropout、eval 模式；不下载权重，不用 GPU。</p>
-<h2 id="重算发生在哪里">11.1 重算发生在哪里</h2>
+<h2 id="p11.1-重算发生在哪里">P11.1 重算发生在哪里</h2>
 <p>假设提示有“床前”两个字符。S0
 先计算这两个位置，再选出“明”；下一轮把“床前明”三个位置全部送进模型，先前“床”“前”的计算又做一次。</p>
 <p>在因果模型中，较早位置不能看后来追加的 token。如果权重、位置、历史
@@ -5498,7 +5571,7 @@ S1：床 前          → prefill，存各层 K/V → 选 明
           明       → 新 Q/K/V + 历史 K/V → 选 月
              月    → 新 Q/K/V + 历史 K/V → ...</code></pre>
 <p>可以把它比作保存已经整理好的借阅索引，下一次只补新条目。类比的边界是：真实缓存不是保存自然语言摘要，也不是模型长期记忆；它保存的是当前请求、当前参数与位置下的浮点张量。缓存本身不会让模型学会新的事实。</p>
-<h2 id="prefill-与-decode首字到底从哪来">11.2 Prefill 与
+<h2 id="p11.2-prefill-与-decode首字到底从哪来">P11.2 Prefill 与
 decode，首字到底从哪来</h2>
 <p><strong>Prefill</strong> 一次处理提示，建立每一层的
 K/V。提示最后一个位置的 logits 已经能选出第一个新
@@ -5518,7 +5591,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb71-1"><a h
 <p>这里的片段是调用顺序，完整可运行示例在源码。<code>cached_forward</code>
 不选 token，只返回当前新块的 logits；<code>generate_cached</code>
 才负责选择与循环。它每次调用从空缓存开始，防止第二个请求误接在第一个请求后面。</p>
-<h2 id="逐层形状与位置偏移">11.3 逐层形状与位置偏移</h2>
+<h2 id="p11.3-逐层形状与位置偏移">P11.3 逐层形状与位置偏移</h2>
 <p>设已有 P 个位置，本次新输入 C 个位置；头数 H，每头宽度 d，主干宽度
 D=H×d。</p>
 <div class="table-wrapper"><table>
@@ -5579,12 +5652,14 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb72-1"><a h
 是缓存长度。旧位置向量已经进入旧 K/V
 的计算，不应给旧缓存再加一次位置向量。参数表最大 128 行，索引只能是
 0–127。</p>
-<h2 id="矩形-mask最容易写错的两行">11.4 矩形 mask：最容易写错的两行</h2>
+<h2 id="p11.4-矩形-mask最容易写错的两行">P11.4 矩形
+mask：最容易写错的两行</h2>
 <p>把提示分块计算，或者一次追加两个
 token，同样必须阻止本块早位置看到本块未来。P=3、C=2 时，新 query
 的绝对位置是 3、4，key 的位置是 0–4。可见规则仍是 <strong>key_position ≤
 query_position</strong>。</p>
-<h3 id="表-11-1三格历史加两格新输入">表 11-1：三格历史加两格新输入</h3>
+<h3 id="表-p11-1三格历史加两格新输入">表
+P11-1：三格历史加两格新输入</h3>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -5629,8 +5704,8 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb73-1"><a h
 Softmax。本实现不接受空块，也不提供
 padding，因此每行至少有自己可见，不会产生全 mask 行。带
 padding/变长批次是另一层接口契约，不能把这个限制忘掉后套到任意批次。</p>
-<h3 id="表-11-2把可见性变成可手算的输出">表
-11-2：把可见性变成可手算的输出</h3>
+<h3 id="表-p11-2把可见性变成可手算的输出">表
+P11-2：把可见性变成可手算的输出</h3>
 <p>暂时只看一个头，让两行 scores 都是
 <code>[ln1,ln2,ln3,ln4,ln5]</code>，五个标量 V 是
 <code>[10,20,30,40,50]</code>。这些是独立手算输入，不是随机模型碰巧得到的分数。</p>
@@ -5664,7 +5739,7 @@ padding/变长批次是另一层接口契约，不能把这个限制忘掉后套
 <p>第一行分子是 10+40+90+160=300，除以 10 得 30；第二行再加
 250，550/15≈36.666667。错误的小矩形下三角会分别得到 10 和
 50/3≈16.666667。这张表由脚本手算函数与测试核对，不用生成句子的表面效果来掩盖错误。</p>
-<h2 id="证明-s0-与-s1-等价要比较什么">11.5 证明 S0 与 S1
+<h2 id="p11.5-证明-s0-与-s1-等价要比较什么">P11.5 证明 S0 与 S1
 等价，要比较什么</h2>
 <p>对同一个 eval 模型与同一串 ID，先完整前向取得 <code>[B,T,57]</code>
 的参考 logits，再分块调用缓存路径，将新块 logits
@@ -5688,8 +5763,8 @@ batch/层数/头维、不同模型或更新权重后的旧缓存。</li>
 的容器不可重赋字段，但其中的张量仍可被调用者修改。因此约定缓存张量只读，不承诺
 Python 的 frozen dataclass 能深度冻结 Tensor。它不是持久化
 checkpoint，也不要跨模型、跨参数更新复用。</p>
-<h2 id="用空间换计算先算真实-kv-负担">11.6 用空间换计算：先算真实 K/V
-负担</h2>
+<h2 id="p11.6-用空间换计算先算真实-kv-负担">P11.6 用空间换计算：先算真实
+K/V 负担</h2>
 <p>MHA 有 L 层，batch 为 B，缓存 T 个 token，H 个头，每头 d
 个数，每个元素 s 字节，则：</p>
 <p><span class="math display">\[M_{KV}=2LBHTds=2LBTDs\]</span></p>
@@ -5733,7 +5808,7 @@ K/V；缓存不把任意长注意力变成与历史长度无关的常数成本�
 头数，量化会改变元素存储，分页会改变分配策略；都不在 S1 实现。这里用 MHA
 的 H 直接计算，只把后续主题留作路线，不能用本章数字声称完成了
 PagedAttention。[来源 2]</p>
-<h2 id="长度重置与批处理的诚实边界">11.7
+<h2 id="p11.7-长度重置与批处理的诚实边界">P11.7
 长度、重置与批处理的诚实边界</h2>
 <p>S0 的旧 <code>generate</code> 超长后保留最后 128 字、重置位置编号。S1
 <strong>拒绝超过容量</strong>：只删掉最老 K/V
@@ -5746,8 +5821,8 @@ S0 一样没有 EOS，按预算停止。</p>
 <p>批量实验只支持同长、无 padding 的 B 个请求，位置从 0
 开始对齐。若要把长短不一的用户请求动态加入/退出，需要分别记录有效长度、注意力可见性与缓存所有权，本教学实现没有做到。对不同
 batch 直接复用旧 cache 会报错，不会替你猜如何重排请求。</p>
-<h2 id="计时首-token-与后续-token-分开记">11.8 计时：首 token 与后续
-token 分开记</h2>
+<h2 id="p11.8-计时首-token-与后续-token-分开记">P11.8 计时：首 token
+与后续 token 分开记</h2>
 <div class="sourceCode" id="cb74"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python3</span> code/12_kv_cache.py</span>
 <span id="cb74-2"><a href="#cb74-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_kv_cache.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
@@ -5770,7 +5845,7 @@ min/median/max。</li>
 Python 验证、<code>cat</code>
 和分配可能抵消省下的计算，缓存不保证在这个微型 CPU
 例子里更快。正确的优化报告应同时列出两条路径和计时范围，而不是只挑最漂亮的一次。</p>
-<h2 id="先预测再看答案-1">11.9 先预测，再看答案</h2>
+<h2 id="p11.9-先预测再看答案">P11.9 先预测，再看答案</h2>
 <ol type="1">
 <li>P=3、C=2 时 scores 的最后两维是什么？第二个新 query 能看几个
 key？</li>
@@ -5820,6 +5895,12 @@ PagedAttention</a>，§2–3：KV cache
 称为 PagedAttention。</li>
 <li><a href="code/07_baby_gpt.py">code/07_baby_gpt.py</a> 与 <a
 href="code/12_kv_cache.py">code/12_kv_cache.py</a>：本章形状、容量策略、计时范围及可运行数值的直接依据。</li>
+<li>大纲 S15 的 <a
+href="https://docs.vllm.ai/en/latest/design/paged_attention/">vLLM Paged
+Attention 设计文档</a>（动态文档，访问核验日
+2026-10-19）仅作后续服务实现导航。本章不依赖
+vLLM、没有运行其内核，也未实现分页缓存；本地 S1
+的行为以配套脚本为准。</li>
 </ol>
 <hr />
 <h1 id="第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典

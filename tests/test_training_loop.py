@@ -121,7 +121,14 @@ class TensorTrainingTests(unittest.TestCase):
         model = base.BabyGPT(base.vocab_size, d_model=8, num_heads=2, num_layers=1, max_seq_len=32)
         snapshot = [p.detach().clone() for p in model.parameters()]
         model.train()
-        self.assertTrue(math.isfinite(loop.evaluate(model, base.poems, base.encode)))
+        observations = []
+        handle = model.register_forward_pre_hook(
+            lambda module, args: observations.append((module.training, torch.is_grad_enabled())))
+        try:
+            self.assertTrue(math.isfinite(loop.evaluate(model, base.poems, base.encode)))
+        finally:
+            handle.remove()
+        self.assertEqual(observations, [(False, False)] * len(base.poems))
         self.assertTrue(model.training)
         self.assertTrue(all(p.grad is None for p in model.parameters()))
         for p, old in zip(model.parameters(), snapshot):
@@ -141,12 +148,71 @@ class TensorTrainingTests(unittest.TestCase):
         dropout.eval()
         self.assertEqual(float(dropout(torch.ones(4)).sum()), 4.)
 
+    def test_evaluate_unequal_documents_token_weighted(self):
+        # A controlled forward emits loss 1 for one target and 4 for four targets.
+        # Correct token mean=(1*1+4*4)/5=3.4; incorrect document mean=2.5.
+        class LengthLoss(torch.nn.Module):
+            def forward(self, x, y):
+                return None, torch.tensor(float(y.numel()))
+        actual = loop.evaluate(LengthLoss(), ['ab', 'abcde'], lambda doc: list(range(len(doc))))
+        self.assertAlmostEqual(actual, 17 / 5, places=12)
+        self.assertNotAlmostEqual(actual, (1 + 4) / 2, places=6)
+
+    def test_strata_use_labels_not_all_input_characters(self):
+        class UniformScores(torch.nn.Module):
+            def forward(self, x):
+                return torch.zeros((*x.shape, 2)), None
+        groups = loop.evaluate_strata(UniformScores(), ['BA'],
+                                     lambda doc: [ord(ch) - ord('A') for ch in doc], ['AB'])
+        # A occurs in training INPUT, but only B is a training LABEL.
+        self.assertEqual(groups['seen'], {'count': 0, 'loss_sum': 0., 'loss': None})
+        self.assertEqual(groups['unseen']['count'], 1)
+        self.assertAlmostEqual(groups['unseen']['loss'], math.log(2), places=7)
+
+    def test_40_step_snapshots_and_label_strata(self):
+        # Independent review reference, six decimals. 1e-6 allows a float32 ULP
+        # plus rounding across CPU environments; default AdamW lr=.001 is far away.
+        expected = {
+            7: (4.280819, 4.219313, 3.175501, 4.494203, 4.843005,
+                4.266185, 3.506729, 4.542207, 5.124327),
+            11: (4.219005, 4.189975, 3.263426, 3.923873, 4.397414,
+                 4.072877, 3.441714, 3.892503, 4.598613),
+        }
+        base = loop.load_baseline()
+        train_labels = set(''.join(doc[1:] for doc in base.poems[:2]))
+        heldout_labels = base.poems[2][1:]
+        shared = [ch for ch in heldout_labels if ch in train_labels]
+        self.assertEqual(sorted(shared), sorted('，，。。'))
+        self.assertEqual(len(heldout_labels), 23)
+        self.assertEqual(sum(ch not in train_labels for ch in heldout_labels), 19)
+        for seed, reference in expected.items():
+            with self.subTest(seed=seed):
+                result = loop.run_cpu(seed, 40)
+                self.assertEqual(result['lr'], .003)
+                before, after = result['before'], result['after']
+                b, a = before['heldout_strata'], after['heldout_strata']
+                values = (result['first_loss'], before['train'], after['train'],
+                          before['heldout'], after['heldout'], b['seen']['loss'],
+                          a['seen']['loss'], b['unseen']['loss'], a['unseen']['loss'])
+                for value, wanted in zip(values, reference):
+                    self.assertAlmostEqual(value, wanted, delta=1e-6)
+                self.assertLess(a['seen']['loss'], b['seen']['loss'])
+                self.assertGreater(a['unseen']['loss'], b['unseen']['loss'])
+                for report in (before, after):
+                    groups = report['heldout_strata']
+                    self.assertEqual(groups['seen']['count'], 4)
+                    self.assertEqual(groups['unseen']['count'], 19)
+                    recombined = sum(g['count'] * g['loss'] for g in groups.values()) / 23
+                    self.assertAlmostEqual(recombined, report['heldout'], delta=1e-6)
+                    for group in groups.values():
+                        self.assertAlmostEqual(group['count'] * group['loss'], group['loss_sum'], places=10)
+
     def test_fixed_seed_repeat_and_heldout_report(self):
         first, repeated = loop.run_cpu(7, 4), loop.run_cpu(7, 4)
         self.assertEqual(first, repeated)
         self.assertEqual(first['logits_shape'][:2], (4, 8))
         self.assertEqual(first['heldout_documents'], 1)
-        self.assertTrue(all(math.isfinite(v) for v in first['after'].values()))
+        self.assertTrue(all(math.isfinite(first['after'][key]) for key in ('train', 'heldout')))
         other = loop.run_cpu(11, 4)
         self.assertNotEqual(first['first_loss'], other['first_loss'])
 

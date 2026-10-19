@@ -24,7 +24,7 @@
 - **尚未按扩展大纲实现**：P12–P28；旧第 9–10 章仍保留可读，但不代表新专题已完成。
 - **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE；每批审核后才继续，不把路线图当成已有功能。
 
-为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)与[第三批记录](docs/batch3-validation.md)。
+为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)与[第四批记录](docs/batch4-validation.md)。
 
 ## 📖 当前版本目录导航
 
@@ -49,7 +49,7 @@
 
 ---
 
-## 💻 10 个配套代码实验（含 1 个选修）
+## 💻 12 个配套代码实验（含 1 个选修）
 
 历史第二批验证了当时的 9 个编号示例；当前共有 12 个，最新执行环境与结果见[第四批记录](docs/batch4-validation.md)。
 

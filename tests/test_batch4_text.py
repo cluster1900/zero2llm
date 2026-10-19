@@ -18,6 +18,19 @@ class Batch4TextTests(unittest.TestCase):
             self.assertIn('参考答案',body)
             self.assertIn('../code/',body)
 
+    def test_progress_and_inserted_unit_numbering(self):
+        previous = (ROOT/'chapters/07_encoder_decoder.md').read_text()
+        self.assertIn('下一单元 P09', previous)
+        self.assertNotIn('训练闭环与评估章节将另批完成', previous)
+        readme = (ROOT/'README.md').read_text()
+        self.assertIn('12 个配套代码实验', readme)
+        self.assertIn('[第四批记录](docs/batch4-validation.md)', readme)
+        for filename, prefix in [('07a_training_loop.md', 'P09'), ('08a_kv_cache.md', 'P11')]:
+            headings = re.findall(r'^## (.+)$', (ROOT/'chapters'/filename).read_text(), re.M)
+            numbered = [h for h in headings if re.match(r'(?:P\d+\.\d+|\d+\.)\s', h)]
+            self.assertTrue(numbered)
+            self.assertTrue(all(h.startswith(prefix + '.') for h in numbered))
+
     def test_p10_parameter_ledger_arithmetic(self):
         rows = [57*48,128*48,2*(4*48**2+(48*192+192+192*48+48)+4*48),2*48,48*57]
         self.assertEqual(sum(rows),67872)

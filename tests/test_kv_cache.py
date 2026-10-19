@@ -2,6 +2,8 @@
 import importlib.util
 from pathlib import Path
 import sys
+import subprocess
+import types
 import unittest
 from unittest.mock import patch
 from torch_test_support import torch_status, torch_reason
@@ -13,6 +15,36 @@ if READY:
     kv = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = kv
     spec.loader.exec_module(kv)
+
+
+class CacheCLITests(unittest.TestCase):
+    def test_missing_torch_cli_is_concise_and_import_still_raises(self):
+        script = Path(__file__).resolve().parents[1] / 'code/12_kv_cache.py'
+        # Simulate absent torch even inside the provisioned test environment.
+        blocker = """
+import builtins, runpy, sys
+original = builtins.__import__
+def guarded(name, *args, **kwargs):
+    if name == 'torch':
+        raise ModuleNotFoundError("No module named 'torch'", name='torch')
+    return original(name, *args, **kwargs)
+builtins.__import__ = guarded
+"""
+        result = subprocess.run([sys.executable, '-c', blocker +
+            "runpy.run_path(sys.argv[1], run_name='__main__')", str(script)],
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('python -m pip install -r requirements.txt', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        imported = subprocess.run([sys.executable, '-c', blocker + """
+try:
+    runpy.run_path(sys.argv[1], run_name='cache_without_torch')
+except ModuleNotFoundError as exc:
+    assert exc.name == 'torch'
+else:
+    raise AssertionError('import should report missing dependency')
+""", str(script)], capture_output=True, text=True)
+        self.assertEqual(imported.returncode, 0, imported.stderr)
 
 
 @unittest.skipUnless(READY, torch_reason('P11', VERSION, PRESENT))
@@ -75,6 +107,26 @@ class CacheTests(unittest.TestCase):
         kv.generate_cached(self.model,second[:,:3],4)
         self.assertTrue(torch.equal(a,kv.generate_cached(self.model,self.tokens[:,:3],4)))
 
+    def test_generation_forward_call_budget(self):
+        for budget in (0, 1, 2, 5):
+            with self.subTest(budget=budget):
+                with patch.object(kv, 'cached_forward', wraps=kv.cached_forward) as forward:
+                    output = kv.generate_cached(self.model, self.tokens[:, :3], budget)
+                self.assertEqual(forward.call_count, budget)
+                self.assertEqual(output.shape, (2, 3 + budget))
+                if budget:
+                    self.assertEqual(forward.call_args_list[0].args[1].shape, (2, 3))
+                    for call in forward.call_args_list[1:]:
+                        self.assertEqual(call.args[1].shape, (2, 1))
+
+    def assert_cache_value_error(self, cache, message):
+        # A downstream RuntimeError is not the documented validation contract.
+        try:
+            with self.assertRaisesRegex(ValueError, message):
+                kv.cached_forward(self.model, self.tokens[:, 4:5], cache)
+        except (RuntimeError, TypeError, IndexError) as exc:
+            self.fail(f"expected ValueError matching {message!r}, got {type(exc).__name__}: {exc}")
+
     def test_greedy_matches_uncached_loop(self):
         expected = self.tokens[:,:3].clone()
         for _ in range(5):
@@ -123,13 +175,11 @@ class CacheTests(unittest.TestCase):
         for layers, message in cases:
             with self.subTest(message=message, layers=len(layers)):
                 malformed = kv.KVCache(layers, self.model, cache.versions)
-                with self.assertRaisesRegex(ValueError, message):
-                    kv.cached_forward(self.model, self.tokens[:, 4:5], malformed)
+                self.assert_cache_value_error(malformed, message)
         # Same-shaped tensors on another device must fail before attention.
         malformed = kv.KVCache(((k.to('meta'), v.to('meta')), cache.layers[1]),
                                self.model, cache.versions)
-        with self.assertRaisesRegex(ValueError, 'dtype/device'):
-            kv.cached_forward(self.model, self.tokens[:, 4:5], malformed)
+        self.assert_cache_value_error(malformed, 'dtype/device')
 
     def test_boundaries_and_foreign_stale_cache(self):
         _,cache = kv.cached_forward(self.model,self.tokens)
@@ -176,6 +226,29 @@ class CacheTests(unittest.TestCase):
             _,cache = scope['cached_forward'](self.model,self.tokens[:,:4])
             mutated,_ = scope['cached_forward'](self.model,self.tokens[:,4:8],cache)
             self.assertGreater((reference-mutated).abs().max().item(),1e-3)
+
+    def test_call_budget_and_dtype_guard_mutations_are_assertion_failures(self):
+        source = Path(kv.__file__).read_text()
+        guard = """            if any(t.device != model.tok_emb.weight.device or
+                   t.dtype != model.tok_emb.weight.dtype for t in (k, v)):
+                raise ValueError("cache dtype/device mismatch; reset cache")"""
+        mutations = [
+            ('if step + 1 < max_new_tokens:', 'if step < max_new_tokens:',
+             'test_generation_forward_call_budget'),
+            (guard, '', 'test_malformed_cache_structure_shape_and_dtype'),
+        ]
+        for old, new, test_name in mutations:
+            self.assertIn(old, source)
+            mutant = types.ModuleType('cache_mutant')
+            mutant.__dict__.update(kv.__dict__)
+            # Execute into the same mapping patched by patch.object so the
+            # generation function's global cached_forward sees the call spy.
+            exec(compile(source.replace(old, new), kv.__file__, 'exec'), mutant.__dict__)
+            result = unittest.TestResult()
+            with patch.dict(globals(), {'kv': mutant}):
+                CacheTests(test_name).run(result)
+            self.assertGreater(len(result.failures), 0, test_name)
+            self.assertEqual(result.errors, [], test_name)
 
     def test_benchmark_smoke_and_contract(self):
         result = kv.benchmark(self.model,self.tokens,prompt_length=4,repeats=2,warmup=1)

@@ -11,7 +11,13 @@ import sys
 import time
 from dataclasses import dataclass
 
-import torch
+try:
+    import torch
+except ModuleNotFoundError as exc:
+    if __name__ == "__main__" and exc.name == "torch":
+        print("P11 requires PyTorch. Install dependencies: python -m pip install -r requirements.txt", file=sys.stderr)
+        raise SystemExit(2) from None
+    raise
 
 # Numeric filenames are loaded once under a stable module name.
 _NAME = "zero2llm_s0"

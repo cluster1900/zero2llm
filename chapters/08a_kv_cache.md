@@ -4,7 +4,7 @@
 
 配套 [code/12_kv_cache.py](../code/12_kv_cache.py) 直接使用 S0 的模型模块，不另训一份近似模型。实验是 CPU、float32、无 dropout、eval 模式；不下载权重，不用 GPU。
 
-## 11.1 重算发生在哪里
+## P11.1 重算发生在哪里
 
 假设提示有“床前”两个字符。S0 先计算这两个位置，再选出“明”；下一轮把“床前明”三个位置全部送进模型，先前“床”“前”的计算又做一次。
 
@@ -21,7 +21,7 @@ S1：床 前          → prefill，存各层 K/V → 选 明
 
 可以把它比作保存已经整理好的借阅索引，下一次只补新条目。类比的边界是：真实缓存不是保存自然语言摘要，也不是模型长期记忆；它保存的是当前请求、当前参数与位置下的浮点张量。缓存本身不会让模型学会新的事实。
 
-## 11.2 Prefill 与 decode，首字到底从哪来
+## P11.2 Prefill 与 decode，首字到底从哪来
 
 **Prefill** 一次处理提示，建立每一层的 K/V。提示最后一个位置的 logits 已经能选出第一个新 token；不用先把这个尚未选出的 token 输入模型。
 
@@ -39,7 +39,7 @@ new_logits, cache = cached_forward(model, next_ids, cache)
 
 这里的片段是调用顺序，完整可运行示例在源码。`cached_forward` 不选 token，只返回当前新块的 logits；`generate_cached` 才负责选择与循环。它每次调用从空缓存开始，防止第二个请求误接在第一个请求后面。
 
-## 11.3 逐层形状与位置偏移
+## P11.3 逐层形状与位置偏移
 
 设已有 P 个位置，本次新输入 C 个位置；头数 H，每头宽度 d，主干宽度 D=H×d。
 
@@ -64,11 +64,11 @@ x = model.tok_emb(idx) + model.pos_emb(pos)
 
 这里 T 是本次新块长度，`offset` 是缓存长度。旧位置向量已经进入旧 K/V 的计算，不应给旧缓存再加一次位置向量。参数表最大 128 行，索引只能是 0–127。
 
-## 11.4 矩形 mask：最容易写错的两行
+## P11.4 矩形 mask：最容易写错的两行
 
 把提示分块计算，或者一次追加两个 token，同样必须阻止本块早位置看到本块未来。P=3、C=2 时，新 query 的绝对位置是 3、4，key 的位置是 0–4。可见规则仍是 **key_position ≤ query_position**。
 
-### 表 11-1：三格历史加两格新输入
+### 表 P11-1：三格历史加两格新输入
 
 | 新 query 位置 | key 0 | key 1 | key 2 | key 3 | key 4 |
 | --- | --- | --- | --- | --- | --- |
@@ -87,7 +87,7 @@ weights = scores.masked_fill(~allowed, float("-inf")).softmax(dim=-1)
 
 这是源码片段，`True` 表示允许；先填负无穷，再 Softmax。本实现不接受空块，也不提供 padding，因此每行至少有自己可见，不会产生全 mask 行。带 padding/变长批次是另一层接口契约，不能把这个限制忘掉后套到任意批次。
 
-### 表 11-2：把可见性变成可手算的输出
+### 表 P11-2：把可见性变成可手算的输出
 
 暂时只看一个头，让两行 scores 都是 `[ln1,ln2,ln3,ln4,ln5]`，五个标量 V 是 `[10,20,30,40,50]`。这些是独立手算输入，不是随机模型碰巧得到的分数。
 
@@ -98,7 +98,7 @@ weights = scores.masked_fill(~allowed, float("-inf")).softmax(dim=-1)
 
 第一行分子是 10+40+90+160=300，除以 10 得 30；第二行再加 250，550/15≈36.666667。错误的小矩形下三角会分别得到 10 和 50/3≈16.666667。这张表由脚本手算函数与测试核对，不用生成句子的表面效果来掩盖错误。
 
-## 11.5 证明 S0 与 S1 等价，要比较什么
+## P11.5 证明 S0 与 S1 等价，要比较什么
 
 对同一个 eval 模型与同一串 ID，先完整前向取得 `[B,T,57]` 的参考 logits，再分块调用缓存路径，将新块 logits 沿时间拼起来。比较的是每个位置的每个词表项，而不是仅比较选出的 token。
 
@@ -114,7 +114,7 @@ float32 的运算顺序可能因为矩阵大小不同而有微小舍入差；测
 
 `KVCache` 的容器不可重赋字段，但其中的张量仍可被调用者修改。因此约定缓存张量只读，不承诺 Python 的 frozen dataclass 能深度冻结 Tensor。它不是持久化 checkpoint，也不要跨模型、跨参数更新复用。
 
-## 11.6 用空间换计算：先算真实 K/V 负担
+## P11.6 用空间换计算：先算真实 K/V 负担
 
 MHA 有 L 层，batch 为 B，缓存 T 个 token，H 个头，每头 d 个数，每个元素 s 字节，则：
 
@@ -134,7 +134,7 @@ S1 用 `torch.cat` 动态增长，旧新张量可能在某一瞬间同时存在�
 
 GQA/MQA 会改变 KV 头数，量化会改变元素存储，分页会改变分配策略；都不在 S1 实现。这里用 MHA 的 H 直接计算，只把后续主题留作路线，不能用本章数字声称完成了 PagedAttention。[来源 2]
 
-## 11.7 长度、重置与批处理的诚实边界
+## P11.7 长度、重置与批处理的诚实边界
 
 S0 的旧 `generate` 超长后保留最后 128 字、重置位置编号。S1 **拒绝超过容量**：只删掉最老 K/V 并不能重现这种重编号，因为保留下来的 K/V 已含旧位置与旧上下文影响。需要新的窗口语义和重算策略才能比较，不能静默丢缓存就声称等价。
 
@@ -142,7 +142,7 @@ S0 的旧 `generate` 超长后保留最后 128 字、重置位置编号。S1 **�
 
 批量实验只支持同长、无 padding 的 B 个请求，位置从 0 开始对齐。若要把长短不一的用户请求动态加入/退出，需要分别记录有效长度、注意力可见性与缓存所有权，本教学实现没有做到。对不同 batch 直接复用旧 cache 会报错，不会替你猜如何重排请求。
 
-## 11.8 计时：首 token 与后续 token 分开记
+## P11.8 计时：首 token 与后续 token 分开记
 
 ```bash
 OMP_NUM_THREADS=1 python3 code/12_kv_cache.py
@@ -158,7 +158,7 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 
 本机测量值和版本见本批验证记录；每次运行都会重新打印，不将抖动的毫秒数写成单元测试常数。小矩阵下 Python 验证、`cat` 和分配可能抵消省下的计算，缓存不保证在这个微型 CPU 例子里更快。正确的优化报告应同时列出两条路径和计时范围，而不是只挑最漂亮的一次。
 
-## 11.9 先预测，再看答案
+## P11.9 先预测，再看答案
 
 1. P=3、C=2 时 scores 的最后两维是什么？第二个新 query 能看几个 key？
 2. 已缓存 5 个 token，下一块 2 个 token 的位置编号是什么？可以重新从 0 开始吗？
@@ -185,3 +185,4 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 1. [Transformers 4.57.1 Caching](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：逐层 K/V、增量计算、cache position 与组合注意力 mask；只在推理使用缓存的边界。
 2. Kwon 等，[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，§2–3：KV cache 与服务内存管理动机。分页和连续批处理留给后续，不将本地 `cat` 称为 PagedAttention。
 3. [code/07_baby_gpt.py](../code/07_baby_gpt.py) 与 [code/12_kv_cache.py](../code/12_kv_cache.py)：本章形状、容量策略、计时范围及可运行数值的直接依据。
+4. 大纲 S15 的 [vLLM Paged Attention 设计文档](https://docs.vllm.ai/en/latest/design/paged_attention/)（动态文档，访问核验日 2026-10-19）仅作后续服务实现导航。本章不依赖 vLLM、没有运行其内核，也未实现分页缓存；本地 S1 的行为以配套脚本为准。

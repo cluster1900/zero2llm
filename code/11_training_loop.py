@@ -122,6 +122,36 @@ def evaluate(model, documents, encode):
     return total / count
 
 
+def evaluate_strata(model, documents, encode, train_documents):
+    """Partition heldout target positions by TRAIN LABEL membership, not vocabulary.
+
+    Counts are token occurrences, not unique characters. Empty strata have no mean.
+    """
+    torch = require_torch()
+    seen_labels = {token for doc in train_documents for token in encode(doc)[1:]}
+    groups = {name: {'count': 0, 'loss_sum': 0.} for name in ('seen', 'unseen')}
+    previous = model.training
+    model.eval()
+    try:
+        with torch.no_grad():
+            for document in documents:
+                ids = encode(document)
+                x = torch.tensor([ids[:-1]], dtype=torch.long)
+                y = torch.tensor(ids[1:], dtype=torch.long)
+                logits, _ = model(x)
+                losses = torch.nn.functional.cross_entropy(
+                    logits.reshape(-1, logits.shape[-1]), y, reduction='none')
+                for target, loss in zip(y.tolist(), losses.tolist()):
+                    group = groups['seen' if target in seen_labels else 'unseen']
+                    group['count'] += 1
+                    group['loss_sum'] += loss
+    finally:
+        model.train(previous)
+    for group in groups.values():
+        group['loss'] = group['loss_sum'] / group['count'] if group['count'] else None
+    return groups
+
+
 def run_cpu(seed=7, steps=40):
     if steps < 0:
         raise ValueError('steps must be nonnegative')
@@ -138,7 +168,8 @@ def run_cpu(seed=7, steps=40):
                          num_layers=1, max_seq_len=32).cpu()
     optimizer = torch.optim.AdamW(model.parameters(), lr=.003)
     before = dict(train=evaluate(model, train, base.encode),
-                  heldout=evaluate(model, heldout, base.encode))
+                  heldout=evaluate(model, heldout, base.encode),
+                  heldout_strata=evaluate_strata(model, heldout, base.encode, train))
     first_loss, shape = None, None
     for step in range(steps):
         xs, ys = [], []
@@ -153,12 +184,13 @@ def run_cpu(seed=7, steps=40):
         if step == 0:
             first_loss = loss
     after = dict(train=evaluate(model, train, base.encode),
-                 heldout=evaluate(model, heldout, base.encode))
+                 heldout=evaluate(model, heldout, base.encode),
+                  heldout_strata=evaluate_strata(model, heldout, base.encode, train))
     return dict(seed=seed, steps=steps, device='cpu', torch=torch.__version__,
-                threads=1, batch_size=4, sequence_length=8, first_loss=first_loss,
+                threads=1, batch_size=4, sequence_length=8, lr=optimizer.param_groups[0]['lr'], first_loss=first_loss,
                 logits_shape=shape, before=before, after=after,
                 train_documents=2, heldout_documents=1,
-                caveat='Full-corpus vocabulary is transductive; one heldout poem is noisy, not general language ability')
+                caveat='Full-corpus vocabulary is transductive; heldout label-distribution mismatch does not demonstrate overfitting or general language ability')
 
 
 def main():
