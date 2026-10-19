@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="650" viewBox="0 0 920 650" role="img" aria-labelledby="p15-title p15-desc">
+  <title id="p15-title">注意力服务的三个层次：计算、存储、调度</title>
+  <desc id="p15-desc">上层以分块在线 Softmax 保留全部可见键；中层两个请求共享物理块零，分叉写入时只复制未满尾块；下层连续批处理在 A 完成后让 C 加入。图示是 CPU 教学机制，不是 GPU 性能测试。</desc>
+  <defs>
+    <marker id="p15-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7" fill="#64748b"/></marker>
+    <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#172033}.title{font-size:21px;font-weight:700}.label{font-size:17px}.small{font-size:15px}.line{stroke:#64748b;stroke-width:2;fill:none;marker-end:url(#p15-arrow)}</style>
+  </defs>
+  <rect x="1" y="1" width="918" height="648" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="460" y="35" text-anchor="middle" class="title">模型不变，分别回答三个系统问题</text>
+  <rect x="20" y="54" width="880" height="160" rx="12" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="40" y="85" class="title">① 计算 kernel：怎样少搬运中间结果？</text>
+  <g text-anchor="middle" class="label">
+    <rect x="45" y="104" width="220" height="52" rx="8" fill="#dbeafe" stroke="#60a5fa"/>
+    <text x="155" y="136">逐块读取 Q / K / V</text>
+    <path class="line" d="M265 130H323"/>
+    <rect x="330" y="104" width="250" height="52" rx="8" fill="#fff" stroke="#60a5fa"/>
+    <text x="455" y="136">更新最大值、分母、分子</text>
+    <path class="line" d="M580 130H638"/>
+    <rect x="645" y="104" width="225" height="52" rx="8" fill="#dbeafe" stroke="#60a5fa"/>
+    <text x="757" y="136">最后统一归一化</text>
+    <text x="460" y="190" class="small">不丢可见键；新最大值变大时，旧分母和旧分子必须一起重缩放。</text>
+  </g>
+  <rect x="20" y="229" width="880" height="204" rx="12" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="40" y="260" class="title">② KV 内存：逻辑连续，物理块不必连续</text>
+  <g class="label">
+    <text x="45" y="299">请求 A：块表 [0, 1]</text>
+    <text x="45" y="345">请求 B：块表 [0, 2]</text>
+    <path class="line" d="M240 293L326 311"/>
+    <path class="line" d="M240 339L326 311"/>
+  </g>
+  <g text-anchor="middle" class="label">
+    <rect x="335" y="280" width="155" height="76" rx="8" fill="#dcfce7" stroke="#4ade80"/>
+    <text x="412" y="307">物理块 0</text><text x="412" y="337">[10, 20]</text>
+    <rect x="515" y="280" width="155" height="76" rx="8" fill="#fff" stroke="#86efac"/>
+    <text x="592" y="307">物理块 1</text><text x="592" y="337">[30, 空]</text>
+    <rect x="695" y="280" width="180" height="76" rx="8" fill="#fef3c7" stroke="#fbbf24"/>
+    <text x="785" y="307">物理块 2</text><text x="785" y="337">[30, 40]</text>
+    <text x="412" y="381" class="small">引用计数 2，共享只读</text>
+    <text x="592" y="381" class="small">引用计数 1，A 的尾块</text>
+    <text x="785" y="381" class="small">引用计数 1，B 写时复制</text>
+    <text x="460" y="412" class="small">块大小为 2；图中数字代表 token 的 KV 载荷，不是 token ID 的真实缓存。</text>
+  </g>
+  <rect x="20" y="448" width="880" height="180" rx="12" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="40" y="480" class="title">③ 请求调度：每轮结束后重新安排空位</text>
+  <g text-anchor="middle" class="label">
+    <text x="115" y="521">每轮 10 ms</text>
+    <text x="302" y="517">0–10</text><text x="462" y="517">10–20</text><text x="622" y="517">20–30</text><text x="782" y="517">30–40</text>
+    <rect x="240" y="529" width="125" height="42" rx="7" fill="#dbeafe"/><text x="302" y="556">A + B</text>
+    <rect x="400" y="529" width="125" height="42" rx="7" fill="#dbeafe"/><text x="462" y="556">A + B</text>
+    <rect x="560" y="529" width="125" height="42" rx="7" fill="#dcfce7"/><text x="622" y="556">C + B</text>
+    <rect x="720" y="529" width="125" height="42" rx="7" fill="#dcfce7"/><text x="782" y="556">C + B</text>
+    <text x="115" y="557">双槽位解码</text>
+    <text x="460" y="604" class="small">A 在 20 ms 完成，C 接替空位；轮时固定、已预填充都是教学假设，不是实测速率。</text>
+  </g>
+</svg>

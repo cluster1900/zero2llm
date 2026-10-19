@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="660" viewBox="0 0 980 660" role="img" aria-labelledby="p17-title p17-desc">
+  <title id="p17-title">CED 教学模型的 global 与 local KV 来源不同</title>
+  <desc id="p17-desc">左侧因果 encoder 将全部六个输入向量变成最终表示 E，中间用 E 为每个 decoder 层投影 global K 和 V。右侧每个 decoder 层则从自身输入产生 Q 和 local K 与 V。下方对比完整 decoder 处理零到五位置和有界 replay 只处理三到五位置，后者仍读取完整的因果 global bank，但局部状态是近似。</desc>
+  <defs>
+    <marker id="p17-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#475569"/></marker>
+    <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#172033}.title{font-size:21px;font-weight:700}.label{font-size:17px}.small{font-size:15px}.line{stroke:#475569;stroke-width:2;fill:none;marker-end:url(#p17-arrow)}</style>
+  </defs>
+  <rect x="1" y="1" width="978" height="658" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="490" y="35" text-anchor="middle" class="title">CED：先问 KV 从哪里来，再问少算哪些位置</text>
+  <rect x="20" y="56" width="270" height="365" rx="12" fill="#eff6ff" stroke="#bfdbfe"/>
+  <rect x="315" y="56" width="300" height="365" rx="12" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <rect x="640" y="56" width="320" height="365" rx="12" fill="#fff7ed" stroke="#fed7aa"/>
+  <g text-anchor="middle">
+    <text x="155" y="85" class="label" font-weight="700">全部输入都经过 encoder</text>
+    <rect x="50" y="104" width="210" height="44" rx="7" fill="#fff" stroke="#94a3b8"/>
+    <text x="155" y="132" class="label">输入向量 [1,6,2]</text>
+    <path class="line" d="M155 148V180"/>
+    <rect x="50" y="183" width="210" height="70" rx="7" fill="#dbeafe" stroke="#60a5fa"/>
+    <text x="155" y="210" class="label">因果 encoder：2 层</text>
+    <text x="155" y="236" class="small">每层只看过去与当前</text>
+    <path class="line" d="M155 253V294"/>
+    <rect x="50" y="297" width="210" height="65" rx="7" fill="#bfdbfe" stroke="#3b82f6"/>
+    <text x="155" y="323" class="label">最终表示 E</text>
+    <text x="155" y="347" class="small">[1,6,2]，覆盖位置 0…5</text>
+    <text x="155" y="394" class="small">本实验不截断 encoder</text>
+
+    <text x="465" y="85" class="label" font-weight="700">global KV 的来源是 E</text>
+    <text x="465" y="128" class="label">先投影，再供上层读取</text>
+    <text x="465" y="166" class="small">不是从 decoder 当前 h 生成</text>
+    <text x="465" y="202" class="small">bank 可先备好，但读取仍因果</text>
+    <path class="line" d="M260 330H345"/>
+    <rect x="348" y="289" width="234" height="82" rx="7" fill="#dcfce7" stroke="#4ade80"/>
+    <text x="465" y="318" class="label">global K/V 投影</text>
+    <text x="465" y="346" class="small">每个 decoder 层各 [1,6,2]</text>
+    <text x="465" y="394" class="small">教学版本：不压缩、不跨层共享</text>
+
+    <text x="800" y="85" class="label" font-weight="700">每个 decoder 层</text>
+    <rect x="675" y="104" width="250" height="44" rx="7" fill="#fff" stroke="#94a3b8"/>
+    <text x="800" y="132" class="label">本层输入 h</text>
+    <path class="line" d="M800 148V180"/>
+    <rect x="675" y="183" width="250" height="70" rx="7" fill="#ffedd5" stroke="#fb923c"/>
+    <text x="800" y="210" class="label">本层 Q 与 local K/V</text>
+    <text x="800" y="236" class="small">局部窗口包含当前位置</text>
+    <path class="line" d="M800 253V294"/>
+    <path class="line" d="M582 330H670"/>
+    <rect x="675" y="297" width="250" height="65" rx="7" fill="#fed7aa" stroke="#f97316"/>
+    <text x="800" y="323" class="label">读取两路 KV，更新 h</text>
+    <text x="800" y="347" class="small">然后进入下一个 decoder 层</text>
+    <text x="800" y="394" class="small">local KV 随本层处理而改变</text>
+  </g>
+  <rect x="20" y="438" width="940" height="157" rx="12" fill="#fff" stroke="#cbd5e1"/>
+  <text x="44" y="469" class="label" font-weight="700">同一模型的两条 prefill 路径：N = 6，W = 3</text>
+  <g text-anchor="middle" class="label">
+    <text x="165" y="512">完整 decoder</text>
+    <text x="165" y="557">有界 replay</text>
+    <g fill="#dbeafe" stroke="#60a5fa">
+      <rect x="290" y="486" width="47" height="34" rx="4"/><rect x="347" y="486" width="47" height="34" rx="4"/><rect x="404" y="486" width="47" height="34" rx="4"/><rect x="461" y="486" width="47" height="34" rx="4"/><rect x="518" y="486" width="47" height="34" rx="4"/><rect x="575" y="486" width="47" height="34" rx="4"/>
+    </g>
+    <text x="313" y="510">0</text><text x="370" y="510">1</text><text x="427" y="510">2</text><text x="484" y="510">3</text><text x="541" y="510">4</text><text x="598" y="510">5</text>
+    <g fill="#e2e8f0" stroke="#cbd5e1"><rect x="290" y="531" width="47" height="34" rx="4"/><rect x="347" y="531" width="47" height="34" rx="4"/><rect x="404" y="531" width="47" height="34" rx="4"/></g>
+    <g fill="#ffedd5" stroke="#fb923c"><rect x="461" y="531" width="47" height="34" rx="4"/><rect x="518" y="531" width="47" height="34" rx="4"/><rect x="575" y="531" width="47" height="34" rx="4"/></g>
+    <text x="313" y="555">略</text><text x="370" y="555">略</text><text x="427" y="555">略</text><text x="484" y="555">3</text><text x="541" y="555">4</text><text x="598" y="555">5</text>
+  </g>
+  <text x="650" y="511" class="small">decoder 层处理次数：12</text>
+  <text x="650" y="555" class="small">decoder 层处理次数：6</text>
+  <text x="490" y="583" text-anchor="middle" class="small">两条路径的 global bank 都含 0…5；replay 的 local 状态只是近似重建。</text>
+  <text x="490" y="622" text-anchor="middle" class="small">图示为 CPU 教学模型：两路分别 Softmax 后相加；官方实现合并 KV 做注意力。</text>
+  <text x="490" y="645" text-anchor="middle" class="small">block visits 不是 FLOPs 或速度；有界 replay 不保证与完整计算等价。</text>
+</svg>
