@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1060" viewBox="0 0 1120 1060" role="img" aria-labelledby="title desc">
+  <title id="title">S6：未来标签、贪心验证与计算预算是三个不同问题</title>
+  <desc id="desc">上部展示教学 MTP 的三个独立线性 head，从同一因果隐藏状态分别预测后一个、后两个和后三个 token。中部展示 cache 为一和二、待输入 token 为三时，草稿四、九、八被目标一次验证：接受四，拒绝九并修正为五，丢弃八；最终 cache 为一二三四，五仍待输入。下部展示固定六道竖式加法题在零到四列计算预算下分别答对零、一、三、五、六题；这是算法实验，不是语言模型能力或加速结论。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#475569"/></marker>
+    <style>
+      text { font-family: "Noto Sans CJK SC", "NotoSansCJKSC", sans-serif; fill: #183047; }
+      .title { font-size: 28px; font-weight: 700; }
+      .label { font-size: 23px; font-weight: 600; }
+      .body { font-size: 20px; }
+      .small { font-size: 18px; }
+      .arrow { stroke: #475569; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+    </style>
+  </defs>
+  <rect width="1120" height="1060" rx="20" fill="#fff"/>
+  <text x="560" y="43" text-anchor="middle" class="title">别把训练监督、生成执行和推理能力混在一起</text>
+  <text x="560" y="77" text-anchor="middle" class="body">S6 只演示机制：不复现 V3 串行 MTP、R1 训练或 DSpark</text>
+
+  <rect x="35" y="100" width="1050" height="295" rx="15" class="panel"/>
+  <text x="65" y="138" class="label">① 训练：同一位置，监督不同的未来距离</text>
+  <rect x="80" y="212" width="255" height="86" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+  <text x="207" y="246" text-anchor="middle" class="label">S5 隐藏状态 h(t)</text>
+  <text x="207" y="277" text-anchor="middle" class="body">只看 x(0) … x(t)</text>
+  <path d="M335 255H380V190H430" class="arrow"/>
+  <path d="M380 255H430" class="arrow"/>
+  <path d="M380 255V320H430" class="arrow"/>
+  <rect x="430" y="163" width="225" height="54" rx="10" fill="#eaf7f0" stroke="#22a06b" stroke-width="2"/>
+  <rect x="430" y="228" width="225" height="54" rx="10" fill="#edf2ff" stroke="#6477bf" stroke-width="2"/>
+  <rect x="430" y="293" width="225" height="54" rx="10" fill="#edf2ff" stroke="#6477bf" stroke-width="2"/>
+  <text x="542" y="198" text-anchor="middle" class="body">原主 head：h=1</text>
+  <text x="542" y="263" text-anchor="middle" class="body">旁路 head 0：h=2</text>
+  <text x="542" y="328" text-anchor="middle" class="body">旁路 head 1：h=3</text>
+  <path d="M655 190H715" class="arrow"/>
+  <path d="M655 255H715" class="arrow"/>
+  <path d="M655 320H715" class="arrow"/>
+  <text x="740" y="197" class="label">标签 x(t+1)</text>
+  <text x="740" y="262" class="label">标签 x(t+2)</text>
+  <text x="740" y="327" class="label">标签 x(t+3)</text>
+  <text x="560" y="377" text-anchor="middle" class="small">先遮住尾部、padding 与跨段标签，再分别计算 CE；辅助梯度进入主干</text>
+
+  <rect x="35" y="415" width="1050" height="335" rx="15" class="panel"/>
+  <text x="65" y="454" class="label">② 贪心验证：接受正确前缀，第一次不符就截断</text>
+  <text x="65" y="491" class="body">手算规则：下一个 ID 加 1。旧 cache=[1,2]；pending=3；草稿=[4,9,8]</text>
+  <rect x="80" y="513" width="960" height="70" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+  <text x="560" y="542" text-anchor="middle" class="label">一次 target 调用：喂入 [3,4,9,8]</text>
+  <text x="560" y="570" text-anchor="middle" class="small">第 0 行预测 4；第 1 行预测 5；后面基于错误前缀的结果不可提交</text>
+  <path d="M560 583V610" class="arrow"/>
+  <rect x="90" y="612" width="230" height="57" rx="10" fill="#eaf7f0" stroke="#22a06b" stroke-width="2"/>
+  <rect x="350" y="612" width="420" height="57" rx="10" fill="#fff8e5" stroke="#d7a22c" stroke-width="2"/>
+  <rect x="800" y="612" width="230" height="57" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+  <text x="205" y="648" text-anchor="middle" class="label">接受 4</text>
+  <text x="560" y="648" text-anchor="middle" class="label">拒绝 9 → 提交修正 5</text>
+  <text x="915" y="648" text-anchor="middle" class="label">丢弃 8</text>
+  <text x="560" y="704" text-anchor="middle" class="label">新 cache=[1,2,3,4]；新 pending=5</text>
+  <text x="560" y="733" text-anchor="middle" class="small">全接受才可取 bonus；EOS 立即停；始终为 correction／bonus 预留一个名额</text>
+
+  <rect x="35" y="770" width="1050" height="255" rx="15" class="panel"/>
+  <text x="65" y="810" class="label">③ 评估预算：计算多一列，不是多写一句话</text>
+  <path d="M100 845V965H450" stroke="#64748b" stroke-width="2" fill="none"/>
+  <path d="M100 905H420M100 845H420" stroke="#dbe3ec" stroke-width="1" fill="none"/>
+  <path d="M100 965L180 945L260 905L340 865L420 845" stroke="#0284c7" stroke-width="3" fill="none"/>
+  <g fill="#0284c7"><circle cx="100" cy="965" r="5"/><circle cx="180" cy="945" r="5"/><circle cx="260" cy="905" r="5"/><circle cx="340" cy="865" r="5"/><circle cx="420" cy="845" r="5"/></g>
+  <text x="115" y="951" class="small">0/6</text>
+  <text x="180" y="929" text-anchor="middle" class="small">1/6</text>
+  <text x="260" y="889" text-anchor="middle" class="small">3/6</text>
+  <text x="340" y="849" text-anchor="middle" class="small">5/6</text>
+  <text x="439" y="850" class="small">6/6</text>
+  <text x="100" y="991" text-anchor="middle" class="small">0</text>
+  <text x="180" y="991" text-anchor="middle" class="small">1</text>
+  <text x="260" y="991" text-anchor="middle" class="small">2</text>
+  <text x="340" y="991" text-anchor="middle" class="small">3</text>
+  <text x="420" y="991" text-anchor="middle" class="small">4</text>
+  <text x="260" y="1015" text-anchor="middle" class="small">每题允许的最多列数</text>
+  <text x="535" y="861" class="body">固定六题；逐列加法＋独立整数检查器</text>
+  <text x="535" y="898" class="body">同时记录允许预算与实际计算量</text>
+  <text x="535" y="935" class="body">这是算法实验，不是 LLM 能力曲线</text>
+  <text x="535" y="981" class="label">target 调用变少 ≠ 已测得速度提升</text>
+  <text x="560" y="1050" text-anchor="middle" class="small">本章只实现贪心投机解码；没有随机采样分布保持的实现或性能保证</text>
+</svg>

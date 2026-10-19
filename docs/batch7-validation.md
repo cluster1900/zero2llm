@@ -27,8 +27,8 @@
 | --- | --- |
 | P18 路由手算 | top-2 权重 4/7、3/7；请求[2,2,1,1]，容量 1 接收[1,1,1,1]；辅助项 16/15 |
 | P18 参数预算 | D=4、E=4、k=2、专家宽 2、共享 1：模块总参数 136、每 token 激活预算 88；不是整模型预算 |
-| P18 S5 | seed 180 两层负载[4,6,11,3]/[8,6,5,5]；full/cache 误差 1.79e-7；紧凑 KV1536 字节 |
-| P19 数据 | 12 条原始生成记录→10 条唯一；train/validation/test 为 6/2/2 篇，有效 targets21/7/7 |
+| P18 S5 | seed 180 两层负载[4,6,11,3]/[8,6,5,5]；full/cache 误差 1.79e-7；紧凑 KV 1536 字节 |
+| P19 数据 | 12 条原始生成记录→10 条唯一；train/validation/test 为 6/2/2 篇，有效 targets 21/7/7 |
 | P19 手算 | 8 输入位置、5 有效 targets；loss 总和 9 ln2，均值 1.2476649250；跨文档上下文与标签边界分别核对 |
 | P19 训练 | 2040 参数，12 步、84 有效 targets；validation 3.7020121983→3.4868052346；最终 test 未评分 |
 | P19 恢复 | step 3 和经过 shuffle 的 step 5 中断，继续后完整状态与逐步 loss 精确一致；限定同环境 CPU 完整更新边界 |
@@ -55,7 +55,7 @@
 
 - P18：[DeepSeekMoE v1 §3](https://arxiv.org/html/2401.06066v1#S3)、[DeepSeek-V3 v2 §2.1.2](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2)。教学 Softmax/selected 归一化/batch 辅助项/独立容量示例不冒充 V3 sigmoid 路由与生产 dropless 方案。
 - P19：[Chinchilla v1](https://arxiv.org/abs/2203.15556v1)、固定 PyTorch 2.14 与 Transformers 4.51.3 文档。生成语料的去重切分策略不适用于随意重划已冻结外部评估集；相关边界见正文。
-- P20：[Transformers 4.51.3](https://huggingface.co/docs/transformers/v4.51.3/en/trainer)、[TRL0.17.0](https://huggingface.co/docs/trl/v0.17.0/en/index)、[ZeRO v3](https://arxiv.org/abs/1910.02054v3)、[Megatron-Core core_v0.12.0](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0)及正文固定 DeepSpeed 源码。没有安装/运行 TRL、DeepSpeed 或 Megatron，也没有 GPU、多卡、通信吞吐或混合精度实验。
+- P20：[Transformers 4.51.3](https://huggingface.co/docs/transformers/v4.51.3/en/trainer)、[TRL 0.17.0](https://huggingface.co/docs/trl/v0.17.0/en/index)、[ZeRO v3](https://arxiv.org/abs/1910.02054v3)、[Megatron-Core core_v0.12.0](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0)及正文固定 DeepSpeed 源码。没有安装/运行 TRL、DeepSpeed 或 Megatron，也没有 GPU、多卡、通信吞吐或混合精度实验。
 
 ## 复跑命令
 
@@ -91,3 +91,7 @@ git diff --check
 本轮新 head 的布局不继承旧 head 的 69 layouts；仍需审核方重跑。没有声称运行了审稿方全部 61 个变异，只报告本地内置检查和两个实际错误函数的独立复验。
 
 本次返修重新尝试正常构建与布局，仍在 Chromium 启动阶段遇到上述 socket 权限错误；随后以 `0eacd0f92cb7435b24e9e3f92037b741c1020ac0` 静态重建，复用源码不变的 12 张 Mermaid 和 20 张静态图。没有图像源码变化。重新验证 30 份 XML 与全部源码副本；HTML 行内数学 span 与 EPUB MathML/TeX annotation 均保留 `\mathcal V`，不再是普通文本 `(V)`。
+
+## 合并后的正式复审
+
+[Normal Work review 5571650468](https://github.com/cluster1900/zero2llm/pull/8#pullrequestreview-5571650468) 对 `559dc57` 独立验证 318 个 HF 测试、21 个脚本、正常构建及提交/重建产物各 69 layouts 通过；61/61 个审核侧变异被拒绝（其中 A09 为真实梯度缺失的 backward 错误）。MathJax 花体 V 与 EPUB MathML 均实际核对。PR #8 合并至 `9c4c9e34de9d6d394e45781b4ab115ee9e196f8d`。该浏览器结果只覆盖本批，不覆盖以后新章节。

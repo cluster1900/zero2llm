@@ -119,6 +119,18 @@
     "width": 1000.0,
     "height": 790.0
   },
+  "p21-sft": {
+    "width": 1000.0,
+    "height": 910.0
+  },
+  "p22-preference": {
+    "width": 1080.0,
+    "height": 850.0
+  },
+  "p23-mtp": {
+    "width": 1120.0,
+    "height": 1060.0
+  },
   "flow-11": {
     "width": 460.2265625,
     "height": 294
