@@ -83,13 +83,13 @@ python3 -m venv .venv
 
 ## 0.5 当前阅读顺序与尚未完成的扩展
 
-本书正在按审核通过的扩展大纲分批更新。当前已实现 P00–P23，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE / 现代 Block / GQA，以及独立的注意力系统、稀疏/线性机制与 CED 数据流，新增教学 MoE、预训练数据与恢复训练、框架与 SFT/LoRA/偏好优化对照及可选教学 MTP；这些 P 编号是扩展计划的编号，不会立即替换旧版全部章号。
+本书正在按审核通过的扩展大纲分批更新。已合并单元为 P00–P23；本分支继续撰写 P24–P26，待批次审核。当前阅读材料包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE / 现代 Block / GQA，以及独立的注意力系统、稀疏/线性机制与 CED 数据流，新增教学 MoE、预训练数据与恢复训练、框架与 SFT/LoRA/偏好优化对照及可选教学 MTP，量化与推理路线、Qwen3 和 DeepSeek 的固定版本案例；这些 P 编号是扩展计划的编号，不会立即替换旧版全部章号。
 
 为了保留已有链接，Tokenizer 暂放在“第 1A 章”，紧跟第 1 章；旧第 2～10 章仍可阅读，但尚未全部按新大纲改写。当前 HTML/EPUB 会按这个顺序包含新单元，不是已完成全部 29 个单元的新书。
 
 ![入门三单元阅读顺序](assets/diagrams/batch1_route.svg)
 
-读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer 章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是 Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP。当前主线已实现到可选教学 MTP，并补充预训练数据、框架、SFT/LoRA 和偏好优化对照；量化与综合案例等后续单元仍按批次推进；YaRN 与 MLA 的教学边界见对应章节，不能把路线图当作完整工业模型的功能清单。
+读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer 章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是 Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP。当前主线已实现到可选教学 MTP，并补充预训练数据、框架、SFT/LoRA 和偏好优化、量化与模型案例；P27 综合体检与 P28 新附录仍按批次推进；YaRN 与 MLA 的教学边界见对应章节，不能把路线图当作完整工业模型的功能清单。
 
 ## 0.6 开始前的三个自测
 
@@ -6605,9 +6605,9 @@ $$
 参考策略 π_ref 像一张固定的起点照片。我们希望提高奖励，又不无节制地偏离它。一种约束量是：
 
 $$
-D_{\rm KL}(\pi_\theta\Vert\pi_{\rm ref})
+D_{\mathrm{KL}}(\pi_\theta\Vert\pi_{\mathrm{ref}})
 =\sum_y\pi_\theta(y)
-\left[\log\pi_\theta(y)-\log\pi_{\rm ref}(y)\right].
+\left[\log\pi_\theta(y)-\log\pi_{\mathrm{ref}}(y)\right].
 $$
 
 两份分布相同时 KL=0；一般不对称，不能调换左右。代码在有限 logits 上用 log-softmax，枚举所有动作计算。手算 p=[0.6,0.3,0.1]、q=[0.2,0.5,0.3]，得到约 0.396058 nats。它不是“只看 chosen 的概率变化”，也不是两个 logits 的欧氏距离。
@@ -6627,7 +6627,7 @@ $$
 奖励模型可以用成对损失：
 
 $$
-\mathcal L_{\rm RM}
+\mathcal L_{\mathrm{RM}}
 =-\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big),
 \qquad \sigma(z)=\frac{1}{1+e^{-z}}.
 $$
@@ -6654,9 +6654,9 @@ PPO 的 clipped surrogate 抑制一批旧样本上的过大更新。它比较当
 $$
 \begin{aligned}
 \Delta_\theta &= \log\pi_\theta(y_w\mid x)-\log\pi_\theta(y_l\mid x),\\
-\Delta_{\rm ref} &= \log\pi_{\rm ref}(y_w\mid x)-\log\pi_{\rm ref}(y_l\mid x),\\
-z &= \beta(\Delta_\theta-\Delta_{\rm ref}),\\
-\mathcal L_{\rm DPO} &= -\log\sigma(z)=\operatorname{softplus}(-z).
+\Delta_{\mathrm{ref}} &= \log\pi_{\mathrm{ref}}(y_w\mid x)-\log\pi_{\mathrm{ref}}(y_l\mid x),\\
+z &= \beta(\Delta_\theta-\Delta_{\mathrm{ref}}),\\
+\mathcal L_{\mathrm{DPO}} &= -\log\sigma(z)=\operatorname{softplus}(-z).
 \end{aligned}
 $$
 
@@ -6758,7 +6758,7 @@ $$
 $$
 \rho_{i,t}
 =\exp\left(\log\pi_\theta(y_{i,t}\mid x,y_{i,<t})
--\log\pi_{\rm old}(y_{i,t}\mid x,y_{i,<t})\right).
+-\log\pi_{\mathrm{old}}(y_{i,t}\mid x,y_{i,<t})\right).
 $$
 
 本章使用 clip ε=0.2，并把“最大化收益”写成优化器常用的“最小化负收益”：
@@ -6788,8 +6788,8 @@ clip 的作用依赖优势符号和更新方向，并不是所有范围外的概
 本章词表很小，K 使用枚举整个词表的精确条件 KL，而不是采样估计。原论文使用的一个逐 token KL 估计写成：
 
 $$
-k=\frac{\pi_{\rm ref}(a\mid s)}{\pi_\theta(a\mid s)}
--\log\frac{\pi_{\rm ref}(a\mid s)}{\pi_\theta(a\mid s)}-1.
+k=\frac{\pi_{\mathrm{ref}}(a\mid s)}{\pi_\theta(a\mid s)}
+-\log\frac{\pi_{\mathrm{ref}}(a\mid s)}{\pi_\theta(a\mid s)}-1.
 $$
 
 若动作 a 真按当前 π_θ 抽样，且支持集条件满足，它的期望等于相应 KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与 old 不同，也不能不加说明地把旧样本均值称为精确 KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 K 的教学目标说成原论文代码逐行复现。
@@ -7287,190 +7287,1179 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 
 ---
 
-# 第9章：走向未来——从经典 Transformer 到 GPT-4、DeepSeek
+# 训练与应用（P24）：量化与推理框架实战 {#p24-quantization}
 
-> 本章保留旧版概览与链接。RoPE、RMSNorm/SwiGLU、GQA/MLA 的完整数值与 CPU 实验分别见 [P12](#p12-rope)、[P13](#p13-modern-block)、[P14](#p14-grouped-kv)；KV cache 见 P11。本章其余前沿摘要不代表后续扩展单元已实现。
+你想把一张大照片带到手机里，可以降低每个像素的精度，也可以换一个更会安排工作的相册程序。前者改变存储的数值，后者改变怎样读取、计算和展示。**量化与推理框架也是两层问题：装得下，不等于算得快；接口能返回文字，不等于模型质量没有变化。**
 
+照片类比到这里就该停了。模型里的一点误差会经过矩阵乘法、注意力和多步生成继续传播，不能只凭“肉眼看起来差不多”判断。我们先用可手算的整数格子，再用真实的本地引擎把文件加载、量化、生成和流式响应串起来。
 
-> “科学不是一座静止的神庙，而是一条永不停息奔涌向前的大河。”
+配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。默认实验只用 Python 标准库、CPU、小数组，不下载权重。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
 
----
+![量化把浮点数映射到整数格点；权重、激活和 KV 是三个独立对象；真实服务还要经过格式与内核检查，并正确处理流式边界](assets/diagrams/p24-quantization.svg)
 
-## 9.1 架构选择：为什么开放式生成常用 Decoder-Only？
+## P24.1 先问：到底把什么变小了
 
-在 2017 到 2020 年间，深度学习界曾有过激烈的“流派之争”：
-- **Encoder-Only 派**：以 Google 的 **BERT** 为代表，专精于理解和分类；
-- **Encoder-Decoder 派**：以 Google 的 **T5** 为代表，专精于机器翻译和摘要；
-- **Decoder-Only 派**：以 OpenAI 的 **GPT 系列** 为代表，坚持纯自回归生成。
+回忆一次生成：权重 W 长期保存在模型里，输入经过各层产生激活 X；已经见过的 token 还留下 K/V，供后续查询。三者的生命周期不同。
 
-到了近几年的开放式聊天模型中，GPT、LLaMA、DeepSeek 等许多代表性系统采用 **Decoder-Only（仅解码器）**。这是适合“读完前文，继续预测下一个词”的工程选择，并不表示 Encoder-Only 或 Encoder-Decoder 已经没有用途。
+| 对象 | 常见形状示例 | 什么时候产生 | 量化之后还要检查什么 |
+| --- | --- | --- | --- |
+| 线性层权重 W | [输出通道,输入通道] | 训练完成后相对固定 | 每层／每组 scale、权重格式、矩阵乘内核 |
+| 激活 X | [B,T,D] | 每次请求、每层计算 | 数据分布会变；静态校准还是动态 scale |
+| KV cache | 每层各一份 [B,H_kv,T,D_head] | prefill 写入，decode 继续追加 | K/V 的尺度、cache dtype、注意力内核与长序列误差 |
 
-### 三种架构各自擅长什么？
+W8A16 表示权重 8 位、激活通常为 16 位；W8A8 表示两者都为 8 位。**仅凭 W8A8 看不出 KV cache 的格式**，也看不出是 INT8 还是 FP8、累加器的位宽、哪几层保持高精度。要继续读配置。
 
-### 表 9-1：三大 Transformer 派系历史战役复盘表
+INT8 是带符号整数，通常有 -128 到 127 这 256 个码；FP8 是另一种带指数的小浮点数。它们都占一个字节，不代表格点相同。NF4 又是另一种低位宽表示。[QLoRA v1](https://arxiv.org/abs/2305.14314v1) 是在冻结的量化基座上训练 LoRA 的方法，不是“任何 4 位文件都能拿去训练”，也不是本章的 INT8 推理程序。
 
-| 架构流派 | 典型代表 | 训练任务 | 为什么被淘汰 / 为什么胜出？ |
-| :--- | :--- | :--- | :--- |
-| **Encoder-Only** | BERT、RoBERTa | 掩码填空、表示学习 | 很适合分类、检索和抽取；它不是为逐字生成而设计的，但经过改造也可以参与生成任务。 |
-| **Encoder-Decoder** | T5、BART | 输入一段文本，再生成另一段文本 | 很适合翻译、摘要等“输入到输出”的转换任务，代价是需要维护两座互相配合的模块。 |
-| **Decoder-Only** | GPT、LLaMA、DeepSeek | **预测下一个词 (Next-Token)** | 训练目标和开放式续写天然一致，结构简单，适合把同一个模型扩展到聊天、代码和长文本生成。 |
+权重压小不会自动把 KV 压小。标准 GQA 的缓存主体字节数仍可按 [P14](#p14-grouped-kv) 计算：
 
----
+$$
+M_{KV}=2L B H_{kv} T D_{head}\,b_{KV}.
+$$
 
-## 9.2 现代大模型的五种关键改进：原理与直觉
+这里 2 是 K 和 V，b_KV 是每元素的字节数。把 2 字节换成 1 字节，只是**数据主体**约减半；scale、分页、对齐、临时缓冲和其他层仍需要空间。MLA、跨层共享等结构不能直接套同一个账本。
 
-从我们刚才手搓的 Baby-GPT，到今天掌控世界算力的千亿大模型，工业界在以下 5 个关键构件上进行了脱胎换骨的升级：
+## P24.2 一把短尺子：scale 与 zero-point
 
-下面按用途把五种改进分成两张图。图中只概括它们的作用，实际收益还取决于模型、训练数据和硬件。
+先固定本章的规则，避免“不同程序都叫 INT8，结果却不一样”。对一个浮点值 x：
 
-```mermaid
-flowchart LR
-    accTitle: 现代 LLM：位置与信息处理
-    accDescr: RoPE 让注意力分数包含相对位置信息；RMSNorm 用均方根控制尺度；SwiGLU 用门控选择信息。
-    A["模型内部<br/>怎样处理信息"] --> B["RoPE<br/>旋转 Q、K，表达相对位置"]
-    A --> C["RMSNorm<br/>用均方根控制尺度"]
-    A --> D["SwiGLU<br/>通过门控选择信息"]
+$$
+q=\operatorname{clip}\bigl(\operatorname{round}_{even}(x/s)+z,\ q_{min},\ q_{max}\bigr),
+\qquad
+\hat x=s(q-z).
+$$
+
+- **scale，s**：相邻两个格点间隔多远，必须有限且大于 0。
+- **zero-point，z**：真实数值 0 对应哪个整数码，必须是范围内的整数。
+- **round_even**：四舍六入；恰好一半时选偶数，也叫 ties-to-even。Python `round` 使用这个规则。
+- **clip**：超出码范围时截到端点，不是让整数绕回另一端。
+- **反量化**得到的是近似值 x̂，不是找回被丢掉的原始小数。
+
+本章先 `round(x/s)`，再加 z。不能随意改成 `round(x/s+z)`：当 z 是奇数，恰好半格时的“偶数”对象变了。别把两套规则在保存与读取时混用。其他引擎可以采用不同舍入或 scale 约定，必须看相应格式与内核。
+
+### 手算表一：对称 INT8
+
+为了让正负范围对称，我们使用 -127 到 127，**故意不用 -128**。取 s=0.25、z=0：
+
+| x | x/s | 舍入后 | 饱和后的 q | x̂ |
+| --- | --- | --- | --- | --- |
+| -40 | -160 | -160 | -127 | -31.75 |
+| -0.625 | -2.5 | -2 | -2 | -0.5 |
+| -0.375 | -1.5 | -2 | -2 | -0.5 |
+| -0.125 | -0.5 | 0 | 0 | 0 |
+| 0.125 | 0.5 | 0 | 0 | 0 |
+| 0.375 | 1.5 | 2 | 2 | 0.5 |
+| 0.625 | 2.5 | 2 | 2 | 0.5 |
+| 40 | 160 | 160 | 127 | 31.75 |
+
+在不发生端点截断的范围内，理想实数运算的最近舍入误差不超过 s/2；被截断的 40 可不受这个保证。实际浮点计算还会有自身的舍入误差，不能要求所有端点逐位完全相等。
+
+代码的核心对应三步：
+
+```python
+scaled = x / params.scale
+bounded = min(params.qmax - params.zero_point,
+              max(params.qmin - params.zero_point, scaled))
+q = round(bounded) + params.zero_point
 ```
 
-```mermaid
-flowchart LR
-    accTitle: 现代 LLM：计算与缓存
-    accDescr: MoE 对每个词只激活部分专家；KV Cache 缓存过去位置的键和值，减少生成时的重复计算。
-    A["计算资源<br/>怎样更有效地使用"] --> B["MoE<br/>每个词只激活部分专家"]
-    A --> C["KV Cache<br/>复用过去的 K、V"]
+为什么先截断再转整数？如果 calibration 的 scale 极小，一个有限的大 x 除以 s 仍可能溢出为无穷。先按整数阈值饱和，就不需要执行 `round(inf)`。阈值本身是整数，因此这与“先舍入、后截断”的数学规则一致。不要先强转 int8 再 clip：已经绕回的值救不回来。
+
+### 手算表二：仿射量化，把零点挪一挪
+
+数据位于 [-1,2] 时，不一定需要给负数留一半格子。仿射版本用完整的 [-128,127]：
+
+$$
+s=(2-(-1))/255=1/85,
+\qquad z=-128-\operatorname{round}(-1/s)=-43.
+$$
+
+| x | round(x/s) | q=round(x/s)-43 | x̂=(q+43)/85 |
+| --- | --- | --- | --- |
+| -1 | -85 | -128 | -1 |
+| 0 | 0 | -43 | 0 |
+| 1 | 85 | 42 | 1 |
+| 2 | 170 | 127 | 2 |
+
+负数码 -43 在这里表示真实的零，不能把它当作 -43 的浮点权重。后面的整数矩阵乘也必须减去各自的 zero-point。
+
+## P24.3 校准：尺子的刻度从哪里来
+
+`fit_params` 的教学策略很简单：
+
+1. 对称版本取 a=max|x|，s=a/127，z=0。
+2. 仿射版本取 lo=min(0,min(x))、hi=max(0,max(x))，s=(hi-lo)/255，再求 z 并限制在合法码范围。
+3. **全零**输入单独设 s=1，避免 0/0；量化与反量化后仍全为零。
+4. 全为正的常量，例如 `[3,3]`，仿射范围是 [0,3]，不是 [3,3]；全为负数同理。包含零解决了非零常量的退化问题。
+5. 空数组、NaN、无穷、布尔值、无效 group size 都报错。极小的非零范围若使 scale 下溢为 0，也明确报错，不把数据静默抹成零。
+
+代码把仿射 scale 写成 `hi/255 - lo/255`，避免先计算 `hi-lo` 时溢出。浮点中两种写法可能有末位差异；这里检验有限性和量化规则，不声称任意极端数据都会恰好占满两个端点。
+
+**校准（calibration）** 是用有代表性的数据决定范围、scale 或其他量化参数。仅对固定权重做 min/max 不需要语料；但激活、KV 以及一些感知激活的权重量化方法，需要让代表性输入真正经过模型。不能只收集“Hello”一次的统计就声称覆盖中文、代码和长上下文。
+
+- **静态量化**：先用校准集定尺度，推理复用。统计开销可移到离线，但分布漂移可能造成截断。
+- **动态量化**：运行时按 token、行或其他粒度计算尺度。较能跟随输入，但要付出统计与转换成本。
+- **裁剪型校准**：故意不让极少数异常值决定整把尺子，换取多数值更细的刻度。截掉哪些值、代价多大，应当记录，不是“优化后免费变准”。
+
+校准集与最后报告质量的测试集应分开。量化参数如果也在最终测试集上挑选，就把调参收益掺进了评估结果。
+
+### 一个分布漂移反例
+
+用 `[-1,0,1]` 做对称校准，s=1/127。真正输入变成 `[-3,-0.5,0,0.5,3]`：
+
+| 评估 x | q | 反量化 x̂ | 绝对误差 |
+| --- | --- | --- | --- |
+| -3 | -127 | -1 | 2 |
+| -0.5 | -64 | -64/127，约 -0.503937 | 1/254 |
+| 0 | 0 | 0 | 0 |
+| 0.5 | 64 | 64/127，约 0.503937 | 1/254 |
+| 3 | 127 | 1 | 2 |
+
+MSE 是所有元素误差平方的平均值，结果约为 **1.6000062**。中间的舍入误差很小，端点的截断才是主要损失。别用“INT8 应该很准”替代检查输入范围。
+
+## P24.4 group：别让一个异常值统治整个矩阵
+
+设一行权重是：
+
+```text
+[0.1, -0.1, 0.2, -0.2, 12, -12, 0.4, -0.4]
 ```
 
-例如，Mixtral 8×7B 在 8 个专家中选择 2 个；DeepSeek-V3 在 256 个路由专家中选择 8 个，并另有共享专家。RoPE 并不自动保证任意长度的外推，KV Cache 的加速倍数也不是固定常数。
+整行共用 s=12/127 时，小数只能挤在较粗的格子里。若按连续小组各自定 scale，前四项就不必服从 12 的范围。
 
----
+| 这行每组元素数 | scale 数 | 最大绝对误差 | MSE | 理想打包字节数 |
+| --- | --- | --- | --- | --- |
+| 8 | 1 | 约 0.02204724 | 约 0.0001594953 | 8+4=12 |
+| 4 | 2 | 约 0.02204724 | 约 0.0001216752 | 8+8=16 |
+| 2 | 4 | 0 | 0 | 8+16=24 |
 
-### 杀手锏 1：旋转位置编码（RoPE）——复数平面上的几何旋转
+本表的存储假设是每个码 1 字节、每组一个 FP32 scale 4 字节，对称 z=0 不另存。实际 Python 列表并不是这样紧凑打包的；这些数字不是程序进程的内存。GGUF 的布局也另有规定。
 
-在第 5 章中，我们学习了绝对正弦位置编码。但在处理长达 10 万字甚至 100 万字的长文本时，原版正弦编码的外推能力有限。
+为什么 group=2 恰好零误差？我们故意选择了每组 `[a,-a]` 的权重，两个端点都可表示。**这不是“一般情况下组越小就无损”的证明**。在本例中最大误差从 group=8 到 4 没变，MSE 却下降了，说明只看一个误差指标也不够。
 
-研究者苏剑林等人在 2021 年的论文 RoFormer 里提出了 **RoPE（Rotary Position Embedding，旋转位置编码）**。后来的 LLaMA、DeepSeek 都广泛使用它。
+实现的张量账本：
 
-> [!NOTE]
-> **用旋转矩阵，而不是和差化积**：
-> 把二维向量 $(x, y)$ 旋转角度 $\theta$，就是乘下面这个矩阵：
-> $$\begin{pmatrix} x' \\ y' \end{pmatrix} = \begin{pmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{pmatrix} \begin{pmatrix} x \\ y \end{pmatrix}$$
-> 
-> **RoPE 在做什么**：
-> - 第 $m$ 个座位上的 Query，旋转 $m\theta$；
-> - 第 $n$ 个座位上的 Key，旋转 $n\theta$；
-> - 做点积时，其中一个旋转可以先转回去。净效果只剩下相对角度 $(n-m)\theta$。
-> 
-> 绝对座位被消掉了，剩下两个字隔了多远。
+| 项目 | 形状／数量 |
+| --- | --- |
+| 原权重 | [R,C] |
+| 每行独立分组 | ceil(C/G) 组 |
+| 所有 scale | R×ceil(C/G) 个 |
+| 量化码 | 仍有 R×C 个 |
+| 反量化权重 | 仍是 [R,C] |
 
----
+例如两行、每行 3 项、G=2，分组长度应为 `[2,1,2,1]`。不能把上一行的尾项和下一行的首项凑一组，也不能丢掉最后一项。理想存储量为 6+4×4=**22 字节**。缩小组会增加 scale 和访存开销，质量收益与内核效率都要测。
 
-### 杀手锏 2：RMSNorm——先不管平均数，只控制振幅
+## P24.5 整数乘法：乘的是码，累加器不能也是 8 位
 
-在第 6 章中，经典的 LayerNorm 需要先算平均数 $\mu$，再算方差 $\sigma^2$。
+忽略 bias，一个点积近似为：
 
-研究人员发现：让数据中心保持零均值其实没那么重要，真正起到稳定数值作用的，是**控制向量的整体振幅大小**！
-于是，**RMSNorm（均方根归一化）** 应运而生：
-$$\text{RMS}(x) = \sqrt{\frac{1}{d} \sum_{i=1}^d x_i^2}$$
-$$\text{RMSNorm}(x) = \frac{x}{\text{RMS}(x)} \odot \gamma$$
+$$
+\sum_i x_iw_i\ \approx\ s_xs_w\sum_i(q_{x,i}-z_x)(q_{w,i}-z_w).
+$$
 
-它直接省去了计算均值的一整套步骤，将显存访问和计算时间压缩了 10% 到 50%，成为了现代模型的标配！
+对称 z=0 时看起来很简洁；仿射版本若漏减 z，会得到系统性错误。
 
----
+手算：激活 scale=0.5、z=-3、码 `[-2,1]`，恢复为 `[0.5,2]`；权重 scale=0.25、z=7、码 `[9,3]`，恢复为 `[0.5,-1]`。
 
-### 杀手锏 3：SwiGLU 激活函数——带有开关的神经元
+| 项 | 激活去零点 | 权重去零点 | 整数乘积 |
+| --- | --- | --- | --- |
+| 第 1 项 | -2-(-3)=1 | 9-7=2 | 2 |
+| 第 2 项 | 1-(-3)=4 | 3-7=-4 | -16 |
+| 合计 | | | -14 |
 
-传统模型使用 ReLU（只保留正数）。现代模型普遍换用了 **SwiGLU**。
-它的直觉就像在电路中加了一个**“可调节亮度的电位器开关”**：
-$$\text{SwiGLU}(x) = \big(\text{Swish}(x W_{\text{门}}) \odot (x W_{\text{上}})\big) W_{\text{下}}$$
-这里的 $\odot$ 是两个向量**对应位置相乘**，不是点积，最后再乘输出矩阵。一条路准备内容，另一条路当开关：开关开多大，内容就通过多少。
+乘回 0.5×0.25，得到 -1.75，与 `0.5×0.5+2×(-1)` 一致。
 
----
+`quantized_dot` 使用 Python 任意精度整数累计，**不等于在真实硬件上提供了无限位宽**。生产内核常用更宽的整数累加器；仍应根据长度、码范围和实现检查溢出。仅 256 项 `127×127` 就累计为 4,129,024，远超 int8。
 
-### 杀手锏 4：混合专家架构（MoE）——DeepSeek 的低成本核武器
+权重量化还可能采用“存低精度，计算前转回较高精度”的路径。能省权重读带宽，不代表每个乘法都在 INT8 中执行。转换开销、batch、prefill/decode 和硬件支持会改变最终速度。我们的 Python 循环只验证数学，不是 SIMD/CUDA 内核基准。
 
-如果一个模型拥有 6710 亿总参数（例如 [DeepSeek-V3 技术报告](https://arxiv.org/abs/2412.19437)中的模型），每次回答一个字都让全部参数跑一遍，电费和硬件成本会非常高。MoE 的想法是：每个词只路由到少数专家。
+## P24.6 KV 量化：误差不只落在一个矩阵上
 
-DeepSeek 和 Mixtral 采用的 **MoE（Mixture of Experts，混合专家模型）** 改变了游戏规则：
+对一个已经可见的前缀，注意力是：
+
+$$
+y=\operatorname{softmax}(qK^\top/\sqrt{d})V.
+$$
+
+- K 的误差先改变分数，再经过 softmax 改变各位置的权重。
+- V 的误差改变被加权求和的内容。
+- 两者都会影响输出；多层、多步生成还可能放大或抵消误差。
+
+脚本用 q=`[0.8,-0.3]`，三个 K 行 `[0.12,-0.7]`、`[1.3,0.04]`、`[-0.31,0.9]`，V 行 `[0.2,2]`、`[1.2,-0.4]`、`[-0.7,0.05]`。每个 K/V 行独立对称量化后再反量化，得到：
+
+| 输出分量 | 原始缓存 | 量化恢复的缓存 |
+| --- | --- | --- |
+| 第 1 维 | 0.5608533946 | 0.5623972551 |
+| 第 2 维 | 0.4222089296 | 0.4242680323 |
+
+最大绝对差约 0.00205910，MSE 约 0.00000331170。测试另用独立标量 softmax 与加权求和核对基线，而不是调用同一个 attention 函数两次宣布正确。
+
+这只是单 query、单头、小前缀的机制实验；**没有实现量化 cache 的追加、分页或实际整数 attention 内核**。真实框架还要说明：K/V 是否分别有 scale，按张量、通道还是 token 定尺度，已有 cache 会不会重算尺度，以及被量化的值怎样交给后端。不能把本表误差外推到十万 token。
+
+例如锁定的 [vLLM 0.8.4 KV 文档](https://docs.vllm.ai/en/v0.8.4/features/quantization/quantized_kvcache.html) 说明了 FP8 KV 与尺度的关系，也明确该版本的空间收益不能直接当成延迟收益。本书没有运行这条 GPU 路线。
+
+## P24.7 GGUF 是包装格式，不是一种固定量化算法
+
+GGUF 可以把模型元数据、tokenizer 信息、张量名、形状、类型和张量数据装进文件。**扩展名是 `.gguf`，并不能推出里面全部都是 4 位权重**：它可以包含 F32/F16，也可以包含多种块量化张量。
+
+本章锁定 llama.cpp b5046，源码提交 `74d4f5b041ad837153b0e90fc864b8290e01d8d5`。其 [GGUF writer](https://github.com/ggml-org/llama.cpp/blob/74d4f5b041ad837153b0e90fc864b8290e01d8d5/gguf-py/gguf/gguf_writer.py) 与 [元数据定义](https://github.com/ggml-org/llama.cpp/blob/74d4f5b041ad837153b0e90fc864b8290e01d8d5/gguf-py/gguf/constants.py) 是我们微型文件的格式依据。
+
+以这个版本的 Q8_0 为例，[块结构定义](https://github.com/ggml-org/llama.cpp/blob/74d4f5b041ad837153b0e90fc864b8290e01d8d5/ggml/src/ggml-common.h) 中每 32 个 int8 码还有一个 2 字节 scale，因此张量块主体是 34 字节，不是只有 32 字节。它与上文“每组 FP32 scale”的教学格式不同；[参考量化函数](https://github.com/ggml-org/llama.cpp/blob/74d4f5b041ad837153b0e90fc864b8290e01d8d5/ggml/src/ggml-quants.c) 的舍入实现也不同。**我们没有把 Python 码数组直接冒充 Q8_0。**
+
+模型能否运行至少有四道门：
+
+1. **架构门**：引擎是否认识模型的层、注意力结构和必要算子？
+2. **文件门**：转换器是否正确保存配置、tensor layout、词表与特殊 token？
+3. **内核门**：该后端是否支持这份文件的量化类型、维度和设备？
+4. **语义门**：tokenizer、chat template、RoPE、EOS 等是否与训练时约定匹配？
+
+通过前三道门，也可能因为模板错了而输出很差。换文件名、重命名架构字段、强行套另一个 tokenizer 都不是合法的兼容性修复。
+
+## P24.8 四类工具，按工作负载选，不按热度选
+
+下表是**固定历史版本**的定位与检查路线，核验日为 **2026-10-19**，不是“这些旧版本是当前生产推荐”，也不保证后续模型被它们支持。
+
+| 工具与锁定版本 | 本章关注的用途 | 需要逐项核对的兼容性 | 本书实际验证 |
+| --- | --- | --- | --- |
+| llama.cpp b5046 | 小模型本地 CPU 路线；GGUF；CLI 与服务接口 | 架构、GGUF 张量类型、CPU 指令／系统依赖、词表与模板 | 微型 Llama F32/Q8_0、CPU CLI、completion SSE |
+| vLLM 0.8.4 | 面向批处理与并发服务；GPU 作为本章选修路线 | supported models、量化后端与硬件矩阵、cache dtype、其他功能组合 | 未安装／未运行 GPU |
+| SGLang 0.4.5 | 服务调度、前缀复用与结构化生成等工作负载 | 模型实现、离线 checkpoint 配置、在线量化类型、后端与硬件 | 未安装／未运行 GPU |
+| TensorRT-LLM 0.18.0 | NVIDIA GPU 上的专用推理栈 | GPU／CUDA／TensorRT 版本、模型转换、量化 recipe 与执行路径 | 未安装／未运行 GPU |
+
+vLLM 的 CPU 等后端要查各自安装与支持页，不能把本表的 GPU 选修路线误读为“框架只能在 GPU 上跑”。同样，支持一种架构，不自动意味着支持它的每一种量化、LoRA、投机解码和多模态组合。
+
+两个具体的版本陷阱比长长的框架名单更值得记住：
+
+- [vLLM 0.8.4 GGUF 页](https://docs.vllm.ai/en/v0.8.4/features/quantization/gguf.html) 把该路线标为实验性、未充分优化，并有限定条件；还提醒优先使用原模型 tokenizer。不能因为 llama.cpp 能读一个 GGUF，就宣布 vLLM 上一样快、一样稳。
+- [SGLang 0.4.5 量化页](https://github.com/sgl-project/sglang/blob/57f99608f4fdea03e0450f51a6fcabe726409f25/docs/backend/quantization.md) 区分离线量化权重与在线量化。加载已量化模型时通常由配置识别格式，不应为了“保险”盲目再叠加在线量化参数。该页列为未来工作的选项不能当成当时已经支持。
+
+[TensorRT-LLM 0.18.0 精度页](https://github.com/NVIDIA/TensorRT-LLM/blob/3c0462002cbefde475d46acb5d5edefec92dfb6a/docs/source/reference/precision.md) 则按 recipe 区分 weight-only、权重与激活、KV 等路径。它部分公式把“量化乘数”叫 scale，本章用的是“格点间距、量化时作除数”。**同名变量未必有相同定义，必要时取倒数，不能直接复制数字。**
+
+## P24.9 真正跑通一次：不下载外部模型的 llama.cpp 路线
+
+先明确实验对象：1 层、隐藏宽度 32、4 个注意力头、FFN 宽度 64、上下文 128；词表 259 项，包括 unk/BOS/EOS 和 256 个字节回退 token。总计 **18,624 个参数**，随机种子 24，未训练，输出不具备语言质量。
+
+`write_tiny_gguf` 直接写入这一固定结构的 F32 GGUF。它不是通用 HF 转换器，不转换本书 S6，也不是一份下载来的 Llama 权重。真实 checkpoint 的转换还要使用与架构匹配的官方转换器。
+
+### 先准备隔离的引擎
+
+我们实际使用的是官方 [b5046 发布资产](https://github.com/ggml-org/llama.cpp/releases/tag/b5046) 中 `llama-b5046-bin-ubuntu-x64.zip`，28,537,350 字节，SHA-256 为：
+
+```text
+10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e
+```
+
+这是 Linux x86_64 路线。可在新的临时目录复现下载与校验，不改已有 Python 环境：
+
+```bash
+mkdir -p /tmp/p24-engine
+curl -fL --max-time 120 \
+  https://github.com/ggml-org/llama.cpp/releases/download/b5046/llama-b5046-bin-ubuntu-x64.zip \
+  -o /tmp/p24-engine/llama-b5046.zip
+printf '%s  %s\n' \
+  10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e \
+  /tmp/p24-engine/llama-b5046.zip | sha256sum -c -
+unzip /tmp/p24-engine/llama-b5046.zip -d /tmp/p24-engine
+```
+
+下载和解压须成功、校验须匹配才继续。可执行文件位于解压后的 `build/bin`。官方二进制如果不适合你的系统，不要忽略 loader 错误，更不要绕过系统安全提示；改用适合系统的官方构建方案，并重新记录版本与结果。macOS、Windows 或自行编译的同版本，本章未实测。
+
+从仓库根目录运行：
+
+```bash
+python code/25_quantized_serving.py \
+  --llama-bin /tmp/p24-engine/build/bin \
+  --work-dir /tmp/p24-smoke
+```
+
+这个 opt-in 命令**不帮你下载或安装任何软件**。它检查 `llama-cli --version`，创建微型 GGUF，并依次执行：
+
+```bash
+llama-quantize tiny-f32.gguf tiny-q8_0.gguf Q8_0
+llama-cli -m tiny-q8_0.gguf -p Hi -n 4 -c 128 -t 1 \
+  -ngl 0 --seed 24 --temp 0 --no-display-prompt
+llama-server -m tiny-q8_0.gguf -c 128 -t 1 -ngl 0 \
+  --host 127.0.0.1 --port <临时空闲端口> --alias p24-tiny
+```
+
+上面的文件名与端口是阅读用简写；脚本保存的 `smoke-report.json` 记录实际绝对路径和端口。`-ngl 0` 不把模型层卸载到 GPU；`-t 1` 固定一个计算线程。共享库搜索路径只给这些子进程，不修改现有环境配置。server 只监听 loopback，并在成功或失败后关闭，不开放到公网。
+
+### 本书实际看到了什么
+
+| 检查 | 本次结果 |
+| --- | --- |
+| 引擎版本 | 5046，提交前缀 74d4f5b0 |
+| 原始微型文件 | F32，81,760 字节 |
+| 量化微型文件 | Q8_0，27,392 字节；一维 norm 张量保留 F32 |
+| CPU CLI | 成功加载并生成 4 个 token |
+| 本地 health | HTTP 200，status=ok |
+| 流式与非流式 completion | HTTP 200；内容一致 |
+| usage | prompt 3、completion 4、total 7 |
+| 停止原因 | length，达到预算，不是自然 EOS |
+| 质量、速度对比、GPU 显存 | **未测** |
+
+未训练模型实际输出是四个 U+0011 控制字符，不是四句通顺回答。脚本用 JSON 转义显示，不把原始控制字符当聊天内容直接打印。能生成只证明文件、算子与服务路径接通。
+
+[已运行记录](../code/fixtures/p24_llama_smoke.json) 保存源码提交、发布资产校验、模型校验和命令；[真实 SSE 捕获](../code/fixtures/p24_llama_completion.sse) 供离线解析回归。这里的文件变小是可验证事实，**不是 3 倍运行加速，也不是模型能力无损**。
+
+b5046 的微型 Llama 成功，**不证明 Qwen3 或 DeepSeek-V4.1-Flash 可运行**。这些模型必须另查相应版本的架构、转换器和内核支持。相邻案例章提供配置阅读，不共享这份兼容性结论。
+
+## P24.10 API 与流式输出：网络块不是 token
+
+引擎在本机运行时，客户端仍要遵守请求协议。这里选择 `/v1/completions`，使用纯文本 prompt，不用 chat template，因为微型模型没有受训对话模板。
+
+```json
+{
+  "model": "p24-tiny",
+  "prompt": "Hi",
+  "max_tokens": 4,
+  "temperature": 0,
+  "seed": 24,
+  "stream": true
+}
+```
+
+路径和字段来自锁定版本的 [llama.cpp server 文档](https://github.com/ggml-org/llama.cpp/blob/74d4f5b041ad837153b0e90fc864b8290e01d8d5/examples/server/README.md)。OpenAI-compatible 说明的是一部分接口形状，不表示所有端点、参数、错误码或 chat/tool 行为完全相同；[vLLM 0.8.4 服务页](https://docs.vllm.ai/en/v0.8.4/serving/openai_compatible_server.html) 也应按具体支持范围阅读。
+
+SSE（Server-Sent Events）用空行分隔事件，事件的 `data:` 字段里常放 JSON。一次网络读取可能只有半个中文字符，也可能包含三个事件；一个 content delta 可能包含多个 token，也可能为空。
+
+```text
+data: {"choices":[{"text":"春","finish_reason":null}]}
+
+data: {"choices":[{"text":"风","finish_reason":"length"}]}
+
+data: [DONE]
 
 ```
-                    输入当前词
-                        │
-                        ▼
-               [ 路由器 Router ]
-                        │
-         ┌──────────────┴──────────────┐
-         ▼ 本次参加                       ▼ 本次休眠
-   DeepSeek-V3：叫醒 8 个路由专家     其余约 248 个路由专家不参加
-   另外还有 1 个共享专家，每次都参加
-         │
-         ▼
-   整个模型约 6710 亿参数
-   每个词激活的大约是 370 亿参数
+
+本章的 `sse_data` 先用增量 UTF-8 解码器把字节接起来，再按 LF/CRLF 行与空行组装事件。`collect_completion` 才解析 JSON、提取文本并处理结束信号。测试把中文和 emoji 的每一个字节切开，也枚举所有单次切分位置。
+
+| 边界 | 本章处理 |
+| --- | --- |
+| 空 role delta、content=null | 不追加文字，不算一个 token |
+| usage-only 事件，choices=[] | 允许，不追加文字 |
+| finish_reason=length | 明确是截断预算；不能改称回答完整 |
+| 只有 EOF，没有 `[DONE]` 或 finish_reason | 报不完整，不伪装成功 |
+| `[DONE]` 之后又出现数据 | 报协议异常 |
+| 非法 UTF-8、破损 JSON、error 对象 | 报错，不展示为模型回答 |
+| 工具调用、多 choice、自动重连 | 本章未实现，拒绝或不承诺支持 |
+
+这个解析器是小而明确的 SSE 子集，不是通用事件总线。它没有自动重发请求，因为断线前可能已经生成或计费，盲目重试会重复执行；它也没有生产级缓冲大小限制、超时策略和背压处理。用在外部服务前必须补上这些约束。
+
+请求发送前还要做上下文预算检查：**经过 tokenizer、BOS 和 chat template 后的 prompt token 数 + 最大新 token 数，不超过实际服务的上下文容量**。例如 7+3=10 恰好允许，8+3>10 拒绝。不要按汉字数、UTF-8 字节数或原始 messages 长度算。
+
+对空输入、超长输入、客户端取消、服务过载、HTTP 非 2xx 和无响应，要有明确的产品处理。当前实战验证了健康检查、正常 streaming/nonstreaming 及预算截断；**没有声称验证并发、真实断网或生产取消机制**。数值和模拟协议边界覆盖不代替线上故障测试。
+
+## P24.11 怎样做一次公平的框架比较
+
+先分清两个问题：
+
+1. 同一引擎里，量化前后的质量与资源怎样变？需要共同基座、相同数据和清楚的量化差异。
+2. 相同模型条件下，不同引擎怎样变？需要同一权重来源、tokenizer、模板、量化方案、KV 精度和生成规则。
+
+如果一个引擎用 Q4、另一个用 BF16，那是在比较两套部署方案，不能把差异全归给调度器。若某格式只有一边支持，就标记为“无可比配置”，不要偷偷换模型。
+
+真正的首 token 延迟 TTFT 是从定义好的请求起点到第一个输出 token；TPOT 是后续输出 token 的平均间隔。假设记录了真实的逐 token 时间 t₁…t_N：
+
+$$
+\mathrm{TTFT}=t_1-t_{start},\qquad
+\mathrm{TPOT}=\frac{t_N-t_1}{N-1}\quad(N>1).
+$$
+
+开始于 10.0 秒，token 到达于 10.2、10.3、10.6 秒，TTFT≈0.2 秒，TPOT≈0.2 秒。N=0 时两者缺失，N=1 时 TPOT 缺失，不写 0 假装更快。`token_latencies` 用这个手算表测试。
+
+**只有 SSE content 事件时间时，应称首内容事件延迟／事件间隔，不冒充逐 token 延迟。** 角色或 usage 事件也不是第一输出 token。本章真实 smoke 只检查协议与结果，没有记录逐 token 时钟，因此不报告 TTFT/TPOT 实测数字。
+
+GPU 选修建议每次只改变一项，并填写：
+
+| 必填项目 | 应记录的内容 |
+| --- | --- |
+| 模型 | 仓库、revision、权重哈希、tokenizer／模板 revision |
+| 数值 | W/A/KV dtype、量化 recipe、group、校准集与 scale 来源 |
+| 设备与软件 | CPU/GPU 型号、显存、驱动、框架／依赖版本、并行度 |
+| 工作负载 | 固定题集、输入/输出长度分布、并发数、batch、采样与停止规则 |
+| 时间口径 | 是否包含网络／排队／prefill；warm-up；重复次数；分位数 |
+| 内存口径 | 权重、KV、workspace、峰值；区分已分配与保留的显存 |
+| 质量 | 固定答案检查器或验证集损失；截断、超时、失败仍保留在分母 |
+
+在没有兼容 GPU、足够内存、合法可用权重或锁定环境时，跳过 GPU 路线并注明未测即可。没有必要为本章下载大模型，也不应该拿发布方 benchmark 填进“本书复现”一栏。
+
+## P24.12 运行、找错与自测
+
+从仓库根目录：
+
+```bash
+python code/25_quantized_serving.py
+python -m unittest discover -s tests -p 'test_quantized_serving.py' -v
 ```
 
-两套常见数字不要混在一起：
-- **Mixtral**：一共 8 个专家，每个词叫醒其中 2 个。
-- **DeepSeek-V3（技术报告中的版本）**：每层有 256 个路由专家，每个词选择其中 8 个，并配合共享专家；报告给出的总参数约 6710 亿、每个词激活约 370 亿。模型版本会更新，数字应以对应技术报告为准。
+默认测试验证独立有理数格点 oracle、手算表、组尾与行边界、整数累加、校准漂移、独立 attention、UTF-8/SSE 和文件生成。它还真正改写并执行七种错误实现：漏减零点、把舍入改成截断、整数点积漏减零点、丢组尾、上下文比较差一位、漏检查 `[DONE]`、每个网络块单独解码 UTF-8。正确基线先通过，错误变体再被同一行为断言抓住。
 
-专家不是出厂就贴着“数学”“历史”的标签。路由器学的是“这个词更适合交给哪几个专家”，分工是训练出来的。
+提供已准备好的引擎后，可选真实测试：
 
----
-
-### 杀手锏 5：KV Cache 机制——消除重复运算的打字机
-
-在自回归生成时，如果没有 KV Cache，生成每个新词都可能重新计算整段前缀的 $Q,K,V$ 和注意力。对长度为 $t$ 的这一步，注意力本身大约要处理 $t^2$ 个位置对；把每一步累加到长度 $N$，朴素实现的总工作量会接近 $O(N^3)$。
-
-**KV Cache 的秘密**：
-过去已经生成的词，在固定的上下文和模型参数下，它们的 **Key 和 Value 不需要重复计算**。模型把之前算好的 K 和 V 存在缓存里。每次生成新词时，只计算当前词的 Query，再与缓存中的历史 K、V 做一次注意力；长度为 $t$ 的单步工作量约为 $O(t)$，生成到长度 $N$ 的总注意力工作量约为 $O(N^2)$。KV Cache 消除的是重复计算，不会把长文本注意力变成常数时间。
-
----
-
-## 9.3 顶级大模型架构进化对照表
-
-下表汇总了自 2017 年以来最具代表性的大模型架构演进轨迹：
-
-### 表 9-2：从经典 Transformer 到 DeepSeek 的参数与架构进化演变
-
-| 特性 / 模型 | 经典 Transformer (2017) | GPT-2 (2019) | LLaMA 3 (2024) | DeepSeek-V3 (2024) |
-| :--- | :---: | :---: | :---: | :---: |
-| **基础架构** | Encoder-Decoder | Decoder-Only | Decoder-Only | **Decoder-Only (MoE)** |
-| **归一化位置** | Post-LN (后置) | Pre-LN (前置) | Pre-LN (前置) | **RMSNorm (无均值)** |
-| **位置编码** | 绝对正弦余弦 | 可学习绝对位置 | **RoPE (旋转位置)** | **RoPE (带多级扩展)** |
-| **激活函数** | ReLU | GELU | **SwiGLU** | **SwiGLU** |
-| **注意力机制** | 标准 MHA | 标准 MHA | **GQA (分组查询注意力)** | **MLA (多头潜在注意力)** |
-| **专家机制** | 单体 Dense | 单体 Dense | 单体 Dense | **MoE (256 专家激活 8 个)** |
-| **最大上下文** | 常见实现约 512 | 1024 | 8,192；后续 3.1 可到 128K | **128,000（128K）** |
-
----
-
-## 9.4 尺度定律（Scaling Law）与神奇的“涌现现象”
-
-最后，让我们回答一个终极哲学问题：
-> “大模型到底为什么会产生像人类一样的推理、翻译和解题能力？”
-
-2020 年，OpenAI 发现了震惊学术界的 **尺度定律（Scaling Law）**：
-在不少受控实验中，随着**模型参数量（Model Size）**、**训练数据量（Dataset Size）** 和 **计算算力（Compute）** 一起增加，预测误差（Loss）会近似沿幂律下降；真实训练还会受到数据质量、优化方法和评测方式影响。
-
-有人把某些能力在变大之后才明显表现出来，叫做**涌现**。这个说法要小心用：不同任务的转折点不一样；有的“突然变好”是因为评分只有对和错，中间的进步被尺子藏住了。更稳妥的观察是：参数、数据和算力一起变大时，预测下一个词的损失沿一条比较平滑的曲线下降。下面的图只表示“规模变大以后，有些困难任务开始做得动”，不是说跨过某一天就会自动会解物理竞赛。
-
-```
-预测下一个词的损失 ▲ 越高越差
-         │ \
-         │  \   小模型：损失高，困难任务经常做不动
-         │   \
-         │    \________  规模、数据、算力一起变大，损失大体平滑下降
-         └────────────────────────────────► 规模
+```bash
+P24_LLAMA_BIN=/tmp/p24-engine/build/bin \
+  python -m unittest discover -s tests -p 'test_quantized_serving.py' -v
 ```
 
-有些困难任务要到模型比较大时才开始做得动。这仍然是“预测下一个词”训练出来的结果，不是模型自动获得了一套和人类相同的心智。第 8 章那个只背三首诗的小模型，就是尺度还很小的时候。
+默认 23 个测试中，22 个运行、1 个真实引擎测试跳过；本次提供 b5046 后，23 个全部实际通过。跳过不等于已运行。
+
+### 自测题
+
+1. s=0.25、z=0 时，0.125、0.375、40 的码与恢复值分别是多少？为什么最后一个误差不受 s/2 限制？
+2. s=0.25、z=3 时，0.125 的码是多少？若把加 z 移进 `round` 会怎样？
+3. 两行各 3 项、G=2，有多少组？按“int8 码+FP32 scale”需要多少字节？
+4. 用 [-1,1] 校准后，评估值 3 能恢复成 3 吗？把校准集改成评估集为什么可能污染质量报告？
+5. W4A16 是否表示 KV 也是 4 位？Q8_0 的 32 个码为何不只占 32 字节？
+6. 三个输出 token 的时间为 10.2、10.3、10.6，请求开始为 10.0，TTFT 与 TPOT 是多少？如果只知道有三个 SSE 块，能否这样算？
+7. 服务只返回部分文字后连接结束，没有终止事件，应显示“完成”吗？`finish_reason=length` 又说明什么？
+
+### 参考答案
+
+1. 码为 0、2、127；恢复为 0、0.5、31.75。40 超过可表示范围，发生饱和截断。
+2. 码为 `round(0.5)+3=3`；改成 `round(3.5)` 得 4，改变了半格的偶数舍入对象。
+3. 每行两组，共四组；6 个码+4×4 字节 scale，共 22 字节。组不能跨行。
+4. 只能恢复到 1。最终评估应使用未参与量化参数选择的数据，否则把调参集效果当泛化效果。
+5. 不表示，KV 单独配置。这里 Q8_0 每 32 个码还有一个 2 字节 scale；其他元数据另算。
+6. TTFT≈0.2 秒，TPOT≈0.2 秒。SSE 块不一定一块一个 token，缺少逐 token 观测时不能这样命名。
+7. 不应；这是不完整响应。length 表示生成因预算被截断，不证明内容已经自然写完。
+
+你现在得到的不是一个“装上就万能”的工具名单，而是一条可检查的链：**数值规则 → 格式与架构 → 设备内核 → 服务边界 → 同条件评估**。后面读真实模型配置时，继续沿这条链检查，不要让模型名替代证据。
+
 
 ---
 
-## 9.5 本章小结
+# 模型案例（P25）：Qwen3，读配置而不是背参数表 {#p25-qwen3}
 
-- **Decoder-Only** 因为训练目标和开放式续写很贴合，成为近年聊天与代码模型中的主流选择；
-- **RoPE、RMSNorm、SwiGLU、MoE 与 KV Cache** 是现代顶级大模型兼顾超长文本、极致速度与低成本推理的五大基石；
-- **尺度定律与涌现现象**揭示了大自然最底层的数学美感：极其纯粹简单的“预测下一个词”，在海量算力与优雅架构的催化下，绽放出了璀璨的通用人工智能火花！
+拿到一张汽车宣传单，你能知道它叫“小型车”，却不能因此确定轮胎尺寸、座位数和油箱容量。模型名里的 `0.6B`、`30B`、`A3B` 也像宣传单上的分类：有用，但不能代替配置、实现与版本。
+
+本章做一次完整的“拆说明书”练习：**选定两个真实 checkpoint，读出它们的组件，算清参数和缓存，再用很小的随机模型验证机制。** 目标不是背诵“Qwen3 都用了什么”，而是能够指出：我说的是哪个仓库、哪次提交、哪个字段，哪些结论还需要看实现。
+
+配套 [code/26_qwen3_case.py](../code/26_qwen3_case.py)，测试为 `tests/test_qwen3_case.py`。默认命令只用 Python 标准库、读取本地小文件；`--torch` 才运行 PyTorch/Jinja2 的额外探针。**本章没有下载或运行任何 Qwen 预训练权重，也没有实现完整 Qwen tokenizer、checkpoint 加载器或生产推理服务。**
+
+先修：[Tokenizer](#a.1-三种切法整词字符与字节)、[RoPE](#p12-rope)、[RMSNorm / SwiGLU](#p13-modern-block)、[GQA](#p14-grouped-kv)、[MoE](#p18-moe)，以及前面关于后训练、推理预算和部署的区分。
+
+## P25.1 先把研究对象钉住
+
+核对日期为 **2026-10-19**。本章研究的是 2025 年首发路线的两个混合 thinking / non-thinking 文本 checkpoint，**不是**名字中带 `Instruct-2507`、`Thinking-2507` 的后续版本，也不是 Qwen3-Next、视觉模型或整个 Qwen3 家族。
+
+| 对象 | 官方仓库 | 本章锁定的完整 revision |
+| --- | --- | --- |
+| Dense | `Qwen/Qwen3-0.6B` | `c1899de289a04d12100db370d81485cdf75e47ca` |
+| MoE | `Qwen/Qwen3-30B-A3B` | `ad44e777bcd18fa416d9da3bd8f70d33ebb85d39` |
+
+官方不可变入口：[0.6B 配置](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/config.json)、[30B-A3B 配置](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/config.json)。`main` 是会移动的分支名；完整 revision 才能让几年后的读者看到同一组字节。
+
+仅有配置还不够。例如，`rms_norm_eps` 说明数值稳定项，却不直接告诉你 Q、K 是否另做归一化。我们还核对 Hugging Face Transformers **v4.51.3** 的实现，锁到 commit `5f4ecf2d9f867a1255131d2461d75793c0cf1db2`：[dense 实现](https://github.com/huggingface/transformers/blob/5f4ecf2d9f867a1255131d2461d75793c0cf1db2/src/transformers/models/qwen3/modeling_qwen3.py)、[MoE 实现](https://github.com/huggingface/transformers/blob/5f4ecf2d9f867a1255131d2461d75793c0cf1db2/src/transformers/models/qwen3_moe/modeling_qwen3_moe.py)。这里选择的是可追溯的实现快照，不宣称它是当前最新版，也不要求安装它。
+
+本地 `code/data/qwen3/` 只保存各 checkpoint 的 `config.json`、`tokenizer_config.json`、`generation_config.json` 和原始 Apache-2.0 `LICENSE`，合计 44,317 字节，另有来源清单。每份文件的完整 URL、字节数、SHA-256 都在 `manifest.json` 中。`load_checkpoint` 先核对 revision 和哈希再读取；损坏时直接报错，**不会偷偷改取最新配置**。
+
+这形成三个证据层次：
+
+1. 官方配置回答“这个 checkpoint 声明了什么”。
+2. 固定实现回答“这些字段怎样变成运算”。
+3. 本章测试回答“我们的小型教学探针实际验证了什么”。
+
+第三层通过，不能替代官方模型质量、训练过程或部署性能的复现。
+
+## P25.2 两列配置，先找不同，再找共同点
+
+下表直接对应上述两个不可变配置，不从模型名猜测数值。
+
+| 字段／含义 | 0.6B dense | 30B-A3B MoE |
+| --- | ---: | ---: |
+| `model_type` | `qwen3` | `qwen3_moe` |
+| 层数 L | 28 | 48 |
+| 隐藏宽度 D | 1024 | 2048 |
+| Q 头数 Hq | 16 | 32 |
+| KV 头数 Hkv | 8 | 4 |
+| `head_dim`，每头宽度 d | 128 | 128 |
+| `vocab_size`，embedding 行数 V | 151936 | 151936 |
+| dense FFN `intermediate_size` | 3072 | 6144，当前全 MoE 层不使用它 |
+| 单专家 `moe_intermediate_size` | 不适用 | 768 |
+| 专家总数／每 token 选中数 | 不适用 | 128 / 8 |
+| `tie_word_embeddings` | true | false |
+| `rope_theta` | 1000000 | 1000000 |
+| `rope_scaling` | null | null |
+| `rms_norm_eps` | 0.000001 | 0.000001 |
+| `max_position_embeddings` | 40960 | 40960 |
+| `use_sliding_window` | false | false |
+
+读表时先做三个检查：
+
+- **不是每个字段都代表当前启用的模块。** MoE 的 `intermediate_size=6144` 留给 dense MLP 路径；本快照所有层都选择专家路径。把 6144 的 dense FFN 再加一份，会把不存在的参数算进去。
+- `torch_dtype=bfloat16` 是配置声明，不意味着所有运行时张量都只能是 BF16。我们的数值探针主动使用 CPU float64。
+- `max_window_layers` 的存在不等于滑动窗口已经开启。两个对象均关闭 `use_sliding_window`，不能给它们贴上“局部注意力模型”的标签。
+
+![两份固定配置如何映射到注意力、FFN 和输出预算](assets/diagrams/p25-qwen3.svg)
+
+## P25.3 一个最容易算错的维度：D 不一定等于 Hq × d
+
+以前的小型教学模型常把 `head_dim` 写成 `D // Hq`。本章两个 checkpoint **显式指定 d=128**，所以：
+
+- dense：D=1024，但 Q 投影宽度为 16×128=2048；
+- MoE：D=2048，但 Q 投影宽度为 32×128=4096。
+
+这不是表格矛盾，而是 Q 投影可以改变宽度。输入一个 `[B,T,D]` 张量，线性层先投影，再分头；注意力完成后，O 投影把拼接的头映回 D，才能与 residual 相加。
+
+以 dense 为例，按 PyTorch 的 `[输出维度, 输入维度]` 写权重形状：
+
+```text
+输入 hidden                  [B,T,1024]
+q_proj.weight               [2048,1024]  → Q [B,16,T,128]
+k_proj.weight / v_proj      [1024,1024]  → K/V [B,8,T,128]
+注意力各头输出               [B,16,T,128]
+拼接                         [B,T,2048]
+o_proj.weight               [1024,2048]  → 输出 [B,T,1024]
+```
+
+因此不能只把 [S4](#p14-grouped-kv) 的模型尺寸改成 1024，就称它为“Qwen3-0.6B 实现”。S4 的旧假设是 `D=Hq*d`；本章的微型探针另写显式 head dimension，并且仍不提供官方 checkpoint 兼容性承诺。
+
+Q/K 的头数关系遵循 GQA：dense 每组 2 个 Q 头共用 1 个 KV 头，MoE 每组 8 个 Q 头共用 1 个 KV 头。分组按连续顺序，例子 Hq=4、Hkv=2 的对应关系是 `[0,0,1,1]`，不是轮流的 `[0,1,0,1]`。
+
+## P25.4 走一遍 block：QK-norm 不是又一个 LayerNorm
+
+在本章选定的实现里，一个 block 的主顺序为：
+
+```text
+x → RMSNorm → Attention → 加回 x
+  → RMSNorm → dense SwiGLU 或稀疏 MoE → 加回上一步结果
+```
+
+注意力内部还有一层细节：Q、K 在投影并按头切开后，分别做 **QK-norm**，随后才应用 RoPE；V 不做这两项变换。
+
+RMSNorm 对最后一维计算：
+
+$$
+\operatorname{RMSNorm}(z)_j
+= g_j\frac{z_j}{\sqrt{\frac{1}{d}\sum_{i=1}^{d}z_i^2+\epsilon}}.
+$$
+
+对 block 输入，最后一维是 D；对单个 Q/K 头，最后一维是 d。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 d 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 Hq×d 或 Hkv×d 的 gain**。这会直接影响参数统计。
+
+本章探针保留 float64 精度来做标量对照；固定官方实现的 RMSNorm 有转到 float32 求统计量再转回的逻辑。即使数学结构一样，两种数值路径也不能宣称逐位等价，更不代表 BF16 GPU kernel 的误差行为已经复现。
+
+RoPE 也有布局约定。本快照使用 **split-half** 配对：d=4 时，维度 0 与 2 配一对，1 与 3 配一对。若记角度为 θ，第一对是：
+
+$$
+(z_0,z_2) \mapsto
+(z_0\cos\theta-z_2\sin\theta,\ z_2\cos\theta+z_0\sin\theta).
+$$
+
+另一种实现可能把相邻维度 0/1、2/3 配对。它们都能表达旋转位置机制，但权重布局、旋转方式和 checkpoint 转换必须一致；不能把一种公式塞进另一种布局，再仅凭“都叫 RoPE”认定兼容。
+
+缓存时保存已经做过位置旋转的 K 和原始投影 V。追加 chunk 的位置从旧缓存长度开始，旧 K 不能再旋转一次；这些正是后面的独立数值测试检查的地方。
+
+## P25.5 SwiGLU 与专家：激活少，不代表存储少
+
+Dense FFN 与每个 MoE 专家都使用三矩阵的 SwiGLU 结构：
+
+$$
+\operatorname{FFN}(x)=W_{down}
+\big[\operatorname{SiLU}(W_{gate}x)\odot(W_{up}x)\big].
+$$
+
+宽度为 M 时，三个无偏置矩阵一共 `3*D*M` 个参数。**gate_proj 是 SwiGLU 的门，不是 MoE 的路由器。** MoE 另有一个从 D 到专家数 E 的 `mlp.gate`，它决定调用哪些完整专家。
+
+对本章的 30B-A3B，固定配置是：E=128、k=8、每个专家 M=768，`decoder_sparse_step=1`、`mlp_only_layers=[]`。因此 48 层均使用 MoE；固定实现中没有额外的 shared expert 分支。不要把 [S5 教学 MoE](#p18-moe) 默认的共享专家设置照搬进来。
+
+单个 token 的路由流程是：
+
+1. 计算 128 个 router logits。
+2. 对全部 logits 做 softmax，选取最大的 8 项。
+3. 因为 `norm_topk_prob=true`，把这 8 项重新归一化到和为 1。
+4. 只计算选中专家，把结果按重新归一化的权重相加。
+
+手算一个更小的例子：4 个专家的 logits 为 `[2,1,-1,0]`，取前 2 个，则选择专家 0、1；混合权重等于 `[exp(2),exp(1)]` 再归一化，约为 `[0.731059,0.268941]`。不能直接拿全体 softmax 的前两项相加，因为它们的和小于 1。
+
+我们的实现采用“选中 logits 再 softmax”，在正常有限数值下与上述归一化等价；相等 logits 用较小专家 ID 优先，只是为了教学可复现，**不是官方 `topk` 对 ties 的契约**。没有实现路由辅助训练损失、专家容量丢弃或跨 GPU 分发，也不把这种实现称为官方性能复刻。
+
+## P25.6 参数到底有多少：先声明口径，再按矩阵加总
+
+`parameter_inventory` 只生成名字与形状，不分配真正的大矩阵。参数数目由各维乘积得到，再按组件求和。
+
+对这两个对象，一层的注意力投影参数为：
+
+$$
+P_{attn}=2D(H_qd)+2D(H_{kv}d).
+$$
+
+前一项对应 Q 与 O，后一项对应 K 与 V。再加 Q/K norm 的 `2d`、两个 block RMSNorm 的 `2D`。最终输出前的 RMSNorm 另加 D。
+
+Dense 每层再加 `3DM`。MoE 每层再加 router 的 `DE` 与全部专家的 `E*3DM`。embedding 为 `VD`；输出 head 也是 `VD`，但只有未绑定时才新增一份独立参数。
+
+| 组件 | 0.6B dense | 30B-A3B MoE |
+| --- | ---: | ---: |
+| 输入 embedding | 155,582,464 | 311,164,928 |
+| 独立输出 head | 0，和输入绑定 | 311,164,928 |
+| 全层注意力投影 | 176,160,768 | 905,969,664 |
+| 全层 Q/K norm | 7,168 | 12,288 |
+| 全层 block RMSNorm | 57,344 | 196,608 |
+| dense FFN | 264,241,152 | 0 |
+| 全层 router | 0 | 12,582,912 |
+| 全部专家 FFN | 0 | 28,991,029,248 |
+| 最终 RMSNorm | 1,024 | 2,048 |
+| **唯一架构参数总数** | **596,049,920** | **30,532,122,624** |
+| 排除输入 embedding／独立输出 head | 440,467,456 | 29,909,792,768 |
+
+“唯一架构参数”指按上述实现结构、绑定关系去重后的参数元素数，**不是实际权重文件的字节数、序列化键的机械求和、显存实测或优化器状态大小**。本章不读取权重文件，因此也没有核验某个存储格式是否重复保存了绑定矩阵。
+
+还需要单独定义“激活参数”。本章采用可复算的 **active-matrix convention**：完整计入 embedding／输出矩阵、注意力、norm、router；每个 MoE 层只计 k 个完整专家矩阵。按此定义，30B-A3B 为：
+
+$$
+30,532,122,624 - 28,991,029,248
++ \frac{8}{128}\times28,991,029,248
+= 3,353,032,704.
+$$
+
+这与[该版本模型卡](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md)描述的约 30.5B 总参数、3.3B 激活参数处在相应量级，但我们明确保留自己的完整计算口径，不把近似标签当作严格恒等式。
+
+为何强调“完整矩阵”？输入 embedding 实际查表只访问选中 token 的行；计算次数、内存读取、算术 FLOPs 不等于这一参数计数。一个 batch 中不同 token 还可能走不同专家，选中专家的并集超过 k。**A3B 不等于只需装下 3B 权重，更不意味着它一定比某个 dense 3B 更快。**
+
+## P25.7 KV cache：这次真的按 Hkv 计算
+
+不量化、各层都保存 K/V 时，逻辑 payload 为：
+
+$$
+\text{bytes}=2\times L\times B\times T\times H_{kv}\times d\times s,
+$$
+
+其中 2 对应 K 与 V，s 是每个元素的字节数。假设 B=1、T=4096、BF16 的 s=2：
+
+- 0.6B：469,762,048 字节，即 **448 MiB**；
+- 30B-A3B：402,653,184 字节，即 **384 MiB**。
+
+这是一个很好的反直觉检查：**总参数更多，不代表每条序列的 KV cache 一定更大。** MoE 对象有更多层，但 KV 头数更少。缓存量主要取决于上述维度，不直接由专家总参数推出来。
+
+如果误把 Hq 代替 Hkv，dense 会多算 2 倍，MoE 会多算 8 倍。本章注意力在运算时临时展开 KV 头，返回的缓存仍是 `[B,Hkv,T,d]`；这不是 FlashAttention，不声称避免了注意力矩阵或临时展开的内存。
+
+数字只覆盖张量逻辑内容，不包括权重、临时工作区、allocator、页面碎片、通信缓冲、padding、量化 scale 或多请求调度。不要据此直接宣布“某张显卡一定装得下”。
+
+## P25.8 Tokenizer 与模板：模型看到的不是裸问题
+
+本地保存的是 `tokenizer_config.json`，其中含有正式的 Jinja chat template 与 added-token 元数据。**它不是完整 BPE tokenizer**：没有 `vocab.json`、`merges.txt` 或 `tokenizer.json`，所以本章不把中文字符串真正编码成官方 token 序列，也不做 Qwen encode/decode 的 round-trip 宣称。
+
+同样不要把 `vocab_size=151936` 当作“中文字符有 151936 个”，或从几个 added token 推断整套 BPE 词表规模。
+
+`render_prompt` 真正执行保存的官方模板，但把练习范围限制为一个 user 文本消息。对问题 `1+1?`、`add_generation_prompt=True`：
+
+```text
+enable_thinking=True 的结尾：
+<|im_start|>user
+1+1?<|im_end|>
+<|im_start|>assistant
+
+False 比 True 多加的后缀（空行有意义）：
+<think>
+
+</think>
+
+```
+
+注意 True 的模板**没有预先写入 `<think>`**。False 则把一个空 thinking 块作为 assistant 的前缀放进 prompt；这部分已属于输入，不是后来生成的输出 token。为了显示清楚，上面排版有说明行；精确换行由模板 golden 测试比对。
+
+两份快照的 added-token 元数据都给出 `<think>` 为 ID 151667、`</think>` 为 151668；它们的 `special` 标记是 false。带尖括号的保留文本，不一定就被 tokenizer 标成“special”；`skip_special_tokens` 不能代替明确的 reasoning 解析。
+
+另一个容易混淆的字段是 BOS：模型配置含 `bos_token_id=151643`，但 tokenizer 配置的 `bos_token` 为 null、`add_bos_token=false`。不能看见前者就手工往每段对话前重复加 BOS。具体输入应遵循所选 tokenizer 与模板的处理规则。[固定 tokenizer 配置](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json)
+
+完整模板还包含历史 assistant、工具调用等分支；本章只测试单轮文本路径，不假装单轮测试已经覆盖所有工具／多轮语义。
+
+## P25.9 Thinking、non-thinking、预算是三件事
+
+对这两个 checkpoint，模型卡描述了硬开关 `enable_thinking`，以及在启用 thinking 时使用 `/think`、`/no_think` 的软提示机制。**软提示是给模型的文本，不是模板解析器里的另一个布尔开关。** 测试会确认：在 user 文本里加 `/no_think`，模板仍保留这段文本，不自动追加 False 的空块。[0.6B 固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)
+
+至于“想多久”，又是预算问题。`max_new_tokens` 限制整个新生成序列，包括思考、闭合标记、最终答案等；它不是“答案最多多少 token”，也不会自动给答案另留一份额度。`completion_budget` 只是对已经得到的 ID 记账，不会迫使模型结束思考，更不是推理预算控制器。
+
+手算一个假想输出，不把它当作真实模型生成：
+
+```text
+生成 ID：[151667, 7, 8, 151668, 9]
+总额度：6
+思考段：3 个 ID（本口径包括开头 <think>）
+闭合：  1 个 ID（</think>）
+答案段：1 个 ID
+合计：  5 个 ID，剩余 1
+```
+
+若额度只有 3，已拿到 `[151667,7,8]`，还没有 `</think>`：应报告“思考未闭合、答案段长度 0”，不能把末尾 8 擅自当作最终答案。此练习把第一个闭合标记作为分界，假设输入是单个正常完成序列；不是任意嵌套标签、工具输出或流式协议的通用解析器。non-thinking 模式则把后续生成序列全记为答案段，包括末尾 EOS 等控制 ID，并不声称所有 ID 都是可显示文本。
+
+此外还有上下文预算：`prompt token 数 + max_new_tokens` 不能超过选用的运行限额。模板中的角色边界、空 thinking 块、历史消息也属于 prompt；字符数不能代替 token 数。`context_budget(12,8,20)` 正好用完 20，`context_budget(12,9,20)` 必须拒绝。
+
+最后，**配置长度不等于能力保证**。两个 config 的 `max_position_embeddings` 都是 40960；对应模型卡描述的原生上下文是 32768。30B-A3B 的卡另外说明借助 YaRN 达到 131072，并解释 40960 默认值的预算安排。本地快照的 `rope_scaling=null`，本章没有启用或验证 YaRN，更不能从 40960 的字段宣布 131072 已经可用。[30B-A3B 长文本说明](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md#processing-long-texts)
+
+本章保存的 generation config 声明采样、temperature=0.6、top-p=0.95、top-k=20。官方卡对 non-thinking 推荐的是另一组采样设置；模板开关本身不会自动重写所有生成参数。不要把上一章用于严格对照的教学贪心解码直接包装成这里的推荐生产配置。
+
+## P25.10 运行：不下载权重，也能得到有意义的证据
+
+在仓库根目录运行：
+
+```bash
+# 标准库：校验本地快照、输出每个组件的来源与预算。
+python code/26_qwen3_case.py
+
+# 仓库基线 PyTorch/Jinja2：执行随机小模型和模板路径。
+OMP_NUM_THREADS=1 python code/26_qwen3_case.py --torch
+
+# 分开报告标准库、模板与数值测试；跳过不是通过。
+OMP_NUM_THREADS=1 python -m unittest discover -s tests -p test_qwen3_case.py -v
+```
+
+默认输出为每项组件附上带完整 revision 的 source URL，并打印本章精确参数和缓存数字。程序无网络请求；测试还封锁网络与可选依赖，确认标准库路径仍可完成。
+
+`--torch` 使用 CPU、PyTorch `2.14.1+cpu`、Jinja2 `3.1.6`、种子 250、单线程、float64。缺少 PyTorch 或 Jinja2 时给出安装 `requirements.txt` 的提示并以状态 2 退出；不是“只打印配置就算可选实验通过”。本章没有额外安装 Transformers，也不修改仓库的依赖锁定。
+
+微型配置为 D=8、Hq=4、Hkv=2、d=4、2 层、词表 17，仍然保留 `Hq*d != D` 的关键结构。dense 的 FFN 宽度 12；MoE 是 4 个宽度 6 的专家、每 token 选 2 个，没有共享专家。它们只随机初始化，没有训练。
+
+本次实际输出的稳定字段为：
+
+```text
+tiny dense: params=1536; shape=(1, 5, 17); cache_bytes=1280
+tiny moe:   params=2312; shape=(1, 5, 17); cache_bytes=1280
+pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
+```
+
+脚本还报告完整输入与 `[2,3]` 分块输入之间的最大 logits 误差，本次分别约 `1.776e-15`、`2.220e-16`，测试阈值为 `1e-10`，不把浮点末位作为跨机器固定输出。1280 字节按 float64 的每元素 8 字节计算，不要拿它与上一节 BF16 的结果混比。
+
+这个 probe 支持等长、无 padding 的 eval 批次，并保护缓存 owner、参数版本、形状、dtype 和上下文边界。缓存应由调用者视为只读；手工修改 tensor 内容或用 `.data` 绕过 PyTorch 版本跟踪不属于支持的流程。它没有训练目标、量化、fused attention、分布式路由或预训练 state 加载，不能作为真实服务的替代品。
+
+## P25.11 为什么这次不是让两个错误实现互相作证
+
+测试分成四层：
+
+1. **来源与算术。** 固定仓库、完整 revision、关键哈希；用独立手写乘法表达式检查真实参数总数，用明确字节数检查两份真实 KV 预算。修改快照或 revision 必须失败。
+2. **实际结构。** 用 `named_parameters()` 比对微型模型所有名字、形状、绑定去重后的总数；不是只比较两个计数公式。
+3. **独立数值。** Python 标量 oracle 从每个权重元素出发，自己做线性层、RMSNorm、split-half RoPE、因果注意力、SwiGLU 和专家混合，不调用生产 helper 或 tensor matmul。它同时对照 dense/MoE 的最终 logits 与每层真实 K/V。
+4. **行为与反例。** 比较任意分块与完整前缀，改未来 token 后确认过去输出不变；检查 sparse dispatch 真正只调用选中的专家；校验坏缓存和预算边界。
+
+还实际执行 **12 个语义错误变体**，并要求独立断言能抓住它们：重复计算绑定 head、用 D/Hq 代替显式 d、漏掉 QK norm 参数、漏计闭合 token、把未闭合思考误作答案、错排 GQA 头、丢失缓存 offset、错用相邻 RoPE 配对、跳过 Q norm、取消选中权重归一化、计算全部专家、再次旋转旧 K。不是在注释里列出错误后就算“做过负例”。
+
+此外，利用已有的独立环境，实际运行了可选官方参照测试 `test_random_tiny_official_dense_and_moe_shapes_logits_and_cache`：Transformers 4.51.3、PyTorch 2.14.1+cpu、CPU float32、种子 89、eager attention，分别构造官方随机 tiny dense／MoE 模型，严格加载同一套微型随机参数。两者参数数目匹配；本次 dense logits 最大差为 0，MoE 约为 `2.384e-7`，逐层 K/V 在 `atol=rtol=3e-6` 下通过。测试不调用 `from_pretrained`，没有下载模型或 tokenizer；缺少这组独立环境时明确跳过，不能算通过。仓库基线环境本次 21 项通过、该可选项跳过；独立环境 22 项全部通过。
+
+这个交叉检查只验证小型结构和数值路径，不表示已经加载或运行上述真实 checkpoint。
+
+这些检查能证明这份教学代码在已覆盖条件下符合我们明确写出的数学规则，**不能证明真实 checkpoint 的输出质量、GPU 性能、长上下文可靠性或 reasoning 能力**。
+
+## P25.12 可选真实推理：明确标记为未运行
+
+如果读者有足够内存、磁盘和下载条件，可以另外使用 0.6B 做真实推理，但这不是本章必修，也不是 `--torch` 的含义。本书本次没有运行以下路线：
+
+1. 建立独立环境，核对所选 Transformers 版本及依赖；这里的解释快照是 v4.51.3，不据此要求替换仓库基线环境。
+2. tokenizer 与模型都传入同一个 `Qwen/Qwen3-0.6B` 和完整 revision `c1899de289a04d12100db370d81485cdf75e47ca`，不能只锁模型、不锁 tokenizer。
+3. 按该版本的正式 `apply_chat_template` 生成输入，并用真实 tokenizer 测量 prompt 长度。选择 thinking 开关后，还要单独核对采样设置与总输出预算。
+4. 记录设备、软件版本、精度、实际生成长度、是否截断、原始输出与解析结果；不要把“能加载”写成质量复现。
+
+不要为了跟着本章先下载 30B-A3B 权重。读取几 KB 的配置与运行几十 GB 的权重，是完全不同的资源承诺。
+
+## P25.13 自测：每道题都有可运行的答案
+
+先手算，再在 `tests/test_qwen3_case.py` 中找到同名测试。
+
+1. **0.6B 的 Q 投影输出为什么不是 1024？** 因为显式 d=128、Hq=16，输出为 2048；O 再映回 1024。见 `test_exercise_explicit_head_width_and_qk_norm_weights`。
+2. **Q norm 是否有 16×128 个 gain？** 没有，本快照只有 128 个，按最后一维归一化、跨头共享。对应同一形状测试及 `test_exercise_qk_norm_and_split_half_rotation_hand_reference`。
+3. **0.6B 的输入／输出 embedding 是否应该计算两遍？** 不应，绑定后唯一架构参数为 596,049,920。见 `test_exact_real_parameter_totals_independent_hand_arithmetic`。
+4. **30B-A3B 应该再加宽度 6144 的 dense FFN 吗？** 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成 4，并排除零基第 1 层后，只有第 3 层是 MoE。见 `test_mixed_sparse_layer_selection_no_unused_dense_mlp_count`。
+5. **四个专家 logits 为 `[2,1,-1,0]`、top-k=2，实际调用谁？** 仅专家 0、1，权重重新归一化约为 0.731059、0.268941。见 `test_sparse_moe_dispatch_and_selected_probability_hand_oracle`。
+6. **BF16、单条 4096-token 序列，两个真实配置的缓存谁大？** dense 为 448 MiB，MoE 为 384 MiB；都不含权重和临时内存。见 `test_exercise_cache_bytes_and_head_ratio`。
+7. **`enable_thinking=False` 和在文本里写 `/no_think` 相同吗？** 不同。前者改变模板后缀；后者是保留给模型解释的软提示。见 `test_exercise_official_template_not_naive_concatenation`。
+8. **额度为 3、没有闭合思考标签时，是否已经有答案？** 不能这样认定；本练习记答案长度 0。闭合标记也占总输出额度。见 `test_exercise_budget_counts_closure_and_missing_answer`。
+9. **把五个 token 分成 1、2、2 三块，缓存长度该是什么？** 依次为 1、3、5；最终 logits 要与独立完整前缀一致，微型 float64 K/V 共 1280 字节。见 `test_arbitrary_chunks_match_independent_full_prefix_and_cache_bytes`。
+10. **微型参数表只是公式吗？** 不是，还核对了实际模块的每个参数名字、形状和唯一总数：dense 1536，MoE 2312。见 `test_exercise_tiny_actual_named_shapes_and_unique_counts`。
+
+读完本章，应能把“Qwen3 用了 GQA 和 MoE”改写为更有信息量的句子：**这份完整 revision 的 dense／MoE checkpoint，按这些配置和实现证据使用了这些组件；我们只在这个小型、可复算的范围内验证过它们。** 这也是阅读下一个模型案例时应保留的习惯。
+
+
+---
+
+# 模型案例（P26）：DeepSeek 的跨版本证据地图 {#p26-deepseek}
+
+[]{#第9章走向未来从经典-transformer-到-gpt-4deepseek}
+
+[]{#第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek}
+
+> 本章不是“在普通电脑上复现 DeepSeek”，而是练习更重要的能力：面对一个真实模型，分清**主干架构、训练方法、推理系统和证据来源**。先读 [P14 的 MLA](#p14-grouped-kv)、[P17 的 CED](#p17-ced)、[P18 的 MoE](#p18-moe) 与 [P23 的 MTP](#p23-mtp)。本章 CPU 实验只用 Python 标准库，不下载权重、不运行远程代码、不需要 GPU。
+
+## P26.1 先锁定对象，再讨论“DeepSeek 用了什么”
+
+“DeepSeek 使用 MoE”“R1 使用强化学习”“V4.1 使用 MTP”看起来像同一种句子，实际在说不同层面的事情。前一句可能描述计算图，中间一句描述权重怎样训练，后一句甚至可能把配置字段误读成训练事实。
+
+我们把一次可靠阅读分成四问：
+
+1. **哪个对象？** 精确到仓库、模型名和不可变 revision，而不只是品牌或系列。
+2. **哪类证据？** 配置给出尺寸；源码给出数据流；论文给出训练流程与实验；模型卡概括发布范围。它们不能相互代替。
+3. **本书做了什么？** 提取字段、运行小矩阵、验证坐标，还是跑了真实权重？只有实际运行的部分才能叫本书实验结果。
+4. **哪里仍未知？** 缺字段不等于功能不存在，参考实现也不等于线上部署实现。
+
+本章核查日期为 **2026-10-19**。以下是官方模型 API 当日返回、随后实际读取配置的固定提交，不是 `main` 别名；后来发布的新模型不自动继承本章结论。
+
+| 本章代号 | 官方仓库 | 固定 revision |
+| --- | --- | --- |
+| V3 | deepseek-ai/DeepSeek-V3 | e815299b0bcbac849fa540c768ef21845365c9eb |
+| R1 | deepseek-ai/DeepSeek-R1 | 56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad |
+| 学生 | deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B | ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562 |
+| V4.1-Flash | deepseek-ai/DeepSeek-V4.1-Flash | 314113f8a7dadb388215396ba5fbee2c610a04d6 |
+
+对应报告分别固定为 [V3：2412.19437v2][V3-paper]、[原始 R1：2501.12948v1][R1-paper]、[V4.1-Flash：2609.19969v1][V41-paper]。这里没有把 R1 后续变体、其他 V4 型号或 API 产品自动算作同一个模型。
+
+[本章脚本](../code/27_deepseek_case.py) 配套五份原始 JSON 配置快照和一份[来源清单](../code/data/deepseek/manifest.json)。清单记录完整 URL、revision、日期和 SHA-256。运行时先检查配置字节，再生成矩阵，全程离线。**哈希只证明当前文件与记录的快照一致，不证明论文正确，更不证明程序刚刚联网复核过。** 论文行是有出处的人工核对记录，程序不会假装自己从 JSON 推导出了训练历史。
+
+![DeepSeek 三条证据路线：V3 把 MLA、MoE 与顺序 MTP 分开；R1 区分后训练教师与异构蒸馏学生；V4.1-Flash 将 CED、CSA2、SWA 和 DSpark 分别对应架构、缓存、局部状态与草稿。底部说明配置、论文和本书实验不能互相冒充。](assets/diagrams/p26-deepseek.svg)
+
+## P26.2 V3：一份参数表里有三种不同问题
+
+### MLA 关心“历史状态存什么”
+
+[V3 报告 §2.1.1][V3-paper] 的 MLA 将内容 K、V 共同关联到低维 latent，另保留解耦的位置键。[固定配置][V3-config] 对应 `kv_lora_rank=512`、`qk_rope_head_dim=64`、`num_attention_heads=128`。这三个量分别是潜变量宽度、位置分支宽度和查询头数，不能把 512 当成头数，也不能因为 `num_key_value_heads=128` 就断定实现缓存了 128 份完整 K、V。
+
+对于这个配置，按“每 token、每层、缓存内容 latent 加共享位置键”的逻辑口径，元素数为：
+
+$$
+512+64=576.
+$$
+
+若假设都用两字节存储，payload 是 1,152 字节。但这是**特定缓存表示的元素账**，不是整个请求的显存：层数、batch、token 数、分配器、量化 scale、工作区与权重尚未计入；具体后端也可能采用不同布局。先说清“谁的哪一块缓存”，再谈节省多少。[P14](#p14-grouped-kv) 解释为什么线性上投影可以吸收到查询或输出侧，本章稍后用三行数据复核它。
+
+### DeepSeekMoE 关心“这次执行哪些 FFN”
+
+[]{#杀手锏-4混合专家架构moedeepseek-的低成本核武器}
+
+[V3 配置][V3-config] 明确：主干 61 层，前 3 层 FFN 为 dense；其后 MoE 每层 256 个路由专家，选择 8 个，并有 1 个共享专家。**不是每一层都有 256 个专家。** 报告中的 671B 总参数与每 token 37B 激活参数是官方模型口径，不是把 `8/256` 直接乘总参数就能得到的数字，也不是本书测得的运行成本。[V3 报告 §4.2][V3-paper]
+
+共享专家像每次都要经过的公共工序，路由专家是当前 token 选择的几条额外支路；它们不是预先贴好“数学专家”“历史专家”的知识库。路由分工由训练形成。
+
+V3 的路由还有一个容易混淆的区别：**纠偏 bias 参与选择专家，选中后的混合权重仍来自原始 affinity。** 配置的 `scoring_func=sigmoid`、`norm_topk_prob=true`、`routed_scaling_factor=2.5` 要分开解释；“auxiliary-loss-free”也不能扩写成“整个训练完全没有任何辅助损失”，报告还保留 sequence-wise 项。[V3 报告 §2.1.2][V3-paper]
+
+本章只做选择与权重的手算，不实现实际的分组/节点受限路由、负载更新、通信、专家网络或辅助目标。完整教学路由和负载实验见 [P18](#p18-moe)。尤其不要将 V3 的 sigmoid 公式照搬到 V4.1-Flash：后者固定配置写的是 `sqrtsoftplus`、384 个路由专家、选择 6 个。[V4.1 固定配置][V41-config]
+
+### MTP 关心“训练时多监督哪个未来位置”
+
+V3 的 MTP 是**顺序模块**，不是在同一 hidden state 上并排挂几个互不相干的线性分类头。后一个预测深度接收前一个深度表示和相应 token 的 embedding；embedding 与输出头共享。报告把额外预测深度设为 1，与固定配置 `num_nextn_predict_layers=1` 对应。[V3 报告 §2.2、§4.2][V3-paper]
+
+因此，主任务预测下一词，额外深度再监督更远一个词。训练时可以提供移位后的真实 token，部署时却不能偷看尚未生成的答案。若用作草稿，仍要由目标模型按投机解码规则验证。**MTP 训练、多 token 草稿、最终接受几个 token，是三个不同问题。** [P23](#p23-mtp) 的独立线性未来头用于学习标签对齐，不冒充 V3 的顺序 MTP。
+
+## P26.3 R1：改变训练路线，不等于发明另一种 Attention
+
+[R1 固定配置][R1-config] 的 `model_type` 仍是 `deepseek_v3`，61 层与 `kv_lora_rank=512` 等字段也能直接读取。但仅靠这些字段，既不能证明模型经过 RL，也不能证明它擅长推理。要回答训练问题，必须读 [R1 原始报告 §2.2–2.4][R1-paper]。
+
+| 对象 | 这份报告描述的训练路线 | 不能偷换成什么 |
+| --- | --- | --- |
+| R1-Zero | 从基础模型开始 RL，不先做冷启动 SFT | 不能据此说所有 R1 都不需要 SFT |
+| R1 | 冷启动 SFT → 推理导向 RL → 拒绝采样与新数据 SFT → 综合任务 RL | 不是简单“在 prompt 里加一步步思考” |
+| R1 蒸馏学生 | 用 R1 整理出的示范数据微调 Qwen/Llama 学生；该报告学生阶段只做 SFT | 不是把教师 MoE 权重逐层缩小，也不是报告证明学生做了同样 RL |
+
+这里的蒸馏首先指**通过教师产出的训练样本传递行为**，不必等同于逐 token 匹配教师所有 logits 的 KL 蒸馏。是否使用 logits、怎样过滤样本、是否再做 RL，都要逐条找证据，不能由“distill”这个词补全。
+
+最小反例就是本章锁定的 [R1-Distill-Qwen-1.5B 配置][Student-config]：`model_type=qwen2`，12 个查询头、2 个 KV 头，28 层。它沿用学生的架构形状，**不能因为名字里有 DeepSeek 就贴上 MLA、256 专家或 CED 的标签**。报告说明该学生基座为 Qwen2.5-Math-1.5B；这和教师属于哪一族是两条不同的谱系。[R1 报告 §2.4][R1-paper]
+
+还有一个适合自己核对的陷阱：学生配置同时包含 `sliding_window=4096` 和 `use_sliding_window=false`。只抽取前一个数字就宣传“用了 4K SWA”是错误读法。配置中的数值、开关、模型代码路径需要一起看。
+
+本章没有微调学生，也没有比较教师与学生分数。想实际理解训练信号，接着看 [P21 的 SFT](#p21-sft)、[P22 的偏好优化](#p22-preference) 和 [P23 的推理/投机解码边界](#p23-mtp)。
+
+## P26.4 V4.1-Flash：必须把 CED、CSA2 和 SWA 分开
+
+### CED：global KV 从哪里来
+
+[V4.1-Flash 报告 §2.1–2.2][V41-paper] 与[固定模型卡][V41-card]描述 40 层语言主干：20 层 causal encoder，再接 20 层 decoder。这里 encoder 仍受因果约束，不是把未来文本全部读完的 BERT 式双向编码器。
+
+decoder 的 **global KV 从最终 encoder 表示投影**，不必等待每个 decoder 层自己的历史表示；但各层 **SWA KV 仍来自本层输入**。一个是全局历史的来源，一个是局部路径的深度，不能把“共享 global KV”误说成“所有层只剩同一份状态”。[固定参考源码 `Attention`][V41-model]也保留这两个入口。
+
+这解释了 CED 为什么能为某些 prefill 路径省去大量 decoder prompt 计算，却没有证明普通逐层参考代码已经实现生产调度。官方参考 `Transformer.forward` 仍遍历主干；报告中的 bounded replay 与部署组织是另一个层面的设计。[P17](#p17-ced) 已用独立数值 oracle 演示：有界 replay 是近似路径，多层叠加后不保证与完整历史严格相等。
+
+### CSA2：global KV 和索引分别由谁生产
+
+根据[报告 §2.3][V41-paper]与[固定 inference 配置][V41-inference-config]，三种模式要画两条来源线，而不是画一条“共享注意力”箭头：
+
+| 模式 | main KV / indexer K | 当前 query 的 Top-K 索引 | 本层 main Q 与 SWA KV |
+| --- | --- | --- | --- |
+| Full | 本层生产 | 本层计算 | 本层计算 |
+| Reindex | 复用前面 Full 层的 bank | 用本层 indexer Q 重新选择 | 本层计算 |
+| Reuse | 复用同一 bank | 复用对此 bank 最近产生的选择 | 本层计算 |
+
+Full 是 **CSA2 路径名**，不是“不加因果 mask 的 dense attention”。Reindex 是重新选择条目，不是重新算整份 KV。Reuse 也不意味着输出相同，因为本层 query 与局部路径仍会改变。[报告 §2.3.1][V41-paper]
+
+固定配置使用从 0 开始的层号：
+
+- `n_layers=40`，`window_size=128`。
+- global KV source 为 `[2,8,14,20]`。
+- index source 为 `[2,8,14,20,24,28,32,36]`。
+- 前 2 层只有 SWA；第 2–19 层压缩比为 2；第 20–39 层为 1。
+- 压缩比数组总长 **43**，尾部 3 项对应额外预测模块，不能因此宣布“主干有 43 层”。
+
+这些值在[外层 `text_config`][V41-config]与[参考 inference 配置][V41-inference-config]中以不同字段名出现；测试逐项对齐它们。本章解析器只遍历前 `n_layers` 项，得到 **2 SWA、4 Full、4 Reindex、30 Reuse**。这是从配置解析的层来源账本，不是执行了 CSA2 attention。
+
+### KV 压缩至少有四本不同的账
+
+请分别记录：每条缓存有多宽、多少 token 合成一条、多少层复用一份、每个数占多少 bit。SWA 的短期状态、indexer K、量化 scale、压缩中间状态和分配器开销还要另算。
+
+[V4.1 报告 §2.4.4][V41-paper]与[固定参考 `_compress_kv`][V41-model]描述 main KV 的 FP4 路径，源码按 16 通道一组使用 E4M3 scale；不能把根配置的权重量化信息直接当作 KV 格式。**权重是 FP8/FP4、KV 是 FP4、文件体积减半、HBM 实占减半，是四种不同主张。** 本章不实现 FP4 编解码，也不从只算数据位宽的账本推断实际服务内存。
+
+## P26.5 同名预测字段，为何不是同一种训练
+
+这是整章最值得保留的一张冲突消解表：
+
+| 证据 | 能直接说什么 | 不能直接说什么 |
+| --- | --- | --- |
+| V3 配置 `num_nextn_predict_layers=1` | 配置记录一个额外预测层 | 单靠此值还不能证明训练流程 |
+| V3 报告 §2.2、§4.2 | 顺序 MTP 与 backbone 联合预训练 | 不能说所有未来版本都照搬 |
+| V4.1 配置 `num_nextn_predict_layers=3`；参考字段 `n_mtp_layers=3` | 发布实现存在三个额外预测模块的配置 | 不能推出 backbone 预训练使用 V3 MTP |
+| V4.1 报告 §2.1、§2.4.3 | backbone 预训练省略 MTP；其后专门训练 DSpark | 不能把字段名当作反驳训练报告的证据 |
+
+这里没有真正的矛盾：**字段名是软件接口，论文陈述的是训练时序。** DSpark 专门训练阶段冻结 backbone；后训练阶段随 backbone 继续训练，但 DSpark 目标的梯度不反传进 backbone。该报告还区分了半自回归草稿与按置信度安排验证的策略。[V4.1 报告 §2.4.3][V41-paper]
+
+固定配置给出 `dspark_block_size=5`、目标层 `[37,38,39]`；这是模块接口，不是“每次一定接受五个词”的保证。[固定 inference 配置][V41-inference-config] 以及[官方 inference README][V41-inference-readme]还提醒我们：参考实现包含 DSpark forward 路径，但 generation 本身仍是普通自回归采样。**存在一个 forward 函数，不等于生成脚本启用了完整投机调度器。**
+
+## P26.6 多模态入口，以及三张进一步阅读的路标
+
+### 视觉 token 怎样接进文本主干
+
+这次讨论的 V4.1-Flash 有图像入口，但不要把这个能力倒灌给本章早先锁定的 V3 或 R1。官方描述的路线是：图像 → DeepSeek-ViT → 局部特征重排 → MLP projector → 与文本 embedding 一起进入语言主干。[固定模型卡][V41-card]
+
+[固定配置][V41-config]给出视觉宽度 1,024、downsample ratio 3、语言宽度 5,120。于是一个 3×3 邻域原来有九个 1,024 维位置，重排后成为一个 **9,216 维向量**，再由 projector 对齐到语言宽度。重排减少位置数，但在投影前并没有丢掉原有九块的通道数。
+
+尤其要看[参考 `Aligner.forward`][V41-vision]：先把 H×W×C 改成通道在前，向**右侧和底部补零**使边长能被 3 整除，再执行不重叠的 `unfold`。一个新 token 内部的顺序是“通道 → 邻域行 → 邻域列”，不是“邻域位置 → 通道”。最后才经过两层 MLP（中间 GELU）。本章只复现前面的坐标重排，不运行 ViT、projector、视觉位置编码或图像理解。
+
+### mHC、Engram、DSpark 各解决什么
+
+| 阅读路标 | 先问的问题 | 本章核对范围 |
+| --- | --- | --- |
+| Single-Pass mHC | 多条 residual stream 怎样混合？哪些依赖妨碍融合？ | 报告 §2.4.1；输入混合系数错开一 block 使用，配置 `hc_mult=4` |
+| Engram | 哪些信息通过条件查表记忆，而不只靠每次 dense 计算？ | 报告 §2.4.2；tokenizer 压缩、哈希和门控；参考配置层号 `[1,14]` |
+| DSpark | 怎样产生草稿，决定验证长度，又保持目标模型负责最终输出？ | 报告 §2.4.3；读训练时序，再区分 forward 与部署调度 |
+
+阅读入口为同一份[版本化报告的 §2.4.1–2.4.3][V41-paper]与[固定源码][V41-model]。不要把三者当作 MLA 的三个别名：一个改 residual stream，一个提供参数化的条件记忆，一个服务于草稿生成。Engram 的内部查表也不能直接称为“联网搜索”或“用户文档 RAG”。
+
+本章只检查 `hc_mult`、`engram_layer_ids`、DSpark 接口字段并建立阅读路线，**未实现这些完整模块，未训练它们，也未验证各自官方收益**。遇到报告之外的新说法，应在矩阵中先记为 unknown，而不是靠熟悉的缩写把空白补满。
+
+## P26.7 自动生成“组件—章节—证据”矩阵
+
+运行 `--matrix-only` 会得到 19 行带出处的完整矩阵，其中 11 行从配置提取，8 行是有版本/位置的人工文献或源码核对。正文压缩展示其中几条，完整字段和来源以脚本输出为准：
+
+| 组件 | 回到本书哪里 | 本章读取的证据 | 输出边界 |
+| --- | --- | --- | --- |
+| V3 MLA | P11 / P14 | [配置][V3-config]：512、64、128 | 尺寸不是语言质量 |
+| V3 MoE | P18 | [配置][V3-config]：dense 前缀 3、256 选 8、共享 1 | 不含真实路由通信 |
+| V3 MTP | P23 | [配置][V3-config] + [报告 §2.2][V3-paper] | 层数与训练流程分开记录 |
+| R1 后训练 | P21 / P22 / P23 | [报告 §2.3–2.4][R1-paper] | 不由配置字段推测 RL |
+| 蒸馏学生 | P14 / P25 | [配置][Student-config]：qwen2、12/2 头 | 不继承教师 MLA 标签 |
+| CED / CSA2 / SWA | P16 / P17 | [配置][V41-inference-config] + [报告 §2.2–2.3][V41-paper] | 解析来源，不执行生产 attention |
+| DSpark | P23 | [配置][V41-inference-config] + [报告 §2.4.3][V41-paper] | 不推出 backbone MTP=true |
+| 视觉重排 | P26 | [Aligner 源码][V41-vision] | 坐标与补零，不是视觉能力测试 |
+| FP4 KV | P24 / P26 | [报告 §2.4.4][V41-paper] | payload 账本，不是总 HBM |
+
+`extract_fields` 遇到缺失字段输出 `null`、记录 missing 路径并标记 `unknown`；它不会用零或 false 顶替。真正存在的 `false` 则保留为 false。程序也不会因为一个配置缺少 `n_routed_experts` 就自动断言“模型完全没有条件计算”。
+
+来源清单与程序是一起维护的教学数据，不是防篡改审计系统：同时修改清单和文件可以产生新的自洽哈希。所以测试还锁住本章声明的 revision 和关键配置值；更新版本时应重新查看原始证据，而不是只改 expected 让测试变绿。
+
+## P26.8 四个可以手算的小实验
+
+### 实验 A：MLA 的两条计算路径
+
+将内容 latent 写成行向量，设三行数据、一个教学头：
+
+$$
+C=\begin{bmatrix}1&2\\-1&1\\2&0\end{bmatrix},\quad
+W_K=\begin{bmatrix}1&2\\-1&1\end{bmatrix},\quad
+W_V=\begin{bmatrix}2&0\\1&3\end{bmatrix}.
+$$
+
+内容 query 为 `[2,-1]`，位置 query 为 `[1,2]`，三行已经旋转过的位置 key 为 `[[0,1],[1,0],[2,-1]]`。内容与位置宽度各为 2，所以此例分母为 √4=2。
+
+路径一展开 `K=CW_K`、`V=CW_V` 再注意力；路径二把 query 改为 `qW_Kᵀ`，先对 C 做加权平均，最后乘 `W_V`。两个路径的 logits 都应为 `[-2,-1,0]`，输出约 `[2.776358,1.274369]`。
+
+这里检查的是线性代数恒等式与位置分支没有丢失；它省略 V3 的多头、query 低秩投影、归一化、真实 RoPE 生成和训练权重。**小实验正确不等于完整 MLA 内核正确。** 测试除比较两路，还直接用 `exp(-2)、exp(-1)、1` 对手工展开后的值 `[4,6]、[-1,3]、[4,0]` 求加权平均，避免两条路径共享同一个错位后一起通过。
+
+### 实验 B：选择 bias 不该污染混合权重
+
+假设三个专家的 sigmoid 后分数为 `[3/4,1/2,1/4]`，选择 bias 为 `[-1,0,1]`，选两个专家。选择用的分数是 `[-1/4,1/2,5/4]`，所以选中专家 **2、1**。
+
+但混合权重来自原始分数，因此是 `(1/4)/(3/4)=1/3` 与 `(1/2)/(3/4)=2/3`。让专家输出分别为 `[2,0]、[0,4]、[6,2]`，共享输出为 `[1,-1]`，教学 scale 暂取 1：
+
+$$
+y=[1,-1]+\tfrac13[6,2]+\tfrac23[0,4]=[3,7/3].
+$$
+
+只要选择顺序不变，改变 bias 的大小不应改变这组权重。若把 bias 加进归一化，数值就变了。固定 V3 配置的 routing scale 是 2.5，脚本参数也可取 2.5；上述输出随之变成 `[6,22/3]`，共享分支不跟着缩放。本实验不把这三位专家宣传成真实训练后的专家。
+
+### 实验 C：CSA2 来源账本，不是压缩算法
+
+用官方层调度，但把序列改成 10 tokens、每条 main latent 仅 4 个数、每数假想 4 bits。为便于手算，暂时不计 scale、indexer、SWA、未满压缩组的状态和字节对齐。
+
+- 18 个 encoder global 层的压缩比为 2，每层对应 5 条已完成的 main 记录。
+- 20 个 decoder global 层的压缩比为 1，每层对应 10 条。
+- 假想“不共享”时共 `18×5+20×10=290` 条。
+- 按固定 source 共享时只有三份 ratio=2 bank 和一份 ratio=1 bank，共 `3×5+10=25` 条。
+
+| 教学口径 | bank 数 | 完整记录数 | 仅 main 数据 payload |
+| --- | --- | --- | --- |
+| 假想逐层独立 | 38 | 290 | 580 bytes |
+| 按配置 source 共享 | 4 | 25 | 50 bytes |
+
+这不是官方“890 bytes/token”等指标的复现，也不是同模型两个真实实现的显存比较。脚本没有生成任何压缩向量、学习 compressor 权重、计算 sparse indexer 或调用 GPU kernel。50 与 580 只回答这里明示的四维小账本问题。
+
+因果性还有一个边界：ratio=2 时，原始位置 0 到来后还没有完整组；位置 1 到来后才有第一组。`completed_entries(q,r)=(q+1)//r`，不能向上取整让第一组在位置 0 就可见。组的代表位置或 RoPE 位置，与组内所有 token 是否已经到齐，是两个不同问题。测试枚举各组末位置作为独立 oracle。
+
+### 实验 D：九个视觉位置如何变一个
+
+用 `grid[y][x][c]=100y+10x+c` 构造 6×6×2 特征。按 3×3 重排后是 4 个 token，每个 18 维，72 个数仍然是 72 个数。第一行应为：
+
+```text
+[0,10,20,100,110,120,200,210,220,
+ 1,11,21,101,111,121,201,211,221]
+```
+
+如果把通道放到最内层，会得到另一个看起来同样是 `[4,18]` 的张量，却无法与 projector 的输入通道对齐。**形状对，不等于坐标对。** 测试用“由输出 feature 编号反推输入坐标”的独立公式检查每个元素，而不是只检查 shape。
+
+4×5×2 的输入会补成 6×6×2，再输出 4×18；原来 40 个数都应保留，另有 32 个填充零。它不是把 3×3 邻域求平均，不能用平均池化来替换这一步。
+
+## P26.9 运行、可验证结果和失败边界
+
+在仓库根目录运行，不需要安装 PyTorch：
+
+```bash
+python code/27_deepseek_case.py
+python code/27_deepseek_case.py --matrix-only
+python code/27_deepseek_case.py --json
+python -m unittest discover -s tests -p 'test_deepseek_case.py' -v
+```
+
+默认输出完整证据矩阵和四个实验；`--json` 输出可被程序读取的同一份报告，`--matrix-only` 只打印矩阵。三个模式互斥；从其他工作目录运行也会按脚本位置找到快照。程序不联网、不下载权重，也不执行配置中的 `auto_map`。
+
+本章实际运行的标准库 CPU 结果：
+
+| 检查 | 结果 | 结论上限 |
+| --- | --- | --- |
+| MLA 展开/吸收输出最大差 | 约 2.22×10⁻¹⁶ | 双精度小矩阵等价；末位允许平台差异 |
+| 路由选中与输出 | `[2,1]`；`[3,2.333333333333333]` | 选择偏置与混合权重分离 |
+| source 共享 main 账本 | 25 条、50 bytes | 明示假设下的整数账 |
+| 视觉重排 | `[6,6,2] → [4,18]` | 元素与坐标检查 |
+| 专项测试 | 16 项通过，无依赖跳过 | 只覆盖本章代码与快照契约 |
+
+专项测试包含六个**实际执行的错误变体**：漏转置、漏位置分支、bias 污染权重、按每层重复存 bank、提前暴露未完成组、调换视觉通道顺序。它们都能返回数值，由数值/坐标断言抓住；没有把语法错误或程序崩溃伪装成“成功检测”。此外还测试坏哈希、浮动 revision、路径越界、缺字段、非法 source 调度、补零、空序列账本和配置别名一致性。
+
+我们没有运行官方权重、训练、GPU 内核、质量 benchmark 或服务吞吐。本书输出不会将官方分数拷贝成“本书实测”。即使官方参考自测能跑通，也只说明它承诺的内容：其 README 明说自测使用未初始化权重，检查形状与 kernel 连接，**不验证真实数值质量**。[官方 inference README][V41-inference-readme]
+
+## P26.10 旧版第 9 章的直觉桥梁：保留有用内容，修正大而化之的结论
+
+[]{#架构选择为什么开放式生成常用-decoder-only}
+[]{#三种架构各自擅长什么}
+[]{#表-9-1三大-transformer-派系历史战役复盘表}
+
+### 三种架构不是“淘汰赛”
+
+| 结构 | 主要信息流 | 适合用来理解的任务 |
+| --- | --- | --- |
+| Encoder-only | 允许输入位置双向交互，再读出表示 | 分类、检索、抽取；BERT 是典型阅读入口 |
+| Encoder-decoder | 编码输入，decoder 读取编码结果并因果生成 | 翻译、摘要；T5 提供 text-to-text 例子 |
+| Decoder-only | 每步只看前文，继续预测下一 token | 开放式续写；本书 Baby-GPT 使用此路线 |
+
+[BERT 原论文 v2](https://arxiv.org/abs/1810.04805v2)与 [T5 原论文 v4](https://arxiv.org/abs/1910.10683v4)给出前两种代表。选择某种结构并不证明另外两种被淘汰。尤其 V4.1-Flash 的 causal encoder，与表中双向 encoder 不是同一个因果设定；不能看到 encoder-decoder 两个单词，就把它与原版翻译 Transformer 的信息流完全等同。
+
+[]{#现代大模型的五种关键改进原理与直觉}
+
+### 五个基础构件仍然有用，但不是每个模型的固定套餐
+
+[]{#杀手锏-1旋转位置编码rope复数平面上的几何旋转}
+
+**RoPE 的手算直觉。** 对二维向量旋转：
+
+$$
+R(\theta)\begin{bmatrix}x\\y\end{bmatrix}
+=\begin{bmatrix}\cos\theta&-\sin\theta\\\sin\theta&\cos\theta\end{bmatrix}
+\begin{bmatrix}x\\y\end{bmatrix}.
+$$
+
+座位 m 的 query 旋转 mθ，座位 n 的 key 旋转 nθ；点积可整理成净旋转 `(n−m)θ`，所以相对位置进入分数。例如 `[1,0]` 旋转 π/2 得到 `[0,1]`，但其长度仍为 1。这个几何关系不自动保证任意长上下文都可靠，完整数值与 YaRN 边界见 [P12](#p12-rope)。
+
+[]{#杀手锏-2rmsnorm先不管平均数只控制振幅}
+
+**RMSNorm 先控制尺度，不减均值。** 实际公式要保留 epsilon：
+
+$$
+\operatorname{RMSNorm}(x)=\frac{x}{\sqrt{\operatorname{mean}(x^2)+\epsilon}}\odot\gamma.
+$$
+
+例如 `[3,4]` 的均方根为 √12.5；令 γ 为 1、忽略小 epsilon，归一化后约 `[0.849,1.131]`，均值不为零。它与 LayerNorm 不是同一个操作，也不能保证固定“快 10%–50%”；速度依赖实现和硬件。[P13](#p13-modern-block) 有带 epsilon 的实现与反例。
+
+[]{#杀手锏-3swiglu-激活函数带有开关的神经元}
+
+**SwiGLU 的两条支路。** 一路准备内容，另一路用 SiLU 调节它：
+
+$$
+\operatorname{SwiGLU}(x)=
+\bigl(\operatorname{SiLU}(xW_g)\odot xW_u\bigr)W_d.
+$$
+
+中间的 ⊙ 是逐元素乘法，不是点积。若某个 gate 输入恰为 0，SiLU(0)=0，该通道的内容支路就被关掉。门控不等于 MoE 路由：前者通常调节 dense 中间通道，后者决定哪些专家支路参与。具体参数量与隐藏宽度要一起算，见 [P13](#p13-modern-block)。
+
+**MoE 的公共工序与选修工序。** 本章 P26.2 和实验 B 保留了“共享专家每次参加、路由专家只选一部分”的直觉，并补上权重归一化手算。不要把总参数、激活参数、显存驻留参数当作同一个数，也不要给专家预先贴知识领域标签。
+
+[]{#杀手锏-5kv-cache-机制消除重复运算的打字机}
+
+**KV Cache 消除重复计算，不消除历史。** 对固定因果模型和未修改的前缀，旧 K、V 不必每个生成步骤重新计算。朴素逐次重算长度 t 的 dense attention，单步约 t²，累积到 N 约 N³；缓存后每次新 query 对历史约 t，累积约 N²。这里仅计算 attention 位置对，不包含投影、FFN、prefill、batch 或内存带宽。缓存既不把全局注意力变成常数，也不能跨权重修改后继续当成有效状态；具体契约见 P11 与 [P15](#p15-attention-systems)。
+
+[]{#顶级大模型架构进化对照表}
+[]{#表-9-2从经典-transformer-到-deepseek-的参数与架构进化演变}
+
+### 用可追溯对照代替“从旧到新全都更强”的大表
+
+| 精确对象 | 本章有证据的重点 | 不应外推 |
+| --- | --- | --- |
+| 固定 V3 | MLA、DeepSeekMoE、顺序 MTP | 不是所有 DeepSeek 的统一模板 |
+| 原始 R1 与固定教师配置 | V3 形状主干与特定后训练流程 | 训练路线不能只由 config 推断 |
+| 固定 R1-Distill-Qwen-1.5B | Qwen 学生架构、12/2 查询/KV 头 | 学生不继承教师所有构件 |
+| 固定 V4.1-Flash | CED、CSA2、局部 SWA、独立训练 DSpark、图像入口 | 不能只按编号认为是“V3 加几层” |
+
+来源分别在本章版本表、组件矩阵和原始配置链接中。旧式“最大上下文”一列也需要拆开：V3 本章固定配置 `max_position_embeddings=163840`，模型卡/报告描述的上下文能力另有口径，**配置允许的索引边界不是已验证质量范围，更不等于某个 API 当前限制**。[V3 配置][V3-config] [V3 模型卡][V3-card]
+
+[]{#尺度定律scaling-law与神奇的涌现现象}
+
+### 尺度与“涌现”：先问测量方法
+
+扩大参数、数据与计算预算，经常是研究训练损失如何变化的一条路线，但性能也取决于数据质量、优化、架构与评测。某项离散任务从“全错”到“答对”，可能显得突然；不能据此断言内部能力也在同一刻跳变，更不能由一张平滑下降曲线推导人类式心智。
+
+对本书读者更实用的问题是：改变了哪个变量？有没有固定训练数据与评测？损失、准确率、延迟、内存是否各自测量？[P19](#p19-pretraining) 和本章的证据矩阵，就是避免把“规模更大”当作万能解释的起点。
+
+## P26.11 小练习与参考答案
+
+1. 删掉 V3 快照中的 `kv_lora_rank` 后直接运行，会先遇到 unknown，还是校验错误？为什么这两种机制都需要？
+2. 为什么 V4.1 的 43 项压缩数组只得到 40 行主干调度？第 25 层的 KV 与索引分别来自哪里？
+3. ratio=2 时，query 位置 0、1、2 各能看见几个完整压缩组？把向下取整改成向上取整错在哪里？
+4. 保持实验 B 的专家排序不变，只把 bias 改成 `[-4,0,2]`。输出应不应该变？若把 routing scale 改成 2.5 呢？
+5. 4×5×2 视觉特征以 r=3 重排后形状是多少？增加的零有几个？只检查 shape 为什么不够？
+6. 看到 `n_mtp_layers=3`，能否在矩阵里添加 `backbone_mtp=true`？看到学生 `sliding_window=4096`，能否宣布它启用了 SWA？
+
+**参考答案（前五项的数值/契约和第六项的证据边界均有专项测试）：**
+
+1. 先触发 SHA-256 不匹配；它保护离线快照。测试直接把缺字段字典送给 extractor 时才得到 unknown，保护解析语义。两者分别回答“文件是否是那份”和“字段是否已知”。
+2. `n_layers=40` 是主干边界，尾部三项另属额外模块。第 25 层是 Reuse：KV 来自 20，最近索引来自 24，本层 SWA 仍是 25。
+3. 分别为 0、1、1；向上取整让尚未收齐的组提前进入历史，违反因果可见性。
+4. 不变，仍为 `[3,7/3]`；scale=2.5 时为 `[6,22/3]`。纠偏只改选择，scale 只乘路由混合项。
+5. 输出 4×18，补 32 个零；交换通道与局部坐标的顺序不会改变 shape，却会改变每个维度的意义。
+6. 都不能。训练时序要读报告，而窗口开关在该学生配置中为 false。既不应把缺证据写成 false，也不应把出现一个数字写成 true。
+
+[]{#本章小结-1}
+
+本章完成的不是“复现一个品牌”，而是搭起一条可检查的链：**固定对象 → 找到证据 → 说明边界 → 做小实验 → 用独立 oracle 与错误变体检查**。V3、R1、蒸馏学生和 V4.1-Flash 可以放在同一张地图上，但不能被拼接成一个现实中不存在的超级架构。
+
+## P26.12 原始资料与版本
+
+- [V3 技术报告 2412.19437v2][V3-paper]：§2.1 MLA/MoE，§2.2 顺序 MTP，§4.2 参数设置；[固定配置][V3-config]与[固定模型卡][V3-card]。
+- [R1 原始报告 2501.12948v1][R1-paper]：§2.2 R1-Zero，§2.3 四阶段后训练，§2.4 蒸馏；[固定教师配置][R1-config]、[固定学生配置][Student-config]。
+- [V4.1-Flash 报告 2609.19969v1][V41-paper]：§2.1–2.4 架构与训练时序、§3.2.2 SWA bounded replay；[固定模型卡][V41-card]。
+- V4.1-Flash 同一 revision 下的 [config.json][V41-config]、[inference/config.json][V41-inference-config]、[model.py][V41-model]、[vision.py][V41-vision]、[inference README][V41-inference-readme]。阅读源码，不导入官方模型、不运行未知权重路径。
+
+[V3-paper]: https://arxiv.org/html/2412.19437v2
+[R1-paper]: https://arxiv.org/html/2501.12948v1
+[V41-paper]: https://arxiv.org/html/2609.19969v1
+[V3-config]: https://huggingface.co/deepseek-ai/DeepSeek-V3/resolve/e815299b0bcbac849fa540c768ef21845365c9eb/config.json
+[V3-card]: https://huggingface.co/deepseek-ai/DeepSeek-V3/blob/e815299b0bcbac849fa540c768ef21845365c9eb/README.md
+[R1-config]: https://huggingface.co/deepseek-ai/DeepSeek-R1/resolve/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/config.json
+[Student-config]: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B/resolve/ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562/config.json
+[V41-config]: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/config.json
+[V41-card]: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/README.md
+[V41-inference-config]: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/config.json
+[V41-model]: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py
+[V41-vision]: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/vision.py
+[V41-inference-readme]: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/README.md
 
 
 ---

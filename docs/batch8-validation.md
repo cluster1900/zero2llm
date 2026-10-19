@@ -88,3 +88,7 @@ git diff --check
 4. P22 真实 CPU demo 在正常或异常退出时恢复调用方 RNG 与线程数；reference 使用独立更新前快照，新增同时修改 reference/initial 的错误变体。独立审校另注入首次 SGD.step 异常及非法 seed，均正确恢复。正常训练报告与旧 head 逐字相同。
 
 本轮仍实际尝试正常 Chromium build/layout，仍为上述 socket 权限失败；静态重建以 `c340f2acef731096d7c6d2f3e38b6761b439d899` 为基准，复用源码未变的全部 12 张 Mermaid 和 23 张静态图，没有图像改动。旧 head 的 78 layouts 由审稿方确证，但新 head 仍待其重跑，未把历史结果当作新版本通过。
+
+## 合并后的正式复审
+
+[Normal Work review 5574179489](https://github.com/cluster1900/zero2llm/pull/9#pullrequestreview-5574179489) 对 `516083c` 独立验证 396/396 HF、388+8 基础、139+257 系统测试；24 默认 CLI 与三条训练入口，正常构建以及提交/重建各 78 layouts 均通过。审核侧 64 个变异有 62 个行为检出、2 个等价；不能把碰到源码锚点的等价写法当作行为检出。审稿方纠正先前系统计数，旧 head 同环境为 138/252。PR #9 于 2026-10-19 合并至 `82d6c84db13a4089f93e06f1b2e8174f5a14ad59`。这些浏览器结果不自动覆盖后续新章节。

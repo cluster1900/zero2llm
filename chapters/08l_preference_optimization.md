@@ -70,9 +70,9 @@ $$
 参考策略 π_ref 像一张固定的起点照片。我们希望提高奖励，又不无节制地偏离它。一种约束量是：
 
 $$
-D_{\rm KL}(\pi_\theta\Vert\pi_{\rm ref})
+D_{\mathrm{KL}}(\pi_\theta\Vert\pi_{\mathrm{ref}})
 =\sum_y\pi_\theta(y)
-\left[\log\pi_\theta(y)-\log\pi_{\rm ref}(y)\right].
+\left[\log\pi_\theta(y)-\log\pi_{\mathrm{ref}}(y)\right].
 $$
 
 两份分布相同时 KL=0；一般不对称，不能调换左右。代码在有限 logits 上用 log-softmax，枚举所有动作计算。手算 p=[0.6,0.3,0.1]、q=[0.2,0.5,0.3]，得到约 0.396058 nats。它不是“只看 chosen 的概率变化”，也不是两个 logits 的欧氏距离。
@@ -92,7 +92,7 @@ $$
 奖励模型可以用成对损失：
 
 $$
-\mathcal L_{\rm RM}
+\mathcal L_{\mathrm{RM}}
 =-\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big),
 \qquad \sigma(z)=\frac{1}{1+e^{-z}}.
 $$
@@ -119,9 +119,9 @@ PPO 的 clipped surrogate 抑制一批旧样本上的过大更新。它比较当
 $$
 \begin{aligned}
 \Delta_\theta &= \log\pi_\theta(y_w\mid x)-\log\pi_\theta(y_l\mid x),\\
-\Delta_{\rm ref} &= \log\pi_{\rm ref}(y_w\mid x)-\log\pi_{\rm ref}(y_l\mid x),\\
-z &= \beta(\Delta_\theta-\Delta_{\rm ref}),\\
-\mathcal L_{\rm DPO} &= -\log\sigma(z)=\operatorname{softplus}(-z).
+\Delta_{\mathrm{ref}} &= \log\pi_{\mathrm{ref}}(y_w\mid x)-\log\pi_{\mathrm{ref}}(y_l\mid x),\\
+z &= \beta(\Delta_\theta-\Delta_{\mathrm{ref}}),\\
+\mathcal L_{\mathrm{DPO}} &= -\log\sigma(z)=\operatorname{softplus}(-z).
 \end{aligned}
 $$
 
@@ -223,7 +223,7 @@ $$
 $$
 \rho_{i,t}
 =\exp\left(\log\pi_\theta(y_{i,t}\mid x,y_{i,<t})
--\log\pi_{\rm old}(y_{i,t}\mid x,y_{i,<t})\right).
+-\log\pi_{\mathrm{old}}(y_{i,t}\mid x,y_{i,<t})\right).
 $$
 
 本章使用 clip ε=0.2，并把“最大化收益”写成优化器常用的“最小化负收益”：
@@ -253,8 +253,8 @@ clip 的作用依赖优势符号和更新方向，并不是所有范围外的概
 本章词表很小，K 使用枚举整个词表的精确条件 KL，而不是采样估计。原论文使用的一个逐 token KL 估计写成：
 
 $$
-k=\frac{\pi_{\rm ref}(a\mid s)}{\pi_\theta(a\mid s)}
--\log\frac{\pi_{\rm ref}(a\mid s)}{\pi_\theta(a\mid s)}-1.
+k=\frac{\pi_{\mathrm{ref}}(a\mid s)}{\pi_\theta(a\mid s)}
+-\log\frac{\pi_{\mathrm{ref}}(a\mid s)}{\pi_\theta(a\mid s)}-1.
 $$
 
 若动作 a 真按当前 π_θ 抽样，且支持集条件满足，它的期望等于相应 KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与 old 不同，也不能不加说明地把旧样本均值称为精确 KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 K 的教学目标说成原论文代码逐行复现。

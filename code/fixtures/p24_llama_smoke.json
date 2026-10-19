@@ -1,0 +1,82 @@
+{
+  "source_commit": "74d4f5b041ad837153b0e90fc864b8290e01d8d5",
+  "version": "version: 5046 (74d4f5b0)\nbuilt with cc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0 for x86_64-linux-gnu",
+  "fixture": {
+    "bytes": 81760,
+    "tensors": 11,
+    "parameters": 18624,
+    "trained": false
+  },
+  "f32_bytes": 81760,
+  "q8_bytes": 27392,
+  "f32_sha256": "ba6bb26dd3f31496f87a54bf530b74dbf281d11f658799b5564cb1cbca4bce1f",
+  "q8_sha256": "e320948d1bf9b77b4d60f00b0d422ded49dba00e83af472dcd1ae0f018407c09",
+  "stream": {
+    "text": "\u0011\u0011\u0011\u0011",
+    "finish_reason": "length",
+    "content_events": 4
+  },
+  "usage": {
+    "completion_tokens": 4,
+    "prompt_tokens": 3,
+    "total_tokens": 7
+  },
+  "commands": [
+    [
+      "/tmp/p24-llama/bin/build/bin/llama-cli",
+      "--version"
+    ],
+    [
+      "/tmp/p24-llama/bin/build/bin/llama-quantize",
+      "/tmp/p24-llama/repro/tiny-f32.gguf",
+      "/tmp/p24-llama/repro/tiny-q8_0.gguf",
+      "Q8_0"
+    ],
+    [
+      "/tmp/p24-llama/bin/build/bin/llama-cli",
+      "-m",
+      "/tmp/p24-llama/repro/tiny-q8_0.gguf",
+      "-p",
+      "Hi",
+      "-n",
+      "4",
+      "-c",
+      "128",
+      "-t",
+      "1",
+      "-ngl",
+      "0",
+      "--seed",
+      "24",
+      "--temp",
+      "0",
+      "--no-display-prompt"
+    ],
+    [
+      "/tmp/p24-llama/bin/build/bin/llama-server",
+      "-m",
+      "/tmp/p24-llama/repro/tiny-q8_0.gguf",
+      "-c",
+      "128",
+      "-t",
+      "1",
+      "-ngl",
+      "0",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "35837",
+      "--alias",
+      "p24-tiny"
+    ]
+  ],
+  "quality_tested": false,
+  "performance_comparison_tested": false,
+  "checked_date": "2026-10-19",
+  "binary_asset": "https://github.com/ggml-org/llama.cpp/releases/download/b5046/llama-b5046-bin-ubuntu-x64.zip",
+  "binary_sha256": "10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e",
+  "binary_bytes": 28537350,
+  "platform": "Linux x86_64, CPU only, one thread",
+  "reproduce": "python code/25_quantized_serving.py --llama-bin /path/to/build/bin --work-dir /tmp/p24-repro",
+  "scope": "Untrained fixture, no external weights, completion API only; does not verify Qwen3/V4.1 or production performance."
+}

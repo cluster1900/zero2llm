@@ -49,9 +49,9 @@ class Batch8TextTests(unittest.TestCase):
 
     def test_progress_and_supported_math_delimiters(self):
         readme = (ROOT / "README.md").read_text()
-        self.assertIn("26 个章节文件", readme)
-        self.assertIn("24 个配套代码实验", readme)
-        self.assertIn("P24–P28", readme)
+        self.assertIn("28 个章节文件", readme)
+        self.assertIn("27 个配套代码实验", readme)
+        self.assertIn("P27–P28", readme)
         self.assertIn("第八批验证", readme)
         for name, _, _ in LESSONS:
             body = (ROOT / "chapters" / name).read_text()
