@@ -249,6 +249,8 @@ $$
 
 因此最后一轮不会越过 `max_new_tokens`。本例保守要求 `prompt 长度 + 生成预算 <= max_seq_len`，不实现滑动截断；若模型权重或影响缓存的设置改变，必须重新开始请求。
 
+每轮验证还必须至少提交一个 token。若拒绝分支因程序错误忘了提交 correction，代码立即抛出 `RuntimeError`，而不是在同一前缀上无限循环。**空草稿本身是合法的**：它仍从目标 logits 提交一个 token，所以不能仅因草稿长度为 0 就报“没有进展”。
+
 ## P23.9 为什么不能把贪心验收拿去冒充随机采样
 
 贪心只需要知道最大项是谁；随机采样必须保持**整个概率分布**。若目标为 p、草稿为 q，在同一条件前缀和同一采样变换下，经典投机采样对从 q 抽出的 token x 使用：
@@ -323,8 +325,9 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 7. 只剩一个输出名额，能否再提交三个草稿与一个 bonus？不能；草稿长度降为 0，只生成一个 token。EOS 也不能越过。检查 `test_short_empty_drafts_and_budget_boundaries` 与 `test_eos_prompt_first_accepted_corrected_rejected_and_bonus`。
 8. 预算 2 的 999+1 是什么临时答案？是 0；预算 3 完成后才得到 1000。预算曲线为什么不是语言模型能力曲线？它来自已写好的竖式算法与固定六题。检查 `test_arithmetic_curve_and_carry_by_independent_integer_oracle`。
 9. p=[0.6,0.4]、q=[0.2,0.8] 时，拒绝的概率质量如何补回？0.4 全补到 A；这是数学例子，不是随机采样实现。检查 `test_hand_sampling_correction_is_math_only_not_a_sampler_claim`。
+10. 草稿第一个位置应该用哪个 head？是主 head，后面才是旁路 head 0、1。固定种子下前缀 `[1,2,5]` 的三个提案为 `[6,0,9]`，limit=1、2、3 分别取前一、二、三项；不能跳过主 head。检查 `test_fixed_seed_draft_head_to_position_scalar_oracle`，并用 `test_cli_pins_documented_outputs_and_actual_cost_counters` 固定正文演示的输出与成本计数。
 
-测试不只让两个共享代码的函数互相证明。它使用 Python 标量标签 oracle、显式 log-sum-exp、解析 logits 梯度与权重有限差分、独立 token-history 目标、真实 S5 完整前缀 logits／逐层 K/V 对照；还实际执行十种错误变体，确认错位标签、错误分母、错误接受、缓存偏一、漏停 EOS、越过预算等会被拦住。
+测试不只让两个共享代码的函数互相证明。它使用 Python 标量标签 oracle、显式 log-sum-exp、解析 logits 梯度与权重有限差分、独立 token-history 目标、真实 S5 完整前缀 logits／逐层 K/V 对照，以及不调用 `mtp_logits` 的逐 head 标量投影 oracle；还实际执行十二种错误变体，确认错位标签、错误分母、错误接受、缓存偏一、漏停 EOS、越过预算、跳过主 head、漏掉 correction 等会被拦住。最后一种由 `test_deleted_correction_mutant_fails_fast_without_timeout` 验证精确的 `RuntimeError`，不是把测试超时算作成功。
 
 读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
 

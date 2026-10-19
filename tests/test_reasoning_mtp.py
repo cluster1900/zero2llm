@@ -142,6 +142,24 @@ else:
 """, str(SCRIPT)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(READY, torch_reason('P23 CLI', VERSION, PRESENT))
+    def test_cli_pins_documented_outputs_and_actual_cost_counters(self):
+        result = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True,
+                                text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = {
+            'greedy tokens equal': 'True',
+            'generated IDs': '[[5, 6, 3, 1, 9, 2, 5, 6, 3, 1]]',
+            'target calls': 'ordinary=10, draft/verify=6',
+            'target input tokens': 'ordinary=11, draft/verify=18',
+        }
+        output = result.stdout.splitlines()
+        for name, value in expected.items():
+            matches = [line for line in output if line.startswith(name + ':')]
+            self.assertEqual(matches, [f'{name}: {value}'])
+        self.assertEqual(output.count('drafter full-prefix calls=4; input tokens=24'), 1)
+        self.assertEqual(output.count('accepted/proposed=4/11; rejected rounds=4; bonuses=0'), 1)
+
 
 @unittest.skipUnless(READY, torch_reason('P23', VERSION, PRESENT))
 class MTPTests(unittest.TestCase):
@@ -262,6 +280,38 @@ class MTPTests(unittest.TestCase):
             modified = model.mtp_logits(changed)
             for old, new in zip(original, modified):
                 torch.testing.assert_close(old[:, :cut], new[:, :cut], rtol=1e-12, atol=1e-12)
+
+    def check_draft_head_positions(self, module):
+        """Independent scalar projections, not the drafter's mtp_logits tuple.
+
+        This reproduces the CLI's fixed model seed. All three expected IDs differ,
+        so skipping, swapping, or reusing the main/side heads is observable even
+        though a correct target verifier can repair those proposals downstream.
+        """
+        torch.manual_seed(230)
+        config = module.s5.MoEConfig(vocab_size=11, d_model=16, num_heads=4,
+            num_kv_heads=2, num_layers=1, max_seq_len=24, expert_width=7, shared_width=5)
+        model = module.MTPGPT(config, depth=2).eval()
+        prefix = torch.tensor([[1, 2, 5]])
+        with torch.no_grad():
+            hidden = model.tok_emb(prefix)
+            for block in model.blocks:
+                hidden = block(hidden)
+            last = model.ln_f(hidden)[0, -1].tolist()
+        expected = []
+        for head in (model.head, model.mtp_heads[0], model.mtp_heads[1]):
+            weights = head.weight.detach().tolist()
+            scores = [sum(value * weight for value, weight in zip(last, row)) for row in weights]
+            # Python max visits vocabulary IDs in ascending order: ties use lowest.
+            expected.append(max(range(config.vocab_size), key=lambda token: scores[token]))
+        self.assertEqual(expected, [6, 0, 9])
+        drafter = module.MTPDraft(model)
+        for limit in (1, 2, 3):
+            self.assertEqual(drafter(prefix, limit).tolist(), [expected[:limit]])
+        self.assertEqual((drafter.calls, drafter.tokens_processed), (3, 9))
+
+    def test_fixed_seed_draft_head_to_position_scalar_oracle(self):
+        self.check_draft_head_positions(m)
 
     def test_objective_scalar_oracle_gradients_and_short_sequences(self):
         model = m.MTPGPT(self.config, depth=3).double()
@@ -508,6 +558,37 @@ class BudgetAndMutationTests(unittest.TestCase):
         self.assertEqual(accepted_mass, [Fraction(1, 5), Fraction(2, 5)])
         self.assertEqual(rejected_mass, Fraction(2, 5))
 
+    def test_deleted_correction_mutant_fails_fast_without_timeout(self):
+        """Execute F07 itself. A bounded spy prevents a hang if the guard regresses.
+
+        The spy's AssertionError is NOT an accepted kill: only the production
+        no-progress RuntimeError after exactly prefill + first verification passes.
+        """
+        source = SCRIPT.read_text(encoding='utf-8')
+        old = '                emitted.append(correct)\n'
+        self.assertEqual(source.count(old), 1)
+        mutant = types.ModuleType('mtp_mutant_missing_correction')
+        mutant.__file__ = str(SCRIPT)
+        sys.modules[mutant.__name__] = mutant
+        try:
+            exec(compile(source.replace(old, ''), str(SCRIPT), 'exec'), mutant.__dict__)
+            model = OracleModel()
+            def bounded_forward(target, chunk, cache):
+                if len(target.calls) >= 2:
+                    raise AssertionError('no-progress guard failed before another target call')
+                return oracle_forward(target, chunk, cache)
+            with self.assertRaisesRegex(RuntimeError, '^draft/verify made no progress$'):
+                mutant.greedy_decode(model, torch.tensor([[1, 2]]), 6,
+                    draft=oracle_draft(model, corrupt_at=0), forward=bounded_forward)
+            self.assertEqual(len(model.calls), 2)
+        finally:
+            del sys.modules[mutant.__name__]
+        # No proposal is NOT no progress: target-only fallback must still finish.
+        result, _ = GreedyTests().check_oracle(count=6,
+            draft=lambda prefix, limit: prefix[:, :0])
+        self.assertEqual(result.target_calls, 6)
+        self.assertEqual(result.proposed, 0)
+
     def test_executable_mutants_are_killed_by_independent_contracts(self):
         source = SCRIPT.read_text(encoding='utf-8')
         contracts = GreedyTests()
@@ -531,6 +612,8 @@ class BudgetAndMutationTests(unittest.TestCase):
             contracts.check_oracle(implementation=module, count=10)
             model = OracleModel(vocab=11, next_fn=lambda ids: (ids[-1]+1) % 11)
             contracts.check_oracle(implementation=module, count=10, eos=5, model=model)
+        def draft_check(module):
+            MTPTests().check_draft_head_positions(module)
         cases = [
             ('future off by one', 'torch.where(keep, tokens[:, horizon:], -100)',
              'torch.where(keep, tokens[:, horizon-1:T-1], -100)', label_check),
@@ -552,10 +635,13 @@ class BudgetAndMutationTests(unittest.TestCase):
              'if False:', decode_check),
             ('no bonus reservation', 'limit = min(draft_tokens, remaining - 1)',
              'limit = min(draft_tokens, remaining)', decode_check),
+            ('skip main draft head', 'for x in logits[:limit]',
+             'for x in logits[1:limit+1]', draft_check),
         ]
         label_check(m)
         loss_check(m)
         decode_check(m)
+        draft_check(m)
         for index, (name, old, new, contract) in enumerate(cases):
             with self.subTest(mutant=name):
                 self.assertEqual(source.count(old), 1)

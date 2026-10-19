@@ -11,6 +11,7 @@ import subprocess
 import sys
 import types
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "code/23_preference_optimization.py"
 spec = importlib.util.spec_from_file_location("preference_lesson", SCRIPT)
@@ -170,6 +171,8 @@ class ArithmeticTests(unittest.TestCase):
 @unittest.skipIf(torch is None, "optional torch unavailable: no CPU tensor/gradient checks ran")
 class TensorTests(unittest.TestCase):
     def setUp(self):
+        previous_threads = torch.get_num_threads()
+        self.addCleanup(torch.set_num_threads, previous_threads)
         torch.set_num_threads(1)
 
     def token_fixture(self):
@@ -356,6 +359,45 @@ class TensorTests(unittest.TestCase):
             for j in range(3):
                 self.assertAlmostEqual(report["sft_logits"][p][j], reference[p][j], places=12)
                 self.assertAlmostEqual(report["dpo_logits"][p][j], weights[p][j], places=12)
+
+    def test_demo_restores_cpu_rng_and_threads_on_success_and_failure(self):
+        # Use a non-demo thread count, and restore our own caller state as well.
+        with torch.random.fork_rng(devices=[]):
+            torch.random.default_generator.manual_seed(913)
+            torch.set_num_threads(2)
+            before = torch.get_rng_state().clone()
+            first = lesson.torch_demo(seed=22)
+            self.assertEqual(torch.get_num_threads(), 2)
+            self.assertTrue(torch.equal(torch.get_rng_state(), before))
+            second = lesson.torch_demo(seed=22)
+            self.assertEqual(first, second)
+            self.assertTrue(torch.equal(torch.get_rng_state(), before))
+            def fail_after_consuming_rng(*args, **kwargs):
+                torch.rand(7)
+                raise RuntimeError("injected rollout failure")
+            with mock.patch.object(lesson, "sample_rollouts", side_effect=fail_after_consuming_rng):
+                with self.assertRaisesRegex(RuntimeError, "injected rollout failure"):
+                    lesson.torch_demo(seed=23)
+            self.assertEqual(torch.get_num_threads(), 2)
+            self.assertTrue(torch.equal(torch.get_rng_state(), before))
+
+    def test_reference_snapshot_detects_correlated_mutation(self):
+        expected = lesson.torch_demo()
+        # Inject a real state mutation: current reference AND initial SFT owner
+        # move together. Comparing those two would falsely report "unchanged".
+        broken = mutant(
+            "            expected_reward = lambda logits:",
+            "            with torch.no_grad():\n"
+            "                reference.add_(1.0)\n"
+            "                initial.add_(1.0)\n"
+            "            expected_reward = lambda logits:",
+        )
+        report = broken.torch_demo()
+        self.assertFalse(report["reference_unchanged"])
+        self.assertTrue(expected["reference_unchanged"])
+        # The recorded pre-update values must not share storage with either.
+        self.assertEqual(report["sft_logits"], expected["sft_logits"])
+        self.assertEqual(report["sft_probabilities"], expected["sft_probabilities"])
 
     def test_full_grpo_updates_against_independent_scalar_finite_difference(self):
         report = lesson.torch_demo()

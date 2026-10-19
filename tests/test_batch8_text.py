@@ -39,6 +39,14 @@ class Batch8TextTests(unittest.TestCase):
             labels = ["".join(x.itertext()) for x in svg.findall(".//s:text", ns)]
             self.assertGreaterEqual(sum(bool(re.search(r"[\u4e00-\u9fff]", x)) for x in labels), 4)
 
+    def test_separate_trl_source_snapshots_are_explained(self):
+        for chapter in ("08k_sft_lora.md", "08l_preference_optimization.md"):
+            text = (ROOT / "chapters" / chapter).read_text()
+            for version in ("0.16.1", "0.17.0", "0.18.2"):
+                self.assertIn(version, text)
+            self.assertIn("环境", text)
+            self.assertIn("版本", text)
+
     def test_progress_and_supported_math_delimiters(self):
         readme = (ROOT / "README.md").read_text()
         self.assertIn("26 个章节文件", readme)

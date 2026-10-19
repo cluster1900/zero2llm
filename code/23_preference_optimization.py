@@ -260,73 +260,83 @@ def sample_rollouts(logits, group_size=8, seed=22):
 
 
 def torch_demo(seed=22):
-    """Real SGD updates of six float64 logits, no canned after-training values."""
+    """Real CPU SGD, preserving the caller's CPU RNG and thread count.
+
+    The CPU-only RNG scope and finally cleanup also apply if a training step
+    raises. No CUDA generator is seeded or initialized for this CPU example.
+    """
     torch = _torch()
-    torch.manual_seed(seed)
-    torch.set_num_threads(1)
-    # Independent parameters for each prompt: no learned arithmetic/generalization.
-    initial = torch.nn.Parameter(torch.zeros(2, 3, dtype=torch.float64))
-    sft_optimizer = torch.optim.SGD([initial], lr=0.4)
-    gold_ids = torch.tensor([0, 2])
-    for _ in range(4):
-        sft_optimizer.zero_grad()
-        sft_loss = -initial.log_softmax(-1)[torch.arange(2), gold_ids].mean()
-        sft_loss.backward()
-        sft_optimizer.step()
-    reference = initial.detach().clone()  # fixed SFT anchor, NEVER optimizer-owned
-    dpo_policy = torch.nn.Parameter(reference.clone())
-    grpo_policy = torch.nn.Parameter(reference.clone())
-    rows, chosen, rejected = torch.tensor([0, 1]), torch.tensor([0, 2]), torch.tensor([1, 1])
-    reference_logps = reference.log_softmax(-1)
-    dpo_optimizer = torch.optim.SGD([dpo_policy], lr=0.4)
-    dpo_start = None
-    for _ in range(6):
-        dpo_optimizer.zero_grad()
-        lp = dpo_policy.log_softmax(-1)
-        loss = dpo_loss(lp[rows, chosen], lp[rows, rejected],
-                        reference_logps[rows, chosen], reference_logps[rows, rejected], beta=0.5)
-        if dpo_start is None:
-            dpo_start = loss.item()
-        loss.backward()
-        dpo_optimizer.step()
-    final_lp = dpo_policy.log_softmax(-1)
-    dpo_end = dpo_loss(final_lp[rows, chosen], final_lp[rows, rejected],
-                       reference_logps[rows, chosen], reference_logps[rows, rejected], beta=0.5)
+    previous_threads = torch.get_num_threads()
+    try:
+        torch.set_num_threads(1)
+        with torch.random.fork_rng(devices=[]):
+            torch.random.default_generator.manual_seed(seed)
+            # Independent parameters for each prompt: no learned arithmetic/generalization.
+            initial = torch.nn.Parameter(torch.zeros(2, 3, dtype=torch.float64))
+            sft_optimizer = torch.optim.SGD([initial], lr=0.4)
+            gold_ids = torch.tensor([0, 2])
+            for _ in range(4):
+                sft_optimizer.zero_grad()
+                sft_loss = -initial.log_softmax(-1)[torch.arange(2), gold_ids].mean()
+                sft_loss.backward()
+                sft_optimizer.step()
+            reference = initial.detach().clone()  # fixed SFT anchor, NEVER optimizer-owned
+            reference_before = reference.clone()  # independent snapshot before ANY preference updates
+            dpo_policy = torch.nn.Parameter(reference.clone())
+            grpo_policy = torch.nn.Parameter(reference.clone())
+            rows, chosen, rejected = torch.tensor([0, 1]), torch.tensor([0, 2]), torch.tensor([1, 1])
+            reference_logps = reference.log_softmax(-1)
+            dpo_optimizer = torch.optim.SGD([dpo_policy], lr=0.4)
+            dpo_start = None
+            for _ in range(6):
+                dpo_optimizer.zero_grad()
+                lp = dpo_policy.log_softmax(-1)
+                loss = dpo_loss(lp[rows, chosen], lp[rows, rejected],
+                                reference_logps[rows, chosen], reference_logps[rows, rejected], beta=0.5)
+                if dpo_start is None:
+                    dpo_start = loss.item()
+                loss.backward()
+                dpo_optimizer.step()
+            final_lp = dpo_policy.log_softmax(-1)
+            dpo_end = dpo_loss(final_lp[rows, chosen], final_lp[rows, rejected],
+                               reference_logps[rows, chosen], reference_logps[rows, rejected], beta=0.5)
 
-    old = grpo_policy.detach().clone()  # one sampled batch, three optimizer steps
-    rollouts = sample_rollouts(old, group_size=8, seed=seed)
-    rewards, prompt_ids = aligned_rewards(rollouts, score_rollouts(rollouts))
-    advantage = torch.tensor(group_advantages(rewards, prompt_ids), dtype=torch.float64)
-    prompts = torch.tensor(prompt_ids)
-    targets = torch.tensor([r.action_id for r in rollouts])[:, None]
-    old_logps = old.log_softmax(-1)[prompts].gather(1, targets).detach()
-    mask = torch.ones_like(targets, dtype=torch.bool)
-    grpo_optimizer = torch.optim.SGD([grpo_policy], lr=0.2)
-    for _ in range(3):
-        grpo_optimizer.zero_grad()
-        loss = grpo_loss(grpo_policy[prompts, None, :], targets, old_logps,
-                         reference[prompts, None, :], mask, advantage)
-        loss.backward()
-        grpo_optimizer.step()
-    expected_reward = lambda logits: logits.softmax(-1)[rows, chosen].mean().item()
-    return {
-        "status": "EXECUTED: CPU finite-action toy; NOT TRL or LLM training",
-        "torch": torch.__version__, "seed": seed, "parameters": initial.numel(),
-        "sft_steps": 4, "dpo_steps": 6, "grpo_steps_one_batch": 3,
-        "sft_logits": reference.tolist(), "dpo_logits": dpo_policy.detach().tolist(),
-        "grpo_logits": grpo_policy.detach().tolist(),
-        "sft_probabilities": reference.softmax(-1).tolist(),
-        "dpo_probabilities": dpo_policy.detach().softmax(-1).tolist(),
-        "grpo_probabilities": grpo_policy.detach().softmax(-1).tolist(),
-        "dpo_loss_before_after": [dpo_start, dpo_end.item()],
-        "exact_kl_to_sft_before": categorical_kl(reference, reference).tolist(),
-        "exact_kl_to_sft_after_dpo": categorical_kl(dpo_policy, reference).detach().tolist(),
-        "exact_kl_to_sft_after_grpo": categorical_kl(grpo_policy, reference).detach().tolist(),
-        "expected_reward_before_after_dpo_grpo": [expected_reward(reference), expected_reward(dpo_policy), expected_reward(grpo_policy)],
-        "sampled_action_ids": [r.action_id for r in rollouts], "sampled_rewards": rewards,
-        "advantages": advantage.tolist(), "reference_unchanged": torch.equal(reference, initial.detach()),
-    }
+            old = grpo_policy.detach().clone()  # one sampled batch, three optimizer steps
+            rollouts = sample_rollouts(old, group_size=8, seed=seed)
+            rewards, prompt_ids = aligned_rewards(rollouts, score_rollouts(rollouts))
+            advantage = torch.tensor(group_advantages(rewards, prompt_ids), dtype=torch.float64)
+            prompts = torch.tensor(prompt_ids)
+            targets = torch.tensor([r.action_id for r in rollouts])[:, None]
+            old_logps = old.log_softmax(-1)[prompts].gather(1, targets).detach()
+            mask = torch.ones_like(targets, dtype=torch.bool)
+            grpo_optimizer = torch.optim.SGD([grpo_policy], lr=0.2)
+            for _ in range(3):
+                grpo_optimizer.zero_grad()
+                loss = grpo_loss(grpo_policy[prompts, None, :], targets, old_logps,
+                                 reference[prompts, None, :], mask, advantage)
+                loss.backward()
+                grpo_optimizer.step()
+            expected_reward = lambda logits: logits.softmax(-1)[rows, chosen].mean().item()
+            return {
+                "status": "EXECUTED: CPU finite-action toy; NOT TRL or LLM training",
+                "torch": torch.__version__, "seed": seed, "parameters": initial.numel(),
+                "sft_steps": 4, "dpo_steps": 6, "grpo_steps_one_batch": 3,
+                "sft_logits": reference_before.tolist(), "dpo_logits": dpo_policy.detach().tolist(),
+                "grpo_logits": grpo_policy.detach().tolist(),
+                "sft_probabilities": reference_before.softmax(-1).tolist(),
+                "dpo_probabilities": dpo_policy.detach().softmax(-1).tolist(),
+                "grpo_probabilities": grpo_policy.detach().softmax(-1).tolist(),
+                "dpo_loss_before_after": [dpo_start, dpo_end.item()],
+                "exact_kl_to_sft_before": categorical_kl(reference_before, reference_before).tolist(),
+                "exact_kl_to_sft_after_dpo": categorical_kl(dpo_policy, reference).detach().tolist(),
+                "exact_kl_to_sft_after_grpo": categorical_kl(grpo_policy, reference).detach().tolist(),
+                "expected_reward_before_after_dpo_grpo": [expected_reward(reference_before), expected_reward(dpo_policy), expected_reward(grpo_policy)],
+                "sampled_action_ids": [r.action_id for r in rollouts], "sampled_rewards": rewards,
+                "advantages": advantage.tolist(), "reference_unchanged": torch.equal(reference, reference_before),
+            }
 
+    finally:
+        torch.set_num_threads(previous_threads)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

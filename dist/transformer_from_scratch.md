@@ -6120,6 +6120,8 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 
 [TRL 0.18.2 的 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py) 展示了成熟训练入口如何处理数据和训练配置。这里引用它作为框架定位，不调用其中 API；更不把其他版本的参数名当成这个版本已经验证过的接口。
 
+版本阅读说明：P20 的 TRL 0.17.0 用于介绍训练框架与职责；本章固定 0.18.2，只查看 SFTTrainer 的数据处理和训练入口；P22 则固定 0.16.1，逐项拆解该版本 GRPO 的具体公式与配置。选择不同标签是为了分别固定这些来源快照，**不是推荐把三版混装，也不是声称三章使用同一套 TRL 环境**。这里没有执行 TRL，因此不作跨版本 API 兼容承诺；尤其不能把 P22 的样本标准差、稳定项、归约和 KL 估计约定推广到 0.18.2。实际运行的是本章独立 PyTorch 脚本；若要迁移到框架，需另选一个统一版本，重新核对模板、mask、配置与实际训练结果。
+
 ## P21.2 对话模板：角色不是另一个输入通道
 
 输入常以消息列表保存：
@@ -6831,7 +6833,7 @@ GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我�
 | 对 SFT 的精确答案 KL，题 1 | 0 | 0.024651 | 0.006595 |
 | DPO 固定偏好对 loss | 0.693147 | 0.562092 | 不作跨目标对照 |
 
-例如题 0 的三个 logits 从 [0.479421,−0.239710,−0.239710] 变为 DPO 的 [0.761335,−0.521624,−0.239710]；这些数字来自 backward 和 SGD，而不是为了展示方向手写的“更新后概率”。reference 保持原值。
+例如题 0 的三个 logits 从 [0.479421,−0.239710,−0.239710] 变为 DPO 的 [0.761335,−0.521624,−0.239710]；这些数字来自 backward 和 SGD，而不是为了展示方向手写的“更新后概率”。reference 保持原值，并与偏好更新前独立 clone 的快照逐值比较；不能仅与可能同步改变的另一份对象比较。示例用 `fork_rng` 与 `finally` 在正常返回和异常退出时恢复调用者的 CPU 随机数状态、线程数，不触碰 CUDA 随机数发生器。
 
 这不是 DPO 优于 GRPO 的实验：优化步数、目标、样本和学习率都不同，数据只有两道训练题。精确期望奖励也不是独立测试集准确率。两题各用一行独立参数，没有任何跨题泛化能力。我们只证明目标、梯度、数据对齐、采样和参数更新构成了可检验闭环。
 
@@ -6844,6 +6846,10 @@ GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我�
 ## P22.8 接到 TRL：固定版本配置阅读，明确未运行
 
 本节核对的是 **TRL 0.16.1** 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，核验日期为 2026-10-19。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。
+
+**为什么相邻章节引用的 TRL 版本不一样？** [P20](#p20-frameworks) 用 [0.17.0 官方总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 建立框架与训练入口的地图；[P21](#p21-sft) 用 [0.18.2 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py) 说明 SFT 训练器的职责。本章则选择 **0.16.1 作为固定的历史 GRPO 实现切片**，逐项核对奖励标准化、KL 估计和 loss 归约，再与手写教学变体对照。选择这个较早标签是为了固定具体的比较对象，不是推荐退回旧环境。
+
+这三个版本号属于三处资料引用，**不是同一套训练环境，不是一条逐章升级或降级的安装路线，也没有经过跨版本兼容性验证**。下面对 0.16.1 行为的结论只适用于所链接的源码；本章没有比较另外两版的相同函数，因此不推断它们的 GRPO 行为一定相同或一定不同。三个章节均未运行 TRL，P20 的真实框架实验是另行锁定的 Transformers / Accelerate 实验。
 
 下面只是一份**未执行的配置示意**，不包含模型下载、Trainer 构造或 train 调用：
 
@@ -6925,9 +6931,11 @@ grpo_config = GRPOConfig(
 | KL 为何不只看采到的动作？ | 精确分布 KL 需要所有动作及概率权重 | 独立 KL 值、方向与闭式梯度 |
 | 参数真的按这些目标更新了吗？ | SFT、DPO、GRPO 的最终 logits 可独立复算 | 标量 SGD 与完整 GRPO 有限差分复算 |
 
+测试另外检查示例调用前后的 CPU 随机数状态与线程数，并注入一次中途异常验证恢复路径；将 reference 和原 SFT 对象同时改动的反例，必须被独立快照检查识别。
+
 测试还将错误真正注入可执行源码：翻转 DPO 符号、反转 β、删参考、混组、错标准差、漏对齐、错误 shift / mask / 长度平均、反转或丢掉 KL 权重、让 old 每步跟随 current、错误 clip、全 token 归约等。测试必须抓住这些行为改变，不能只检查源码里有没有某个词。
 
-在上面的基线环境实测，19 个测试通过；不加载第三方包时，7 个标准库测试通过、12 个 PyTorch 测试明确跳过。测试通过说明这份微型实现满足所声明的契约，不说明 RLHF 安全性、真实人类偏好或大模型能力已被验证。
+在上面的基线环境实测，21 个测试通过；不加载第三方包时，7 个标准库测试通过、14 个 PyTorch 测试明确跳过。测试通过说明这份微型实现满足所声明的契约，不说明 RLHF 安全性、真实人类偏好或大模型能力已被验证。
 
 本章可以带走的一句话是：**偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。** 下一章会把这一框架接到推理预算、MTP 和投机解码，并继续区分训练目标与推理时计算。
 
@@ -7185,6 +7193,8 @@ $$
 
 因此最后一轮不会越过 `max_new_tokens`。本例保守要求 `prompt 长度 + 生成预算 <= max_seq_len`，不实现滑动截断；若模型权重或影响缓存的设置改变，必须重新开始请求。
 
+每轮验证还必须至少提交一个 token。若拒绝分支因程序错误忘了提交 correction，代码立即抛出 `RuntimeError`，而不是在同一前缀上无限循环。**空草稿本身是合法的**：它仍从目标 logits 提交一个 token，所以不能仅因草稿长度为 0 就报“没有进展”。
+
 ## P23.9 为什么不能把贪心验收拿去冒充随机采样
 
 贪心只需要知道最大项是谁；随机采样必须保持**整个概率分布**。若目标为 p、草稿为 q，在同一条件前缀和同一采样变换下，经典投机采样对从 q 抽出的 token x 使用：
@@ -7259,8 +7269,9 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 7. 只剩一个输出名额，能否再提交三个草稿与一个 bonus？不能；草稿长度降为 0，只生成一个 token。EOS 也不能越过。检查 `test_short_empty_drafts_and_budget_boundaries` 与 `test_eos_prompt_first_accepted_corrected_rejected_and_bonus`。
 8. 预算 2 的 999+1 是什么临时答案？是 0；预算 3 完成后才得到 1000。预算曲线为什么不是语言模型能力曲线？它来自已写好的竖式算法与固定六题。检查 `test_arithmetic_curve_and_carry_by_independent_integer_oracle`。
 9. p=[0.6,0.4]、q=[0.2,0.8] 时，拒绝的概率质量如何补回？0.4 全补到 A；这是数学例子，不是随机采样实现。检查 `test_hand_sampling_correction_is_math_only_not_a_sampler_claim`。
+10. 草稿第一个位置应该用哪个 head？是主 head，后面才是旁路 head 0、1。固定种子下前缀 `[1,2,5]` 的三个提案为 `[6,0,9]`，limit=1、2、3 分别取前一、二、三项；不能跳过主 head。检查 `test_fixed_seed_draft_head_to_position_scalar_oracle`，并用 `test_cli_pins_documented_outputs_and_actual_cost_counters` 固定正文演示的输出与成本计数。
 
-测试不只让两个共享代码的函数互相证明。它使用 Python 标量标签 oracle、显式 log-sum-exp、解析 logits 梯度与权重有限差分、独立 token-history 目标、真实 S5 完整前缀 logits／逐层 K/V 对照；还实际执行十种错误变体，确认错位标签、错误分母、错误接受、缓存偏一、漏停 EOS、越过预算等会被拦住。
+测试不只让两个共享代码的函数互相证明。它使用 Python 标量标签 oracle、显式 log-sum-exp、解析 logits 梯度与权重有限差分、独立 token-history 目标、真实 S5 完整前缀 logits／逐层 K/V 对照，以及不调用 `mtp_logits` 的逐 head 标量投影 oracle；还实际执行十二种错误变体，确认错位标签、错误分母、错误接受、缓存偏一、漏停 EOS、越过预算、跳过主 head、漏掉 correction 等会被拦住。最后一种由 `test_deleted_correction_mutant_fails_fast_without_timeout` 验证精确的 `RuntimeError`，不是把测试超时算作成功。
 
 读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
 

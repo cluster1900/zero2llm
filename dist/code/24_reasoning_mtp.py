@@ -266,6 +266,11 @@ def greedy_decode(model, prompt, max_new_tokens, eos_id=None, draft=None,
         if all_accepted:
             emitted.append(int(verify[0, K].argmax()))
             bonus += int(K > 0)
+        # A rejected first proposal must emit its correction. Without it, a
+        # broken branch can leave the while loop stuck on the same prefix.
+        # An EMPTY proposal is valid: the all-accepted fallback above emits one.
+        if not emitted:
+            raise RuntimeError('draft/verify made no progress')
         new_tokens = torch.tensor([emitted], dtype=torch.long, device=prompt.device)
         tokens = torch.cat((tokens, new_tokens), dim=1)
         pending = new_tokens[:, -1:]
