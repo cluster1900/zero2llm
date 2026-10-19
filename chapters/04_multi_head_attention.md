@@ -4,7 +4,7 @@
 
 上一章我们用 $Q$ 和 $K$ 打分，做 Softmax，再用权重汇总 $V$。本章把这套计算分成几个并行的“头”，重点追踪形状怎样变化、参数和计算成本怎样计数。
 
-配套代码是 [code/04_multi_head_attention.py](../code/04_multi_head_attention.py)。本章只讨论**标准、等宽的多头自注意力**：Q、K、V 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV 头等变体留到后续章节。
+配套代码是 [code/04_multi_head_attention.py](../code/04_multi_head_attention.py)。本章只讨论**标准、等宽的多头自注意力**：Q、K、V 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV 头等变体留到后续章节（大纲 S05：[GQA 原始论文](https://arxiv.org/abs/2305.13245)）。
 
 ---
 

@@ -87,12 +87,12 @@ def experiment_causal_mask():
     # 制作下三角掩码 (对角线及以下为 True/1，右上角未来位置为 False/0)
     # torch.tril 表示 lower triangular (下三角)
     mask = torch.ones(seq_len, seq_len, dtype=torch.bool).tril()
-    print("掩码矩阵 (1 表示允许看，0 表示未来禁止看):")
+    print("掩码矩阵 (True 表示允许看，False 表示未来禁止看):")
     print(mask.tolist())
 
     # 真正使用负无穷；有限大负数不是对所有 dtype 都安全
     masked_scores = scores.masked_fill(~mask, -torch.inf)
-    print("\n加上掩码后的打分矩阵 (未来的位置被极小负数封印):")
+    print("\n加上掩码后的打分矩阵 (未来的位置被负无穷 -inf 屏蔽):")
     for row in masked_scores.tolist():
         print(["%.1f" % v if v > -100 else "-inf" for v in row])
 

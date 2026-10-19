@@ -3,6 +3,8 @@ import importlib.util
 from pathlib import Path
 import sys
 import math
+import io
+from contextlib import redirect_stdout
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +40,29 @@ class StableSoftmaxTests(unittest.TestCase):
         self.assertTrue(all(math.isfinite(x) for x in expected))
         self.assertAlmostEqual(sum(expected), 1.)
 
+    def test_manual_walkthrough_matches_chapter(self):
+        # Exercise the actual script, so changing its matrices invalidates chapter snapshots.
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            manual.main()
+        output = stream.getvalue()
+        for expected in [
+            "Q=['0.600', '0.500'], K=['0.550', '0.550'], V=['1.050', '0.450']",
+            "Q=['0.640', '1.040'], K=['0.680', '1.000'], V=['0.920', '1.080']",
+            "Q=['0.400', '1.220'], K=['0.530', '1.090'], V=['0.350', '1.350']",
+            "查询:我       0.4278      0.6421      0.6102",
+            "查询:爱       0.6534      1.0431      1.0414",
+            "查询:学       0.6300      1.0550      1.0902",
+            "29.08%      36.03%      34.90%",
+            "25.31%      37.38%      37.31%",
+            "24.31%      37.18%      38.51%",
+            "新 '我' 向量: [0.7589, 0.991]",
+            "新 '爱' 向量: [0.7402, 1.0213]",
+            "新 '学' 向量: [0.7321, 1.0308]",
+        ]:
+            self.assertIn(expected, output)
+
+
     def test_invalid(self):
         for xs in [[], [math.inf], [-math.inf], [math.nan]]:
             with self.subTest(xs=xs), self.assertRaises(ValueError):
@@ -56,9 +81,35 @@ class AttentionTests(unittest.TestCase):
         weights = masked_softmax(scores, allowed)
         torch.testing.assert_close(weights.sum(-1), torch.tensor([[1., 1., 0.]]).double().expand(2, -1))
         self.assertEqual(torch.count_nonzero(weights[..., ~allowed]).item(), 0)
-        (weights.square().sum()).backward()
+        # Reject NaN inside backward even if a later mask would hide its gradient.
+        with torch.autograd.detect_anomaly():
+            (weights.square().sum()).backward()
         self.assertTrue(torch.isfinite(scores.grad).all())
         self.assertEqual(torch.count_nonzero(scores.grad[:, 2]).item(), 0)
+
+    def test_scaling_example_matches_chapter(self):
+        stream = io.StringIO()
+        with redirect_stdout(stream):
+            load('03_scaled_dot_product').experiment_why_scale()
+        output = stream.getvalue()
+        for expected in ['[-8.57, -13.0, -4.31]', '[-1.07, -1.63, -0.54]',
+                         '1.39%', '0.02%', '98.59%', '30.50%', '17.54%', '51.96%']:
+            self.assertIn(expected, output)
+
+    def test_swap_qk_is_not_weight_matrix_symmetry(self):
+        q = torch.eye(2, dtype=torch.float64)
+        symmetric_k = torch.diag(torch.tensor([1., 2.], dtype=torch.float64))
+        scores = q @ symmetric_k.T
+        swapped = symmetric_k @ q.T
+        weights = torch.softmax(scores, dim=-1)
+        torch.testing.assert_close(weights, torch.softmax(swapped, dim=-1))
+        self.assertFalse(torch.allclose(weights, weights.T))
+        # A non-symmetric score matrix generally changes after swapping Q and K.
+        k = torch.tensor([[1., 2.], [0., 1.]], dtype=torch.float64)
+        before = torch.softmax(q @ k.T, dim=-1)
+        after = torch.softmax(k @ q.T, dim=-1)
+        self.assertFalse(torch.allclose(before, after))
+
 
     def test_invalid_masks_and_nonfinite(self):
         with self.assertRaises(TypeError):

@@ -25,8 +25,8 @@ python3 scripts/check_book.py
 
 | 检查 | 本批结果 |
 | --- | --- |
-| 完整依赖环境 unittest | 32 项通过：原有 20 项 + 本批 12 项 |
-| 无 PyTorch/Tokenizers/Cairo 的标准库环境 | 32 项收集，20 项通过、12 项明确跳过；不是完整注意力验收 |
+| 完整依赖环境 unittest | 35 项通过：原有 20 项 + 本批 15 项 |
+| 无 PyTorch/Tokenizers/Cairo 的标准库环境 | 35 项收集，21 项通过、14 项明确跳过；不是完整注意力验收 |
 | Node 截图辅助逻辑 | 3 项通过；不代替浏览器布局 |
 | 编号脚本 01–09 | CPU 全部退出码 0；包含旧 Baby-GPT 小型训练冒烟检查 |
 | 静态构建与 check_book | HTML、EPUB、合并 Markdown 生成；资源、内部链接、目录锚点通过 |
@@ -56,3 +56,18 @@ python3 scripts/build_without_browser.py --baseline 85155216f747a60a3ad4cdef5745
 已实际尝试正常 build.py 和 check:layout，均被 Chromium 的 socket 限制阻止。请 Normal Work 在本批最终 head 用正常构建及 390/768/844px 布局检查复审。首批在 head 815ce64 的 [36 个章节/视口组合 PASS](https://github.com/cluster1900/zero2llm/pull/2#pullrequestreview-5565985839) 仅属于首批，不算本批的验证结果。
 
 本批仅提交主题分支与 Draft PR；合并、部署、Release 不是本记录宣称已完成的事项。
+
+
+## 2026-10-19 第3章复审返修
+
+[Normal Work 对 ada40256 的复审](https://github.com/cluster1900/zero2llm/pull/3#pullrequestreview-5566181208) 独立跑过九个脚本、32 项 Python 与3项 Node测试、正常 Chromium 构建，并取得 36 个章节/视口组合 PASS；它还通过8种变异验证原回归有效。该结果属于旧 head，不能代替下述修改后的浏览器复验。
+
+本轮恢复初学者可跟算的完整路径，而不只增加一句说明：
+- §3.2.1 恢复“我/爱/学”的输入、三张投影矩阵、Q/K/V三行、缩放分数矩阵、权重百分比、V逐项加权及全部输出，并链接脚本02。解释列向量代码与行向量公式之间要转置矩阵；说明显示权重和100.01%来自舍入。
+- §3.2.2 用实际重跑脚本03的seed=42输出对照除以8前后分布，并链接代码，区分“缩放会改变权重”和“减最大值不改变权重”。
+- 自测1区分“交换Q/K使S变Sᵀ”和“权重矩阵自身是否对称”：S对称时交换前后相同，尽管权重矩阵本身可能不对称。
+- 对齐 any_allowed 变量名、因果与padding取与措辞；修正脚本打印的 True/False、-inf 与浮点舍入说法；第4章补大纲S05的GQA原文链接。
+
+新增3项回归分别锁定脚本02的数值输出、脚本03的缩放输出、对称/非对称S交换Q/K的区别。现有全mask梯度测试加入 anomaly detection；实际临时注入“跳过safe直接softmax”的不安全变异，测试因 SoftmaxBackward0 返回NaN而拒绝，生产源码未保留变异。
+
+本轮最终35项Python测试、3项Node测试、九个编号脚本CPU运行、静态重建及资源/链接检查通过。正常Chromium/布局仍受本容器socket限制；请在修正版head复验，不沿用旧head的PASS。
