@@ -107,6 +107,18 @@
     "width": 980.0,
     "height": 660.0
   },
+  "p18-moe": {
+    "width": 1000.0,
+    "height": 830.0
+  },
+  "p19-pretraining": {
+    "width": 1000.0,
+    "height": 710.0
+  },
+  "p20-frameworks": {
+    "width": 1000.0,
+    "height": 790.0
+  },
   "flow-11": {
     "width": 460.2265625,
     "height": 294

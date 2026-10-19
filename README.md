@@ -17,20 +17,21 @@
 [扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
 
 - **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
-- **当前可读**：20 个章节文件（含前言、插入的第 1A 章与附录），18 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
+- **当前可读**：23 个章节文件（含前言、插入的第 1A 章与附录），21 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
 - **P03–P05 正文与 CPU 示例已实现**：注意力动机、QKV/稳定 Softmax/掩码、多头张量账本；因果性、padding/全 mask 行、形状与参考实现回归。验收记录见[第二批验证](docs/batch2-validation.md)。
 - **P06–P08 正文与 CPU 示例已实现**：位置编码、残差/LayerNorm/FFN、三类架构与生成循环；保留手算表，增加数值、自测和变异回归。见[第三批验证](docs/batch3-validation.md)。
 - **P09–P11 正文与 CPU 示例已实现**：训练最小闭环、Baby-GPT S0 基线和 S1 KV cache；训练/留出边界、checkpoint、完整/增量 logits 对齐与内存账。见[第四批验证](docs/batch4-validation.md)。
 - **P12–P14 正文与 CPU 示例已实现**：S2 RoPE 与长上下文边界、S3 RMSNorm/SwiGLU、S4 GQA 与独立 MLA 小矩阵；各阶段全量/增量对齐、数值和参数/缓存账。YaRN 是论文机制导读，不宣称完整复现其训练。见[第五批验证](docs/batch5-validation.md)。
 - **P15–P17 正文与独立 CPU 实验已实现**：分块在线 Softmax、分页缓存与调度账本，SWA / 线性递推，以及官方 CED 数据流的教学模型。三个实验不改变 S4 主线，不代表 CUDA kernel、生产服务或真实 DeepSeek 权重复现。见[第六批验证](docs/batch6-validation.md)。
-- **尚未按扩展大纲实现**：P18–P28；旧第 9–10 章仍保留可读，但不代表新专题已完成。
+- **P18–P20 正文与 CPU 实验已实现**：S5 教学 MoE、预训练数据与恢复训练、Transformers 小模型 CPU 对照与分片内存账本；TRL/DeepSpeed/Megatron 的角色及未运行多卡边界另行说明。见[第七批验证](docs/batch7-validation.md)。
+- **尚未按扩展大纲实现**：P21–P28；旧第 9–10 章仍保留可读，但不代表新专题已完成。
 - **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE；每批审核后才继续，不把路线图当成已有功能。
 
-为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，P15–P17 以 08e/08f/08g 插入，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)、[第五批记录](docs/batch5-validation.md)与[第六批记录](docs/batch6-validation.md)。
+为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，P15–P17 以 08e/08f/08g 插入，P18–P20 以 08h/08i/08j 插入，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)、[第五批记录](docs/batch5-validation.md)、[第六批记录](docs/batch6-validation.md)与[第七批记录](docs/batch7-validation.md)。
 
 ## 📖 当前版本目录导航
 
-当前版本包含 20 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
+当前版本包含 23 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
 
 | 章节与标题 | 核心生活类比 / 几何直觉 | 用到的数学知识 | 配套可运行代码 |
 | :--- | :--- | :--- | :---: |
@@ -52,16 +53,19 @@
 | [**P15. FlashAttention、分页与调度**](chapters/08e_attention_systems.md) | 分块算账、分页账本与排队服务 | 在线 Softmax、块表、TTFT / TPOT | [`code/16_attention_systems.py`](code/16_attention_systems.py) |
 | [**P16. 稀疏、混合与线性注意力**](chapters/08f_sparse_linear_attention.md) | 有限窗口与压缩的累积笔记 | SWA mask、感受野、递推与核函数 | [`code/17_sparse_linear_attention.py`](code/17_sparse_linear_attention.py) |
 | [**P17. CED 因果编码器—解码器**](chapters/08g_ced_architecture.md) | 整理全局资料与局部续写 | 全局 KV 来源、因果性、重放近似与路径计数 | [`code/18_ced_architecture.py`](code/18_ced_architecture.py) |
+| [**P18. MoE 专家与路由**](chapters/08h_moe.md) | 分流工作与共享知识 | top-k 权重、负载、容量与参数预算 | [`code/19_moe.py`](code/19_moe.py) |
+| [**P19. 预训练数据与恢复训练**](chapters/08i_pretraining_pipeline.md) | 整理资料与保存练习进度 | 去重切分、文档边界、损失归约与状态恢复 | [`code/20_pretraining_pipeline.py`](code/20_pretraining_pipeline.py) |
+| [**P20. 训练框架与分片账本**](chapters/08j_training_frameworks.md) | 手写步骤与框架分工 | 标签错位、模型状态、数据并行与分片字节数 | [`code/21_training_frameworks.py`](code/21_training_frameworks.py) |
 | [**09. 走向现代大模型 (LLMs)**](chapters/09_modern_llms.md) | RoPE 旋转位置编码、RMSNorm、SwiGLU、DeepSeek MoE | 复数平面旋转、均方根、尺度定律与涌现 | - |
 | [**10. 附录与黑话词典**](chapters/10_appendix.md) | 数学公式速查卡、深度学习黑话翻译大白话词典 | 全书数理汇总 | - |
 
 ---
 
-## 💻 18 个配套代码实验（含 1 个选修）
+## 💻 21 个配套代码实验（含可选框架对照）
 
-历史第二批验证了当时的 9 个编号示例；当前共有 18 个，最新执行环境与结果见[第六批记录](docs/batch6-validation.md)。
+历史第二批验证了当时的 9 个编号示例；当前共有 21 个，最新执行环境与结果见[第七批记录](docs/batch7-validation.md)。
 
-原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10、16 个只依赖标准库；第 3～7、12～15、17、18 个需要 PyTorch；第 11 个的 --scalar-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4。
+原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10、16 个，以及第 21 个的默认账本模式只依赖标准库；第 3～7、12～15、17～19 个需要 PyTorch；第 11 个的 --scalar-only、第 20 个的 --data-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4；第 21 个 --hf 对照另需 requirements-frameworks.txt 中固定的依赖。
 
 1. **[`code/01_vector_similarity.py`](code/01_vector_similarity.py)**：纯 Python 手写向量内积与余弦相似度，验证水果空间距离与国王-女王向量平移。
 2. **[`code/02_manual_attention.py`](code/02_manual_attention.py)**：纯 Python 零依赖手算 3 个字（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化。
@@ -87,6 +91,10 @@
 17. **[`code/17_sparse_linear_attention.py`](code/17_sparse_linear_attention.py)**：滑动窗口、独立线性注意力与检索边界实验。
 18. **[`code/18_ced_architecture.py`](code/18_ced_architecture.py)**：独立因果 encoder/global-KV/decoder 教学数据流；区分精确前向与近似 replay。
 
+19. **[`code/19_moe.py`](code/19_moe.py)**：S5 教学 MoE 路由、共享专家、负载与缓存对照。
+20. **[`code/20_pretraining_pipeline.py`](code/20_pretraining_pipeline.py)**：合成数据清理、packing 边界与可恢复 CPU 训练。
+21. **[`code/21_training_frameworks.py`](code/21_training_frameworks.py)**：标准库分片账本与可选固定版本 Transformers CPU smoke；不下载大模型权重。
+
 ### CPU 快速验证
 
 ```bash
@@ -100,6 +108,20 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-tokenizer.txt
 .venv/bin/python code/09_hf_tokenizer.py
 ```
+
+### P20 可选框架 CPU 对照
+
+使用独立环境，不要原地升级基础 .venv。固定组合为 Transformers 4.51.3、Accelerate 1.6.0、Tokenizers 0.21.4 与书中 PyTorch 基线；这是验证快照，不是最新版本推荐。安装之后，实验使用本地随机 tiny 模型与合成 token，不下载预训练权重：
+
+```bash
+python3 -m venv .venv-frameworks
+.venv-frameworks/bin/python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+.venv-frameworks/bin/python -m pip install -r requirements.txt -r requirements-frameworks.txt -r requirements-build-static.txt
+.venv-frameworks/bin/python code/21_training_frameworks.py --hf
+.venv-frameworks/bin/python -m unittest discover -s tests -v
+```
+
+默认运行 code21 只检验标准库内存账本；只有 --hf 真正执行框架对照。依赖缺少或版本不符会明确跳过，不能把跳过当作通过。DeepSpeed/Megatron 多卡、CUDA 和 TRL 后训练没有在本批运行。
 
 ### 快速运行代码：
 
@@ -169,7 +191,7 @@ npm run check:layout  # 检查手机、平板、横屏下的图表尺寸，输�
 
 ```bash
 .venv/bin/python -m pip install -r requirements-build-static.txt
-.venv/bin/python scripts/build_without_browser.py --baseline 72c39df44d05032edca7f0509bab6b765c35f48b
+.venv/bin/python scripts/build_without_browser.py --baseline 66dbeb94dd9935046af0e859a223775b7adf4e0e
 ```
 
 此路径仅复用与基准原稿**逐字一致**的 Mermaid 预渲染图片，新/修改的静态 SVG 由固定版本 CairoSVG 转 PNG。遇到改动的 Mermaid 会失败，要求回到正常 Chromium 构建，绝不会用旧图冒充新图。它不代替浏览器布局检查；正常构建方式仍是 `python3 build.py`。
