@@ -17,12 +17,13 @@
 [扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
 
 - **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
-- **当前可读**：12 个章节文件（含前言、插入的第 1A 章与附录），9 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
+- **当前可读**：12 个章节文件（含前言、插入的第 1A 章与附录），10 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
 - **P03–P05 正文与 CPU 示例已实现**：注意力动机、QKV/稳定 Softmax/掩码、多头张量账本；因果性、padding/全 mask 行、形状与参考实现回归。验收记录见[第二批验证](docs/batch2-validation.md)。
-- **尚未按扩展大纲实现**：P06–P28；旧第 5–10 章仍保留可读，但不代表新专题已完成。
+- **P06–P08 正文与 CPU 示例已实现**：位置编码、残差/LayerNorm/FFN、三类架构与生成循环；保留手算表，增加数值、自测和变异回归。见[第三批验证](docs/batch3-validation.md)。
+- **尚未按扩展大纲实现**：P09–P28；旧第 8–10 章仍保留可读，但不代表新专题已完成。
 - **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE；每批审核后才继续，不把路线图当成已有功能。
 
-首批为保持旧链接，把 Tokenizer 插为第 1A 章；第二批仍使用原第 2–4 章文件名。验证条件和结果见[首批记录](docs/batch1-validation.md)与[第二批记录](docs/batch2-validation.md)。
+首批为保持旧链接，把 Tokenizer 插为第 1A 章；第二批仍使用原第 2–4 章文件名。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)与[第三批记录](docs/batch3-validation.md)。
 
 ## 📖 当前版本目录导航
 
@@ -38,18 +39,18 @@
 | [**04. 多头注意力机制**](chapters/04_multi_head_attention.md) | 三个臭皮匠诸葛亮、低维空间切片魔术 | 空间投影、张量维度切分与拼接 | [`code/04_multi_head_attention.py`](code/04_multi_head_attention.py) |
 | [**05. 位置编码与座位号**](chapters/05_positional_encoding.md) | 小猫吃小鱼顺序危机、石英手表三针定乾坤 | 正弦波 $\sin$、余弦波 $\cos$、和角公式 | [`code/05_positional_encoding.py`](code/05_positional_encoding.py) |
 | [**06. 积木组件：残差、LN 与 FFN**](chapters/06_residual_layernorm_ffn.md) | 考试保底底分、全科标准化、每个词闭门深思 | 导数恒等 $+1$ 路径、Z-Score 均值与方差 | [`code/06_transformer_block.py`](code/06_transformer_block.py) |
-| [**07. 编码器与解码器**](chapters/07_encoder_decoder.md) | 阅卷老师 vs 考场作家、因果掩码闭卷考试、贪吃蛇生成 | 下三角掩码矩阵、自回归循环 | - |
+| [**07. 编码器与解码器**](chapters/07_encoder_decoder.md) | 资料整理与写作、因果掩码闭卷考试、逐步生成 | 标签错位、温度分布、EOS/长度停止 | [`code/10_generation_loop.py`](code/10_generation_loop.py) |
 | [**08. 实战：手搭 Baby-GPT**](chapters/08_baby_transformer.md) | 从第一行代码训练一个能背三首短诗的微型模型 | 交叉熵损失、温度采样、梯度下降 | [`code/07_baby_gpt.py`](code/07_baby_gpt.py) |
 | [**09. 走向现代大模型 (LLMs)**](chapters/09_modern_llms.md) | RoPE 旋转位置编码、RMSNorm、SwiGLU、DeepSeek MoE | 复数平面旋转、均方根、尺度定律与涌现 | - |
 | [**10. 附录与黑话词典**](chapters/10_appendix.md) | 数学公式速查卡、深度学习黑话翻译大白话词典 | 全书数理汇总 | - |
 
 ---
 
-## 💻 9 个配套代码实验（含 1 个选修）
+## 💻 10 个配套代码实验（含 1 个选修）
 
 第二批重跑全部 9 个编号示例，版本与跳过边界见[验证记录](docs/batch2-validation.md)。
 
-原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8 个只依赖标准库；第 3～7 个需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4。
+原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10 个只依赖标准库；第 3～7 个需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4。
 
 1. **[`code/01_vector_similarity.py`](code/01_vector_similarity.py)**：纯 Python 手写向量内积与余弦相似度，验证水果空间距离与国王-女王向量平移。
 2. **[`code/02_manual_attention.py`](code/02_manual_attention.py)**：纯 Python 零依赖手算 3 个字（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化。
@@ -61,6 +62,8 @@
 
 8. **[`code/08_byte_bpe.py`](code/08_byte_bpe.py)**：确定性字节 BPE，中文、emoji 与未见文本的往返验证；无需模型下载。
 9. **[`code/09_hf_tokenizer.py`](code/09_hf_tokenizer.py)**（选修）：固定 HF Tokenizers 0.21.4，在相同合成语料上对照；不要求两种实现的 ID 相同。
+
+10. **[`code/10_generation_loop.py`](code/10_generation_loop.py)**：标准库手算 mask、标签错位、温度概率与可复现生成追踪，验证 EOS 和新增长度停止；固定 logits，不是训练模型。
 
 ### CPU 快速验证
 
