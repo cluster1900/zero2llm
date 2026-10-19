@@ -17,11 +17,12 @@
 [扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
 
 - **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
-- **当前可读**：12 个章节文件（含前言、插入的第 1A 章与附录），9 个示例脚本；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
-- **尚未按扩展大纲实现**：P03–P28；旧第 2–10 章仍保留可读，但不代表新专题已完成。
+- **当前可读**：12 个章节文件（含前言、插入的第 1A 章与附录），9 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
+- **P03–P05 正文与 CPU 示例已实现**：注意力动机、QKV/稳定 Softmax/掩码、多头张量账本；因果性、padding/全 mask 行、形状与参考实现回归。验收记录见[第二批验证](docs/batch2-validation.md)。
+- **尚未按扩展大纲实现**：P06–P28；旧第 5–10 章仍保留可读，但不代表新专题已完成。
 - **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE；每批审核后才继续，不把路线图当成已有功能。
 
-本批为保持旧链接，把 Tokenizer 插为第 1A 章，没有重编号其他文件。验证条件和结果见[批次实验记录](docs/batch1-validation.md)。
+首批为保持旧链接，把 Tokenizer 插为第 1A 章；第二批仍使用原第 2–4 章文件名。验证条件和结果见[首批记录](docs/batch1-validation.md)与[第二批记录](docs/batch2-validation.md)。
 
 ## 📖 当前版本目录导航
 
@@ -46,7 +47,9 @@
 
 ## 💻 9 个配套代码实验（含 1 个选修）
 
-原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。本批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8 个只依赖标准库；第 3～7 个需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4。
+第二批重跑全部 9 个编号示例，版本与跳过边界见[验证记录](docs/batch2-validation.md)。
+
+原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8 个只依赖标准库；第 3～7 个需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4。
 
 1. **[`code/01_vector_similarity.py`](code/01_vector_similarity.py)**：纯 Python 手写向量内积与余弦相似度，验证水果空间距离与国王-女王向量平移。
 2. **[`code/02_manual_attention.py`](code/02_manual_attention.py)**：纯 Python 零依赖手算 3 个字（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化。
@@ -59,7 +62,7 @@
 8. **[`code/08_byte_bpe.py`](code/08_byte_bpe.py)**：确定性字节 BPE，中文、emoji 与未见文本的往返验证；无需模型下载。
 9. **[`code/09_hf_tokenizer.py`](code/09_hf_tokenizer.py)**（选修）：固定 HF Tokenizers 0.21.4，在相同合成语料上对照；不要求两种实现的 ID 相同。
 
-### 本批 CPU 快速验证
+### CPU 快速验证
 
 ```bash
 python3 code/01_vector_similarity.py
@@ -135,7 +138,7 @@ npm run check         # 单独检查已有成品
 npm run check:layout  # 检查手机、平板、横屏下的图表尺寸，输出预览截图
 ```
 
-若构建机不能启动 Chromium，可使用本批提供的受限静态构建路径（需要支持 `alerts` 的 Pandoc；本批使用 3.9，及本地完整 Git 历史）：
+若构建机不能启动 Chromium，可使用受限静态构建路径（需要支持 `alerts` 的 Pandoc；本批使用 3.9，及本地完整 Git 历史）：
 
 ```bash
 .venv/bin/python -m pip install -r requirements-build-static.txt

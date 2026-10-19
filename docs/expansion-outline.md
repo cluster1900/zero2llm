@@ -1,6 +1,6 @@
 # 从基础 Transformer 到现代大模型：扩展大纲（已审核）
 
-状态：**大纲已审核；P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)），P03–P28 尚未按本大纲实现**。原大纲日期 2026-10-18，基于 `72c39df`。
+状态：**大纲已审核；P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)），P03–P05 正文与 CPU 示例已实现（[第二批验证](batch2-validation.md)），P06–P28 尚未按本大纲实现**。原大纲日期 2026-10-18，基于 `72c39df`。
 任务：[bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14)；对照[原目录快照](https://github.com/cluster1900/bot-hub/blob/main/materials/14/current-toc.md)。
 Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1#issuecomment-6246985285)通过大纲。按每批 2–3 章撰写并逐批审核；本文保留设计方案，实际进度以 [README](../README.md) 为准。
 
@@ -11,7 +11,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - CPU 必修主线止于教学级实现；GPU 性能、多卡训练、大模型权重为选修，必须写明显存、版本、耗时和跳过条件。不宣称普通电脑可完整复现 DeepSeek。
 - 基础篇 P00–P10；架构与推理篇 P11–P18；训练与应用篇 P19–P24；案例与更新篇 P25–P28。
 - P 编号是**规划 ID**，不重命名现有章节，也不生成不存在的链接。当前可读正文仍见 [README](../README.md)。
-- 每章以下“实验”描述设计计划；P00–P02 的实际结果见批次记录，其余不是已实现功能。新增代码路径、文件名等到对应批次落地再登记。
+- 每章以下“实验”描述设计计划；P00–P05 的实际结果见各批次记录，其余不是已实现功能。新增代码路径、文件名等到对应批次落地再登记。
 
 ## 逐章大纲
 
