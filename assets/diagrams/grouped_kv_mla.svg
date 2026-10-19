@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="430" viewBox="0 0 920 430" role="img" aria-labelledby="p14-title p14-desc">
+  <title id="p14-title">GQA 的分组共享与 MLA 的潜变量压缩是两条不同路线</title>
+  <desc id="p14-desc">左侧四个查询头按连续分组读取两个 KV 头，缓存不保存重复副本。右侧输入分别生成内容潜变量和 RoPE 位置键，两个部分都进入缓存，内容潜变量支持不同头的上投影。</desc>
+  <defs>
+    <marker id="p14-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0L7 3.5L0 7" fill="#64748b"/></marker>
+    <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#172033}.title{font-size:20px;font-weight:700}.label{font-size:16px}.small{font-size:14px}.line{stroke:#64748b;stroke-width:2;fill:none;marker-end:url(#p14-arrow)}</style>
+  </defs>
+  <rect x="1" y="1" width="918" height="428" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="460" y="33" text-anchor="middle" class="title">同样想省缓存，但压缩对象不同</text>
+  <rect x="20" y="52" width="420" height="352" rx="12" fill="#eff6ff" stroke="#bfdbfe"/>
+  <rect x="460" y="52" width="440" height="352" rx="12" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="230" y="82" text-anchor="middle" class="title">GQA：少一些 KV 头</text>
+  <text x="680" y="82" text-anchor="middle" class="title">MLA：存内容潜变量 + 位置键</text>
+  <g class="label" text-anchor="middle">
+    <rect x="46" y="114" width="70" height="42" rx="7" fill="#dbeafe" stroke="#60a5fa"/><text x="81" y="141">Q0</text>
+    <rect x="141" y="114" width="70" height="42" rx="7" fill="#dbeafe" stroke="#60a5fa"/><text x="176" y="141">Q1</text>
+    <rect x="249" y="114" width="70" height="42" rx="7" fill="#ede9fe" stroke="#a78bfa"/><text x="284" y="141">Q2</text>
+    <rect x="344" y="114" width="70" height="42" rx="7" fill="#ede9fe" stroke="#a78bfa"/><text x="379" y="141">Q3</text>
+    <path class="line" d="M81 156L128 215"/><path class="line" d="M176 156L128 215"/>
+    <path class="line" d="M284 156L331 215"/><path class="line" d="M379 156L331 215"/>
+    <rect x="60" y="220" width="136" height="58" rx="8" fill="#dbeafe" stroke="#60a5fa"/><text x="128" y="244">K0 / V0</text><text x="128" y="266" class="small">第 0 组，共享读取</text>
+    <rect x="263" y="220" width="136" height="58" rx="8" fill="#ede9fe" stroke="#a78bfa"/><text x="331" y="244">K1 / V1</text><text x="331" y="266" class="small">第 1 组，共享读取</text>
+    <text x="230" y="310">映射 [0, 0, 1, 1]</text>
+    <text x="230" y="338">缓存 K 和 V：各 [B, 2, T, d]</text>
+    <text x="230" y="372" class="small">不是先存 4 份，再说“逻辑上共享”</text>
+    <rect x="615" y="106" width="130" height="40" rx="7" fill="#fff" stroke="#94a3b8"/><text x="680" y="132">输入 x_t</text>
+    <path class="line" d="M645 146L575 200"/><path class="line" d="M715 146L790 200"/>
+    <text x="566" y="174" class="small">降维</text><text x="805" y="174" class="small">投影 + RoPE</text>
+    <rect x="495" y="207" width="160" height="58" rx="8" fill="#dcfce7" stroke="#4ade80"/><text x="575" y="232">内容潜变量 c_t</text><text x="575" y="253" class="small">r 个数 / token</text>
+    <rect x="710" y="207" width="160" height="58" rx="8" fill="#fef3c7" stroke="#fbbf24"/><text x="790" y="232">独立位置键 k_R_t</text><text x="790" y="253" class="small">d_r 个数 / token</text>
+    <path class="line" d="M575 265V292"/><text x="575" y="316" class="small">各头不同的内容 K / V</text>
+    <text x="790" y="314" class="small">跨头共享的位置项</text>
+    <text x="680" y="345">压缩缓存：[c_t, k_R_t]</text>
+    <text x="680" y="374" class="small">省略位置项，就不是本章的 MLA 算式</text>
+  </g>
+</svg>

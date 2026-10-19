@@ -23,7 +23,8 @@ class Batch4TextTests(unittest.TestCase):
         self.assertIn('下一单元 P09', previous)
         self.assertNotIn('训练闭环与评估章节将另批完成', previous)
         readme = (ROOT/'README.md').read_text()
-        self.assertIn('12 个配套代码实验', readme)
+        numbered_scripts = list((ROOT/'code').glob('[0-9][0-9]_*.py'))
+        self.assertIn(f'{len(numbered_scripts)} 个配套代码实验', readme)
         self.assertIn('[第四批记录](docs/batch4-validation.md)', readme)
         for filename, prefix in [('07a_training_loop.md', 'P09'), ('08a_kv_cache.md', 'P11')]:
             headings = re.findall(r'^## (.+)$', (ROOT/'chapters'/filename).read_text(), re.M)

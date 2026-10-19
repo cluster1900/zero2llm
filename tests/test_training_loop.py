@@ -148,6 +148,25 @@ class TensorTrainingTests(unittest.TestCase):
         dropout.eval()
         self.assertEqual(float(dropout(torch.ones(4)).sum()), 4.)
 
+    def test_strata_forward_eval_no_grad_and_restore_mode(self):
+        base = loop.load_baseline()
+        model = base.BabyGPT(base.vocab_size, d_model=8, num_heads=2,
+                             num_layers=1, max_seq_len=32)
+        observations = []
+        handle = model.register_forward_pre_hook(
+            lambda module, args: observations.append((module.training, torch.is_grad_enabled())))
+        try:
+            for initial_training in (True, False):
+                observations.clear()
+                model.train(initial_training)
+                groups = loop.evaluate_strata(model, base.poems[1:], base.encode, base.poems[:1])
+                self.assertEqual(observations, [(False, False)] * 2)
+                self.assertEqual(model.training, initial_training)
+                self.assertEqual(sum(group['count'] for group in groups.values()), 46)
+                self.assertTrue(all(p.grad is None for p in model.parameters()))
+        finally:
+            handle.remove()
+
     def test_evaluate_unequal_documents_token_weighted(self):
         # A controlled forward emits loss 1 for one target and 4 for four targets.
         # Correct token mean=(1*1+4*4)/5=3.4; incorrect document mean=2.5.

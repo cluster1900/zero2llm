@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="410" viewBox="0 0 800 410" role="img" aria-labelledby="title desc">
+  <title id="title">S3 保留 RoPE 注意力，只替换归一化与 FFN</title>
+  <desc id="desc">左边是 Pre-Norm Block 的两条残差支路，右边展开 SwiGLU 的门、内容和输出投影。单变量实验分别替换 Norm 与 FFN。</desc>
+  <defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7" fill="#334155"/></marker></defs>
+  <rect width="800" height="410" rx="14" fill="#f8fafc"/>
+  <g font-family="sans-serif" fill="#0f172a" text-anchor="middle">
+    <text x="220" y="32" font-size="19" font-weight="bold">主干形状始终是 [B,T,D]</text>
+    <text x="600" y="32" font-size="19" font-weight="bold">SwiGLU：两路逐元素相乘</text>
+    <g fill="none" stroke="#334155" stroke-width="2" marker-end="url(#arrow)">
+      <path d="M220,61 V82"/><path d="M220,120 V138"/><path d="M220,177 V203"/>
+      <path d="M220,230 V249"/><path d="M220,287 V307"/><path d="M220,345 V366"/>
+      <path d="M220,65 H50 V216 H205"/><path d="M220,235 H90 V380 H205"/>
+      <path d="M600,80 V100 H500 V122"/><path d="M600,100 H700 V122"/>
+      <path d="M500,160 V183"/><path d="M500,221 V253 H586"/>
+      <path d="M700,160 V253 H616"/><path d="M600,268 V289"/><path d="M600,327 V350"/>
+    </g>
+    <text x="220" y="58" font-size="16">x</text>
+    <rect x="130" y="82" width="180" height="38" rx="7" fill="#dbeafe"/><text x="220" y="107" font-size="16">RMSNorm</text>
+    <rect x="110" y="138" width="220" height="39" rx="7" fill="#e2e8f0"/><text x="220" y="163" font-size="16">RoPE + MHA（不改）</text>
+    <circle cx="220" cy="216" r="14" fill="#fff" stroke="#334155"/><text x="220" y="222" font-size="21">+</text>
+    <rect x="130" y="249" width="180" height="38" rx="7" fill="#dbeafe"/><text x="220" y="274" font-size="16">RMSNorm</text>
+    <rect x="130" y="307" width="180" height="38" rx="7" fill="#dcfce7"/><text x="220" y="332" font-size="16">SwiGLU FFN</text>
+    <circle cx="220" cy="380" r="14" fill="#fff" stroke="#334155"/><text x="220" y="386" font-size="21">+</text>
+    <text x="600" y="77" font-size="16">归一化后的 x：[B,T,D]</text>
+    <rect x="435" y="122" width="130" height="38" rx="7" fill="#dcfce7"/><text x="500" y="147" font-size="16">gate：D → M</text>
+    <rect x="635" y="122" width="130" height="38" rx="7" fill="#dcfce7"/><text x="700" y="147" font-size="16">up：D → M</text>
+    <rect x="435" y="183" width="130" height="38" rx="7" fill="#fef3c7"/><text x="500" y="208" font-size="16">SiLU</text>
+    <circle cx="600" cy="253" r="15" fill="#fff" stroke="#334155"/><text x="600" y="260" font-size="22">×</text>
+    <rect x="520" y="289" width="160" height="38" rx="7" fill="#dcfce7"/><text x="600" y="314" font-size="16">down：M → D</text>
+    <text x="600" y="374" font-size="15">D=48：GELU 宽 192 → SwiGLU 宽 128</text>
+    <text x="600" y="396" font-size="14">无 bias 时两者均为 18432 个 FFN 参数</text>
+  </g>
+</svg>

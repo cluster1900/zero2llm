@@ -58,6 +58,16 @@ def slugify(text):
     clean = re.sub(r"[*_`]", "", clean).strip()
     return re.sub(r"[^\w\u4e00-\u9fa5]+", "-", clean).strip("-")
 
+
+def chapter_title_id(line):
+    """Keep explicit Pandoc heading IDs shared by EPUB, HTML and cross-links."""
+    title = line.removeprefix("# ").strip()
+    explicit = re.search(r"\s+\{#([A-Za-z][\w:.-]*)\}\s*$", title)
+    if explicit:
+        title = title[:explicit.start()].rstrip()
+    clean_title = re.sub(r'[*_`]', '', title)
+    return clean_title, explicit.group(1) if explicit else slugify(clean_title)
+
 def merge_markdown():
     print("▶ 正在合并 Markdown 章节文件...")
     chapter_files = get_sorted_chapters()
@@ -152,10 +162,21 @@ def build_html(document_path):
 
     # Pandoc 对中文标题的默认 id 会去掉部分标点，而目录需要保留可读的短横线。
     # 在服务端直接补 id，这样即使 CDN 脚本加载失败，目录仍然能跳转。
+    explicit_ids = set()
+    for chapter in get_sorted_chapters():
+        with open(chapter, encoding="utf-8") as source:
+            for line in source:
+                if line.startswith("# "):
+                    if re.search(r"\s+\{#[A-Za-z][\w:.-]*\}\s*$", line):
+                        explicit_ids.add(chapter_title_id(line)[1])
+                    break
+
     def add_heading_id(match):
         attrs, inner = match.group(1), match.group(2)
+        existing = re.search(r'\bid="([^"]*)"', attrs)
+        identifier = existing.group(1) if existing and existing.group(1) in explicit_ids else slugify(inner)
         attrs = re.sub(r'\s+id="[^"]*"', "", attrs)
-        return f'<h1 id="{slugify(inner)}"{attrs}>{inner}</h1>'
+        return f'<h1 id="{identifier}"{attrs}>{inner}</h1>'
 
     html_body = re.sub(
         r"<h1\b([^>]*)>(.*?)</h1>", add_heading_id, html_body, flags=re.DOTALL
@@ -181,10 +202,7 @@ def build_html(document_path):
         with open(cpath, "r", encoding="utf-8") as f:
             for line in f:
                 if line.startswith("# "):
-                    title = line.replace("# ", "").strip()
-                    # 提取纯文字
-                    clean_title = re.sub(r'[*_`]', '', title)
-                    slug = slugify(clean_title)
+                    clean_title, slug = chapter_title_id(line)
                     toc_items.append((clean_title, slug))
                     break
 

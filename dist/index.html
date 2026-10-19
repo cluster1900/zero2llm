@@ -498,6 +498,9 @@ figcaption, .diagram-caption {
   <li><a href="#训练基础-P09-让一次猜字变成一次学习">训练基础（P09）：让一次猜字变成一次学习</a></li>
   <li><a href="#第8章-实战-手搭一个微型大语言模型-Baby-GPT">第8章：实战——手搭一个微型大语言模型（Baby-GPT）</a></li>
   <li><a href="#生成优化-P11-KV-Cache-不再重复算历史">生成优化（P11）：KV Cache，不再重复算历史</a></li>
+  <li><a href="#p12-rope">旋转位置（P12）：RoPE 与 YaRN，能算更长不等于能读懂</a></li>
+  <li><a href="#p13-modern-block">现代 Block（P13）：RMSNorm 与 SwiGLU</a></li>
+  <li><a href="#p14-grouped-kv">架构进阶（P14）：MHA、MQA、GQA 与 MLA</a></li>
   <li><a href="#第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典 Transformer 到 GPT-4、DeepSeek</a></li>
   <li><a href="#附录-数学公式速查卡与深度学习黑话翻译词典">附录：数学公式速查卡与深度学习黑话翻译词典</a></li>
 </ul>
@@ -663,8 +666,9 @@ CPU 参考实现；跳过 GPU
 速度也不能混成一个数字。本书后续会专章展开，此时先记住：<strong>结果正确，不代表速度快；速度快，也不代表结果正确。</strong></p>
 <h2 id="当前阅读顺序与尚未完成的扩展">0.5
 当前阅读顺序与尚未完成的扩展</h2>
-<p>本书正在按审核通过的扩展大纲分批更新。当前批次完成的是 P00
-阅读指南、P01 词嵌入、P02 Tokenizer；这些 P
+<p>本书正在按审核通过的扩展大纲分批更新。当前已实现
+P00–P14，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE /
+现代 Block / GQA；这些 P
 编号是扩展计划的编号，不会立即替换旧版全部章号。</p>
 <p>为了保留已有链接，Tokenizer 暂放在“第 1A 章”，紧跟第 1 章；旧第 2～10
 章仍可阅读，但尚未全部按新大纲改写。当前 HTML/EPUB
@@ -672,13 +676,14 @@ CPU 参考实现；跳过 GPU
 <figure>
 <a href="assets/rendered/batch1_route.svg" title="点击查看原尺寸图"><img
 src="assets/rendered/batch1_route.svg" class="book-diagram" width="520"
-alt="本批次阅读顺序" /></a>
-<figcaption>本批次阅读顺序</figcaption>
+alt="入门三单元阅读顺序" /></a>
+<figcaption>入门三单元阅读顺序</figcaption>
 </figure>
 <p>读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer
 章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是
 Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA →
-MoE。现在它们仍是逐批落地的计划，不能把路线图当作已实现功能清单。</p>
+MoE。当前已实现到 GQA，MoE 等后续单元仍按批次推进；YaRN 与 MLA
+的教学边界见对应章节，不能把路线图当作完整工业模型的功能清单。</p>
 <h2 id="开始前的三个自测">0.6 开始前的三个自测</h2>
 <ol type="1">
 <li>一个数组形状是
@@ -3154,8 +3159,8 @@ class="math inline">\(p+k\)</span>。例如最快的那一对，从位置 0 的
 <p>这是“模型有机会利用相对关系”的数学依据，不是“训练一定会学会距离”的证明，也不是“加法位置编码的整个注意力分数只取决于距离”。加入内容并经过不同的
 <span class="math inline">\(W_Q,W_K\)</span>
 后，还会出现内容与位置的交叉项。</p>
-<p>路线图中的 <strong>P12：RoPE 与 YaRN</strong>
-会研究另一条路线：把位置信息用于 Q/K
+<p>后面的 <a href="#p12-rope">P12：RoPE 与 YaRN</a>
+研究另一条路线：把位置信息用于 Q/K
 的旋转，并检查相对关系与缓存位置偏移。这里先认识名字，不提前把正弦相加改写成
 RoPE，更不把旋转当成长上下文效果的保证。[来源 3，§3.1–3.2]</p>
 <h2 id="为什么相加而不是拼接先算一遍">5.6
@@ -5903,8 +5908,1772 @@ vLLM、没有运行其内核，也未实现分页缓存；本地 S1
 的行为以配套脚本为准。</li>
 </ol>
 <hr />
+<h1 id="p12-rope">旋转位置（P12）：RoPE 与
+YaRN，能算更长不等于能读懂</h1>
+<p>在 S0 / S1 中，我们给每个 token 加一个可学习的“座位号”向量。现在做
+S2：删掉绝对位置表，在注意力的 Q、K
+上旋转坐标。其余仍是多头注意力、LayerNorm、GELU 和 Pre-LN
+残差，不能把下一章的升级一起混进来。</p>
+<p>本章先让你用纸笔算一次旋转，再追踪缓存中的位置，最后亲眼看一个“训练长度内答对，长度外答错”的
+CPU 小实验。配套 <a href="code/13_rope.py">code/13_rope.py</a>
+实现的是<strong>普通 RoPE，不是完整
+YaRN，也不承诺获得生产级长上下文能力</strong>。</p>
+<h2 id="p12.1-不再给座位贴标签而是转动方向">P12.1
+不再给座位贴标签，而是转动方向</h2>
+<p>想象每个座位有一面小钟。Q 和 K
+原本是指针，位置决定转多少角度。同样的两根指针，若一起多转一圈中的同一角度，它们的夹角不变；如果只移动其中一个座位，夹角就会改变。</p>
+<p>这个比喻有两条边界。第一，真实 Q、K
+不是二维，而是拆成许多二维坐标对，各对转速不同。第二，旋转不增加语义知识，也不使两个
+token 越远就必然越不相关；内容投影和整个网络仍参与决定分数。</p>
+<figure>
+<a href="assets/rendered/p12-rope.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/p12-rope.svg" class="book-diagram" width="720"
+alt="RoPE：二维旋转保留长度；缓存追加时继续使用位置 3、4，只旋转新 Q/K。" /></a>
+<figcaption>RoPE：二维旋转保留长度；缓存追加时继续使用位置
+3、4，只旋转新 Q/K。</figcaption>
+</figure>
+<p>S1 与 S2 的区别可以写成三行：</p>
+<pre class="text"><code>S1：x = token_embedding + learned_position_embedding → Q/K/V → 注意力
+S2：x = token_embedding → Q/K/V → 对 Q/K 做 RoPE → 注意力
+                              V 不旋转；不再增加绝对位置表</code></pre>
+<p>换掉位置机制会改变模型函数，不能声称 S1 与 S2
+用同一份权重就有相同输出。本章证明的是 <strong>S2
+自己的完整前向与缓存前向使用同一个模型、同一组参数时对齐</strong>。</p>
+<h2 id="p12.2-先把一个二维旋转算完">P12.2 先把一个二维旋转算完</h2>
+<p>二维向量 <code>[a,b]</code> 逆时针旋转角度 φ 后：</p>
+<pre class="text"><code>a&#39; = a cosφ − b sinφ
+b&#39; = a sinφ + b cosφ</code></pre>
+<p>这里是弧度：π/2 等于 90°。取 <code>[a,b]=[3,4]</code>，原长度是
+√(3²+4²)=5。</p>
+<h3 id="表-p12-1旋转方向变了长度没有变">表
+P12-1：旋转方向变了，长度没有变</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>φ</th>
+<th>cosφ</th>
+<th>sinφ</th>
+<th>旋转结果</th>
+<th>长度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>[3,4]</td>
+<td>5</td>
+</tr>
+<tr>
+<td>π/2</td>
+<td>0</td>
+<td>1</td>
+<td>[-4,3]</td>
+<td>5</td>
+</tr>
+<tr>
+<td>π</td>
+<td>-1</td>
+<td>0</td>
+<td>[-3,-4]</td>
+<td>5</td>
+</tr>
+</tbody>
+</table></div>
+<p>以第二行为例：第一坐标是 3×0−4×1=−4；第二坐标是 3×1+4×0=3。浮点
+cos(π/2) 未必严格等于 0，因此测试使用小容差，不要求每一位相等。</p>
+<p>为什么长度不变？把 a’²+b’² 展开，交叉项互相抵消，剩下
+<code>(a²+b²)(cos²φ+sin²φ)=a²+b²</code>。这不是“训练出来大致如此”，而是旋转公式的性质。源码
+<code>rotation_walkthrough()</code> 用 float64
+生成上表，<code>test_rotation_matches_independent_float64_matrix_and_preserves_tail</code>
+还用独立的 2×2
+矩阵验证实现，防止完整前向与缓存路径一起写错却互相对齐。</p>
+<h2 id="p12.3-为什么位置差会进入注意力分数">P12.3
+为什么位置差会进入注意力分数</h2>
+<p>把位置 m 的旋转记作 R(mθ)，θ 是这一对坐标每前进一个 token
+的转角。RoPE 对 Q、K 分别使用自己的位置：</p>
+<pre class="text"><code>q_rot = R(mθ) q
+k_rot = R(nθ) k
+q_rot · k_rot = q · R((n−m)θ) k</code></pre>
+<p>“两个都转”可改写成“第一个不转，第二个只转相对角度”。这就是点积中的相对位置性质。注意：公式把
+q、k 当作固定的内容向量；真实 q、k
+由上下文产生，不能据此说整个模型输出只由距离决定。</p>
+<p>令 q=[1,2]、k=[3,4]、θ=1，设 Δ=n−m。直接代入会得到：</p>
+<pre class="text"><code>q · R(Δ)k
+= 1×(3cosΔ−4sinΔ) + 2×(3sinΔ+4cosΔ)
+= 11cosΔ + 2sinΔ</code></pre>
+<h3 id="表-p12-2同时平移位置固定内容的点积不变">表
+P12-2：同时平移位置，固定内容的点积不变</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>m</th>
+<th>n</th>
+<th>Δ=n−m</th>
+<th>旋转后点积</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>7.626267334</td>
+</tr>
+<tr>
+<td>2</td>
+<td>3</td>
+<td>1</td>
+<td>7.626267334</td>
+</tr>
+<tr>
+<td>0</td>
+<td>2</td>
+<td>2</td>
+<td>-2.759020348</td>
+</tr>
+</tbody>
+</table></div>
+<p>前两行是把两个位置都加
+2；最后一行改变了相对距离。表由同一个脚本生成。更大距离下三角函数还会继续摆动，因此<strong>不能从这个表归纳出“距离越大，点积就单调减小”</strong>，更不能把
+RoPE 说成一个自动削弱远距离内容的开关。</p>
+<h2 id="p12.4-多维向量不同坐标对像不同转速的钟">P12.4
+多维向量：不同坐标对像不同转速的钟</h2>
+<p>设每个头宽度为 d，实际旋转的前 r 个坐标称为
+<code>rotary_dim</code>。r 必须为正偶数，且不超过 d。本章默认
+r=d；部分旋转时，后面 d−r 个坐标保持原样。</p>
+<p>我们使用相邻配对：<code>(x0,x1)、(x2,x3)、…</code>。对第 i 对，i 从 0
+开始：</p>
+<pre class="text"><code>θ_i = base^(−2i/r)
+φ_i(p) = p × θ_i</code></pre>
+<p><code>base=10000</code> 是本例的设定，不是所有模型统一的常数。r=8
+时有四对，而不是八对。位置 p=10 时：</p>
+<h3 id="表-p12-3快钟和慢钟">表 P12-3：快钟和慢钟</h3>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>i</th>
+<th>坐标对</th>
+<th>θ_i：每 token 转角</th>
+<th>p=10 的角度</th>
+<th>转一圈所需 token 数 2π/θ_i</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0,1</td>
+<td>1.000000</td>
+<td>10.000000</td>
+<td>6.283185</td>
+</tr>
+<tr>
+<td>1</td>
+<td>2,3</td>
+<td>0.100000</td>
+<td>1.000000</td>
+<td>62.831853</td>
+</tr>
+<tr>
+<td>2</td>
+<td>4,5</td>
+<td>0.010000</td>
+<td>0.100000</td>
+<td>628.318531</td>
+</tr>
+<tr>
+<td>3</td>
+<td>6,7</td>
+<td>0.001000</td>
+<td>0.010000</td>
+<td>6283.185307</td>
+</tr>
+</tbody>
+</table></div>
+<p>这是 <code>frequency_walkthrough()</code>
+的输出。高频意味着转得快、波长短；低频意味着转得慢、波长长。不能把“低频坐标编号大”误读成“绝对位置大”。</p>
+<p>有些实现将前半和后半坐标配对，而不是相邻配对。只要权重排列和旋转约定配套，二者可以通过相应的维度置换对应；<strong>不能把已有
+checkpoint
+的权重原样交给另一种配对约定，假装没有改变模型</strong>。本章不用外部
+checkpoint。</p>
+<p><code>apply_rope</code> 的核心代码与上面的两行算式一一对应：</p>
+<div class="sourceCode" id="cb80"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb80-1"><a href="#cb80-1" aria-hidden="true" tabindex="-1"></a>frequencies <span class="op">=</span> base <span class="op">**</span> (<span class="op">-</span>torch.arange(<span class="dv">0</span>, dim, <span class="dv">2</span>, device<span class="op">=</span>x.device, dtype<span class="op">=</span>work_dtype) <span class="op">/</span> dim)</span>
+<span id="cb80-2"><a href="#cb80-2" aria-hidden="true" tabindex="-1"></a>angles <span class="op">=</span> positions.to(work_dtype)[:, <span class="va">None</span>] <span class="op">*</span> frequencies[<span class="va">None</span>, :]</span>
+<span id="cb80-3"><a href="#cb80-3" aria-hidden="true" tabindex="-1"></a>c, s <span class="op">=</span> angles.cos(), angles.sin()</span>
+<span id="cb80-4"><a href="#cb80-4" aria-hidden="true" tabindex="-1"></a>even <span class="op">=</span> x[..., :dim:<span class="dv">2</span>].to(work_dtype)</span>
+<span id="cb80-5"><a href="#cb80-5" aria-hidden="true" tabindex="-1"></a>odd <span class="op">=</span> x[..., <span class="dv">1</span>:dim:<span class="dv">2</span>].to(work_dtype)</span>
+<span id="cb80-6"><a href="#cb80-6" aria-hidden="true" tabindex="-1"></a>rotated <span class="op">=</span> torch.stack((even <span class="op">*</span> c <span class="op">-</span> odd <span class="op">*</span> s, even <span class="op">*</span> s <span class="op">+</span> odd <span class="op">*</span> c), dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb80-7"><a href="#cb80-7" aria-hidden="true" tabindex="-1"></a>rotated <span class="op">=</span> rotated.flatten(<span class="op">-</span><span class="dv">2</span>).to(x.dtype)</span>
+<span id="cb80-8"><a href="#cb80-8" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> torch.cat((rotated, x[..., dim:]), dim<span class="op">=-</span><span class="dv">1</span>)</span></code></pre></div>
+<p>第一行生成 r/2 个频率；第二行把 T 个位置与这些频率相乘，得到
+<code>[T,r/2]</code> 角度表。<code>stack</code>
+放回两个坐标，<code>flatten</code> 恢复最后一维。<code>x</code> 可为
+<code>[B,H,T,d]</code>，角度表会广播到 batch
+和头上。完整函数检查维度、偶数、位置长度及设备。</p>
+<p>float64 输入用 float64 计算角度；float16/bfloat16 先转 float32
+计算旋转再转回，避免直接在低精度里算角度。本实现没有声称任意大位置都足够精确，float32
+也有数值范围和分辨率限制。</p>
+<h2 id="p12.5-s2-的张量账本和接口">P12.5 S2 的张量账本和接口</h2>
+<p>本章的 <code>RopeConfig</code> 前五个字段沿用
+S0：词表大小、主干宽度、头数、层数、允许的最大输入长度；新增
+<code>rope_base</code> 与可选 <code>rotary_dim</code>。例如
+<code>RopeConfig(17,16,4,2,64)</code> 表示 17 个 token、宽度 16、4
+个头、2 层、最多 64 个位置。每头宽度 d=4。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>本例 B=2、T=12 时的形状</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ID</td>
+<td>[2,12]</td>
+<td>token 查表</td>
+</tr>
+<tr>
+<td>x</td>
+<td>[2,12,16]</td>
+<td>没有 <code>pos_emb</code> 相加</td>
+</tr>
+<tr>
+<td>Q、K、V</td>
+<td>各 [2,4,12,4]</td>
+<td>线性投影后分头</td>
+</tr>
+<tr>
+<td>旋转后 Q、K</td>
+<td>各 [2,4,12,4]</td>
+<td>形状不变，V 不变</td>
+</tr>
+<tr>
+<td>scores</td>
+<td>[2,4,12,12]</td>
+<td>QKᵀ / √4，再加因果 mask</td>
+</tr>
+<tr>
+<td>Attention 输出</td>
+<td>[2,12,16]</td>
+<td>对 V 加权、拼头、输出投影</td>
+</tr>
+<tr>
+<td>logits</td>
+<td>[2,12,17]</td>
+<td>各 Block 后接归一化和词表分类头</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>RopeGPT(config).forward(idx, targets=None)</code> 返回
+<code>(logits,loss)</code>。传入右移标签时 loss
+是所有位置的平均交叉熵；没有标签时 loss 为 None。LayerNorm 和 GELU
+没有偷偷替换，KV 头也没有共享。后两章在这份基线上分别做 S3、S4。</p>
+<p>完整前向会生成 <code>positions=0,…,T−1</code>，分别旋转 Q 与
+K；缓存前向则必须沿用已有位置。下一节就是二者最容易分叉的地方。</p>
+<h2 id="p12.6-缓存-offset旧钥匙不能再转一次">P12.6 缓存
+offset：旧钥匙不能再转一次</h2>
+<p>已有 P=3 个 token，新来 C=2 个，位置应该是
+<strong>[3,4]</strong>，不是 [0,1]。本例缓存保存<strong>已经旋转的
+K</strong>，以及没有旋转的 V：</p>
+<div class="sourceCode" id="cb81"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a>positions <span class="op">=</span> torch.arange(offset, offset <span class="op">+</span> T, device<span class="op">=</span>idx.device)</span>
+<span id="cb81-2"><a href="#cb81-2" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> apply_rope(q, positions, attn.rope_base, attn.rotary_dim)</span>
+<span id="cb81-3"><a href="#cb81-3" aria-hidden="true" tabindex="-1"></a>k <span class="op">=</span> apply_rope(k, positions, attn.rope_base, attn.rotary_dim)</span>
+<span id="cb81-4"><a href="#cb81-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> cache <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb81-5"><a href="#cb81-5" aria-hidden="true" tabindex="-1"></a>    k <span class="op">=</span> torch.cat((cache.layers[i][<span class="dv">0</span>], k), dim<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb81-6"><a href="#cb81-6" aria-hidden="true" tabindex="-1"></a>    v <span class="op">=</span> torch.cat((cache.layers[i][<span class="dv">1</span>], v), dim<span class="op">=</span><span class="dv">2</span>)</span></code></pre></div>
+<p>每层都这样做，不能只修第一层。旧 K 保持原样；对拼接后的所有 K
+再整体旋转，会把旧位置转两次。</p>
+<p>RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>query 位置</th>
+<th>key0</th>
+<th>key1</th>
+<th>key2</th>
+<th>key3</th>
+<th>key4</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3</td>
+<td>看</td>
+<td>看</td>
+<td>看</td>
+<td>看</td>
+<td>不看</td>
+</tr>
+<tr>
+<td>4</td>
+<td>看</td>
+<td>看</td>
+<td>看</td>
+<td>看</td>
+<td>看</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>key_position &lt;= query_position</code>
+使用真实整数位置。缓存内存仍是 MHA 的
+<code>2×层数×B×H×T×d×每元素字节数</code>。上节 2
+层、B=2、H=4、T=12、d=4、float32 的结果为 <strong>6144
+字节</strong>。去掉绝对位置表并不会把历史 K/V
+也去掉；这是张量有效载荷，不包含 Python
+对象、分配器和注意力中间结果。</p>
+<p>本接口只支持无 padding、同长度 batch、固定位置规则、eval
+模式。新请求必须传
+<code>cache=None</code>。缓存与模型绑定，参数更新/替换、dtype 改变、RoPE
+配置改变、归一化 epsilon
+改变等都会使旧缓存失效；实现检查这些签名并报错。缓存张量必须当作只读对象，不支持通过
+<code>.data</code> 偷改参数绕过版本计数。</p>
+<p>完整前向与分块前向对照了逐 token、[3,4,2,3] 分块、一次完整输入以及
+T=1。脚本种子 42、float32 下最大绝对误差实测为
+<strong>2.38418579×10⁻⁷</strong>；另有 float64、部分旋转、不同
+batch、请求重置、缓存分支与因果性测试。不是拿“生成了相同的字”替代所有
+logits 的比较。</p>
+<h2 id="p12.7-外推和插值可以继续转但没学过新路程">P12.7
+外推和插值：可以继续转，但没学过新路程</h2>
+<p>没有绝对位置查表，并不表示长上下文问题消失了。公式当然能给位置 1000
+算
+cos/sin；模型是否学会在那个距离检索内容，是另一个问题。新增干扰内容、注意力分布、训练数据和数值精度也都会影响结果。</p>
+<p>设训练长度 L=8，希望使用长度 L′=32，扩展倍数 s=L′/L=4：</p>
+<ul>
+<li><strong>直接外推</strong>：仍用
+pθ，不改变转速；测试会出现训练未覆盖的相对距离。</li>
+<li><strong>位置插值（PI）</strong>：用
+<code>(p/s)θ</code>，等价于把频率改为
+θ/s。这里缩放的是旋转相位，不是删除
+token，也不是把注意力矩阵缩成八个位置。</li>
+</ul>
+<h3 id="表-p12-4同一个位置新的转角">表 P12-4：同一个位置，新的转角</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>token 位置 p</th>
+<th>外推的 pθ</th>
+<th>PI 的 (p/4)θ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0θ</td>
+<td>0θ</td>
+</tr>
+<tr>
+<td>7</td>
+<td>7θ</td>
+<td>1.75θ</td>
+</tr>
+<tr>
+<td>8</td>
+<td>8θ</td>
+<td>2θ</td>
+</tr>
+<tr>
+<td>31</td>
+<td>31θ</td>
+<td>7.75θ</td>
+</tr>
+</tbody>
+</table></div>
+<p>表由 <code>interpolation_walkthrough()</code> 生成。通常以长度比 L′/L
+缩放，因此最后的 7.75 不等于训练最后一个整数位置
+7；这是长度定义和离散端点的区别，不能声称端点逐一重合。相邻 token
+的相位差也从 θ 压缩成 θ/4，可能改变模型对局部距离的分辨。因果 mask
+仍比较原始的 token 次序，不随 PI 缩放。</p>
+<p>只修改 <code>max_seq_len</code>，只是放开本实现的输入检查；只做
+PI，也不能自动证明质量改善。需要指定训练方案，并分别测短上下文和目标长上下文。本章不把
+PI 数值示范当作已训练的位置扩展模型。</p>
+<h2 id="p12.8-yarn按频段调节还要调注意力分数">P12.8
+YaRN：按频段调节，还要调注意力分数</h2>
+<p><a href="https://arxiv.org/html/2309.00071v2">YaRN 原论文
+v2，§3.2–3.4</a> 的组合不只是“把位置除以 s”。用波长 λ=2π/θ，与原训练长度
+L 的比值 r=L/λ，来区分频段：</p>
+<ul>
+<li>转得快、训练范围内已转过很多圈的频段：保留原频率。</li>
+<li>转得慢的频段：使用 θ/s 插值。</li>
+<li>中间频段：通过 ramp 混合 θ/s 和 θ，而非给所有维度同一个缩放。</li>
+</ul>
+<p>论文定义的 ramp γ 从 0 过渡到 1，混合式为
+<code>θ′=(1−γ)θ/s+γθ</code>；因此 γ=0 对应完全插值，γ=1
+对应不改频率，方向不要写反。</p>
+<p>另一部分是注意力温度：把 <code>softmax(QKᵀ/√d)</code> 改为
+<code>softmax(QKᵀ/(t√d))</code>。若 Q 和 K 各乘 a=√(1/t)，点积会乘
+<strong>a²</strong>，不是 a。论文对 LLaMA 系列给出的经验关系是
+<code>a=1+0.1 ln(s)</code>，不能当成所有模型通用的常数。这个缩放会改变
+Q/K 的长度；P12.2 的“范数不变”只适用于未附加幅度缩放的纯旋转。</p>
+<p>频段插值与注意力缩放构成这里介绍的 YaRN
+核心。训练和长文本评估仍需另外说明，本章没有做论文规模的微调。不要把本章普通
+RoPE 的 CPU 结果标成“YaRN 复现”。</p>
+<p>还有一个缓存陷阱：如果生成中动态改变 s，旧 K
+所用的角度规则就过期。当前 S2 固定规则并拒绝改配置后复用旧缓存；它不实现
+Dynamic YaRN。若要扩展，需要专门设计未旋转 K
+的保留/重算等一致性策略，不能只改一个频率变量后继续拼旧 K。</p>
+<h2 id="p12.9-cpu-反例短距离记住了长距离未必记得住">P12.9 CPU
+反例：短距离记住了，长距离未必记得住</h2>
+<p>我们不拿三首诗自然语言输出评判长上下文，而是造一个明确任务：</p>
+<pre class="text"><code>输入：[BOS=9, 答案a, 随机干扰token…, QUERY=8]
+目标：在最后 QUERY 位置预测 a，a 只可能是 0、1、2、3</code></pre>
+<p>比如 <code>[9,2,7,0,6,1,3,8]</code> 的正确答案是 2。干扰 token 来自
+0–7，可能包含其他候选答案，不能只找序列里唯一出现的某个符号。BOS 和
+QUERY 帮助定义任务，没有泄露“最后一格应该猜什么”。</p>
+<p>完整模型接口仍可做语言模型训练，但<strong>这个实验只对 QUERY
+位置的十分类 logits 算一次交叉熵</strong>，不是全序列 next-token
+loss，不报告语言模型困惑度。只在四种合法答案里均匀猜，准确率基线是
+25%；如果在十个输出 ID 中均匀乱猜，则是
+10%。训练让模型学会使用合法答案，不应混淆这两条基线。</p>
+<p>实验协议写死在 <code>length_experiment()</code>，便于复现和审计：</p>
+<ul>
+<li>CPU、float32、单线程；验证环境 PyTorch 2.14.1+cpu，依赖见仓库
+requirements。</li>
+<li>两层模型，d_model=32，H=4，词表大小 10；普通
+RoPE、全头旋转、base=10000。</li>
+<li>从一开始允许
+<code>max_seq_len=64</code>，<strong>实际训练样本始终只有 8
+个位置</strong>。</li>
+<li>AdamW，学习率 0.003，weight_decay=0；batch=32，更新 400 次，共 12800
+个训练样本。</li>
+<li>独立生成的测试流从未交给优化器；每个长度 512 个样本，标签仍是相同的
+0–3，没有“长序列突然出现训练没见过的目标字”这一混淆。</li>
+<li>完整报告种子
+2025、2026、2027，不只挑一个最差的长长度；小型合成数据仍可能重复，独立抽样不等于自然文本去重测试。</li>
+</ul>
+<h3 id="表-p12-5每个种子的完整准确率">表
+P12-5：每个种子的完整准确率</h3>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>种子</th>
+<th>T=8</th>
+<th>T=16</th>
+<th>T=32</th>
+<th>T=64</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2025</td>
+<td>512/512=100%</td>
+<td>351/512=68.55%</td>
+<td>247/512=48.24%</td>
+<td>390/512=76.17%</td>
+</tr>
+<tr>
+<td>2026</td>
+<td>512/512=100%</td>
+<td>226/512=44.14%</td>
+<td>170/512=33.20%</td>
+<td>364/512=71.09%</td>
+</tr>
+<tr>
+<td>2027</td>
+<td>512/512=100%</td>
+<td>252/512=49.22%</td>
+<td>170/512=33.20%</td>
+<td>203/512=39.65%</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="表-p12-6种子-2026-的-query-损失账本">表 P12-6：种子 2026 的
+QUERY 损失账本</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>T</th>
+<th>样本数</th>
+<th>交叉熵总和</th>
+<th>每样本平均交叉熵</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8</td>
+<td>512</td>
+<td>0.535311</td>
+<td>0.001046</td>
+</tr>
+<tr>
+<td>16</td>
+<td>512</td>
+<td>1698.983002</td>
+<td>3.318326</td>
+</tr>
+<tr>
+<td>32</td>
+<td>512</td>
+<td>2015.840637</td>
+<td>3.937189</td>
+</tr>
+<tr>
+<td>64</td>
+<td>512</td>
+<td>594.218678</td>
+<td>1.160583</td>
+</tr>
+</tbody>
+</table></div>
+<p>该种子第一训练 batch 的 CE 为 2.338030，最后一个为
+0.001039。训练日志是训练
+batch，表格是独立测试样本，不能混写成同一组指标。CE
+按自然对数计算；总和除以样本数得到均值，表中做了六位小数舍入。</p>
+<p><strong>结论只到这里：这个设置在训练长度内成功，但直接外推后不能保持准确率。</strong>
+不是证明 RoPE 在所有长任务上都失败，也不是证明 YaRN
+一定解决这个任务。增长长度同时增加检索距离和干扰 token
+数，本实验没有隔离二者；也没有与其他位置方法做等预算对照，所以不能把全部损失归因于某一个频率。</p>
+<p>尤其注意 T=64 常比 T=32
+好。我们如实保留这个非单调现象，不把表改写成“长度越长越差”的漂亮故事。周期相位可能参与这种变化，但仅凭这张表不能确定原因；不同种子的变化也不小。算法能继续计算，是能力测试的起点，不是终点。</p>
+<h2 id="p12.10-怎么运行以及哪些检查比一句生成结果更可靠">P12.10
+怎么运行，以及哪些检查比一句生成结果更可靠</h2>
+<p>在仓库根目录、已经安装 <code>requirements.txt</code> 的 Python
+环境中运行：</p>
+<div class="sourceCode" id="cb83"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb83-1"><a href="#cb83-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/13_rope.py</span>
+<span id="cb83-2"><a href="#cb83-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/13_rope.py <span class="at">--skip-training</span></span>
+<span id="cb83-3"><a href="#cb83-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/13_rope.py <span class="at">--seeds</span> 2026</span>
+<span id="cb83-4"><a href="#cb83-4" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_rope.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>第一条打印所有算术表、缓存差值和三个种子的训练/测试结果；第二条跳过训练；第三条只复现指定种子。没有权重下载，不需要
+GPU。缺少 PyTorch 时 CLI 给出安装提示；测试沿用仓库的稳定 2.14.x
+版本闸门，<strong>被跳过不算通过</strong>。不同硬件/数值库末位可能有差异，测试对记录值使用明确的
+CPU 容差。</p>
+<p><code>tests/test_rope.py</code>
+不只检查形状。它核对旋转范数、独立矩阵参考、相对位置恒等式、未旋转尾部、梯度有限性、float64
+精度、缓存位置/因果
+mask/内存/重置，以及训练反例的可复现指标。负例还故意重置新块
+offset、取消旋转、把旧 K 转第二次，确认会被 logits
+比较识别出来。规范正确性与模型质量是两套检查，两套都不能省。</p>
+<h2 id="p12.11-自测与参考答案">P12.11 自测与参考答案</h2>
+<p>先遮住答案，试着独立解释：</p>
+<ol type="1">
+<li><code>[3,4]</code> 逆时针转 90° 后是什么？模长是多少？</li>
+<li>q=[1,2]、k=[3,4]、θ=1，位置从 (0,1) 改为
+(2,3)，点积会改变吗？为什么不能由此断言整个模型平移不变？</li>
+<li>d=8、rotary_dim=6 时有几对旋转坐标？哪两个坐标原样保留？</li>
+<li>缓存已有 7 个 token，本次新增 3 个，RoPE 位置应是什么？旧 K
+要不要重新旋转？</li>
+<li>L=8 扩到 L′=32，用 PI 时位置 31 的相位是什么？一共有多少
+token？</li>
+<li>YaRN 若让 Q、K 都乘
+a，注意力点积乘多少？纯旋转的范数测试还能原样用吗？</li>
+<li>本实验 T=64 比 T=32 好，是否推翻“只放宽长度检查不保证质量”？</li>
+<li>对 2 层、B=2、H=4、T=12、d=4 的 float32 模型，实际 K/V
+有效载荷多少字节？</li>
+</ol>
+<p>参考答案：</p>
+<ol type="1">
+<li><code>[-4,3]</code>，模长仍为 5，见
+<code>rotation_walkthrough()</code>。</li>
+<li>不变，都是 7.626267334，因为相对位置差仍是 1。结论固定了
+q、k；上下文、边界和模型其他计算也可能变化。</li>
+<li>三对，即 (0,1)、(2,3)、(4,5)；坐标 6、7
+不动。频率公式的分母使用旋转宽度 6。</li>
+<li><code>[7,8,9]</code>。旧 K 已经旋转，不再旋转；新 query 7 也不能偷看
+key8/9。</li>
+<li><code>7.75θ</code>，仍有 32 个 token；最后 query 的原始位置仍是
+31，不是“第 7 个 token”。</li>
+<li>乘 a²。附加幅度缩放后不再保持原范数，不能套用普通 RoPE
+的单位旋转断言。</li>
+<li>不推翻。测试长度外仍低于 T=8
+的准确率，而失败幅度不必随长度单调增长；我们没有证明某种普遍规律。</li>
+<li><code>2×2×2×4×12×4×4=6144</code> 字节。RoPE 不减少 KV
+数量，也不等于没有缓存成本。</li>
+</ol>
+<h2 id="p12.12-来源与下一步">P12.12 来源与下一步</h2>
+<p>来源核验日期：2026-10-19。</p>
+<ul>
+<li><a href="https://arxiv.org/abs/2104.09864">RoFormer / RoPE
+论文，arXiv:2104.09864</a>：Q/K
+旋转与相对位置点积的原始来源；本章二维数值是独立手算与脚本生成。</li>
+<li><a href="https://arxiv.org/html/2309.00071v2">YaRN 论文
+v2，arXiv:2309.00071v2</a>：这里固定版本解释
+PI、分频段插值、注意力温度和动态缩放缓存问题，不将论文的模型规模与训练成绩当成本仓库复现。</li>
+<li>所有 CPU 实验数字来自本仓库 <code>code/13_rope.py</code>
+的上述明确配置；没有把论文指标移植成自己的结果。</li>
+</ul>
+<p>S2 已把“位置在哪里进入模型”和“缓存该保存什么”说明白。接下来 P13
+一次只换一个部件，理解 RMSNorm 与 SwiGLU；P14 再处理共享 KV
+头与压缩，而不是把 RoPE、GQA 和 MLA 都叫作“节省缓存的同一种技巧”。</p>
+<hr />
+<h1 id="p13-modern-block">现代 Block（P13）：RMSNorm 与 SwiGLU</h1>
+<p><a href="#p12-rope">P12 的 S2</a> 已经把位置处理换成 RoPE，但 Block
+内部仍然是 LayerNorm 和 GELU FFN。本章得到
+S3：<strong>保留残差路线、因果注意力和 RoPE，只研究归一化与
+FFN</strong>。不同时加入 GQA，不借“现代”二字暗示每种设置都更好。</p>
+<p>配套 <a href="code/14_modern_block.py">code/14_modern_block.py</a>
+在 S2
+类上做替换，不复制另一套注意力代码。你会先算两行小向量，再检查真实参数量，最后做两个分开的消融实验。初次接触这些名词时，请先回顾
+P07 的 Pre-LN 和逐位置 FFN，以及 P09 的前向、反向和 optimizer。</p>
+<h2 id="p13.1-先认出没有变的骨架">P13.1 先认出没有变的骨架</h2>
+<p>一个 Block 仍然做两次“先归一化、再计算、加回主干”：</p>
+<p><span
+class="math display">\[u=x+\operatorname{Attention}(\operatorname{Norm}_1(x))\]</span>
+<span
+class="math display">\[y=u+\operatorname{FFN}(\operatorname{Norm}_2(u))\]</span></p>
+<p>Norm 和 FFN 都分别作用于每个 token
+的最后一维。它们本身不把不同位置混起来；跨位置读信息的是
+Attention。输入和输出都是
+<code>[B,T,D]</code>，所以残差相加仍然合法。这里 B 是 batch，T
+是序列长度，D 是主干宽度。</p>
+<figure>
+<a href="assets/rendered/p13-modern-block.svg"
+title="点击查看原尺寸图"><img src="assets/rendered/p13-modern-block.svg"
+class="book-diagram" width="720"
+alt="S3 主干与 SwiGLU 两路门控：注意力不改，FFN 内部宽度可以改" /></a>
+<figcaption>S3 主干与 SwiGLU 两路门控：注意力不改，FFN
+内部宽度可以改</figcaption>
+</figure>
+<p>图中“×”是逐坐标相乘，不是矩阵乘法。FFN 内部临时变宽，输出投影再回到
+D；它没有偷偷改变下一个 Block 的输入宽度。模型最后的 <code>ln_f</code>
+也要跟随归一化选择，不能只改每个 Block 的两处
+Norm，漏掉输出头之前的一处。</p>
+<h2 id="p13.2-layernorm-与-rmsnorm-究竟除以什么">P13.2 LayerNorm 与
+RMSNorm 究竟除以什么</h2>
+<p>先取某个 token 的向量 <span
+class="math inline">\(x=[x_1,\ldots,x_D]\)</span>。为看清区别，暂时令可学习缩放
+<span class="math inline">\(\gamma\)</span> 全为 1，偏移 <span
+class="math inline">\(\beta\)</span> 全为 0。</p>
+<p>LayerNorm 先减均值，再除以标准差：</p>
+<p><span class="math display">\[\mu=\frac{1}{D}\sum_i x_i,\qquad
+v=\frac{1}{D}\sum_i(x_i-\mu)^2\]</span> <span
+class="math display">\[\operatorname{LN}(x)_i=\frac{x_i-\mu}{\sqrt{v+\epsilon}}\gamma_i+\beta_i\]</span></p>
+<p>这里方差除以 D，不是统计学无偏估计的 D−1。PyTorch LayerNorm 对应
+<code>correction=0</code>。它在训练和推理时都使用当前输入的统计量，没有
+BatchNorm 那种运行均值表。[来源 3]</p>
+<p>RMS 是 root mean
+square，中文是“均方根”：先平方、求平均，再开平方。RMSNorm
+<strong>不减均值</strong>：</p>
+<p><span class="math display">\[r^2=\frac{1}{D}\sum_i x_i^2,\qquad
+\operatorname{RMSNorm}(x)_i=\frac{x_i}{\sqrt{r^2+\epsilon}}\gamma_i\]</span></p>
+<p>本章实现只有 D 个可学习的 <span
+class="math inline">\(\gamma\)</span>，没有 <span
+class="math inline">\(\beta\)</span>。它把向量的整体尺度调到较稳定的范围，却不强制把中心搬到
+0。RMSNorm
+原论文研究的正是省去重新居中后的归一化方式；论文中的实验结果不能直接成为我们这份
+CPU 实现的速度保证。[来源 1]</p>
+<p>一个很有用的恒等式是 <span
+class="math inline">\(r^2=v+\mu^2\)</span>。例如 <code>[1,3]</code>
+的均值是 2，方差是 1，均方是 5，因此 <span
+class="math inline">\(5=1+2^2\)</span>。RMSNorm 不是“LN
+换个名字”：只要均值不是 0，两个分母一般不同，LN 的分子也还减了均值。</p>
+<h3 id="表-p13-1两行向量逐项手算">表 P13-1：两行向量，逐项手算</h3>
+<p>为了使分母容易核对，这张教学表故意用
+<strong>ε=0.5</strong>，不是模型训练默认的
+<code>1e-5</code>。每一行独立归一化，γ=1，β=0。</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+<col style="width: 12%" />
+</colgroup>
+<thead>
+<tr>
+<th>输入 x</th>
+<th>均值 μ</th>
+<th>方差 v</th>
+<th>均方 r²</th>
+<th>LN 分母</th>
+<th>RMS 分母</th>
+<th>LN 输出</th>
+<th>RMSNorm 输出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>[1,3]</td>
+<td>2</td>
+<td>1</td>
+<td>5</td>
+<td>√1.5</td>
+<td>√5.5</td>
+<td>[-0.816497,0.816497]</td>
+<td>[0.426401,1.279204]</td>
+</tr>
+<tr>
+<td>[3,5]</td>
+<td>4</td>
+<td>1</td>
+<td>17</td>
+<td>√1.5</td>
+<td>√17.5</td>
+<td>[-0.816497,0.816497]</td>
+<td>[0.717137,1.195229]</td>
+</tr>
+</tbody>
+</table></div>
+<p>第二行等于第一行的每个坐标都加 2。LN 把这次整体平移消掉，RMSNorm
+则保留差异。以第一行 RMS
+输出为例，<code>1/√5.5≈0.426401</code>，<code>3/√5.5≈1.279204</code>，输出的均值明显不是
+0。</p>
+<p>如果学到 γ=[2,0.5]，还要把两个输出坐标分别乘 2 和 0.5；γ
+不是整条向量共用一个数。LN 在 γ 不同或 β
+非零时，其最终输出也不必保持均值
+0，不能把“标准化后的中间量”与“可学习仿射变换后的输出”混为一谈。</p>
+<p><code>norm_walkthrough()</code>
+产生表中的原始张量；测试独立使用两种平方根公式核对，不是拿同一个实现与自己比较。</p>
+<h2 id="p13.3-ε-是数值约定不是可省略的装饰">P13.3 ε
+是数值约定，不是可省略的装饰</h2>
+<p>若 x 全为 0，直接除以 RMS 会出现 0/0。加上正数 ε 后，分母至少是
+√ε，输出仍为 0，反向也可保持有限。但 ε
+很小时，零点附近导数可能很大；“有限”不等于“绝不会梯度爆炸”。</p>
+<p>位置也很重要：</p>
+<p><span
+class="math display">\[\sqrt{\operatorname{mean}(x^2)+\epsilon}\ \ne\
+\sqrt{\operatorname{mean}(x^2)}+\epsilon\]</span></p>
+<p>右边不是本章实现。表 P13-1 的较大 ε
+能让这类错误很容易暴露，生产配置的小 ε
+反而可能让粗糙测试漏掉它。<code>norm_eps</code>
+必须是有限正数；0、负数、NaN、无穷和布尔值都被拒绝。</p>
+<p>再看“缩放不变”这句话：当忽略 ε 且乘数 a&gt;0
+时，RMS(ax)=a·RMS(x)，因此归一化可抵消这种正的整体缩放。保留 ε 后只能在
+ε 相对均方很小时近似成立；a&lt;0
+还会反转符号。不要把论文里的理想化推导写成任意输入、任意精度下的逐位相等保证。</p>
+<h3 id="低精度为什么先升到-float32">低精度为什么先升到 float32</h3>
+<p>float16 能表示 40000 左右的数，但它的平方已经远超 float16
+范围。错误地先在 float16 中平方，之后再转换
+float32，已经救不回无穷了。源码先转换，再做平方、均值和倒平方根：</p>
+<div class="sourceCode" id="cb84"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a>work <span class="op">=</span> x.<span class="bu">float</span>() <span class="cf">if</span> x.dtype <span class="kw">in</span> (torch.float16, torch.bfloat16) <span class="cf">else</span> x</span>
+<span id="cb84-2"><a href="#cb84-2" aria-hidden="true" tabindex="-1"></a>inv_rms <span class="op">=</span> torch.rsqrt(work.square().mean(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>) <span class="op">+</span> <span class="va">self</span>.eps)</span>
+<span id="cb84-3"><a href="#cb84-3" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> (work <span class="op">*</span> inv_rms <span class="op">*</span> <span class="va">self</span>.weight.to(work.dtype)).to(x.dtype)</span></code></pre></div>
+<p>这是源码原句。float32 输入保持 float32；float64 输入保留
+float64，而不是为了“统一精度”反而降成 float32。最后返回输入
+dtype，方便后续残差计算。γ 的转换仍在自动求导图里，并没有切断梯度。</p>
+<p>我们的 <code>eps=1e-5</code>
+是明确写入实验的选择，不依赖库的默认值。PyTorch 2.14 的 RMSNorm 在
+<code>eps=None</code> 时按计算类型选择机器
+epsilon；比较第三方实现时，应把 ε、统计计算 dtype 和最终输出 dtype
+一并核对。[来源 4] 此实现没有宣称能处理任意大的 float32
+数，也没有替你实现 AMP 或 fused
+kernel。半精度测试只验证这个局部数值策略，整模型消融仍在 CPU float32
+下运行。</p>
+<h2 id="p13.4-从-gelu-ffn-到内容乘以门">P13.4 从 GELU FFN
+到“内容乘以门”</h2>
+<p>旧 FFN 是两次线性投影，中间加 GELU：先 D→H，再 H→D。默认
+H=4D。它在同一个 token 的特征间重组信息，不是沿时间轴做卷积。</p>
+<p>SwiGLU 在同一个输入上走两条 D→M 支路。一条产生内容
+<code>up(x)</code>，另一条经过 SiLU 后调节内容
+<code>gate(x)</code>，最后通过 <code>down</code> 回到 D：</p>
+<p><span class="math display">\[g=xW_g,\quad u=xW_u,\quad
+z=\operatorname{SiLU}(g)\odot u,\quad y=zW_d\]</span> <span
+class="math display">\[\operatorname{SiLU}(t)=t\sigma(t)=\frac{t}{1+e^{-t}}\]</span></p>
+<p>这里公式采用行向量右乘矩阵的记法，PyTorch <code>nn.Linear</code>
+则储存转置方向的权重。<code>gate.weight</code> 与 <code>up.weight</code>
+的形状是 <code>[M,D]</code>，<code>down.weight</code> 是
+<code>[D,M]</code>。源码只有一行核心计算：</p>
+<div class="sourceCode" id="cb85"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb85-1"><a href="#cb85-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">self</span>.down(F.silu(<span class="va">self</span>.gate(x)) <span class="op">*</span> <span class="va">self</span>.up(x))</span></code></pre></div>
+<p>SiLU 是 Swish 在参数 β=1 时的形式。GLU
+变体论文将这类两路相乘的结构用于 Transformer FFN；SwiGLU 对门支路使用
+Swish，而不是把 FFN 中的 GELU 单独换成 SiLU 就结束。[来源 2、5]</p>
+<p>把 gate 类比成音量旋钮有助于记忆，但类比不能过头：<strong>SiLU
+的输出不是概率，不限于 [0,1]，可以为负，也可以大于 1</strong>。SwiGLU
+没有在若干专家中做 top-k 选择，也不是后续 MoE
+的路由器。两条支路都计算，每个中间坐标都相乘。</p>
+<h3 id="表-p13-2真正走完两路投影">表 P13-2：真正走完两路投影</h3>
+<p>令输入 x=[1,2]，选以下 PyTorch 权重，没有 bias，down 是单位矩阵：</p>
+<pre class="text"><code>gate.weight = [[1,-1], [0,1]]
+up.weight   = [[1, 1], [2,1]]
+down.weight = [[1, 0], [0,1]]</code></pre>
+<p>于是 gate 的第一坐标是 1×1+2×(−1)=−1，第二坐标是 1×0+2×1=2；up
+的两坐标分别是 3 和 4。</p>
+<div class="table-wrapper"><table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>中间坐标</th>
+<th>gate 投影 g</th>
+<th>sigmoid(g)</th>
+<th>SiLU(g)=g×sigmoid(g)</th>
+<th>up 内容 u</th>
+<th>相乘结果 z</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>-1</td>
+<td>0.268941</td>
+<td>-0.268941</td>
+<td>3</td>
+<td>-0.806824</td>
+</tr>
+<tr>
+<td>1</td>
+<td>2</td>
+<td>0.880797</td>
+<td>1.761594</td>
+<td>4</td>
+<td>7.046377</td>
+</tr>
+</tbody>
+</table></div>
+<p>down 是单位矩阵，所以输出恰好是
+<code>[-0.806824,7.046377]</code>。如果误用 sigmoid 而不是
+SiLU，第一项会变成正数；如果误把两路相加，也不会得到表中的结果。<code>gate_walkthrough()</code>
+打印每一层，测试把最终结果独立写成 <code>-3/(1+e)</code> 和
+<code>8/(1+exp(-2))</code> 核对。</p>
+<h2 id="p13.5-为什么不能把两种-ffn-都设置为-4d-宽">P13.5
+为什么不能把两种 FFN 都设置为 4D 宽</h2>
+<p>先全部关闭 bias，GELU FFN 有两个矩阵，参数数是：</p>
+<p><span class="math display">\[N_{\text{GELU}}=D H+H D=2DH\]</span></p>
+<p>SwiGLU 有三个矩阵，参数数是：</p>
+<p><span class="math display">\[N_{\text{SwiGLU}}=D M+D M+M
+D=3DM\]</span></p>
+<p>如果 H=M=4D，后者的矩阵参数多 50%。然后拿训练 loss
+比较并宣布“门控优于 GELU”，就把增加参数的影响混进来了。令两者相等，可得
+M=2H/3；当 H=4D 时，M≈8D/3。这种收窄门控 FFN 的比较思路也出现在 GLU
+变体论文中。[来源 2]</p>
+<h3 id="表-p13-3d48-的每层-ffn-账本">表 P13-3：D=48 的每层 FFN 账本</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>FFN</th>
+<th>中间宽度</th>
+<th>矩阵参数计算</th>
+<th>无 bias 参数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GELU 基线</td>
+<td>H=192</td>
+<td>2×48×192</td>
+<td>18432</td>
+</tr>
+<tr>
+<td>SwiGLU，错误地保持同宽</td>
+<td>M=192</td>
+<td>3×48×192</td>
+<td>27648</td>
+</tr>
+<tr>
+<td>SwiGLU，匹配预算</td>
+<td>M=128</td>
+<td>3×48×128</td>
+<td>18432</td>
+</tr>
+</tbody>
+</table></div>
+<p>这里第二行不是“非法模型”，而是不适合用来隔离门控结构效果的同预算对照。M
+不一定能整除，硬件对齐也可能要求它是某个数的倍数。<code>matched_swiglu_width</code>
+选最接近参数预算的合法正整数宽度，平局选较小值；如设置
+<code>multiple_of</code>，要重新报告真实误差。</p>
+<p>有 bias 时也别忘了数：GELU 多 H+D，SwiGLU 多 2M+D。上述宽度对应 18672
+与 18736，不再严格相等，相差
+64。源码的计数函数包含这两种情况，测试再用真实 <code>numel()</code>
+交叉检查。参数数相同也不等于峰值激活内存、执行时间或训练质量相同：门控要保留额外支路中间量，kernel
+和硬件的实现也不同。</p>
+<h2 id="p13.6-s2-不被悄悄改写s3-有明确配置">P13.6 S2 不被悄悄改写，S3
+有明确配置</h2>
+<p><code>ModernConfig</code> 扩展 S2 的
+<code>RopeConfig</code>；词表、主干宽度、头数、层数、容量、RoPE base 和
+rotary_dim 都继承。新增的开关是归一化类型、FFN 类型、ε、内部宽度与 bias
+策略。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>原始 S2</th>
+<th>S3 默认</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>注意力与位置</td>
+<td>MHA + RoPE</td>
+<td>完全保留</td>
+</tr>
+<tr>
+<td>Norm</td>
+<td>LayerNorm，γ 与 β</td>
+<td>RMSNorm，只有 γ</td>
+</tr>
+<tr>
+<td>FFN</td>
+<td>GELU，H=4D，有 bias</td>
+<td>SwiGLU，预算匹配 M，无 bias</td>
+</tr>
+<tr>
+<td>残差顺序</td>
+<td>Pre-Norm</td>
+<td>完全保留</td>
+</tr>
+<tr>
+<td>cache 路径</td>
+<td>S2 的 cached_forward</td>
+<td>调用同一函数</td>
+</tr>
+</tbody>
+</table></div>
+<p>同时改变 Norm、FFN 和 bias 才得到这份默认 S3，所以 <strong>“默认 S2
+对默认 S3”不能称为单变量消融</strong>。默认 S3 也不是把一个已训练 S2
+checkpoint 无损升级后的模型；结构不同的参数需要合适训练。</p>
+<p>为守住旧行为，测试还构建一个兼容设置：<code>norm_kind='layernorm'</code>、<code>ffn_kind='gelu'</code>、<code>norm_bias=True</code>、<code>ffn_bias=True</code>、ε=1e-5、H=4D。它在相同
+seed 下与 S2 的每个 state tensor、每个输出 logit 精确相同。S2
+自己的默认配置和代码没有因本章而变成 RMSNorm。</p>
+<h2 id="p13.7-单变量消融先控制什么再比较什么">P13.7
+单变量消融，先控制什么再比较什么</h2>
+<p>先建立一个<strong>公开说明的无 bias 对照 A</strong>：LayerNorm 保留
+γ，去掉 β；FFN 的两个线性层也去掉
+bias。这是实验准备，不是归一化或门控胜出的证据。随后只比较相邻两行：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>实验</th>
+<th>Norm</th>
+<th>FFN</th>
+<th>FFN 宽度</th>
+<th>相对上一行的研究变量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>LayerNorm，无 β</td>
+<td>GELU，无 bias</td>
+<td>192</td>
+<td>无 bias 控制组</td>
+</tr>
+<tr>
+<td>B</td>
+<td>RMSNorm</td>
+<td>GELU，无 bias</td>
+<td>192</td>
+<td>归一化方式</td>
+</tr>
+<tr>
+<td>C</td>
+<td>RMSNorm</td>
+<td>SwiGLU，无 bias</td>
+<td>128</td>
+<td>同预算 FFN 结构</td>
+</tr>
+</tbody>
+</table></div>
+<p>A→B 的 ε、γ、FFN、注意力等都固定，比较的是居中与均方归一化机制。B→C
+固定所有非 FFN 部件；FFN
+结构与它所需的预算匹配宽度一起作为处理项。<strong>这不是“只改一个激活函数”</strong>，不能把结论归因于
+SiLU 单独的效果。</p>
+<p><code>make_ablation_models()</code> 除了设置同一 seed，还真的调用
+<code>copy_unchanged</code>：A→B 复制所有非 Norm state
+tensor，并复制对应 γ；B→C 复制全部非 FFN state tensor。它检查 key、shape
+和数值一致，不通过参数共享来冒充复制。因此训练 A 不会顺便更新 B。新 FFN
+形状不同，不能要求它与旧 FFN 逐项同值；用相同初始化规则与 seed
+生成，并明确它是被研究的组件。</p>
+<p>仅写两次 <code>manual_seed(42)</code>
+不够：如果第一个模型多初始化一层，第二个模型后续参数的随机数消耗顺序就可能不同。<strong>复制并检查不变部分</strong>才是这里可执行的控制条件。</p>
+<h3 id="整模型账本为什么三行都是-61008">整模型账本：为什么三行都是
+61008</h3>
+<p>设置 V=57、D=48、L=2、H=4，embedding 与输出 head 不共享权重。每个
+Block 两个 Norm，加最后一个 Norm，共 5 个。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>部分</th>
+<th>参数计算</th>
+<th>参数数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>token embedding + 输出 head</td>
+<td>2×57×48</td>
+<td>5472</td>
+</tr>
+<tr>
+<td>两层 MHA 投影</td>
+<td>2×4×48²</td>
+<td>18432</td>
+</tr>
+<tr>
+<td>两层 FFN，按表匹配</td>
+<td>2×18432</td>
+<td>36864</td>
+</tr>
+<tr>
+<td>5 个仅有 γ 的 Norm</td>
+<td>5×48</td>
+<td>240</td>
+</tr>
+<tr>
+<td>合计</td>
+<td>5472+18432+36864+240</td>
+<td>61008</td>
+</tr>
+</tbody>
+</table></div>
+<p>原 S2 默认是 61728 个参数。对照 A 去掉两层 FFN 的 2×(192+48)=480 个
+bias，再去掉 Norm 的 5×48=240 个 β，合计少 720，得到 61008。RoPE
+没有可学习位置表，不能把 S0 的那张位置表又算进来。</p>
+<h2 id="p13.8-实际跑一次但不要把-smoke-当榜单">P13.8
+实际跑一次，但不要把 smoke 当榜单</h2>
+<p>在仓库根目录安装固定依赖后执行：</p>
+<div class="sourceCode" id="cb87"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb87-1"><a href="#cb87-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
+<span id="cb87-2"><a href="#cb87-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/14_modern_block.py</span>
+<span id="cb87-3"><a href="#cb87-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_modern_block.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<p>没有 PyTorch 时，CLI 会简短提示安装方式并以退出码 2
+结束。张量测试使用仓库共享的稳定版 torch 2.14.x
+检查；未安装或版本不匹配会明确 skip，<strong>skip
+不是通过</strong>。不需要下载模型或数据。</p>
+<p>固定实验条件：CPU、PyTorch
+2.14.1+cpu、float32、单线程、seed=42，B=2、T=12、8 次更新。数据用单独的
+generator，seed=43，先生成长度 T+1 的
+ID，再取相邻输入/目标。三行模型使用同一份
+batch、同一输入顺序和步数，每次都创建全新的
+AdamW，lr=0.001、betas=(0.9,0.999)、eps=1e-8、weight_decay=0，无
+dropout。</p>
+<h3 id="表-p13-4这一次实跑的训练闭环结果">表
+P13-4：这一次实跑的训练闭环结果</h3>
+<div class="table-wrapper"><table style="width:100%;">
+<colgroup>
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+<col style="width: 16%" />
+</colgroup>
+<thead>
+<tr>
+<th>配置</th>
+<th>每层 FFN 参数</th>
+<th>整模型参数</th>
+<th>更新前 loss</th>
+<th>8 次更新后 loss</th>
+<th>所有参数梯度有限</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A：LN + GELU</td>
+<td>18432</td>
+<td>61008</td>
+<td>4.429393</td>
+<td>2.889954</td>
+<td>True</td>
+</tr>
+<tr>
+<td>B：RMSNorm + GELU</td>
+<td>18432</td>
+<td>61008</td>
+<td>4.441514</td>
+<td>2.896931</td>
+<td>True</td>
+</tr>
+<tr>
+<td>C：RMSNorm + SwiGLU</td>
+<td>18432</td>
+<td>61008</td>
+<td>4.403015</td>
+<td>3.212187</td>
+<td>True</td>
+</tr>
+</tbody>
+</table></div>
+<p>这几行表明：配置有实数结果、梯度能传到全部参数、优化器确实更新、参数预算确实匹配。它们<strong>不能证明任何一种结构在语言任务上更优</strong>。这里只有一个
+seed、一份反复训练的合成 batch，没有验证集、自然语言语料或质量指标；C
+的训练 loss 更高也不证明 SwiGLU
+一般更差。本章不计时，因此也不从这些结果推断速度。</p>
+<p>若真要研究质量，应沿用 P09 的训练/验证分离，固定数据与 token
+预算，在多个 seed 下记录验证 loss
+的分布，并把超参数搜索预算也控制住。不要把这里的八步示例包装成复现原论文实验。</p>
+<h2 id="p13.9-换了组件旧的-cache-正确性仍要重测">P13.9 换了组件，旧的
+cache 正确性仍要重测</h2>
+<p>归一化和 FFN 只处理当前 token，不改变 P11
+的因果缓存理由。但每层缓存的 K/V 已经受到之前层的 Norm 与 FFN
+影响。若完整前向使用 RMSNorm，而缓存路径偷偷硬编码了
+LayerNorm，两条路径会计算不同的模型。</p>
+<p>S3 直接复用 S2 的 <code>cached_forward</code>。这个函数访问当前 Block
+的 <code>ln1</code>、<code>ln2</code> 和
+<code>mlp</code>，因此自然调用被替换后的模块；没有另写一份旧 FFN 藏在
+decode 分支里。测试把同一串 token 分成 <code>[12]</code>、12 次单
+token、<code>[3,5,4]</code> 和 <code>[11,1]</code>，拼接每块
+logits，与同权重的完整前向逐项比较。B&gt;1、float32 和 float64
+都覆盖。</p>
+<p>在表 P13-4 更新后的模型上，用长度 5 的块重放同一输入，三行 float32
+最大 logit 误差分别约为 5.36×10⁻⁷、4.47×10⁻⁷、3.58×10⁻⁷；测试容差为
+atol=3e-6、rtol=1e-5。缓存等价比较的是<strong>同一个模型的两种计算路线</strong>，不是要求
+A、B、C 三个不同模型的输出彼此相等。</p>
+<p>缓存仍然是每请求私有、eval-only，不接受权重更新后的旧
+cache。配置、Norm 的 ε 或 GELU 近似模式变化也需要重置。手工改 Tensor 的
+<code>.data</code>
+会绕过版本追踪，仍不在支持范围；不要把这个教学缓存当成可以任意热替换参数的服务系统。</p>
+<h2 id="p13.10-让测试真的能抓错">P13.10 让测试真的能抓错</h2>
+<p>正常通过只能说明当前样例没发现问题。这里还在内存里编译几个错误版本，确认独立参考测试会失败；生产源码不会被改动。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>故意制造的错误</th>
+<th>会被什么抓住</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RMS 分母误用居中后的方差</td>
+<td>非零均值输入和独立均方参考</td>
+</tr>
+<tr>
+<td>ε 加在平方根外</td>
+<td>ε=0.5 的精确手算表</td>
+</tr>
+<tr>
+<td>SwiGLU 使用 sigmoid 而不是 SiLU</td>
+<td>gate=-1、2 的符号与幅值</td>
+</tr>
+<tr>
+<td>门与内容相加而非相乘</td>
+<td>两路投影的最终输出参考</td>
+</tr>
+</tbody>
+</table></div>
+<p>还有 double
+精度自动微分数值检查、全零与半精度大输入的有限反向、真实参数计数、显式复制后的数值一致性、S2
+兼容模式及缓存对齐。测试一旦失败，应先定位公式、dtype、配置或共享状态，而不是扩大容差直到它变绿。</p>
+<h2 id="p13.11-自测与参考答案">P13.11 自测与参考答案</h2>
+<ol type="1">
+<li><code>[1,3]</code> 整体加 2 后，为什么 LN 表中不变，而 RMSNorm
+变了？</li>
+<li>为什么“先 float16 平方，再转 float32”还会出错？</li>
+<li>SwiGLU 的门输出为 1.76 是否违反概率范围？</li>
+<li>D=48，GELU 的 H=192。无 bias 的 SwiGLU
+应取多宽才能匹配矩阵参数？</li>
+<li>同一个 seed 是否足以证明消融只有一个变量变化？</li>
+<li>为什么表 P13-4 不能用来排“哪种 Block 最好”？</li>
+<li>A→B 为什么把 LayerNorm 的 β 也关闭？</li>
+<li>改完 Norm 后只看生成出的一个 token 一样，能证明缓存等价吗？</li>
+</ol>
+<p>参考答案：</p>
+<ol type="1">
+<li>LN 在两个输入上都减去各自均值，得到同样的
+<code>[-1,1]</code>；RMSNorm 不居中，均方从 5 变 17，分子也改变。</li>
+<li>溢出在平方那一步已经发生，随后升精度只能保留无穷；必须先转换再平方。</li>
+<li>不违反。SiLU 门不是概率，可以大于 1、为负；sigmoid 本身才在 0 与 1
+之间。</li>
+<li>M=128，因为 2×48×192=3×48×128=18432。开启 bias 后要把 bias
+额外计算，不能直接声称总参数严格相等。</li>
+<li>不够。初始化时随机数消耗顺序可能变化，必须复制并验证不变部分，同时控制数据、优化器、步数和其他设置。</li>
+<li>单 seed、重复
+batch、无验证集，只能演示训练与数值闭环；没有足够证据做泛化质量或速度结论。</li>
+<li>避免把“多一组可训练偏移参数”也夹在归一化机制对比里。关闭 bias
+是对照准备，不宣称它单独带来收益。</li>
+<li>不能。argmax 相同可掩盖很大的 logit
+差异，应比较每个位置、每个词表项，并覆盖分块与参数变更边界。</li>
+</ol>
+<h2 id="p13.12-本章带走什么">P13.12 本章带走什么</h2>
+<p>RMSNorm 的关键是<strong>均方缩放，不居中</strong>；SwiGLU
+的关键是<strong>两路投影，其中一路过
+SiLU，再逐元素相乘</strong>。数值稳定需要明确 ε
+和计算精度；公平比较需要明确参数、bias、数据、初始化和优化器，不是换掉两个类名就算完成。</p>
+<p>下一单元 <a href="#p14-grouped-kv">P14</a> 保持 S3 的 Norm 与
+FFN，再改变 KV
+头的共享方式。这样每次升级都有明确的变化范围，不让“现代大模型积木”变成无法追踪的名词堆叠。</p>
+<h2 id="来源与实现核对">来源与实现核对</h2>
+<ol type="1">
+<li><a href="https://arxiv.org/abs/1910.07467">Root Mean Square Layer
+Normalization，Zhang 与 Sennrich，2019</a>：RMSNorm
+的原始定义与研究；本章手算、dtype 约定和 CPU 测试为独立教学例子。</li>
+<li><a href="https://arxiv.org/abs/2002.05202">GLU Variants Improve
+Transformer，Shazeer，2020</a>：GLU
+变体及匹配预算时缩小中间宽度；本章不复现其 T5 训练结论。</li>
+<li><a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html">PyTorch
+2.14 LayerNorm</a>：方差口径、γ/β、ε 和 bias 参数。</li>
+<li><a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.RMSNorm.html">PyTorch
+2.14 RMSNorm</a>：公式与 epsilon 计算类型；本代码始终显式指定 ε。</li>
+<li><a
+href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.SiLU.html">PyTorch
+2.14 SiLU</a>：SiLU 的逐元素定义。</li>
+</ol>
+<p>来源核对日期：2026-10-19。实际实验由固定依赖环境运行；其它设备或库版本的最后几位可能不同，应先核对配置与测试，而不是把表中的舍入值当作所有环境的逐位承诺。</p>
+<hr />
+<h1 id="p14-grouped-kv">架构进阶（P14）：MHA、MQA、GQA 与 MLA</h1>
+<p>上一章把归一化和 FFN 换成现代 Block，但每个 query 头仍有自己的一份
+K/V。现在进入 S4：<strong>保留 S3 的
+RoPE、RMSNorm、SwiGLU，只把注意力改成可以共享 K/V 的
+GQA</strong>。另做一个独立的小矩阵实验，解释 MLA
+为什么不是另一种“少几个头”。</p>
+<p>配套 <a
+href="code/15_grouped_kv.py">code/15_grouped_kv.py</a>。不下载模型，不跑
+GPU，不实现 DeepSeek 生产 kernel；普通 CPU
+就能检查形状、缓存字节数和数值关系。</p>
+<h2 id="p14.1-从四个读者四套索引说起">P14.1
+从四个读者、四套索引说起</h2>
+<p>把 query 头想成四个读者：每个人带着自己的问题，去查历史 token 的索引
+K，再按照匹配程度读取内容 V。</p>
+<ul>
+<li><strong>MHA</strong>：四个读者各有一套 K/V。</li>
+<li><strong>MQA</strong>：四个读者共用一套
+K/V，但仍然各提各的问题。</li>
+<li><strong>GQA</strong>：分成两组，每组两个读者，共用这一组的
+K/V。</li>
+<li><strong>MLA</strong>：不是简单合并索引套数，而是保存一段较短的内容潜变量，再通过各头不同的映射参与运算；还要保存单独的位置键。</li>
+</ul>
+<p>类比到此为止：K/V
+和潜变量不是人能直接阅读的摘要，也不是可无损压缩任何资料的 ZIP
+文件。它们是模型训练得到的向量。减少表示自由度可能影响质量，必须靠训练和评估判断。</p>
+<figure>
+<a href="assets/rendered/grouped_kv_mla.svg"
+title="点击查看原尺寸图"><img src="assets/rendered/grouped_kv_mla.svg"
+class="book-diagram" width="720"
+alt="GQA 按连续组共享 KV；MLA 缓存低维内容和解耦位置键，两者不是同一个机制" /></a>
+<figcaption>GQA 按连续组共享 KV；MLA
+缓存低维内容和解耦位置键，两者不是同一个机制</figcaption>
+</figure>
+<h2 id="p14.2-先区分两个头数">P14.2 先区分两个头数</h2>
+<p>继续用 B 表示 batch，T 表示序列长度，D
+表示主干宽度。本章新增两个量：</p>
+<ul>
+<li>Hq：query 头数。</li>
+<li>Hkv：key/value 头数。本实现 K 和 V 的头数相同。</li>
+<li>d：每头宽度，本章令 d=D/Hq，Q、K、V 每头宽度相同。</li>
+</ul>
+<p>这三个名字的边界可以放进同一张表：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>名称</th>
+<th>KV 头数</th>
+<th>Hq=4 时的例子</th>
+<th>每个 KV 头服务多少个 query 头</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MHA</td>
+<td>Hkv=Hq</td>
+<td>Hkv=4</td>
+<td>1</td>
+</tr>
+<tr>
+<td>GQA 的中间情况</td>
+<td>1&lt;Hkv&lt;Hq</td>
+<td>Hkv=2</td>
+<td>2</td>
+</tr>
+<tr>
+<td>MQA</td>
+<td>Hkv=1</td>
+<td>Hkv=1</td>
+<td>4</td>
+</tr>
+</tbody>
+</table></div>
+<p>从广义参数化看，MHA 和 MQA 是 GQA 的两个边界。实际说“采用
+GQA”时，人们常指表格的中间情况。MQA 中的“单”指只有一个 KV
+头，<strong>不是整个模型只剩一个注意力头</strong>。</p>
+<p>本实现要求 <code>Hq % Hkv == 0</code>，使每组大小相同。例如 4 个
+query 头分成 3
+个等大的组就不合法。这是本教学实现的分组约定，不是说所有想象得到的不等分共享都数学上不可能。</p>
+<h2 id="p14.3-分组映射不能凭感觉写">P14.3 分组映射不能凭感觉写</h2>
+<p>Hq=4、Hkv=2 时，每组有 g=Hq/Hkv=2 个 query 头。编号从 0 开始：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>query 头 h</th>
+<th>使用的 KV 头 <code>h // g</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1</td>
+</tr>
+<tr>
+<td>3</td>
+<td>1</td>
+</tr>
+</tbody>
+</table></div>
+<p>因此映射是 <code>[0,0,1,1]</code>，不是
+<code>[0,1,0,1]</code>。两种排列都能得到合法张量形状，但对应不同的权重组织方式，不能混用。</p>
+<p>不用随机数也能抓住这个错误。设只有一个历史位置，KV 头 0 的 V 是
+<code>[10,11]</code>，KV 头 1 的 V 是 <code>[20,21]</code>。只有一个可见
+key 时，Softmax 权重必为 1。四个头的输出就必须依次为：</p>
+<pre class="text"><code>头 0：[10,11]
+头 1：[10,11]
+头 2：[20,21]
+头 3：[20,21]</code></pre>
+<p>脚本的 <code>mapping_walkthrough()</code>
+正是这个算例。测试还写了“每个 batch、每个 query
+头、每个位置分别算”的慢参考，不与快速路径共享映射函数。否则两个实现一起写错，full/cache
+对齐也可能照样通过。</p>
+<h2 id="p14.4-真正要变小的是投影和缓存">P14.4
+真正要变小的是投影和缓存</h2>
+<p>PyTorch 的 <code>Linear(in_features, out_features)</code>
+把输入最后一维映射到输出最后一维；它保存的 weight 形状是
+<code>[out_features,in_features]</code>。这一点不要与纸面上右乘矩阵的写法弄反。</p>
+<div class="sourceCode" id="cb89"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb89-1"><a href="#cb89-1" aria-hidden="true" tabindex="-1"></a>D <span class="op">=</span> config.d_model</span>
+<span id="cb89-2"><a href="#cb89-2" aria-hidden="true" tabindex="-1"></a>kv_width <span class="op">=</span> config.num_kv_heads <span class="op">*</span> <span class="va">self</span>.head_dim</span>
+<span id="cb89-3"><a href="#cb89-3" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.W_q <span class="op">=</span> nn.Linear(D, D, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb89-4"><a href="#cb89-4" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.W_k <span class="op">=</span> nn.Linear(D, kv_width, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb89-5"><a href="#cb89-5" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.W_v <span class="op">=</span> nn.Linear(D, kv_width, bias<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb89-6"><a href="#cb89-6" aria-hidden="true" tabindex="-1"></a><span class="va">self</span>.W_o <span class="op">=</span> nn.Linear(D, D, bias<span class="op">=</span><span class="va">False</span>)</span></code></pre></div>
+<p>逐行看：</p>
+<ol type="1">
+<li>Q 仍然输出 Hq×d=D 个数，query 头没有减少。</li>
+<li>K 和 V 各只输出 Hkv×d 个数，不是先算出全部 MHA 头再丢弃。</li>
+<li>每个 query 头依然产生一个 d 维输出，所以拼接后仍是 D 维，W_o
+不变。</li>
+</ol>
+<p>当已有 P 个缓存位置、本次输入 C 个 token 时：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>张量</th>
+<th>形状</th>
+<th>Hq=4、Hkv=2 时的头数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>当前 Q</td>
+<td>[B,Hq,C,d]</td>
+<td>4</td>
+</tr>
+<tr>
+<td>当前 K、V</td>
+<td>各 [B,Hkv,C,d]</td>
+<td>2</td>
+</tr>
+<tr>
+<td>拼接后的缓存 K、V</td>
+<td>各 [B,Hkv,P+C,d]</td>
+<td>2</td>
+</tr>
+<tr>
+<td>注意力计算临时使用的 K、V</td>
+<td>各 [B,Hq,P+C,d]</td>
+<td>4</td>
+</tr>
+<tr>
+<td>scores、weights</td>
+<td>各 [B,Hq,C,P+C]</td>
+<td>4</td>
+</tr>
+<tr>
+<td>拼接后的本块输出</td>
+<td>[B,C,D]</td>
+<td>头轴已拼回 D</td>
+</tr>
+</tbody>
+</table></div>
+<p>本章为了易读，注意力乘法前临时扩展 K/V：</p>
+<div class="sourceCode" id="cb90"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb90-1"><a href="#cb90-1" aria-hidden="true" tabindex="-1"></a>repeats <span class="op">=</span> Hq <span class="op">//</span> Hkv</span>
+<span id="cb90-2"><a href="#cb90-2" aria-hidden="true" tabindex="-1"></a>keys <span class="op">=</span> k.repeat_interleave(repeats, dim<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb90-3"><a href="#cb90-3" aria-hidden="true" tabindex="-1"></a>values <span class="op">=</span> v.repeat_interleave(repeats, dim<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb90-4"><a href="#cb90-4" aria-hidden="true" tabindex="-1"></a>scores <span class="op">=</span> q <span class="op">@</span> keys.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>) <span class="op">/</span> math.sqrt(d)</span></code></pre></div>
+<p><code>repeat_interleave(2, dim=1)</code> 沿头轴连续重复每个 KV
+头，得到刚才的 <code>[0,0,1,1]</code>。<code>repeat(1,2,1,1)</code>
+则会把整组头再排一遍，得到 <code>[0,1,0,1]</code>，不是同一映射。</p>
+<p><strong>缓存保存的必须还是原始 k、v，而不是临时的
+keys、values。</strong> 本实现确实会为临时重复张量和完整 scores
+分配内存，因此“缓存较小”不等于“本代码峰值内存按相同比例缩小”，更不等于“运行一定更快”。优化
+kernel 可以避免某些显式复制，但本章没有实现或测速这种 kernel。</p>
+<h2 id="p14.5-s4-怎样接在-s3-后面">P14.5 S4 怎样接在 S3 后面</h2>
+<p><code>GroupedConfig</code> 继承上一章的
+<code>ModernConfig</code>，只新增
+<code>num_kv_heads</code>。<code>GroupedGPT</code> 保留词嵌入、Block
+的归一化/FFN、最终归一化和输出层，替换各层
+<code>.attn</code>。新模型仍返回
+<code>(logits, loss)</code>，训练代码不需要另造一种损失。</p>
+<p>在 Hkv=Hq 的边界，投影形状和算法都退回 MHA。测试把 S3 的同一份
+state_dict 装入这个边界模型，逐项检查参数、logits、K/V
+完全一致。<strong>不同 Hkv 的随机模型不能用来宣称质量相同；这里证明的是
+MHA 边界，以及各模型自身 full/cache 的一致性。</strong></p>
+<p>GQA 的缓存不能直接交给 P12 的 MHA 缓存函数。P12 校验的是 Hq 个 KV
+头，S4 必须校验 Hkv。源码专门定义 <code>GroupedCache</code> 和自己的
+<code>cached_forward</code>，保留三个规则：</p>
+<ol type="1">
+<li>新 Q/K 的 RoPE 位置是 <code>P,...,P+C-1</code>。只旋转新
+K；旧缓存里的 K 已经转过，V 不转。</li>
+<li>矩形 mask 仍是 <code>key_position &lt;= query_position</code>。例如
+P=3、C=2 时，两行可见性分别是
+<code>[1,1,1,1,0]</code>、<code>[1,1,1,1,1]</code>。</li>
+<li>各层缓存保存
+<code>[B,Hkv,P+C,d]</code>；前一份缓存不被原地改写，新请求用
+<code>None</code> 开始。</li>
+</ol>
+<p>下面是缓存路径的核心，不是另一份模型：</p>
+<div class="sourceCode" id="cb91"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb91-1"><a href="#cb91-1" aria-hidden="true" tabindex="-1"></a>q, k, v <span class="op">=</span> block.attn.project(block.ln1(x), offset<span class="op">=</span>offset)</span>
+<span id="cb91-2"><a href="#cb91-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> cache <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb91-3"><a href="#cb91-3" aria-hidden="true" tabindex="-1"></a>    k <span class="op">=</span> torch.cat((cache.layers[i][<span class="dv">0</span>], k), dim<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb91-4"><a href="#cb91-4" aria-hidden="true" tabindex="-1"></a>    v <span class="op">=</span> torch.cat((cache.layers[i][<span class="dv">1</span>], v), dim<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb91-5"><a href="#cb91-5" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> block.attn.attend(q, k, v, offset<span class="op">=</span>offset)</span>
+<span id="cb91-6"><a href="#cb91-6" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> block.mlp(block.ln2(x))</span>
+<span id="cb91-7"><a href="#cb91-7" aria-hidden="true" tabindex="-1"></a>layers.append((k, v))</span></code></pre></div>
+<p><code>project</code> 用两种头数做 reshape；<code>attend</code>
+才临时扩展
+KV；最后一行不保存扩展后的副本。缓存同时记录模型身份和参数/位置设置签名。修改权重、RoPE
+设置、归一化 epsilon 或头数后，必须重建缓存。不要通过 <code>.data</code>
+偷改参数，也不要编辑缓存张量；这样的绕过不在检测保证内。缓存推理要求
+eval，不支持 padding、变长 batch 或 autocast；训练走正常 full
+forward。</p>
+<h2 id="p14.6-先算内存账再测实际张量">P14.6
+先算内存账，再测实际张量</h2>
+<p>本章 K、V 每头同宽，且不量化。L 层、batch B、长度 T、每个数 s
+字节时：</p>
+<p><span class="math display">\[
+\text{KV 字节数}=2\times L\times B\times T\times H_{kv}\times d\times s
+\]</span></p>
+<p>开头的 2 表示 K、V 两份。固定 Hq 和 d，缓存相对 MHA 的比例是
+Hkv/Hq，不是其平方。query 不在这个缓存里。</p>
+<p>脚本取 D=48、Hq=4、d=12、L=2、B=2、T=12，float32 的 s=4：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>结构</th>
+<th>Hkv</th>
+<th>两层 W_k/W_v 参数总数</th>
+<th>实际 KV 缓存字节</th>
+<th>相对 MHA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MHA</td>
+<td>4</td>
+<td>9216</td>
+<td>18432</td>
+<td>1</td>
+</tr>
+<tr>
+<td>GQA</td>
+<td>2</td>
+<td>4608</td>
+<td>9216</td>
+<td>1/2</td>
+</tr>
+<tr>
+<td>MQA</td>
+<td>1</td>
+<td>2304</td>
+<td>4608</td>
+<td>1/4</td>
+</tr>
+</tbody>
+</table></div>
+<p>例如中间一行的参数数目是
+<code>2×L×D×Hkv×d=2×2×48×2×12=4608</code>。它只数
+W_k/W_v，不是整模型参数。缓存则是 <code>2×2×2×12×2×12×4=9216</code>
+字节。两者恰好在这个例子相差 2 倍，没有普遍意义。</p>
+<p>源码用 <code>numel() * element_size()</code> 实测每层
+K/V；测试还检查底层存储大小，避免只在 shape
+上做一个漂亮的切片，底下仍占着大张量。统计不包含模型权重、临时注意力矩阵、分配器和
+Python 对象开销。float64 改为每数 8
+字节，缓存字节数翻倍；这也是测试的一部分。</p>
+<h2 id="p14.7-从头训练不等于转换旧-checkpoint">P14.7
+从头训练，不等于转换旧 checkpoint</h2>
+<p>有两条不同路线：</p>
+<ul>
+<li><strong>从头训练 GQA</strong>：直接创建 Hkv 较小的
+W_k/W_v，所有参数按新结构学习。本章模型支持正常反向传播；脚本不训练、不报告语言质量。</li>
+<li><strong>把已训练的 MHA 改成 GQA</strong>：旧 W_k/W_v
+的形状不同，需要明确的转换策略，再评估是否保留能力。改一个配置值或用不严格加载跳过权重，不是完成转换。</li>
+</ul>
+<p>GQA 原论文的做法是把同组 KV
+头的投影取平均作为初始化，再继续预训练（uptraining）；论文中的训练预算和质量结果是其特定实验，不是对任意
+checkpoint 的保证。<a
+href="https://arxiv.org/html/2305.13245v3#S2">原论文 v3，§2</a></p>
+<p>举一个足够小的权重例子：四个头，每头输出宽度 d=1，输入宽度为 2：</p>
+<pre class="text"><code>旧 weight 的四行：[0,1]、[2,3]、[4,5]、[6,7]
+组 0 平均：([0,1]+[2,3])/2 = [1,2]
+组 1 平均：([4,5]+[6,7])/2 = [5,6]</code></pre>
+<p><code>mean_pool_kv_weight()</code>
+实现的就是这一层初始化算术，没有执行继续训练。平均后不能声称输出相同：只有一个可见
+token，原来四个头的 V 为
+<code>[1,3,5,7]</code>，两两平均并共享后输出变成
+<code>[2,2,6,6]</code>。Softmax 此时全为 1，差异仍然存在。</p>
+<p>只有组内原本就满足特定相同权重等条件，或者在 Hkv=Hq
+不压缩的边界，才可能保持对应函数。<strong>普通 MHA → GQA
+的均值转换不是无损等价变换。</strong></p>
+<h2 id="p14.8-mla共享低维内容不是共享完整-kv-头">P14.8
+MLA：共享低维内容，不是共享完整 KV 头</h2>
+<p>MLA 是 Multi-head Latent Attention。DeepSeek-V3
+报告中的关键设计是：用同一个较短的潜变量共同表示内容 K 和 V，并把 RoPE
+位置键单独保存；各头的内容上投影可以不同。<a
+href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1">技术报告
+v2，§2.1.1</a></p>
+<p>为了与 PyTorch
+批量张量的方向一致，下面都用<strong>行向量右乘矩阵</strong>。这与论文常用的列向量写法互为转置，不是换了算法。设单个
+token 输入为 x_t，潜变量宽度 r，内容 key 宽度 d_c，value 宽度 d_v：</p>
+<p><span class="math display">\[
+c_t=x_t W_{down},\qquad k^C_{t,h}=c_t U^K_h,\qquad v_{t,h}=c_t U^V_h
+\]</span></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>对象</th>
+<th>形状</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>x_t</td>
+<td>[D]</td>
+<td>本层输入</td>
+</tr>
+<tr>
+<td>W_down</td>
+<td>[D,r]</td>
+<td>降到潜变量</td>
+</tr>
+<tr>
+<td>c_t</td>
+<td>[r]</td>
+<td>内容 K/V 共同使用</td>
+</tr>
+<tr>
+<td>U^K_h</td>
+<td>[r,d_c]</td>
+<td>第 h 头的内容 key 映射</td>
+</tr>
+<tr>
+<td>U^V_h</td>
+<td>[r,d_v]</td>
+<td>第 h 头的 value 映射</td>
+</tr>
+</tbody>
+</table></div>
+<p>GQA 中，同组 query 使用<strong>相同完整 K/V</strong>。这里不同头的 U
+可以不同，所以同一个 c_t 可以产生不同头的
+K/V；共享的是潜在表示，不是说这些头的 K/V 必须相等。</p>
+<p>“先降维、再升维”也不是任意矩阵的免费无损压缩。<code>W_down @ U</code>
+的秩最多是 r。比如目标矩阵 <code>diag(3,2,1)</code> 的秩为 3，用秩 2 的
+<code>diag(3,2,0)</code> 代替，最后一个方向被丢掉，Frobenius 误差为
+1。源码会打印这个反例。模型必须在这种表示约束下学习；本章不把已有 MHA
+权重直接变成等价 MLA。</p>
+<h2 id="p14.9-为什么能不存展开的内容-kv">P14.9 为什么能不存展开的内容
+K/V</h2>
+<p>先暂时拿掉位置项。当前 query 的内容部分是 q^C_h，某个历史位置的 key
+是 <code>c_t @ U^K_h</code>。利用矩阵乘法的结合律：</p>
+<p><span class="math display">\[
+q^C_h(k^C_{t,h})^\top
+= q^C_h(U^K_h)^\top c_t^\top
+\]</span></p>
+<p>因此可以先算一个 r 维的新
+query：<code>q_absorbed = q_content @ U_k.T</code>，再与缓存的 c_t
+打分。<strong>这一步只移动括号，没有宣称任意低秩近似不损失信息。</strong></p>
+<p>value 也有类似关系。若注意力权重为 a_t：</p>
+<p><span class="math display">\[
+\sum_t a_t(c_t U^V_h)=\left(\sum_t a_t c_t\right)U^V_h
+\]</span></p>
+<p>先对潜变量加权求和，再做一次上投影即可。每个头的 a_t
+仍可不同，因此不会强迫所有头输出相同。</p>
+<p>小矩阵实验分别计算：</p>
+<ol type="1">
+<li>先显式展开各头的内容 K/V，再做注意力。</li>
+<li>不把展开的内容 K/V 当作缓存，只使用潜变量计算打分和加权结果。</li>
+</ol>
+<p>对同一组低秩参数，这两种括号位置的结果应当只差浮点舍入。测试比较全部
+score
+和输出，不只看一两个标量。本函数为核对而同时保留两条路径的张量，<strong>它本身并不是一段峰值内存优化实现</strong>。</p>
+<h2 id="p14.10-rope-位置项为什么单独算">P14.10 RoPE
+位置项为什么单独算</h2>
+<p>不能把位置从内存账本里删掉。若把每个历史位置的内容 K
+全部旋转，不同位置带来不同旋转矩阵；一般不能再把它们吸收成一个与历史位置无关的固定
+query 投影。</p>
+<p>本章演示的解耦方案把打分拆成两项：</p>
+<p><span class="math display">\[
+\text{score}_{h,i,t}
+=\frac{q^C_{i,h}(k^C_{t,h})^\top
++q^R_{i,h}(k^R_t)^\top}{\sqrt{d_c+d_r}}
+\]</span></p>
+<ul>
+<li>内容项：K 从 c_t 得到，不对这一部分施加
+RoPE，才能使用上面的矩阵结合律。</li>
+<li>位置项：单独投影并旋转得到 q^R 和 k^R。这里 k^R_t 跨头共享，但
+q^R_{i,h} 可以随头不同。</li>
+<li>因果 mask：依然只能看 t≤i，压缩不取消因果约束。</li>
+<li>缩放：本例拼接后的 Q/K 总宽度是
+d_c+d_r，所以除以它的平方根，不是潜变量宽度 r 的平方根。</li>
+</ul>
+<p>推理要缓存的是 <strong>c_t 加 k^R_t</strong>，不是只缓存
+c_t。理想紧凑 payload 为 <code>L×B×T×(r+d_r)×s</code>，这里不再另外乘
+2，因为一个 c_t 同时服务内容 K 和
+V。若采用别的表示、复制方式或量化，还要重算账本。</p>
+<p>独立实验固定 H=2、T=3、r=2、d_c=d_v=d_r=2，float64，每数 8 字节：</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>表示</th>
+<th>每 token 保存的数</th>
+<th>三个 token 的字节数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>展开内容 K/V，仍共享位置键</td>
+<td>H×(d_c+d_v)+d_r=10</td>
+<td>240</td>
+</tr>
+<tr>
+<td>潜变量 + 位置键</td>
+<td>r+d_r=4</td>
+<td>96</td>
+</tr>
+<tr>
+<td>只算潜变量，漏掉位置键</td>
+<td>r=2</td>
+<td>48，但这个账本不完整</td>
+</tr>
+</tbody>
+</table></div>
+<p>展开对照已经把位置键跨头共享，没有故意为每个头多复制一份来夸大收益。省下的比例由具体维度决定；<strong>MLA
+不保证在所有配置下都比 MQA 更省，也不等于“GQA 再少一个头”</strong>。</p>
+<p>官方推理源码的吸收路径同样把内容缓存与位置缓存分开；本章只借此核验设计含义，不复刻其并行、量化或
+kernel。<a
+href="https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py">DeepSeek-V3
+官方 inference/model.py</a></p>
+<h2 id="p14.11-运行读输出检查失败">P14.11 运行、读输出、检查失败</h2>
+<p>在仓库根目录：</p>
+<div class="sourceCode" id="cb93"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb93-1"><a href="#cb93-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
+<span id="cb93-2"><a href="#cb93-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/15_grouped_kv.py</span>
+<span id="cb93-3"><a href="#cb93-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_grouped_kv.py <span class="at">-v</span></span></code></pre></div>
+<p>本批在 Python 3.12.14、PyTorch 2.14.1+cpu、单 CPU 线程、seed=42
+下运行。模型表格使用 float32，独立 MLA 矩阵使用
+float64；不训练、不下载权重。关键输出：</p>
+<pre class="text"><code>Hq=4 Hkv=2 mapping: (0, 0, 1, 1)
+one-key head outputs: [[10.0, 11.0], [10.0, 11.0], [20.0, 21.0], [20.0, 21.0]]
+Hkv=4: KV parameters=9216, cache=18432 bytes, formula=18432, shape=(2, 4, 12, 12), max_error=3.58e-07
+Hkv=2: KV parameters=4608, cache=9216 bytes, formula=9216, shape=(2, 2, 12, 12), max_error=3.58e-07
+Hkv=1: KV parameters=2304, cache=4608 bytes, formula=4608, shape=(2, 1, 12, 12), max_error=4.77e-07
+mean-pooled example: [[1.0, 2.0], [5.0, 6.0]] (initialization, not equivalence)
+MLA matrix scores error=1.11e-16, output error=4.44e-16
+MLA toy payload compact=96 bytes vs expanded=240 bytes; both include RoPE keys
+Rank example: 3 -&gt; 2, Frobenius error=1.0</code></pre>
+<p>末位浮点误差可随平台变化。模型按 <code>[3,4,1,4]</code> 分块，把每块
+logits 拼回完整序列，与同一模型的 full forward 比较；误差阈值是
+<code>atol=3e-6, rtol=1e-5</code>。不同 Hkv 的行不是相互比
+logits，也不是质量或吞吐排行榜。</p>
+<p>测试覆盖四类问题：</p>
+<ul>
+<li><strong>算对了什么</strong>：独立逐头参考、手算映射、MHA/MQA
+边界、部分 RoPE、同权重全量/单 token/多种分块对齐、有限梯度。</li>
+<li><strong>真的存少了吗</strong>：K/V 投影宽度、缓存头数、tensor
+字节与底层存储字节，而不是只检查打印的公式。</li>
+<li><strong>哪些输入会被拒绝</strong>：非法头数、空序列、错误
+dtype、越界
+token、跨模型缓存、长度溢出、坏缓存形状、权重/位置设置改变。</li>
+<li><strong>错误实现能被抓住吗</strong>：内存中把连续重复改成平铺重复、把
+RoPE offset 重置为 0、把矩形 mask 错当普通下三角、把扩展后的 KV
+存入缓存，分别验证测试判据会发现错误。源码文件不会被这些 mutation
+测试改写。</li>
+</ul>
+<p>本批共 22 项测试。没有安装兼容的 torch 2.14.x
+时，数值类按共享测试门控明确跳过；缺依赖的 CLI
+给出安装提示。<strong>skip 不是通过，不能靠只有 CLI 检查成功来宣称 GQA
+数值实现已验证。</strong></p>
+<h2 id="p14.12-自测题与参考答案">P14.12 自测题与参考答案</h2>
+<ol type="1">
+<li>Hq=8、Hkv=2 时，query 头 5 使用哪一个 KV 头？还能输出 8
+个头吗？</li>
+<li>Hq=4、Hkv=3 为什么被本实现拒绝？MQA 的 query 头数是不是 1？</li>
+<li>P=3、C=2、Hq=4、Hkv=2、B=1、d=12 时，Q、紧凑 K 缓存和 scores
+分别是什么形状？</li>
+<li>表格的 GQA 缓存如果从 float32 换成 float64，是多少字节？为什么不是 4
+倍？</li>
+<li>MHA 四个头的单位置 V 为
+<code>[1,3,5,7]</code>，两两平均后还能声称输出不变吗？</li>
+<li>MLA 的代数验证误差接近零，是否证明把任意 MHA checkpoint 压成秩 2
+都无损？</li>
+<li>MLA 小实验为什么是 96 字节，而不是 48？打分除以 √2 还是 √4？</li>
+<li>full/cache 完全相等，能否单凭这个结果证明 <code>[0,0,1,1]</code>
+的映射写对了？</li>
+</ol>
+<p>参考答案：</p>
+<ol type="1">
+<li>每组 4 个 query 头，<code>5//4=1</code>。仍有 8 个 query
+及对应输出头。</li>
+<li>4 不能被 3 整除，无法按当前约定等分。MQA 只有 1 个 KV 头，query
+头数仍可为 4。</li>
+<li>Q <code>[1,4,2,12]</code>；K 缓存 <code>[1,2,5,12]</code>；scores
+<code>[1,4,2,5]</code>。第二行新 query 能看五个
+key，第一行只能看前四个。</li>
+<li>18432 字节。单个数从 4 字节到 8 字节，只有 2
+倍；张量元素数未变。</li>
+<li>不能，变成
+<code>[2,2,6,6]</code>。平均是初始化策略，不是一般的函数等价证明。</li>
+<li>否。它只证明同一组已因式分解参数的矩阵结合律；<code>diag(3,2,1)</code>
+的秩 2 反例仍有误差 1。</li>
+<li>每 token 除了 2 个潜变量数，还存 2 个位置键数，共
+<code>3×4×8=96</code> 字节；内容 key 2 维加位置 2 维，缩放分母是
+√4=2。</li>
+<li>不能，两个路径可能共享同一个映射错误。还要用手算或独立逐头参考验证。</li>
+</ol>
+<p>到这里，S4 仍是一条普通 decoder-only 主线，只更换了 KV
+共享方式。下一阶段研究
+kernel、缓存管理和服务调度时，要把“模型表示减少了什么”与“系统怎样高效执行”分开记账。</p>
+<h2 id="资料与实现边界">资料与实现边界</h2>
+<ul>
+<li><a href="https://arxiv.org/html/2305.13245v3">GQA 原论文
+v3</a>：核验 MHA/MQA/GQA 边界及分组均值初始化、继续预训练的区别。</li>
+<li><a
+href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1">DeepSeek-V3
+技术报告 v2，§2.1.1</a>：核验 MLA
+的联合内容压缩、解耦位置项与缩放维度。</li>
+<li><a
+href="https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py">DeepSeek-V3
+官方推理源码</a>：核验内容/位置缓存分离的实现入口；动态链接核验日
+2026-10-19。</li>
+</ul>
+<p>本章实现 GQA 的完整 tiny-model 前向和紧凑缓存；MLA
+仅实现独立矩阵教学实验，未实现完整训练模型、checkpoint
+转换流程、分布式部署或生产性能复现。</p>
+<hr />
 <h1 id="第9章-走向未来-从经典-Transformer-到-GPT-4-DeepSeek">第9章：走向未来——从经典
 Transformer 到 GPT-4、DeepSeek</h1>
+<blockquote>
+<p>本章保留旧版概览与链接。RoPE、RMSNorm/SwiGLU、GQA/MLA 的完整数值与
+CPU 实验分别见 <a href="#p12-rope">P12</a>、<a
+href="#p13-modern-block">P13</a>、<a href="#p14-grouped-kv">P14</a>；KV
+cache 见 P11。本章其余前沿摘要不代表后续扩展单元已实现。</p>
+</blockquote>
 <blockquote>
 <p>“科学不是一座静止的神庙，而是一条永不停息奔涌向前的大河。”</p>
 </blockquote>
