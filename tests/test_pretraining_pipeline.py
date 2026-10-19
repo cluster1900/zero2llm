@@ -51,6 +51,18 @@ class PipelineStandardLibraryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "deduplicate"):
             p.split_documents([p.Document(str(i), "春") for i in range(5)])
 
+    def test_nfc_canonical_text_and_deduplication(self):
+        self.assertEqual(p.clean_text(" e\u0301 "), "\u00e9")
+        self.assertEqual(p.clean_text("\uf900"), "\u8c48")
+        # NFC is not general compatibility normalization (NFKC).
+        self.assertEqual(p.clean_text("Ａ"), "Ａ")
+        docs, report = p.clean_deduplicate([
+            p.Document("nfd", "cafe\u0301"), p.Document("nfc", "caf\u00e9"),
+            p.Document("cjk_compat", "\uf900"), p.Document("cjk_unified", "\u8c48")])
+        self.assertEqual([(d.uid, d.text) for d in docs], [("nfd", "caf\u00e9"), ("cjk_compat", "\u8c48")])
+        self.assertEqual(report["duplicates"], [["nfc", "nfd"], ["cjk_unified", "cjk_compat"]])
+        self.assertEqual(report["kept"], 2)
+
     def test_exact_scope_unknown_token_and_metadata(self):
         docs, report = p.clean_deduplicate([p.Document("a", "春风"), p.Document("b", "春风月")])
         self.assertEqual(len(docs), 2)  # near duplicates are deliberately NOT detected

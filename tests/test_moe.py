@@ -136,6 +136,17 @@ class MoETests(unittest.TestCase):
         self.assertAlmostEqual(equal.aux_loss.item(), 1.)
         self.assertEqual(equal.requested.tolist(), [5, 5, 0, 0])  # aux=1 is not proof of balanced hard routes.
 
+    def test_capacity_does_not_change_requested_load_auxiliary(self):
+        # Independent rational hand oracle: E * sum(f_e * mean_probability_e).
+        expected = 16 / 15
+        for capacity, accepted in ((None, [2, 2, 1, 1]), (1, [1, 1, 1, 1]),
+                                   (0, [0, 0, 0, 0])):
+            with self.subTest(capacity=capacity):
+                info = m.routing_walkthrough(capacity)
+                self.assertEqual(info.requested.tolist(), [2, 2, 1, 1])
+                self.assertEqual(info.accepted.tolist(), accepted)
+                self.assertAlmostEqual(info.aux_loss.item(), expected, places=13)
+
     def test_hand_scalar_output_and_router_input_gradients(self):
         class Scale(torch.nn.Module):
             def __init__(self, factor):

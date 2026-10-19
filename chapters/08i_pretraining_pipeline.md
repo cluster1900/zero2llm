@@ -173,7 +173,7 @@ mean_loss = total_loss / total_targets if total_targets else None
 
 为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变；故意仍然执行 AdamW step 的坏版本确实改变权重。
 
-还要分清“框架替我们移位”和“已经手工移位”。本章的 `tensor_loss` 接受已对齐的 next-token labels，**不再移位**。Transformers 某些 causal-LM 接口则接收与输入同排的 labels，在模型内部移位；其 v4.57.1 的 language-modeling collator 在 `mlm=False` 时采用输入同排、padding 忽略的约定。换框架时必须核对具体模型，不能把这两种契约叠加使用。[官方 Data Collator 文档](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/data_collator)
+还要分清“框架替我们移位”和“已经手工移位”。本章的 `tensor_loss` 接受已对齐的 next-token labels，**不再移位**。Transformers 某些 causal-LM 接口则接收与输入同排的 labels，在模型内部移位；其 v4.51.3 的 language-modeling collator 在 `mlm=False` 时采用输入同排、padding 忽略的约定。换框架时必须核对具体模型，不能把这两种契约叠加使用。[官方 Data Collator 文档](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)
 
 ## P19.6 混合比例：同样“各一半”，可能不是同一回事
 
@@ -331,6 +331,6 @@ N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验�
 - [PyTorch 2.14：Reproducibility](https://docs.pytorch.org/docs/2.14/notes/randomness.html)：随机源、确定性与跨环境限制。
 - [PyTorch 2.14：Automatic Mixed Precision](https://docs.pytorch.org/docs/2.14/amp.html)：autocast、gradient scaling 与数值范围。
 - [PyTorch 保存与加载教程](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html)：本章核验时为 2.14 教程，动态入口；模型与优化器状态的区别。
-- [Transformers v4.57.1：Data Collator](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/data_collator)：固定版本的标签与 padding 契约。本章没有安装或调用 Transformers。
+- [Transformers v4.51.3：Data Collator](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)：固定版本的标签与 padding 契约。本章没有安装或调用 Transformers。
 
 来源核验日：2026-10-19。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。

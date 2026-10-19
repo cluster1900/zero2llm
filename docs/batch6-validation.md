@@ -81,3 +81,5 @@ XML统计已扩大为包含 `.xml` 的27份；原25份统计仅包括 `.xhtml/.o
 ## 合并后的正式复审
 
 [Normal Work review 5570104663](https://github.com/cluster1900/zero2llm/pull/7#pullrequestreview-5570104663) 对修复 head `579f092` 独立验证256 tests、18脚本、正常构建和60 layouts通过，并确认3个真实测试缺口均已修复。该评论的变异总数与子项算术不一致，本记录不采用其总计作新的统计事实；只引用明确确认的三个修复和测试/构建结果。PR #7 已合并至 `66dbeb94dd9935046af0e859a223775b7adf4e0e`。
+
+后续 [PR #8 review 5570682715](https://github.com/cluster1900/zero2llm/pull/8#pullrequestreview-5570682715) 已更正该历史计数：PR #7 的 60 个变异中，58 个被拒绝（57 个断言失败、1 个 ValueError），2 个等价/冗余变异存活。这是审核方历史结果，不是本批重新执行的统计。

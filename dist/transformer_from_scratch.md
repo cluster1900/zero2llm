@@ -5540,7 +5540,7 @@ mean_loss = total_loss / total_targets if total_targets else None
 
 为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变；故意仍然执行 AdamW step 的坏版本确实改变权重。
 
-还要分清“框架替我们移位”和“已经手工移位”。本章的 `tensor_loss` 接受已对齐的 next-token labels，**不再移位**。Transformers 某些 causal-LM 接口则接收与输入同排的 labels，在模型内部移位；其 v4.57.1 的 language-modeling collator 在 `mlm=False` 时采用输入同排、padding 忽略的约定。换框架时必须核对具体模型，不能把这两种契约叠加使用。[官方 Data Collator 文档](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/data_collator)
+还要分清“框架替我们移位”和“已经手工移位”。本章的 `tensor_loss` 接受已对齐的 next-token labels，**不再移位**。Transformers 某些 causal-LM 接口则接收与输入同排的 labels，在模型内部移位；其 v4.51.3 的 language-modeling collator 在 `mlm=False` 时采用输入同排、padding 忽略的约定。换框架时必须核对具体模型，不能把这两种契约叠加使用。[官方 Data Collator 文档](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)
 
 ## P19.6 混合比例：同样“各一半”，可能不是同一回事
 
@@ -5698,7 +5698,7 @@ N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验�
 - [PyTorch 2.14：Reproducibility](https://docs.pytorch.org/docs/2.14/notes/randomness.html)：随机源、确定性与跨环境限制。
 - [PyTorch 2.14：Automatic Mixed Precision](https://docs.pytorch.org/docs/2.14/amp.html)：autocast、gradient scaling 与数值范围。
 - [PyTorch 保存与加载教程](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html)：本章核验时为 2.14 教程，动态入口；模型与优化器状态的区别。
-- [Transformers v4.57.1：Data Collator](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/data_collator)：固定版本的标签与 padding 契约。本章没有安装或调用 Transformers。
+- [Transformers v4.51.3：Data Collator](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)：固定版本的标签与 padding 契约。本章没有安装或调用 Transformers。
 
 来源核验日：2026-10-19。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。
 
@@ -5808,7 +5808,7 @@ $$
 \left[\log\sum_v\exp(z_{b,t,v})-z_{b,t,y_{b,t+1}}\right],
 $$
 
-其中有效集合 \(\mathcal V\) 只包含下一位置标签不是 -100 的预测位置，N 是这些位置的数量。本例第一行 5 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。
+其中有效集合 $\mathcal V$ 只包含下一位置标签不是 -100 的预测位置，N 是这些位置的数量。本例第一行 5 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。
 
 代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。测试还用 Python 标量循环、稳定的指数求和独立算一次，避免两个实现都复制同一个索引错误。
 
@@ -5889,7 +5889,7 @@ python3.12 -m venv /tmp/zero2llm-frameworks
 
 rank 是分布式进程的编号；world size 是进程总数。常见 GPU 训练把一个 rank 对应一张 GPU，但这不是这些词的定义。
 
-最容易理解的数据并行是 DDP：各 rank 持有同一模型副本，读取不同数据，反向传播时同步梯度，再按一致规则更新。它提高了可以共同处理的数据量，**没有自动把模型参数、梯度和普通优化器状态都分成几份**。DDP 也不会替你切分输入数据，数据采样器必须配合。相关职责见 [PyTorch 2.7 固定版 DDP API](https://docs.pytorch.org/docs/2.7/generated/torch.nn.parallel.DistributedDataParallel.html)；这里引用其机制说明，不声称本次运行了 PyTorch 2.7 的多卡测试。
+最容易理解的数据并行是 DDP：各 rank 持有同一模型副本，读取不同数据，反向传播时同步梯度，再按一致规则更新。它提高了可以共同处理的数据量，**没有自动把模型参数、梯度和普通优化器状态都分成几份**。DDP 也不会替你切分输入数据，数据采样器必须配合。相关职责见 [PyTorch 2.14 固定版 DDP API](https://docs.pytorch.org/docs/2.14/generated/torch.nn.parallel.DistributedDataParallel.html)；这里引用其机制说明，不声称本次运行了 PyTorch 2.14 的多卡测试。
 
 假设每个 rank 一次处理 b 条，累积 A 次后更新，数据并行组有 D 个 rank，理想情况下每次更新包含 b×A×D 条样本。若长度不一，有效监督 token 数不一定按样本数平均；还要检查各 rank 的 loss 归一化与梯度汇总口径。P19 中关于有效 token 和梯度累积的约定，并不会因为加了 DDP 就消失。
 
@@ -6084,7 +6084,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 - [Transformers 4.51.3 Trainer](https://huggingface.co/docs/transformers/v4.51.3/en/trainer)、[GPT-2 API](https://huggingface.co/docs/transformers/v4.51.3/en/model_doc/gpt2)、[对应 Trainer 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)：对象职责、标签计数与保存逻辑。本章实际运行此版本。
 - [Transformers 4.51.3 PyPI 元数据](https://pypi.org/pypi/transformers/4.51.3/json)、[Accelerate 1.6.0 PyPI 元数据](https://pypi.org/pypi/accelerate/1.6.0/json)：附加依赖选择；实际锁定项见 requirements-frameworks.txt。
 - [TRL 0.17.0 总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 与 [SFTTrainer](https://huggingface.co/docs/trl/v0.17.0/en/sft_trainer)：仅核验框架关系和后训练入口，未安装或运行 TRL。
-- [PyTorch 2.7 DDP 文档](https://docs.pytorch.org/docs/2.7/generated/torch.nn.parallel.DistributedDataParallel.html)：固定机制参考；不代表本书跑过该版本多卡。
+- [PyTorch 2.14 DDP 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.parallel.DistributedDataParallel.html)：固定机制参考；不代表本书跑过该版本多卡。
 - [ZeRO 论文 v3](https://arxiv.org/abs/1910.02054v3)；[DeepSpeed v0.16.5 ZeRO 文档源码](https://github.com/deepspeedai/DeepSpeed/blob/v0.16.5/docs/code-docs/source/zero3.rst)：已读取该 tag 的官方原始文件，作为分片机制参考；未安装 DeepSpeed。
 - [Megatron-LM 原始论文](https://arxiv.org/abs/1909.08053)、[流水线与大规模训练论文](https://arxiv.org/abs/2104.04473)、[Megatron-Core core_v0.12.0 仓库](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0)：并行与 checkpoint 参考，未运行其 GPU 示例。
 

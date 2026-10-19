@@ -49,3 +49,8 @@ class Batch7TextTests(unittest.TestCase):
         chapter = (ROOT / "chapters/08j_training_frameworks.md").read_text()
         for name in ("Transformers", "TRL", "DeepSpeed", "Megatron"):
             self.assertIn(name, chapter)
+
+    def test_math_uses_pandoc_supported_delimiters(self):
+        chapter = (ROOT / "chapters/08j_training_frameworks.md").read_text()
+        self.assertIn(r"其中有效集合 $\mathcal V$", chapter)
+        self.assertNotIn(r"\(\mathcal V\)", chapter)

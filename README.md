@@ -115,7 +115,8 @@ python3 -m venv .venv
 
 ```bash
 python3 -m venv .venv-frameworks
-.venv-frameworks/bin/python -m pip install -r requirements.txt -r requirements-frameworks.txt
+.venv-frameworks/bin/python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+.venv-frameworks/bin/python -m pip install -r requirements.txt -r requirements-frameworks.txt -r requirements-build-static.txt
 .venv-frameworks/bin/python code/21_training_frameworks.py --hf
 .venv-frameworks/bin/python -m unittest discover -s tests -v
 ```
