@@ -1,5 +1,8 @@
 # 第9章：走向未来——从经典 Transformer 到 GPT-4、DeepSeek
 
+> 本章保留旧版概览与链接。RoPE、RMSNorm/SwiGLU、GQA/MLA 的完整数值与 CPU 实验分别见 [P12](#p12-rope)、[P13](#p13-modern-block)、[P14](#p14-grouped-kv)；KV cache 见 P11。本章其余前沿摘要不代表后续扩展单元已实现。
+
+
 > “科学不是一座静止的神庙，而是一条永不停息奔涌向前的大河。”
 
 ---

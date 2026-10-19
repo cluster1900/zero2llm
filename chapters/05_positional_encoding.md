@@ -174,7 +174,7 @@ $$\cos((p+k)\omega_i)=\cos(p\omega_i)\cos(k\omega_i)-\sin(p\omega_i)\sin(k\omega
 
 这是“模型有机会利用相对关系”的数学依据，不是“训练一定会学会距离”的证明，也不是“加法位置编码的整个注意力分数只取决于距离”。加入内容并经过不同的 $W_Q,W_K$ 后，还会出现内容与位置的交叉项。
 
-路线图中的 **P12：RoPE 与 YaRN** 会研究另一条路线：把位置信息用于 Q/K 的旋转，并检查相对关系与缓存位置偏移。这里先认识名字，不提前把正弦相加改写成 RoPE，更不把旋转当成长上下文效果的保证。[来源 3，§3.1–3.2]
+后面的 [P12：RoPE 与 YaRN](#p12-rope) 研究另一条路线：把位置信息用于 Q/K 的旋转，并检查相对关系与缓存位置偏移。这里先认识名字，不提前把正弦相加改写成 RoPE，更不把旋转当成长上下文效果的保证。[来源 3，§3.1–3.2]
 
 ## 5.6 为什么相加，而不是拼接？先算一遍
 
@@ -306,4 +306,4 @@ python -m unittest discover -s tests -p 'test_positions.py' -v
 
 1. Vaswani et al., [Attention Is All You Need，arXiv:1706.03762v7](https://arxiv.org/html/1706.03762v7)，版本日期 2023-08-02，初稿 2017-06-12。§3.4：输入嵌入缩放；§3.5：正弦公式、相加、相对偏移动机与长度外推动机；§6.2 表 3(E)：可学习位置对照。
 2. Shaw, Uszkoreit & Vaswani, [Self-Attention with Relative Position Representations，arXiv:1803.02155v2](https://arxiv.org/html/1803.02155v2)，版本日期 2018-04-12。§3.1：相对关系进入键和值；§3.2：按相对距离查表与截断。仅作类型比较，不在本章实现该模型。
-3. Su et al., [RoFormer，arXiv:2104.09864v5](https://arxiv.org/html/2104.09864v5)，版本日期 2023-11-08。§3.1–3.2：用 Q/K 旋转表达位置关系。本章只给路线提示，详细实现留给大纲 P12。
+3. Su et al., [RoFormer，arXiv:2104.09864v5](https://arxiv.org/html/2104.09864v5)，版本日期 2023-11-08。§3.1–3.2：用 Q/K 旋转表达位置关系。本章只给路线提示，详细实现见 [P12](#p12-rope)。

@@ -79,13 +79,13 @@ python3 -m venv .venv
 
 ## 0.5 当前阅读顺序与尚未完成的扩展
 
-本书正在按审核通过的扩展大纲分批更新。当前批次完成的是 P00 阅读指南、P01 词嵌入、P02 Tokenizer；这些 P 编号是扩展计划的编号，不会立即替换旧版全部章号。
+本书正在按审核通过的扩展大纲分批更新。当前已实现 P00–P14，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE / 现代 Block / GQA；这些 P 编号是扩展计划的编号，不会立即替换旧版全部章号。
 
 为了保留已有链接，Tokenizer 暂放在“第 1A 章”，紧跟第 1 章；旧第 2～10 章仍可阅读，但尚未全部按新大纲改写。当前 HTML/EPUB 会按这个顺序包含新单元，不是已完成全部 29 个单元的新书。
 
-![本批次阅读顺序](assets/diagrams/batch1_route.svg)
+![入门三单元阅读顺序](assets/diagrams/batch1_route.svg)
 
-读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer 章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是 Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE。现在它们仍是逐批落地的计划，不能把路线图当作已实现功能清单。
+读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer 章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是 Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE。当前已实现到 GQA，MoE 等后续单元仍按批次推进；YaRN 与 MLA 的教学边界见对应章节，不能把路线图当作完整工业模型的功能清单。
 
 ## 0.6 开始前的三个自测
 

@@ -17,18 +17,19 @@
 [扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
 
 - **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
-- **当前可读**：14 个章节文件（含前言、插入的第 1A 章与附录），12 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
+- **当前可读**：17 个章节文件（含前言、插入的第 1A 章与附录），15 个编号示例脚本及共享 attention_core.py 辅助模块；本分支 HTML / EPUB 同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
 - **P03–P05 正文与 CPU 示例已实现**：注意力动机、QKV/稳定 Softmax/掩码、多头张量账本；因果性、padding/全 mask 行、形状与参考实现回归。验收记录见[第二批验证](docs/batch2-validation.md)。
 - **P06–P08 正文与 CPU 示例已实现**：位置编码、残差/LayerNorm/FFN、三类架构与生成循环；保留手算表，增加数值、自测和变异回归。见[第三批验证](docs/batch3-validation.md)。
 - **P09–P11 正文与 CPU 示例已实现**：训练最小闭环、Baby-GPT S0 基线和 S1 KV cache；训练/留出边界、checkpoint、完整/增量 logits 对齐与内存账。见[第四批验证](docs/batch4-validation.md)。
-- **尚未按扩展大纲实现**：P12–P28；旧第 9–10 章仍保留可读，但不代表新专题已完成。
+- **P12–P14 正文与 CPU 示例已实现**：S2 RoPE 与长上下文边界、S3 RMSNorm/SwiGLU、S4 GQA 与独立 MLA 小矩阵；各阶段全量/增量对齐、数值和参数/缓存账。YaRN 是论文机制导读，不宣称完整复现其训练。见[第五批验证](docs/batch5-validation.md)。
+- **尚未按扩展大纲实现**：P15–P28；旧第 9–10 章仍保留可读，但不代表新专题已完成。
 - **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE；每批审核后才继续，不把路线图当成已有功能。
 
-为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)与[第四批记录](docs/batch4-validation.md)。
+为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)与[第五批记录](docs/batch5-validation.md)。
 
 ## 📖 当前版本目录导航
 
-当前版本包含 14 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
+当前版本包含 17 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
 
 | 章节与标题 | 核心生活类比 / 几何直觉 | 用到的数学知识 | 配套可运行代码 |
 | :--- | :--- | :--- | :---: |
@@ -44,20 +45,23 @@
 | [**P09. 训练最小闭环**](chapters/07a_training_loop.md) | 练习与留出考试、错误标签作弊反例 | 交叉熵、梯度、loss reduction | [`code/11_training_loop.py`](code/11_training_loop.py) |
 | [**08. 实战：手搭 Baby-GPT**](chapters/08_baby_transformer.md) | 从第一行代码训练一个能背三首短诗的微型模型 | 交叉熵损失、温度采样、梯度下降 | [`code/07_baby_gpt.py`](code/07_baby_gpt.py) |
 | [**P11. KV Cache**](chapters/08a_kv_cache.md) | 保存历史 K/V，只计算新位置 | 矩形因果 mask、偏移、张量字节数 | [`code/12_kv_cache.py`](code/12_kv_cache.py) |
+| [**P12. RoPE 与 YaRN**](chapters/08b_rope_yarn.md) | 旋转时钟与历史位置 | 二维旋转、相对相位、缓存偏移与外推边界 | [`code/13_rope.py`](code/13_rope.py) |
+| [**P13. RMSNorm 与 SwiGLU**](chapters/08c_modern_block.md) | 幅度刻度与可学习门控 | 均方根、SiLU、参数预算与单变量比较 | [`code/14_modern_block.py`](code/14_modern_block.py) |
+| [**P14. MHA / MQA / GQA 与 MLA**](chapters/08d_grouped_kv_mla.md) | 查询分组共享资料与低秩压缩 | KV 头映射、缓存字节、低秩矩阵与位置项 | [`code/15_grouped_kv.py`](code/15_grouped_kv.py) |
 | [**09. 走向现代大模型 (LLMs)**](chapters/09_modern_llms.md) | RoPE 旋转位置编码、RMSNorm、SwiGLU、DeepSeek MoE | 复数平面旋转、均方根、尺度定律与涌现 | - |
 | [**10. 附录与黑话词典**](chapters/10_appendix.md) | 数学公式速查卡、深度学习黑话翻译大白话词典 | 全书数理汇总 | - |
 
 ---
 
-## 💻 12 个配套代码实验（含 1 个选修）
+## 💻 15 个配套代码实验（含 1 个选修）
 
-历史第二批验证了当时的 9 个编号示例；当前共有 12 个，最新执行环境与结果见[第四批记录](docs/batch4-validation.md)。
+历史第二批验证了当时的 9 个编号示例；当前共有 15 个，最新执行环境与结果见[第五批记录](docs/batch5-validation.md)。
 
-原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10 个只依赖标准库；第 3～7、12 个需要 PyTorch；第 11 个的 --scalar-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4。
+原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10 个只依赖标准库；第 3～7、12～15 个需要 PyTorch；第 11 个的 --scalar-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4。
 
 1. **[`code/01_vector_similarity.py`](code/01_vector_similarity.py)**：纯 Python 手写向量内积与余弦相似度，验证水果空间距离与国王-女王向量平移。
 2. **[`code/02_manual_attention.py`](code/02_manual_attention.py)**：纯 Python 零依赖手算 3 个字（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化。
-3. **[`code/03_scaled_dot_product.py`](code/03_scaled_dot_product.py)**：用数值实验揭开“为什么必须除以 $\sqrt{d_k}$”的方差危机，以及因果掩码如何用 $-1e9$ 阻隔未来。
+3. **[`code/03_scaled_dot_product.py`](code/03_scaled_dot_product.py)**：用数值实验揭开“为什么必须除以 $\sqrt{d_k}$”的方差危机，以及因果掩码如何用 $-\infty$ 阻隔未来。
 4. **[`code/04_multi_head_attention.py`](code/04_multi_head_attention.py)**：多头注意力的 PyTorch 完整实现与张量维度变换追踪。
 5. **[`code/05_positional_encoding.py`](code/05_positional_encoding.py)**：正弦余弦位置编码矩阵计算与控制台 ASCII 字符波浪热力图打印。
 6. **[`code/06_transformer_block.py`](code/06_transformer_block.py)**：Pre-LN Transformer 积木块拼装（LayerNorm + MHA + 残差 + FFN）。
@@ -70,6 +74,10 @@
 
 11. **[`code/11_training_loop.py`](code/11_training_loop.py)**：标准库交叉熵/梯度手算，CPU 数据切分、一次更新、整首留出与重复种子实验；不将共享词表设置称为严格独立评估。
 12. **[`code/12_kv_cache.py`](code/12_kv_cache.py)**：同一 S0 参数的增量 S1；完整 logits 对齐、矩形 mask、缓存字节账、首 token/后续 token CPU 计时。
+
+13. **[`code/13_rope.py`](code/13_rope.py)**：S2 旋转 Q/K、缓存位置偏移、短序列训练后的长度外推边界。
+14. **[`code/14_modern_block.py`](code/14_modern_block.py)**：S3 逐项替换 RMSNorm / SwiGLU，参考公式、梯度与参数预算比较。
+15. **[`code/15_grouped_kv.py`](code/15_grouped_kv.py)**：S4 紧凑 GQA 缓存、MHA/MQA 边界和独立教学 MLA 小矩阵；不是生产 MLA kernel。
 
 ### CPU 快速验证
 
@@ -101,7 +109,7 @@ python code/07_baby_gpt.py
 
 如果想先从手算和纯 Python 实验入手，可以直接运行 `python3 code/01_vector_similarity.py` 和
 `python3 code/02_manual_attention.py`，它们不需要安装 PyTorch。重新编译 EPUB/HTML 还需要系统中的
-`pandoc` 和 Node.js 22 或更高版本（macOS 可运行 `brew install pandoc node`），并先运行 `npm ci` 安装锁定版本的图表构建工具。阅读成品不需要这些依赖。
+`pandoc`（本书验证版本为 **3.9**）和 Node.js 22 或更高版本（macOS 可运行 `brew install pandoc node`），并先运行 `npm ci` 安装锁定版本的图表构建工具。阅读成品不需要这些依赖。
 
 ---
 
@@ -184,3 +192,5 @@ Mermaid 图必须提供 `accTitle` 和 `accDescr`；渲染错误、缺图或内�
 在 GitHub Actions 手动运行 **Refresh book release downloads**，选择已有 Release 标签，即可替换阅读文件。
 也可以在推送到 `main` 的提交消息中加入 `[refresh-release]`，显式更新 `v1.0.0` 的下载文件。
 工作流不会移动旧标签；Release 说明会标出本次阅读文件对应的提交，并用新的附件链接替换旧 ZIP 链接。
+
+构建环境提示：本书要求 **Pandoc 3.9 或更新版本**，已验证版本为 **3.9**。[官方 3.9 发布记录](https://pandoc.org/releases.html#pandoc-3.9)说明该版本加入 Pandoc Markdown 的 `+alerts` 支持；3.5 不支持该组合，独立审核也已复现失败。新版本仍须重跑产物/布局检查，不假定任意系统自带版本均兼容。

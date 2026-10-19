@@ -4,7 +4,7 @@
 
 上一章给 token 加上了位置信息。现在，我们把已经学过的多头自注意力，和本章的三个组件装成一个 **Transformer Block**。本章的目标不是记住模型名，而是能回答：“这条支路算了什么？为什么要加回输入？归一化发生在哪一步？参数花在了哪里？”
 
-配套代码：[code/06_transformer_block.py](../code/06_transformer_block.py)。先读数值例子，再运行脚本逐项核对。本章采用普通 LayerNorm、带偏置的两层 ReLU FFN，以及没有 dropout 的多头自注意力；默认 Pre-LN，也提供 Post-LN 对照。它是教学积木，不是某个 GPT、LLaMA 或 DeepSeek checkpoint 的完整复刻。RMSNorm 与 SwiGLU 只在章末留路标，系统推导放到规划 P13。
+配套代码：[code/06_transformer_block.py](../code/06_transformer_block.py)。先读数值例子，再运行脚本逐项核对。本章采用普通 LayerNorm、带偏置的两层 ReLU FFN，以及没有 dropout 的多头自注意力；默认 Pre-LN，也提供 Post-LN 对照。它是教学积木，不是某个 GPT、LLaMA 或 DeepSeek checkpoint 的完整复刻。RMSNorm 与 SwiGLU 只在章末留路标，系统推导与实验见 [P13](#p13-modern-block)。
 
 ---
 
@@ -427,7 +427,7 @@ Pre-LN zero-sublayer identity max error=0.000000
 - Pre-LN 与 Post-LN 的区别是计算顺序，不是标签；前者保留未归一化的残差主干，后者对相加结果归一化。
 - 普通 FFN 用共享的两层仿射变换和中间非线性逐位置加工；算参数时记得偏置，算成本时区分参数与运算。
 
-后续规划 P13 会单独讲 RMSNorm 与 SwiGLU，并在相近参数预算下做对比。本章不实现它们，也不预先承诺某个通用加速比例。先把基础 Block 的路径读准，再逐个替换组件。[路标：RMSNorm 原始论文](https://arxiv.org/abs/1910.07467)、[GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202)
+已实现的 [P13](#p13-modern-block) 单独讲 RMSNorm 与 SwiGLU，并在相近参数预算下做对比。本章不实现它们，也不预先承诺某个通用加速比例。先把基础 Block 的路径读准，再逐个替换组件。[路标：RMSNorm 原始论文](https://arxiv.org/abs/1910.07467)、[GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202)
 
 接下来读第 7 章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention 和训练目标，组成不同的系统。
 
