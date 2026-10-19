@@ -77,3 +77,7 @@ README 的 Pandoc 3.9 发布锚点改为 `pandoc-3.9-2026-02-03`；P14.10 多余
 XML统计已扩大为包含 `.xml` 的27份；原25份统计仅包括 `.xhtml/.opf/.ncx`，不是声称额外两份已损坏。修正 FlashAttention 论文版本措辞以免误读成 FlashAttention-2，并清理 P17 两处空格、补充路径计数与报告对应。旧章7的 HTML/EPUB 锚点不同，本轮保留普通文字路标，不引入可能断裂的统一链接；P15图块表信息已完整，未为可选箭头建议改变图。
 
 本次返修重新尝试正常 build/layout，仍是上述 socket 权限限制；静态重建以旧 head `46aa14d8ce0e62a585cc82824cbe0faeab8254b9` 为基准，复用源码完全不变的12张Mermaid和17张静态图，无图像改动。重新解析27份XML，源码dist副本一致。独立审校复跑26个P15测试及3个新变异，确认正确基线有限、running-max变异为真实合法输入溢出、两个时间指标变异为字典断言失败。
+
+## 合并后的正式复审
+
+[Normal Work review 5570104663](https://github.com/cluster1900/zero2llm/pull/7#pullrequestreview-5570104663) 对修复 head `579f092` 独立验证256 tests、18脚本、正常构建和60 layouts通过，并确认3个真实测试缺口均已修复。该评论的变异总数与子项算术不一致，本记录不采用其总计作新的统计事实；只引用明确确认的三个修复和测试/构建结果。PR #7 已合并至 `66dbeb94dd9935046af0e859a223775b7adf4e0e`。

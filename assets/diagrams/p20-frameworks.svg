@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="790" viewBox="0 0 1000 790" role="img" aria-labelledby="p20-title p20-desc">
+  <title id="p20-title">从框架接口到 ZeRO 持久状态分片</title>
+  <desc id="p20-desc">上半图展示本地 tokenizer 产生输入与标签，config 定义随机小模型，Trainer 控制前向、loss、反向和 SGD 更新。下半图按 DDP、ZeRO 一到三阶段列出每个 rank 的参数、梯度和优化器状态是否分片。十个参数分给四个 rank 的所有权为三、三、二、二；默认每参数权重二字节、梯度二字节、优化器状态十二字节，最满 rank 状态依次为一百六十、七十六、六十二、四十八字节。不包含激活、临时聚合和通信缓冲，不是显存实测。</desc>
+  <defs>
+    <marker id="p20-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#475569"/></marker>
+    <style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#172033}.title{font-size:23px;font-weight:700}.heading{font-size:19px;font-weight:700}.label{font-size:17px}.small{font-size:15px}.line{stroke:#475569;stroke-width:2;fill:none;marker-end:url(#p20-arrow)}</style>
+  </defs>
+  <rect x="1" y="1" width="998" height="788" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="500" y="38" text-anchor="middle" class="title">框架负责组织训练，测试负责证明目标与更新正确</text>
+  <rect x="22" y="57" width="956" height="294" rx="12" fill="#fff" stroke="#cbd5e1"/>
+  <text x="42" y="87" class="heading">① 本章实际运行：CPU 小模型 + Trainer</text>
+  <rect x="42" y="118" width="200" height="99" rx="8" fill="#eff6ff" stroke="#60a5fa"/>
+  <text x="142" y="146" text-anchor="middle" class="label" font-weight="700">本地 tokenizer</text>
+  <text x="142" y="173" text-anchor="middle" class="small">input_ids / mask / labels</text>
+  <text x="142" y="198" text-anchor="middle" class="small">[2,6]，有效目标 9 个</text>
+  <path class="line" d="M242 168H283"/>
+  <rect x="287" y="118" width="193" height="99" rx="8" fill="#eff6ff" stroke="#60a5fa"/>
+  <text x="383" y="146" text-anchor="middle" class="label" font-weight="700">config → model</text>
+  <text x="383" y="173" text-anchor="middle" class="small">随机小 GPT-2，2,704 参数</text>
+  <text x="383" y="198" text-anchor="middle" class="small">logits [2,6,12]</text>
+  <path class="line" d="M480 168H521"/>
+  <rect x="525" y="118" width="193" height="99" rx="8" fill="#f0fdf4" stroke="#4ade80"/>
+  <text x="621" y="146" text-anchor="middle" class="label" font-weight="700">loss → backward</text>
+  <text x="621" y="173" text-anchor="middle" class="small">只 shift 一次</text>
+  <text x="621" y="198" text-anchor="middle" class="small">独立 CE 核对分母</text>
+  <path class="line" d="M718 168H759"/>
+  <rect x="763" y="118" width="193" height="99" rx="8" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="859" y="146" text-anchor="middle" class="label" font-weight="700">SGD 更新 3 次</text>
+  <text x="859" y="173" text-anchor="middle" class="small">与手写循环逐参数对照</text>
+  <text x="859" y="198" text-anchor="middle" class="small">本地保存 / 恢复 logits</text>
+  <rect x="42" y="237" width="914" height="43" rx="8" fill="#e0e7ff" stroke="#a5b4fc"/>
+  <text x="499" y="265" text-anchor="middle" class="label">Trainer + Accelerate：组织数据、设备、更新与保存，不替你判断任务是否正确</text>
+  <text x="42" y="311" class="small">TRL 在 HF 生态上扩展后训练入口；SFT / DPO / GRPO 留到后续章节，不在这里假称已运行。</text>
+  <text x="42" y="335" class="small">本实验完全本地：不下载权重，不下载 tokenizer，不运行 DeepSpeed / Megatron。</text>
+
+  <rect x="22" y="369" width="956" height="350" rx="12" fill="#fff" stroke="#cbd5e1"/>
+  <text x="42" y="400" class="heading">② 标准库模拟：P = 10，D = 4；分片元素 [3,3,2,2]</text>
+  <text x="42" y="427" class="small">权重 2 bytes + 梯度 2 bytes + 优化器 12 bytes（m、v、master 各 4 bytes）</text>
+  <g text-anchor="middle" class="label">
+    <text x="120" y="467" font-weight="700">策略</text>
+    <text x="307" y="467" font-weight="700">参数</text>
+    <text x="485" y="467" font-weight="700">梯度</text>
+    <text x="663" y="467" font-weight="700">优化器状态</text>
+    <text x="864" y="467" font-weight="700">最满 rank</text>
+    <path d="M42 479H956" stroke="#cbd5e1"/>
+    <text x="120" y="512">DDP / Stage 0</text>
+    <text x="120" y="559">ZeRO-1</text>
+    <text x="120" y="606">ZeRO-2</text>
+    <text x="120" y="653">ZeRO-3</text>
+    <g fill="#dbeafe" stroke="#93c5fd">
+      <rect x="234" y="488" width="146" height="34" rx="5"/>
+      <rect x="412" y="488" width="146" height="34" rx="5"/>
+      <rect x="590" y="488" width="146" height="34" rx="5"/>
+      <rect x="234" y="535" width="146" height="34" rx="5"/>
+      <rect x="412" y="535" width="146" height="34" rx="5"/>
+      <rect x="234" y="582" width="146" height="34" rx="5"/>
+    </g>
+    <g fill="#dcfce7" stroke="#86efac">
+      <rect x="590" y="535" width="146" height="34" rx="5"/>
+      <rect x="412" y="582" width="146" height="34" rx="5"/>
+      <rect x="590" y="582" width="146" height="34" rx="5"/>
+      <rect x="234" y="629" width="146" height="34" rx="5"/>
+      <rect x="412" y="629" width="146" height="34" rx="5"/>
+      <rect x="590" y="629" width="146" height="34" rx="5"/>
+    </g>
+    <text x="307" y="512">全量</text><text x="485" y="512">全量</text><text x="663" y="512">全量</text>
+    <text x="307" y="559">全量</text><text x="485" y="559">全量</text><text x="663" y="559">分片</text>
+    <text x="307" y="606">全量</text><text x="485" y="606">分片</text><text x="663" y="606">分片</text>
+    <text x="307" y="653">分片</text><text x="485" y="653">分片</text><text x="663" y="653">分片</text>
+    <text x="864" y="512">160 bytes</text><text x="864" y="559">76 bytes</text>
+    <text x="864" y="606">62 bytes</text><text x="864" y="653">48 bytes</text>
+  </g>
+  <text x="42" y="695" class="small">不整除时，最满分片用 ceil(P/D)。这里无 padding，不把每张卡都算成“2.5 个参数”。</text>
+  <text x="500" y="748" text-anchor="middle" class="label" font-weight="700">状态账本 ≠ GPU 显存峰值 ≠ 速度测试</text>
+  <text x="500" y="773" text-anchor="middle" class="small">排除激活、buffer、通信 bucket、临时 all-gather、分配器与对齐填充。</text>
+</svg>

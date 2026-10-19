@@ -83,13 +83,13 @@ python3 -m venv .venv
 
 ## 0.5 当前阅读顺序与尚未完成的扩展
 
-本书正在按审核通过的扩展大纲分批更新。当前已实现 P00–P17，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE / 现代 Block / GQA，以及独立的注意力系统、稀疏/线性机制与 CED 数据流；这些 P 编号是扩展计划的编号，不会立即替换旧版全部章号。
+本书正在按审核通过的扩展大纲分批更新。当前已实现 P00–P20，包括阅读基础、注意力、训练闭环、Baby-GPT 与 KV cache / RoPE / 现代 Block / GQA，以及独立的注意力系统、稀疏/线性机制与 CED 数据流，新增教学 MoE、预训练数据与恢复训练、框架对照；这些 P 编号是扩展计划的编号，不会立即替换旧版全部章号。
 
 为了保留已有链接，Tokenizer 暂放在“第 1A 章”，紧跟第 1 章；旧第 2～10 章仍可阅读，但尚未全部按新大纲改写。当前 HTML/EPUB 会按这个顺序包含新单元，不是已完成全部 29 个单元的新书。
 
 ![入门三单元阅读顺序](assets/diagrams/batch1_route.svg)
 
-读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer 章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是 Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE。当前已实现到 GQA，MoE 等后续单元仍按批次推进；YaRN 与 MLA 的教学边界见对应章节，不能把路线图当作完整工业模型的功能清单。
+读词嵌入时，我们先假设“每个词已有编号”；紧接着 Tokenizer 章会打开这个假设，解释为什么一个词不一定是一个 token。后续实现路线是 Baby-GPT 基线 → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE。当前主线已实现到教学 MoE，并补充预训练数据与框架对照；后训练等后续单元仍按批次推进；YaRN 与 MLA 的教学边界见对应章节，不能把路线图当作完整工业模型的功能清单。
 
 ## 0.6 开始前的三个自测
 
@@ -5003,6 +5003,1090 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture
 4. 至少要分别跟踪 main KV、indexer K、Top-K 选择及各自 source，处理共享层的写入与读取时机，并重新验证索引与压缩条目的因果可见性。压缩块没有收齐时不能提前公开含有未来输入的摘要；修改名字不提供这些保证。
 
 记住这条主线即可：**CED 改变 decoder global KV 的来源；局部 SWA 仍有自己的逐层状态，所以需要 replay；有界 replay 是明确接受误差的取舍，不是免费的等价省算。** 本章已经用实际张量和反例验证这三件事，但没有复现官方训练、权重、服务系统或性能。
+
+
+---
+
+# 架构进阶（P18）：MoE 的专家、路由与负载 {#p18-moe}
+
+想象一间维修店：前台看过问题，把工单交给几位师傅；有些检查则每张工单都要做。店里可以有很多师傅，但一张工单未必请所有人动手。这是理解 **Mixture of Experts（MoE，混合专家）** 的起点。
+
+不过，“专家”不是预先命名的数学老师、程序员或翻译官。它通常只是一组可训练的 FFN 权重；路由器根据当前 token 的隐藏向量选它。某个专家是否出现了可解释的分工，需要实验，不能由名字保证。多个 token 也可以同时选择同一专家，所以“前台把一个问题交给一个人”的类比很快就不够用了。
+
+在 [P14 的 S4](#p14-grouped-kv) 中，我们已经有 RoPE、RMSNorm、SwiGLU、GQA 和 compact KV cache。本章回到主线，构造 **S5：只把 S4 的 FFN 换成教学 MoE**。P15–P17 的系统、稀疏注意力和 CED 独立实验没有偷偷混进来。
+
+配套 [code/19_moe.py](../code/19_moe.py)，测试为 `tests/test_moe.py`。CPU 即可运行，不下载模型，不训练出专业分工，也不复现完整 DeepSeek。
+
+## P18.1 先找准：换的是哪一块
+
+回想 Pre-Norm Block 的两条残差支路：
+
+$$
+u=x+\operatorname{Attention}(\operatorname{Norm}_1(x)),\qquad
+h=u+\operatorname{FFN}(\operatorname{Norm}_2(u)).
+$$
+
+S5 不改变第一条支路，只把第二式的 FFN 换成 MoE：
+
+$$
+h=u+\operatorname{MoE}(\operatorname{Norm}_2(u)).
+$$
+
+因此，MoE 本身不再加一次输入残差。注意力负责读取其他位置，MoE 在本层逐 token 加工已经得到的表示。换 FFN 不意味着换掉因果 mask，也不意味着取消 GQA 的 K/V 缓存。
+
+![S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃](assets/diagrams/p18-moe.svg)
+
+图中的 E 是可选的路由专家数量，k 是每 token 选择的数量，S 是始终参与的共享专家数量。**E 和 k 不能混写。** k=2、E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。
+
+## P18.2 路由器先打分，再选择，再加权
+
+设一个 token 的输入是行向量 x，宽度为 D。教学路由器是一层不带 bias 的 Linear：
+
+$$
+z=xW_r^T,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
+p_e=\frac{\exp(z_e)}{\sum_j\exp(z_j)}.
+$$
+
+z 是分数，p 是本章选用的 Softmax affinity，意思是 token 对专家的相对偏好。它不是词表上的下一个 token 概率，维度 E 也不是词表大小 V。
+
+接着取 p 最大的 k 个专家，记为集合 K。本章再把**所选专家**的权重归一化：
+
+$$
+w_e=\frac{p_e}{\sum_{j\in K}p_j}\quad(e\in K),\qquad
+\operatorname{MoE}(x)=\sum_{e\in K}w_e F_e(x)+\sum_{s=1}^{S}F_s^{shared}(x).
+$$
+
+没有被选中的路由专家不计算 F_e(x)，也不参与这次加权和。共享专家全部执行，输出直接相加，不与路由专家一起归一化，也不除以 S。
+
+这是本书明确选择的一套教学约定，不是“所有 MoE 的唯一公式”。尤其要区分原始 Softmax、所选权重归一化、Sigmoid affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生不同输出。
+
+### 三张工单，手算一次
+
+不必先学习路由器的训练。假设它已经给出下面的 p，专家编号从 0 开始，k=2。相同分数时，本章固定选编号较小者在前，以便复现。
+
+| token | p0 | p1 | p2 | p3 | 选择顺序 | 组合权重 |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 0.4 | 0.3 | 0.2 | 0.1 | 0、1 | 4/7、3/7 |
+| B | 0.1 | 0.2 | 0.3 | 0.4 | 3、2 | 4/7、3/7 |
+| C | 0.4 | 0.4 | 0.1 | 0.1 | 0、1 | 1/2、1/2 |
+
+A 选择的原始概率和为 0.7，所以不是“0.4 倍专家 0 加 0.3 倍专家 1”，而是 4/7 与 3/7。C 的平局不随机打破。
+
+请求负载是 `[2,2,1,1]`，总和 6=N×k。它数的是 **token—专家分配次数**，不是不同 token 的数量，也不包括共享专家。一个 token 选择两个专家，会计两次；每个共享专家另外处理全部 N=3 个 token。
+
+### 再把输出算成一个具体数字
+
+为了单独检查组合规则，暂时不用 SwiGLU，把三个专家换成简单倍率：F0(x)=x，F1(x)=10x，F2(x)=100x。令 affinity 比例为 1:2:4，top-2 选专家 2 和 1，归一化权重为 2/3 和 1/3：
+
+$$
+y_{routed}=\tfrac23\times100x+\tfrac13\times10x=70x.
+$$
+
+再加两个共享分支 3x 和 5x，得到 78x，而不是 74x。这个倍率实验只用来验算组合，不把线性倍率当成真正的专家能力；正式模块和另一组独立梯度测试都使用 SwiGLU。
+
+## P18.3 张量账本：先摊平，最后放回
+
+设输入 X 的形状为 [B,T,D]，N=B×T。MoE 的路由和专家计算不需要先混合不同 token，因此把前两维暂时摊平即可。
+
+| 张量 | 形状 | 含义 |
+| --- | --- | --- |
+| flat | [N,D] | 当前调用的全部 token 向量 |
+| router.weight | [E,D] | 为所有路由专家打分 |
+| logits、probs | [N,E] | 每 token 对每个路由专家的分数、affinity |
+| indices | [N,k] | 被选中的专家编号 |
+| weights | [N,k] | 丢弃前的组合权重 |
+| kept | [N,k] | 容量实验中是否接受该分配 |
+| requested、accepted | [E] | 容量处理前后各专家的分配次数 |
+| output | [N,D] → [B,T,D] | 专家结果按原 token 位置合回 |
+
+**dispatch** 是按专家收集 token；**combine** 是把结果送回 token 原位置并加权。它们不能只做 reshape：同一个 token 可能出现在多个专家的小批次中，结果要相加，而不是覆盖。
+
+例如上面的 A、B、C：专家 0 收 A、C；专家 1 收 A、C；专家 2 收 B；专家 3 收 B。专家 0 的两个输出再分别回到 A、C 的位置。并没有把 A 的结果交给 C。
+
+## P18.4 专家多了，参数和计算怎样算
+
+沿用 P13 的无 bias SwiGLU，中间宽度为 d_f 的一个专家有三张矩阵：gate、up、down。参数量为 3D d_f。路由器有 DE 个参数。
+
+设路由专家宽度为 d_r，共享专家宽度为 d_s，则**仅 MoE 模块**：
+
+$$
+P_{total}=E(3Dd_r)+S(3Dd_s)+DE,
+$$
+
+$$
+P_{active/token}=k(3Dd_r)+S(3Dd_s)+DE.
+$$
+
+这里的 active 是不丢弃时，每 token 参与运算的权重预算。路由器需要给全部 E 个专家打分，所以不能只算 k 个 router 行；共享专家也不能漏算。两式都不包含 attention、norm、embedding 和输出 head，更不是整模型内存公式。
+
+手算 D=4、E=4、k=2、d_r=2、S=1、d_s=2：
+
+- 一个路由专家：3×4×2=24。
+- 共享专家：24；路由器：4×4=16。
+- 总参数：4×24+24+16=136。
+- 每 token 激活参数预算：2×24+24+16=88。
+
+**136/88 不是速度比。** 权重仍需保存或调度；路由、收集、合回、访问内存都需要工作。训练时还有梯度、优化器状态和中间激活。对一批 token，不同 token 的选择取并集后，可能所有专家都被用到。
+
+### 细粒度专家：把宽专家换成更多窄专家
+
+考虑 D=4、没有共享专家的两个方案：
+
+| 方案 | E | k | 专家宽度 | 全部专家参数，不含 router | 每 token 专家参数，不含 router | 含 router 总参数 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 较粗 | 2 | 1 | 8 | 192 | 96 | 200 |
+| 较细 | 4 | 2 | 4 | 192 | 96 | 208 |
+
+专家总预算与每 token 专家预算都相同，但细粒度方案能选择更多组合，同时 router 更大，dispatch 次数也增加。本章通过 expert_width、num_experts 和 top_k 表达这组设计，不提供把一个已训练宽专家无损切成窄专家的转换器。**预算相同不等于函数相同，也不保证质量更好。**
+
+共享专家则是另一维选择：每个 token 都会经过它们，可以学习跨 token 的共同处理，但“学到共同知识”仍是训练假设。若添加共享专家却不相应调整 k 或宽度，激活预算会增加，不能再声称公平对比。
+
+## P18.5 负载失衡：总共六张分配，不等于每人一样忙
+
+如果全部 token 只选择少数专家，会有两个问题：一些专家很少接到任务、很少得到直接的任务梯度；部署到多设备时，忙设备可能拖住其他设备。
+
+负载直方图可以帮助发现问题，却不证明模型质量。自然语言不要求每个小 batch 都完美均匀；过强地追求均匀，也可能干扰有用的选择。本章区分两类调节办法。
+
+### 办法一：辅助均衡损失，通过梯度影响路由器
+
+本章将整个 [B,T] 摊平，定义：
+
+$$
+f_e=\frac{n_e}{Nk},\qquad
+\bar p_e=\frac1N\sum_{t=1}^{N}p_{t,e},\qquad
+L_{aux}=E\sum_e f_e\bar p_e.
+$$
+
+n_e 使用丢弃前的 requested 计数；f 的总和为 1。计数来自离散选择，本实现不对它求梯度，梯度通过平均 affinity 流向 router。训练时再乘一个小系数 alpha：
+
+$$
+L=L_{CE}+\alpha\cdot\operatorname{mean}_{layers}(L_{aux}).
+$$
+
+S5 默认 alpha=0.01，且只有提供 targets 才返回训练损失。均衡辅助项不是标签预测的交叉熵；对验证损失或困惑度做比较时，应单独计算 CE，不把 CE+辅助项直接拿去算 perplexity。
+
+在 A、B、C 的例子里，f=[1/3,1/3,1/6,1/6]，平均 p=[0.3,0.3,0.2,0.2]，所以未乘系数的 L_aux=16/15≈1.066667。
+
+不要把“辅助损失等于 1”读成“硬路由已均衡”。例如四个专家的 p 都等于 1/4，在我们的固定平局规则下，所有 token 都选 0、1，计数仍失衡，但上述辅助项恰好也是 1。应同时查看计数、概率和训练效果。
+
+### 办法二：偏置式均衡，改变选择而不篡改组合权重
+
+为每个专家保存一个不通过梯度学习的 balancing bias b_e。**只在选择时**使用 p_e+b_e；组合时仍按未加 bias 的原始 p 归一化。
+
+以 1:2:4 的 affinity 为例，若给专家 1 加 0.5，它可以排到专家 2 前面，但同样选中 1、2 时，权重仍为 1/3、2/3。不是把加过 0.5 的分数再当成输出权重。
+
+一步训练结束后，本章演示以下显式更新：超出平均请求负载的专家减小 bias，低于平均的增加 bias，相等则不变。例子 `[4,0,2,2]` 的平均为 2，更新步长 0.1 时，bias 增量为 `[-0.1,+0.1,0,0]`。
+
+代码将这件事放在 `update_balance_bias`，不放进 forward。否则同样的输入多调用一次，下一次结果就可能改变，缓存也可能悄悄过期。多 batch 或多设备时需要先按既定统计窗口聚合计数，本章没有实现分布式聚合或生产训练调度。
+
+本实现用 balance_mode 选择 `none`、`aux` 或 `bias`，使两种教学机制可以单独观察。偏置模式不自动叠加辅助项；这项简化不代表真实模型不能组合两者。
+
+## P18.6 容量与丢弃：丢的是专家支路，不是删除句子
+
+某些 MoE 实现为每个专家一次接收的 token 数量设上限，便于控制缓冲区大小。超过容量时，系统可能丢弃、改派或采用不丢弃的可变长度实现，必须看具体规则。
+
+本章的**独立容量实验**用固定整数 capacity，表示每个专家在本次调用最多接受多少次分配。顺序按 flat 的 token 索引从小到大；容量用完后，该专家分支贡献变成 0：
+
+- 不删除原 token，不改序列长度。
+- 不改派到其他专家。
+- 不把存活分支重新归一化。
+- 共享专家不受此容量限制；Block 的残差也仍在。
+
+A、B、C 例子设置 capacity=1 后，requested 仍是 `[2,2,1,1]`，accepted 变成 `[1,1,1,1]`。C 的两个路由分支都被拒绝，共享分支仍能输出。
+
+再看部分丢弃：第一行 p=[0.5,0.1,0.4]，第二行 p=[0.4,0.3,0.3]，k=2、capacity=1。第一行占用了专家 0 和 2；第二行本来选 0、1，但只剩专家 1 被接受，所以其路由权重总和是 **3/7，而不是 1**。这是本实验的语义，不代表它是最佳训练策略。
+
+### 为什么 S5 语言模型明确禁止这个选项
+
+“每次调用重新计算容量”会让同一串 token 的结果依赖分块方式：整段 prefill 可能让后面的 token 丢弃，而逐 token decode 每次都拿到新容量。batch 中另一条序列还可能抢占同一专家的配额。若容量根据 batch token 总数推导，改变未来长度甚至可能改变已有位置的结果。
+
+因此，`TeachingMoE` 可独立演示容量，`MoEGPT` 的完整前向与缓存前向都要求 **dropless，即 capacity=None**。运行中偷偷改成整数也会报错，而不是给出两种语义不一致的 logits。这不是“缓存功能不够强就不测”，而是先把正确性契约说清楚。
+
+## P18.7 梯度去哪儿：选择离散，权重仍可微
+
+在一次前向里，top-k 的专家编号是离散的。本实现不会对“编号从 1 跳到 2”求导。但在选中的分支内部，SwiGLU、归一化权重和输入仍参与 autograd。
+
+需要分开看：
+
+1. 被接受的专家收到来自相应 token 的任务梯度；本次完全没执行的专家，其参数 `.grad` 可以是 None，不代表程序故障。
+2. top-k 组合权重通常让任务损失影响 router，但本章的 **top-1 加所选权重归一化**有特殊性：唯一权重恒为 1，所以该任务路径的 router 梯度为 0。
+3. 辅助损失通过全部 affinity 影响 router，不能把“空专家没有直接任务梯度”误说成“对应 router 行永远没有梯度”。
+
+在 78x 的手算测试里，x=[1,0]、router 第一列为 [0,log2,log4]、第二列为 0。令损失为输出各维之和，router 第一列梯度为 `[0,-20,+20]`：权重变化会在 10x 与 100x 间重新分配。输入第一维梯度为 78+20log2，第二维为 78。测试把这些字面算式与 autograd 对齐，没有拿生产 dispatch 函数自己验证自己。
+
+“今天没收到梯度”不等于“永远不会变化”：其他 batch 可能路由到它，优化器的历史动量、权重衰减和梯度清理方式也会影响实际更新。我们的空专家测试只断言本次反向的直接梯度。
+
+## P18.8 顺着代码走一次
+
+关键实现没有写成一个与主线无关的玩具。`MoEGPT` 继承 `GroupedGPT`，保留 attention、norm、残差、embedding 和 head，只替换每个 Block 的 mlp。
+
+```python
+for block in self.blocks:
+    block.mlp = TeachingMoE(
+        config.d_model, config.num_experts, config.top_k,
+        config.expert_width, config.shared_experts,
+        config.shared_width, config.balance_mode)
+```
+
+专家调用处可以按六步读：
+
+```python
+flat = x.reshape(-1, self.d_model)
+info = route(self.router(flat), self.top_k, bias, self.capacity)
+output = flat * 0
+for expert_id, expert in enumerate(self.experts):
+    token_ids, slots = ((info.indices == expert_id) & info.kept).nonzero(as_tuple=True)
+    if token_ids.numel() == 0:
+        continue
+    values = expert(flat.index_select(0, token_ids))
+    values = values * info.weights[token_ids, slots, None].to(values.dtype)
+    output = output.index_add(0, token_ids, values)
+for expert in self.shared:
+    output = output + expert(flat)
+return output.reshape_as(x)
+```
+
+1. 摊平 token，但保留 D。
+2. 计算 router，再得到选择、权重和容量 mask。这里 bias 只在偏置模式提供。
+3. 按 expert_id 找出属于它的 token 和在 top-k 列表中的位置 slots。
+4. 只收集并计算这些 token，空专家直接跳过。
+5. 查出对应权重乘到专家输出上，`index_add` 按 token 索引相加，避免覆盖其他专家的贡献。
+6. 运行所有共享专家，恢复原形状。残差在外层 Block 中添加。
+
+route 里不用默认 topk 的偶然平局顺序，而使用稳定降序排序，保证同分时专家编号较小的在前。没有非零均衡偏置时，直接按 logits 排序：Softmax 单调，而直接排序可避免极小概率下溢成相同的 0，制造假的平局。组合权重则直接对**所选原始 logits**做 Softmax：代数上等于先取原始 p 再归一化，但若 bias 选中极小概率专家，可避免原始 p 下溢后出现 0/0。
+
+这仍然是强调可读性的 CPU 实现：Python 循环、有限性检查、逐专家收集都不是生产 fused kernel。不要拿它的运行时间推断大型 MoE 的性能。
+
+### 缓存也必须认识路由配置
+
+S5 继续调用 S4 的 compact GQA cache，形状仍为 [B,Hkv,T,d]。但高层的历史 K/V 依赖低层 MoE 的输出，所以改变低层路由也会让缓存失效。
+
+已有签名追踪权重、位置参数、norm epsilon 等；S5 另外追踪实际模块上的 top_k、capacity、balance_mode，以及 balancing bias 等 buffer 的身份、原地修改版本、dtype 和 device。bias 虽然不是 Parameter，也必须纳入。
+
+以下情况都需要清空 cache：更新权重、更改 router 设置、执行 bias 更新、替换 bias buffer、切换 dtype/device。不同模型不能共用缓存。和 S1–S4 一样，故意通过 `.data` 绕过版本跟踪或手动改 cache 张量都不受支持；签名不是防篡改哈希。
+
+`last_info` 只是最近一次调用的诊断，不是累计请求状态。逐 token decode 后看到的计数，只描述最后一次输入的那几个 token。不要把它当成整段请求直方图。
+
+## P18.9 在 CPU 上跑通，并知道测试证明了什么
+
+使用仓库固定依赖，在仓库根目录运行：
+
+```bash
+python -m pip install -r requirements.txt
+OMP_NUM_THREADS=1 python code/19_moe.py
+OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_moe.py' -v
+```
+
+2026-10-19，CPU、PyTorch 2.14.1+cpu、seed=180 的实际输出包括：
+
+```text
+capacity=None; selected=[[0, 1], [3, 2], [0, 1]]
+requested=[2, 2, 1, 1]; accepted=[2, 2, 1, 1]; aux=1.066667
+capacity=1; selected=[[0, 1], [3, 2], [0, 1]]
+requested=[2, 2, 1, 1]; accepted=[1, 1, 1, 1]; aux=1.066667
+module budget: {'expert': 24, 'router': 16, 'shared': 24, 'total': 136, 'active': 88}
+finite training loss/gradients: True
+layer 0 requested load: [4, 6, 11, 3]
+layer 1 requested load: [8, 6, 5, 5]
+full/cache maximum absolute error: 1.79e-07
+compact KV payload bytes: 1536; no GPU timing measured
+```
+
+后一组直方图来自未训练的两层 S5，B=2、T=6、k=2，所以每层计数和为 24。不能把随机初始化下的分工当成学到的专家能力。脚本用合成 token 做一次梯度 smoke，循环左移标签也只是用于验证反向，并非本书推荐的语料构造或验证集评估方法。
+
+KV 的 1536 字节可以独立复算：2（K/V）×2 层×2 batch×6 token×2 KV 头×4 头宽×4 字节。MoE 没有把 Hkv 改成 E；专家参数内存与 KV payload 是两本不同的账。
+
+测试覆盖的不只是 full/cache 相同：
+
+- 固定路由权重、平局规则、负载、辅助损失和参数预算手算。
+- 独立逐标量 SwiGLU 与路由参考，对比输出、输入梯度和全部参数梯度。
+- 空 token、空专家、所有 token 集中到一个专家、top-1 和 top-E 边界。
+- 容量为零、完全丢弃、部分丢弃，以及共享分支仍保留。
+- 稀疏 dispatch 确实不调用空专家；梯度 None 与零的区别。
+- 多种 chunk 划分、单 token decode、未来 token 改动不影响前缀、batch 独立和请求重置。
+- bias、top-k、权重、dtype、位置参数改变后，旧 cache 被拒绝。
+- 故意改成均匀权重、全专家执行、把 bias 混进组合、共享输出取平均、丢弃后重归一化、后到先收等错误时，独立判据确实失败。
+
+CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位可能随环境变化，判定依据是测试容差，而非逐字复制日志。没有 PyTorch 时，CLI 给出安装提示并退出码 2，数值测试明确跳过；**跳过不是通过**。
+
+## P18.10 多设备时，还要付“把工单送过去”的成本
+
+当专家分布在不同设备上，dispatch 不再只是本机索引：需要把 token 向量送到相应专家所在的设备，算完后把输出送回。常见 expert parallel 会用到 all-to-all 一类通信，但具体分组、复制和合并方案各不相同。
+
+一个粗略账本是：N 个 token，每个发往 k 个远端专家，每份 D 维、每元素 q 字节，那么一次向外发送的向量 payload 约为 NkDq；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。
+
+因此，决定时延的至少包括：
+
+- 每个专家的实际 token 数，最忙的设备是否成为瓶颈。
+- 矩阵乘法能否形成足够大的批次。
+- 网络带宽、延迟、路由限制与通信重叠。
+- 模型权重能否驻留，加载或搬运要花多久。
+- 服务目标是 prefill 吞吐、单请求 decode 延迟，还是并发服务。
+
+“激活参数较少，所以普通电脑一定更快”是不成立的。小 batch 下，大量小矩阵乘法和调度可能更慢。性能要回到 P15 的相同请求长度、并发、硬件与 TTFT/TPOT 等指标上测；本章没有 GPU 或多卡实验。
+
+## P18.11 和官方资料对照：学机制，不冒充复现
+
+本章于 2026-10-19 核验以下固定论文版本，并沿用大纲来源编号：
+
+- **S19：** [DeepSeekMoE，arXiv 2401.06066v1，§3.1–3.3](https://arxiv.org/html/2401.06066v1#S3)。它讨论细粒度专家、共享专家隔离与负载均衡。共享专家始终执行，细分专家时要同时调整激活数量，不能只比较专家数。该版本公式（9）–（11）的 Softmax gating 不应被自动改写为本章的 selected renormalization。
+- **S09：** [DeepSeek-V3 官方仓库](https://github.com/deepseek-ai/DeepSeek-V3) 所链接的 [技术报告 arXiv 2412.19437v2，§2.1.2](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2)。V3 使用 Sigmoid affinity、所选 affinity 归一化、只影响选择的均衡偏置，并保留很小的序列级辅助项；报告明确说明训练和推理不丢弃 token。因此 “auxiliary-loss-free” 不能解释成全模型绝对没有任何辅助损失，也不能把本章容量丢弃示例说成 V3 的做法。
+
+本书 S5 使用 Softmax affinity、单进程逐专家 dispatch、可分开观察的 batch 辅助项或偏置模式。没有复现 V3 的 Sigmoid 路由、节点限制、分布式均衡、FP8、通信 kernel、训练数据或官方权重。引用生产系统的设计动机，不意味着继承其性能和质量结论。
+
+## P18.12 自测：先写答案，再运行断言
+
+1. A 的 p=[0.4,0.3,0.2,0.1]、k=2，输出权重是 0.4、0.3 吗？三行 A、B、C 一共发生多少次路由分配？
+2. D=4、E=4、k=2、路由和共享宽度都为 2、一个共享专家时，MoE 总参数与每 token 激活预算各多少？是整模型参数吗？
+3. 把 E=2、k=1、宽度 8 换成 E=4、k=2、宽度 4，专家参数预算保持什么？包含 router 后还严格相等吗？
+4. A、B、C 的请求计数为何是 [2,2,1,1]？capacity=1 后计数和 C 的路由贡献怎样变？
+5. 部分丢弃例子第二行只保留专家 1，权重应为 1 还是 3/7？共享分支受不受影响？
+6. 所有 token 的四个 affinity 都是 1/4，top-2 的硬负载会均匀吗？L_aux=1 能证明均衡吗？
+7. top-1 且所选权重归一化时，单靠任务损失能在本实现中更新 router 吗？辅助项呢？
+8. bias 更新采用负载 [4,0,2,2]、步长 0.1 时，增量是多少？已建的 KV cache 能否继续用？
+9. 缓存和完整前向都用同一个错误的“所有专家平均”函数，二者一致能证明 MoE 正确吗？
+10. 本次 CPU 日志中的 KV payload 1536 字节怎样算？为什么它不等于专家权重占用？
+
+### 参考答案与对应测试
+
+1. 权重为 4/7、3/7；三行共 3×2=6 次。见 `test_hand_route_weights_counts_aux_and_ties`。
+2. 总参数 136，激活预算 88，只覆盖 MoE 模块。见 `test_parameter_active_budget_and_fine_grained_example`。
+3. 专家总参数都是 192，每 token 专家参数都是 96；含 router 总参数分别为 200、208。见同一预算测试。
+4. A、C 都选 0、1，B 选 3、2；accepted=[1,1,1,1]，C 的路由贡献为零，共享和残差不因此删除。见 `test_capacity_fixed_order_no_renormalization_shared_survives`。
+5. 3/7，不重新归一化；共享分支不受容量限制。该测试同时检查部分丢弃与 capacity=0。
+6. 不会。固定平局规则使每个 token 都选 0、1；损失仍可为 1。见手算路由测试中五 token 的 [5,5,0,0] 断言。
+7. 不能通过这条任务路径，唯一组合权重恒为 1，router 梯度为零；辅助项在测试的集中路由案例中提供非零梯度。见 `test_sparse_execution_empty_experts_and_top1_router_gradient`。
+8. [-0.1,+0.1,0,0]；更新 buffer 后必须重置缓存。见偏置方向测试与 `test_runtime_and_buffer_mutations_invalidate_cache`。
+9. 不能。测试还用独立标量输出/梯度参考、78x 手算和故意注入的错误验证判据。见 `test_mutations_fail_independent_oracle_not_only_cache_agreement`。
+10. 2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见 `test_full_cache_alignment_each_mode_and_extreme_k`。
+
+到这里，S0→S5 已经把“多保存一些参数”和“每 token 真正调用哪些参数”分开。接下来进入训练流水线：即使路由与缓存都正确，数据边界、去重、切分和预算没有处理好，也训练不出可靠的模型。
+
+
+---
+
+# 预训练（P19）：从三首诗到可恢复的数据流水线 {#p19-pretraining}
+
+P09 让我们看清了一次学习：取文本、错开一格、预测、评分、更新。可是，把三首诗换成许多文件之后，最容易出错的地方往往不在 Transformer 公式里，而在“这份题从哪里来”“哪些题重复了”“断电后从哪一题继续”。
+
+本章把这条链拆开。**读完后，你应能追踪每一个被评分的 token，解释两个独立的文档边界，并验证恢复训练不是重新开了一局。** 前置是 P09 的交叉熵与训练循环、Baby-GPT 的输入输出，以及 P13 的 RMSNorm/SwiGLU；不需要 GPU，也不需要下载大模型。
+
+完整实验在 [code/20_pretraining_pipeline.py](../code/20_pretraining_pipeline.py)。前半段只用 Python 标准库，后半段用 CPU 训练一个 2,040 参数的小模型。语料是本章生成的极短字符串，不是抓取网页、用户聊天记录或私有文件。本章的目标是检查数据与状态的正确性，**不是训练出会写诗的模型，更不是复现工业规模预训练**。
+
+![从生成语料到文档隔离、token 加权评分与精确恢复的预训练流水线](assets/diagrams/p19-pretraining.svg)
+
+## P19.1 在算力之前，先问数据的来历
+
+把训练数据想成练习册：页数多，不代表题目有用；同一道题印一万遍，也不是一万道新题。但这个类比也有限，语言模型从 token 分布中拟合条件概率，并不会像教师那样主动判断题目是否可靠。
+
+“质量”至少包括几件不同的事：
+
+- **可读与正确**：乱码、截断、重复页眉、错误答案会改变训练信号。
+- **与用途相关**：百科、代码、对话、数学题有不同分布。某领域 loss 低，不等于别的领域好。
+- **覆盖与代表性**：过滤规则可能把少数语言、方言或特殊文体一起删掉。
+- **来源可追踪**：能知道一条记录来自哪个版本、经过什么处理、为什么被保留。
+- **使用范围明确**：能访问、能下载、公开展示，不自动等于可以任意训练、再分发或商用。
+
+许可、隐私与技术清洗是不同的检查。删除邮箱地址不等于完成隐私处理；有许可也不等于其中所有个人信息都适合进入训练集。真实项目需要按来源核对适用的授权、用途、保留和删除要求，记录审核结果；不要把未经允许的私人文件上传到演示平台。本章不提供自动许可判断或自动隐私合规保证。
+
+本实验只生成“春风”“月明山水”“光”这样的玩具字符串。每条 `Document` 都记录 `uid`、`text`、`source`、`provenance`。`generated-for-this-book` 明确表示**这份语料是在本章内生成的**，不是某个外部数据集的许可证，也不是对任意网页加上此标签就获得授权。程序拒绝其他来源标签，只是限定演示的输入范围；它没有能力验证别人填写的标签是否真实。
+
+## P19.2 先清洗和去重，再划分我们自己的小语料
+
+先看一份完整的清洗账本，而不是只看最后剩下几条：
+
+| 阶段 | 本实验做什么 | 数量与例子 |
+| --- | --- | --- |
+| 原始记录 | 10 条生成字符串，加一条重复变体、一条空白 | 12 条 |
+| 规范化 | Unicode NFC；删除所有空白字符 | `" 春\n风 "` 变为 `"春风"` |
+| 空文档过滤 | 规范化后为空就移除 | 移除 `blank` |
+| 全局精确去重 | 比较规范化后的整篇文本，保留输入顺序中的第一份 | `duplicate` 与 `d00` 相同，移除前者 |
+| 文档级划分 | 固定 seed=19 打乱唯一文档，再按 6/2/2 分配 | 训练 6、验证 2、测试 2 |
+
+这里的“全局”，只指**这一份尚未划分的封闭生成语料**。去重函数在划分之前运行，使同一个规范化文档不能因为换了 ID，就同时出现在练习册和考试卷。随机划分重叠窗口则做不到这一点：窗口不同，来源可能仍是同一篇。
+
+代码顺序很短：
+
+```python
+kept, report = clean_deduplicate(raw_documents)
+splits = split_documents(kept, seed=19)
+rows = {name: pack_documents(docs) for name, docs in splits.items()}
+```
+
+为什么还要保存 `report`？否则我们看到“10 条”时，不知道是删掉了两条垃圾、丢了一个文件，还是悄悄改变了清洗规则。`data_version` 则对流水线版本、固定词表、特殊 ID、原始记录及来源、划分结果和 packing 结果的规范 JSON 取 SHA-256。它用来发现配置或数据改变，不证明内容正确，也不是隐私匿名化方法。
+
+### 精确去重不等于近重复检测
+
+`"春风"` 与 `"春风月"` 仍是两条记录；改一个字、换行以外的格式差异、翻译、释义、共享大段模板，都可能留在数据里。本章不实现 MinHash、相似段落聚类或语义去重，也不声称已经消除训练污染。实际项目可以先在更大语料上定义近重复关系，再把同一重复簇放到同一划分，检查阈值误删和漏检。
+
+本章的“删掉所有空白”只适合这份极小中文玩具数据。照搬到英文，会把 `a book` 变成 `abook`；照搬到 Python，会破坏缩进。清洗规则必须随数据类型定义和版本化，不能把“删得更干净”当作普适目标。
+
+### 冻结的外部测试集，处理方向相反
+
+假设一个外部考试集已经固定，里面有文档 E；后来收集的训练候选集里也出现了 E。**不要**把两者合在一起执行“第一份胜出”，再重新随机划分。若训练副本排在前面，原本必须保留的考试题可能被移走，还可能进入训练。
+
+正确的边界是：保留冻结的评估集及其版本，对训练候选执行重叠检查，移除或隔离训练中的冲突，并记录规则。近重复、来源重叠和时间泄漏仍需另查。本章的 `split_documents` 是“自己建立一个封闭玩具数据划分”的函数，**不是通用 benchmark 去污染工具**。
+
+验证集用于选择超参数或观察训练；测试集留到方案冻结后的最终评估。默认演示只查看验证集，输出 `test_evaluated=false`。即使测试文本没有参与梯度更新，反复用测试分数选模型，也会逐渐把测试集变成验证集。
+
+## P19.3 Token 不是字符数，处理数量也不是有效监督数量
+
+P09 为复用三首诗的字符词表，提前知道了保留诗歌的字符。本章换成一份**提前写死、并非从任何划分拟合的** 14 字教学字表：
+
+```text
+春 风 月 明 山 水 花 开 日 光 云 雨 星 河
+```
+
+再加四个特殊 ID：`PAD=0`、`BOS=1`、`EOS=2`、`UNK=3`。因此词表大小是 18，`春=4`、`风=5`、`月=6`。本例逐字编码，未知字映射到 UNK；真实 tokenizer 可以把多个字符变成一个 token，也可以把一个字符拆成多个 token。这里不训练 tokenizer，更不声称这 18 项能覆盖自然语言。
+
+每篇文档写成 `BOS + 正文 + EOS`。长度为 n 的正文产生 n+2 个真实输入位置，却只有 n+1 个有效预测目标：BOS 预测第一个字，最后一个字预测 EOS；EOS 本身没有后续同文档目标。
+
+实测数据账本如下。目标数包含 EOS，不包含 BOS、PAD 或被忽略的位置；物理槽位是实际计算的固定长度输入格子。
+
+| 划分 | 文档 ID | 文档数 | 长度 12 的块数 | 有效目标 token | 物理输入槽位 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| train | d09、d05、d06、d02、d03、d07 | 6 | 3 | 21 | 36 |
+| validation | d04、d01 | 2 | 1 | 7 | 12 |
+| test | d08、d00 | 2 | 1 | 7 | 12 |
+
+训练集一遍有 15 个正文字符、12 个 BOS/EOS 输入，共 27 个非 PAD 输入；固定计算 36 个槽位，其中只有 21 个位置产生监督。把这几个数都叫“训练了 36 tokens”会掩盖边界开销。报告预算时应写清：是原始文本 tokens、非 padding 输入 tokens，还是有效 loss targets，以及是否包含重复遍历。
+
+这些文档极短且来自同一小字表，即便精确文本不重叠，也会共享字符和短语。它们只是检验划分机制，不能支撑泛化能力结论。
+
+## P19.4 Packing：装进一箱，不等于连成一篇
+
+如果每篇两三个字都占一个长度 12 的张量，大部分格子会是 PAD。**Packing** 把多个短文档装到同一行，减少空格。关键问题是：第二篇是否应该读取第一篇？第一篇的结尾是否应该预测第二篇的开头？
+
+本章选择严格的**文档独立目标**：两者都不允许。其他训练配方可能有意采用连续串流上下文，但那是另一种条件分布，不能把普通三角 causal mask 称为文档隔离。
+
+我们采用最直白的装箱策略：按已有顺序放入整篇文档；放不下就开新块；最后补 PAD。**不把一篇文档切成多个块，不丢掉尾巴。** 文档连同 BOS/EOS 超过块长时，代码明确报错，要求先定义分块策略。若以后支持长文档切分，还需决定上下文重叠、目标是否重复计数、是否重置位置、EOS 仅在真正结尾还是每块都插入；不能悄悄截断后说“都读过了”。
+
+### 一行八格，逐格追踪
+
+取文档 A=`春风`、B=`月`，暂用块长 8。`-100` 是本实验的 IGNORE，不是一个词表 ID，也不应拿去查 embedding。
+
+| 格子 i | 输入 x / ID | 文档内位置 | 同文档可见输入格子 j | 已错位的目标 y | 计入 loss？ |
+| --- | --- | ---: | --- | --- | --- |
+| 0 | BOS / 1 | 0 | 0 | 春 / 4 | 是 |
+| 1 | 春 / 4 | 1 | 0、1 | 风 / 5 | 是 |
+| 2 | 风 / 5 | 2 | 0、1、2 | EOS / 2 | 是 |
+| 3 | EOS / 2 | 3 | 0、1、2、3 | -100 | 否 |
+| 4 | BOS / 1 | 0 | 4 | 月 / 6 | 是 |
+| 5 | 月 / 6 | 1 | 4、5 | EOS / 2 | 是 |
+| 6 | EOS / 2 | 2 | 4、5、6 | -100 | 否 |
+| 7 | PAD / 0 | 占位为 0 | 无 | -100 | 否 |
+
+行长 T=8，模型输入是 `[B,T]`，输出 logits 是 `[B,T,V]`，这里 B=1、V=18。位置 ID 在每篇 BOS 重置为 0；整箱中的“第 4 格”不是文档 B 的第 4 个位置。
+
+本章的布尔 attention mask 中，`True` 表示**允许**，不是“挡住”：
+
+```text
+允许(i,j) = i、j 属于同一个非 PAD 文档，并且 j <= i
+```
+
+不同 API 对布尔 mask 的约定可能相反，接入框架前必须核对。本模型使用自己的显式 attention 函数，不把这个矩阵不加检查地送给任意接口。
+
+### 两条边界互不替代
+
+1. **Attention 边界防偷读上下文。** 只用普通 causal mask，B 的 BOS 仍能看到 A 的全部输入。即使 A 的 EOS 标签已设为 -100，B 的表示仍会受 A 影响。
+2. **Label 边界防错出题。** 即使 attention 已完全隔离，把整行统一做 `y=x[1:]`，A 的 EOS 仍会被要求预测 B 的 BOS。这个目标不是 A 文档的一部分。
+
+程序先在每篇内部生成 `tokens[1:] + [IGNORE]`，再拼装，因此只错位一次。EOS 作为上一字的正确答案参与 loss；EOS 作为输入时的输出忽略。PAD 既不能作为被读取的 key，也不作为有效 query 或 loss target。
+
+PAD 查询整行都不可见，直接对全是负无穷的分数做 softmax 会产生不定义的结果。本实现先识别全禁用行，使用安全的临时零分数，再把禁止位置权重乘为零，使其 attention 输出精确为零；最终 PAD logits 也置零。这不是让 PAD 读取任意文档来“凑一个可见项”。
+
+测试还做了更直观的核对：关闭 dropout 后，把 A、B 一起 packing 得到的真实位置 logits，应与分别单独处理的结果接近；只改 A 的字，B 的输出应完全不变。把 mask 故意换成普通下三角后，后一条检查确实会失败。
+
+## P19.5 Loss：每道有效小题一票，不是每箱一票
+
+下面给五个有效目标指定一组**人为设计、未训练得来**的正确答案概率。忽略位置没有 loss，不是“loss 等于零后也算进分母”。
+
+| 格子 | 正确答案 | 指定 p(正确答案) | 单 token loss = -ln(p) |
+| --- | --- | ---: | ---: |
+| 0 | 春 | 1/2 | 0.693147181 |
+| 1 | 风 | 1/4 | 1.386294361 |
+| 2 | EOS | 1/2 | 0.693147181 |
+| 3 | 忽略 | 不评分 | 不计入分母 |
+| 4 | 月 | 1/8 | 2.079441542 |
+| 5 | EOS | 1/4 | 1.386294361 |
+| 6、7 | 忽略 | 不评分 | 不计入分母 |
+
+总 loss 是 `9 × ln(2) = 6.238324625`，有效目标数是 5，平均是 **1.247664925**。不是除以 8，也不是只除以正文字符数 3。
+
+脚本没有把概率直接塞给 `cross_entropy`。它构造完整 18 类 logits：其他 17 类分数为 0，目标类分数设为 `ln(17p/(1-p))`，softmax 后的目标概率才恰好为 p。标准库的 `scalar_loss` 用稳定 log-sum-exp 独立计算，tensor 测试再与 `torch.nn.functional.cross_entropy(..., reduction="sum")` 比较，并核对忽略位置梯度为零。
+
+为什么不能平均文档均值？A 有 3 个目标，均值为 `4ln(2)/3 ≈ 0.924196241`；B 有 2 个，均值为 `5ln(2)/2 ≈ 1.732867951`。正确合并方式是：
+
+```text
+(3 × A均值 + 2 × B均值) / (3 + 2) = 1.247664925
+```
+
+简单平均两份均值会得到约 **1.328532096**，给短文档额外权重。评估多个长度不同的 batch 时也是一样：累计 loss 总和与有效 token 总数，最后只除一次。
+
+```python
+total_loss, total_targets = 0.0, 0
+for batch in validation_batches:
+    loss_sum, count = tensor_loss(logits, labels)
+    total_loss += float(loss_sum)
+    total_targets += count
+mean_loss = total_loss / total_targets if total_targets else None
+```
+
+这是说明聚合方式的片段，完整 `evaluate()` 会在循环中做前向，使用 `eval()` 与 `no_grad()`，最后恢复原训练模式。测试用 2 个目标和 5 个目标的两块检查加权方式，故意平均块均值会给出不同结果。
+
+### 全部标签都忽略时，不能只想到除零
+
+`tensor_loss` 返回可求导的零与 `count=0`；统计均值返回 `None`，表示**没有可评分样本**，不是模型获得了完美的零损失。训练器直接跳过这种行，不执行 backward、optimizer.step、学习率推进或 token 计数。
+
+为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变；故意仍然执行 AdamW step 的坏版本确实改变权重。
+
+还要分清“框架替我们移位”和“已经手工移位”。本章的 `tensor_loss` 接受已对齐的 next-token labels，**不再移位**。Transformers 某些 causal-LM 接口则接收与输入同排的 labels，在模型内部移位；其 v4.57.1 的 language-modeling collator 在 `mlm=False` 时采用输入同排、padding 忽略的约定。换框架时必须核对具体模型，不能把这两种契约叠加使用。[官方 Data Collator 文档](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/data_collator)
+
+## P19.6 混合比例：同样“各一半”，可能不是同一回事
+
+如果 1 篇长百科有 1,000 个目标，1 篇短问答只有 10 个，按文档各抽一半，长期得到的 token 比例不会是各一半。数据混合至少要说明：按文档、按原始 bytes、按非 PAD token，还是按有效监督 token 计量。
+
+本章不实现领域采样调度器，只记录两个人工来源标签：`generated/nature` 与 `generated/reversal`。训练划分中，前者贡献 15 个有效目标，后者贡献 6 个；一遍的 token 比例是 **5/7 与 2/7**。这不是经过搜索得到的最佳配方，只是当前语料和划分的账本。每个 epoch 将三个 packed rows 打乱后各用一次，因此完整一遍保留这个比例；只训练半遍时，实际累计比例可能不同。
+
+真实配方可以增加稀缺领域的采样频率，但重复少量样本不会凭空制造新知识，还会改变过拟合、记忆和评估风险。应同时记录目标混合比例、实际消费量、重复次数、每来源验证结果；不要只有一个综合 loss，掩盖某个来源退步。
+
+本训练器每步用当前块的有效目标平均 loss。块中目标数为 6、7 或 8，所以每步样本量略有不同。它**没有**梯度累积，也没有声称“多个不等长块的梯度均值再平均”等价于一次全局 token 平均。若加入梯度累积，应明确总有效目标分母；汇总训练日志也应按 `loss × count` 累计。日志跨越了不同参数状态，仍不等于用最终模型重跑整个训练集得到的评估 loss。
+
+## P19.7 学习率、精度与预算：三个不同的旋钮
+
+### 学习率改变更新幅度，不改变题目来源
+
+`learning_rate()` 使用固定总步数 12：前两步 warmup，随后线性降到峰值的 10%。前几步和最后一步的值如下：
+
+| 更新步号（从 1 开始） | 1 | 2 | 3 | 4 | 12 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 学习率 | 0.0015 | 0.0030 | 0.0030 | 0.0027 | 0.0003 |
+
+这里的 warmup 只是一个可核对的实验设置，不是“所有模型都必须两步预热”。峰值、步数、batch token 数、优化器与初始化共同影响训练。恢复到第 5 步之后，不能把学习率又从第 1 步开始，也不能不记录就把总预算从 12 改成 120；本程序会拒绝不同 horizon 的 checkpoint。
+
+### 混合精度不等于“所有张量都改成半精度”
+
+本实验用 **CPU float32**，没有 AMP，也没有 GradScaler。混合精度训练通常让适合的算子使用较低精度，部分归约或敏感操作保持较高精度；收益取决于设备、算子与形状，不保证每个小任务更快。
+
+FP16 的较小梯度可能下溢；loss scaling 在反向前放大 loss，更新前还原梯度。BF16 与 FP16 的数值范围不同，也不是只换名称就能复用所有设置。应检查有限 loss/梯度、与 float32 参考的偏差，并使用适合该设备和模型的 autocast/scaler 流程，而不是盲目调用 `model.half()`。若用了 GradScaler，其状态也属于恢复训练的一部分。[PyTorch 2.14 AMP 文档](https://docs.pytorch.org/docs/2.14/amp.html)
+
+GPU 混合精度、吞吐、显存与多卡恢复均为**未运行的扩展方向**，本章没有速度或显存节省实测。想扩展时先固定 GPU 型号、驱动、PyTorch/CUDA 版本、dtype、有效 batch tokens、预热和计时边界，再分别测正确性与性能；不能拿本章 CPU 的确定性结果替代 GPU 验证。
+
+## P19.8 Checkpoint：不是一张权重照片，而是训练现场
+
+模型参数回答“目前学到哪了”，但不足以回答“下一步会发生什么”。想象暂停视频：只保存当前画面，无法知道播放器下一帧的位置、播放速度或随机播放列表。
+
+本章的 checkpoint 保存以下内容：
+
+| 状态 | 为什么要保存 | 漏掉之后可能怎样 |
+| --- | --- | --- |
+| model | 全部参数和 buffer | 学到的内容丢失 |
+| optimizer | AdamW 一阶/二阶矩、更新步及参数组设置 | 同样梯度也得到不同更新 |
+| torch_rng | CPU dropout 随机数生成器的当前状态 | 下一个 dropout 掩码不同 |
+| shuffle_rng | 本地 Python 随机数生成器当前状态 | 下个 epoch 的顺序不同 |
+| order、cursor、epoch | 当前行顺序、下一行游标、已走到哪一遍 | 重复或跳过样本 |
+| step、tokens、history | 已完成更新数、有效目标消费量及记录 | 学习率、预算或日志接不上 |
+| config、data_version、torch_version、schema | 同一模型设置、数据流水线和文件契约 | 用错词表、块长、语料或版本 |
+
+种子只是“随机播放从哪里开始”，RNG 状态才是“已经播放到哪里”。重新调用 `manual_seed(7)` 不等于继续中断前的随机序列。本代码将 dropout RNG 和 shuffle RNG 分开保存，避免其他调用者使用随机数影响本实验。
+
+学习率不是另一个 scheduler 对象，而是由保存的 `step` 和固定 `config` 推导，因此这里没有额外 scheduler state；若改用有内部状态的 scheduler，就应把它加入 checkpoint。PyTorch 官方恢复示例也强调，继续训练不能只保存模型，还要保存优化器等训练状态。[保存与恢复教程](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html)
+
+### 我们精确承诺的恢复边界
+
+1. 单进程、单 CPU、float32、固定软件环境和确定性计算。
+2. 只在一个 optimizer step **完成之后**保存；不处理中途 backward 的梯度。
+3. 没有 DataLoader worker 预取、分布式 rank、CUDA RNG、AMP 或梯度累积。
+4. 恢复时先创建同配置模型与优化器，再加载全部状态，从下一条 packed row 继续。
+5. 完整连续训练与“训练一段 → 写临时文件 → 新建训练器 → 从磁盘加载 → 继续”比较**全部状态和每步 loss**，不仅比较最终权重接近。
+
+代码对 `state_dict()` 做深拷贝，防止“快照”仍引用活参数，后续更新把快照一起改掉。文件先写同目录临时路径再替换目标，这是单文件保存的基本防半写措施，不是经过故障注入证明的断电持久性方案。
+
+演示只读取自己刚写出的 checkpoint，使用 `weights_only=True` 和 CPU 映射；这不代表可以放心加载未知来源文件。[PyTorch 2.14 的加载警告](https://docs.pytorch.org/docs/2.14/generated/torch.load.html)
+
+即使随机种子相同，PyTorch 也不保证不同发布版本、平台或 CPU/GPU 之间逐位相同。因此本章的 `exact_resume=true` 是**当前环境里的同轨迹恢复检查**，不是跨硬件通用保证；代码还会拒绝与记录不同的完整 torch 版本字符串。[PyTorch 2.14 可复现性说明](https://docs.pytorch.org/docs/2.14/notes/randomness.html)
+
+## P19.9 在 CPU 上跑出证据，而不是只看一条下降曲线
+
+在仓库根目录运行；有 PyTorch 的命令使用按 README 安装依赖的 Python 环境：
+
+```bash
+# 只看清洗、划分、packing、手算表，无需 torch
+python code/20_pretraining_pipeline.py --data-only
+
+# 12 步连续运行，对照在第 3 步后写盘再恢复
+python code/20_pretraining_pipeline.py --steps 12 --interrupt 3
+
+# 第 5 步已经经历一次重新洗牌，而且位于 epoch 中间
+python code/20_pretraining_pipeline.py --steps 12 --interrupt 5
+
+python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
+```
+
+没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。测试的 tensor 部分明确跳过，**skip 不算训练验证通过**。
+
+2026-10-19 在 Python 3.12.14、torch 2.14.1+cpu、单线程、float32、seed=7 下的本书实测：
+
+| 记录 | 结果 | 能说明什么 |
+| --- | --- | --- |
+| 数据版本 | `1b1a8d64d76a38761d8166a145550efdab89a852874994c19be8333947c75705` | 本次完整生成/处理契约的指纹 |
+| 训练器 | 单头 attention、宽度 12、dropout=0.2、2,040 参数 | 小型检查模型，不是生产模型 |
+| 优化器 | AdamW，betas=(0.9,0.999)，eps=1e-8，weight_decay=0.01 | 恢复测试确实包含有状态优化器 |
+| 数据消费 | 12 次更新、84 个有效目标 | 21 个目标重复 4 遍，不是 84 个不同知识点 |
+| 恢复一致性 | 第 3 步及第 5 步中断后，完整状态与连续运行逐项相等 | 包含参数、优化器、RNG、游标和 loss 轨迹 |
+| 验证均值 | 3.702012198 → 3.486805235，均为 7 个目标 | 仅这份玩具划分上的变化 |
+| 最终测试集 | 默认未评分 | 不用测试分数指导本演示 |
+| 回归测试 | 16 项通过；无 torch 环境为 7 通过、9 跳过 | 标准库与 tensor 边界分别验证 |
+
+模型复用 P13 / S3 的 RMSNorm 与 SwiGLU，但为了让文档边界可逐格检查，另写了单头显式 attention 与文档内学习式位置 embedding。**它不是把 S3 的 cache 模型无缝升级成另一条主线**，也没有实现 RoPE、KV cache 或高效变长 attention kernel。此处关注数据契约，后续接入框架时再验证接口对应。
+
+### 让坏版本真正跑一下
+
+`tests/test_pretraining_pipeline.py` 不只检查函数是否返回某个标志。每组先验证正确路径，再让有缺陷的计算产生可观察的差异：
+
+| 真实错误变体 | 如何检测 |
+| --- | --- |
+| 将文档 mask 换成普通 causal 下三角 | 改 A 的内容后 B 的 logits 变化；独立标量 attention oracle 不符 |
+| 整箱直接移位标签 | A 的 EOS 开始预测 B 的 BOS；目标数与 loss 改变 |
+| 令 labels 等于当前输入 | 不会预测未来的“抄写器”获得假低 loss |
+| 平均不等长块的均值 | 2 与 5 个目标的独立标量总和不符 |
+| 忽略全 PAD，但仍调用 AdamW step | 已建立的优化器状态推动参数继续变化 |
+| 恢复权重，却遗漏 optimizer | 后续 loss 轨迹与最终参数不同 |
+| 忽略 dropout RNG、shuffle RNG 或 cursor 中任一项 | 各自单独导致后续 loss 与最终参数不同 |
+
+最后一组在第 5 步暂停：已经发生过一次 epoch 洗牌，且 cursor 位于中间。如果在第一次洗牌之前测试“漏掉 shuffle RNG”，新建训练器的 RNG 可能恰好等于保存状态，错误版本和正确版本会暂时等价。**反例必须真的触发它声称检测的错误，不能只让测试名字看起来严格。**
+
+## P19.10 Scaling laws：有条件的拟合，不是“参数越多就会觉醒”
+
+当数据和训练流程可信，才有意义问“同样算力该放在更多参数还是更多 token 上”。Chinchilla 原始研究围绕固定训练计算预算，比较模型规模与训练 token 数，并在其研究范围内得到二者应共同增长的计算最优结论；它报告了 70B 参数、使用更多训练数据的模型与更大基线的比较。这是论文作者的实验结果，不是本章复现。[Chinchilla，arXiv v1](https://arxiv.org/abs/2203.15556v1)
+
+一种常见的理解方式是把训练结束时的预测 loss 拟合成：
+
+$$L(N,D) \approx E + A/N^{\alpha} + B/D^{\beta}.$$
+
+N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验设置下估计的量。该论文在所讨论的数据充足设置中使用平滑训练 loss 作为测试 loss 的估计；本章反复使用同一小语料，不满足这个前提，不能拿训练 loss 充当独立验证 loss。增加 N 或 D 时，可下降的部分逐渐变小，所以同一预算下需要分配。对某些稠密模型训练的粗略计算账本，还会使用 `C ≈ 6ND`；它忽略或近似了若干开销，不是任意结构、序列长度或硬件下的精确 FLOPs。
+
+使用这些关系前，应检查：架构与优化方法是否接近、数据分布与质量是否稳定、训练范围是否支持外推、重复数据如何计数、评估指标是什么、预算是否只算训练。MoE 的总参数与激活参数不同，长上下文 attention 的成本也不同；模型未来要服务多少次推理，又可能改变整个生命周期的最优选择。不要把某个经验 token/parameter 比例当成所有项目的固定常数。
+
+再看“涌现”。可以观察到某个任务指标在一段规模范围突然上升，但这不自动证明所有任务共享一条能力阈值。以一个人为评分例子来说，连续改善的准确率若被报告成“超过 80% 才记 1 分”，显示出的曲线会突然跳变；跳变的一部分来自计分方式。这个例子不否认真实能力变化，只说明需要检查连续指标、误差范围、任务定义与复现，不能只凭一张台阶图宣布普适定律。
+
+本章只有 2,040 参数、十条唯一生成字符串与 12 步训练。它既不能估计可信的 scaling-law 指数，也不能验证通用能力涌现。它能做的更基础：保证算进 loss 的题是我们想出的题，确保恢复没有偷偷换一套训练过程。
+
+## P19.11 小结与练习
+
+把本章压成五个问题：数据允许怎么用？重复在什么时候处理？每格能读谁、要预测谁？loss 分母是谁？暂停后究竟恢复了什么？这五个问题，比一条漂亮的训练曲线更值得先检查。
+
+1. 把手算表中 B 改成 `月明`：会多几个输入位置、几个有效目标？块长 8 还能装下吗？
+2. 只把 A 的 EOS 标签设为 -100，却保留整箱普通 causal mask，修好了哪条边界，又漏了哪条？
+3. 两个 batch 分别有 2 与 8 个有效目标，均值 loss 为 1 与 3，正确合并均值是多少？为什么不是 2？
+4. 保存于第一遍洗牌前，能证明 shuffle RNG 恢复正确吗？设计一个必须经历下一次洗牌的测试。
+5. 若把短文档采样概率提高一倍，原始文档数、有效 token 比例和独立信息量会不会都提高一倍？
+
+### 参考答案
+
+1. B 的三个输入位置变成四个，增加一个输入与一个有效目标。两篇共 8 个真实输入，刚好装满；目标为 3+3=6 个。`test_exercise_answers_and_mixture_accounting` 检查真实槽位、无 PAD 与目标计数。
+2. 只修了跨文档目标，没有修跨文档上下文。B 的 BOS 仍能读取 A；修改 A 后 B 的 logits 会改变。对应 `test_packed_model_equals_documents_alone_and_isolates_both_directions` 中的 causal-only 前向反例。
+3. `(2×1 + 8×3)/10 = 2.6`。`test_exercise_answers_and_mixture_accounting` 构造两类 logits，使两组单 token loss 分别为 1 与 3，再用标量交叉熵核对，不只比较写死的算式。
+4. 不能。在当前三块训练数据上，第 1–3 步走完第一遍，第 4 步重新洗牌。选择第 5 步后保存，让 shuffle RNG 已前进且 cursor=2。先确认正常恢复到第 12 步与连续运行完全相同，再仅把恢复后的 shuffle RNG 换成新建训练器的初始状态，继续到下一次洗牌并比较 loss 轨迹及最终参数。现有 `test_resume_omission_mutants_change_actual_losses_and_final_weights` 正是这个实验；正确路径精确相等，遗漏路径不相等。
+5. 都不能这样推断。假设短、长文档分别有 2 与 8 个有效目标，初始抽样概率各 1/2，短文档的期望 token 份额是 `2/(2+8)=1/5`。把短文档的采样权重翻倍后，归一化的文档概率变为 2/3 与 1/3，短文档的 token 份额是 `(2×2)/(2×2+1×8)=1/3`，不是 2/5。原始文档数量没变，重复抽样也没增加独立信息；改变的是被消费的频率和分布。`test_exercise_answers_and_mixture_accounting` 核对这两个份额，`test_pack_count_conservation_and_explicit_long_document_rejection` 核对实际来源 token 账本。
+
+下一章 [P20：训练框架](#p20-frameworks) 把这些明确的契约对应到 Transformers、训练器与多卡状态，而不是让框架替我们决定数据是否正确。
+
+### 原始与官方资料
+
+- [Training Compute-Optimal Large Language Models，arXiv:2203.15556v1](https://arxiv.org/abs/2203.15556v1)：固定预算下参数量与训练 token 的研究，尤其 §3 的拟合和实验条件。
+- [PyTorch 2.14：Reproducibility](https://docs.pytorch.org/docs/2.14/notes/randomness.html)：随机源、确定性与跨环境限制。
+- [PyTorch 2.14：Automatic Mixed Precision](https://docs.pytorch.org/docs/2.14/amp.html)：autocast、gradient scaling 与数值范围。
+- [PyTorch 保存与加载教程](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html)：本章核验时为 2.14 教程，动态入口；模型与优化器状态的区别。
+- [Transformers v4.57.1：Data Collator](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/data_collator)：固定版本的标签与 padding 契约。本章没有安装或调用 Transformers。
+
+来源核验日：2026-10-19。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。
+
+
+---
+
+# 训练进阶（P20）：从手写循环到训练框架 {#p20-frameworks}
+
+在 [P19：预训练数据与训练流程](#p19-pretraining) 中，我们已经能说明一批文本怎样变成输入、标签和一次参数更新。现在换一个问题：**当这些工作交给框架，哪些东西只是换了名字，哪些东西真的改变了？**
+
+初学者常有两种相反的困惑。一种是“我会写 backward，为什么还需要 Trainer？”另一种是“示例能启动，就证明训练正确了吧？”本章既不要求你重写工业训练系统，也不把配置文件当咒语。我们先把一个 2,704 参数的小模型接上真正的 Transformers，再用手写计算检查它，最后才谈多卡。
+
+配套 [code/21_training_frameworks.py](../code/21_training_frameworks.py) 有两条互不冒充的路线：
+
+- **必修机制实验：**只用 Python 标准库，逐 rank 计算 DDP 与 ZeRO 的持久模型状态字节数。
+- **可安装的 CPU 框架实验：**用固定版本 Transformers + Accelerate，运行随机初始化小 GPT-2 的前向、3 次真实 Trainer 更新、独立 loss / 更新对照，以及本地保存和重新加载。
+
+第二条不会下载任何预训练权重或 tokenizer；不是 GPT-2 语言能力复现。DeepSpeed、Megatron 和多 GPU 训练**没有在本章运行**，不能把内存算术结果当成它们的显存或速度实测。完成后，你应当能读懂一个训练入口，并指出它的标签、优化器、并行方式和检查点到底由谁负责。
+
+## P20.1 框架没有取消训练循环
+
+先回想最朴素的一步：取 batch，前向得到 logits，算 loss，反向得到梯度，再让 optimizer 更新参数。训练框架主要把这个流程及周边工作组织起来：搬运设备、分发数据、累积梯度、记录日志、保存状态、恢复进度。
+
+**训练目标仍由标签和 loss 决定，不由框架名字决定。** 如果标签错移两次，换成 Trainer 不会让目标自动正确。如果验证集泄漏，换成多卡只会更快地完成一次有问题的实验。
+
+本章用下表做翻译，而不是背 API 清单：
+
+| 手写代码中的职责 | Transformers 中的主要对象 | 不应误以为它会代办 |
+| --- | --- | --- |
+| 模型的结构参数 | config，例如 GPT2Config | 自动提供训练好的权重 |
+| 神经网络和前向运算 | model，例如 GPT2LMHeadModel | 自动理解任何 tokenizer 的词表 |
+| 文本转 ID、特殊 token、补齐 | tokenizer | 自动决定任务该监督哪些位置 |
+| 一条条样本 | dataset | 自动保证无泄漏、无重复、来源合法 |
+| 合并样本为 batch | data collator | 永远使用正确的 padding 和 label mask |
+| 学习率、步数、保存策略等 | TrainingArguments | 替你选择合理的实验预算 |
+| 训练、评估、保存的控制流程 | Trainer | 证明模型学到了泛化能力 |
+
+[Transformers 4.51.3 的 Trainer 文档](https://huggingface.co/docs/transformers/v4.51.3/en/trainer) 把它定位为训练与评估循环，并说明它通过 Accelerate 处理设备和分布式能力。可以把 Trainer 看成“把你已经理解的步骤可靠串起来的调度者”，不要把它当成替代理解的黑盒。
+
+![训练框架地图与 ZeRO 状态切分：数据和 tokenizer 进入模型，Trainer 控制更新；分片只改变持久状态的分布](assets/diagrams/p20-frameworks.svg)
+
+这里还有一条重要边界：本书之前的 miniGPT 是用来逐层解释机制的代码主线；本章换用 GPT2LMHeadModel，是学习成熟 API 的独立实验。两者没有自动共享权重。即使都叫 Transformer，也不能把旧 checkpoint 直接塞进新模型，然后宣称转换成功。
+
+## P20.2 config、model、tokenizer：三样东西不能混成一样
+
+### config 是结构说明，不是模型的记忆
+
+本章的关键配置很小：
+
+```python
+config = GPT2Config(
+    vocab_size=12, n_positions=16, n_ctx=16,
+    n_embd=16, n_layer=1, n_head=2, n_inner=32,
+    resid_pdrop=0.0, embd_pdrop=0.0, attn_pdrop=0.0,
+    bos_token_id=2, eos_token_id=3, pad_token_id=0,
+    use_cache=False, attn_implementation="eager",
+)
+model = GPT2LMHeadModel(config)
+```
+
+vocab_size 是输出分类的类别数；n_embd 是每个 token 的表示宽度；n_layer 是 Transformer block 数；n_head 是注意力头数。16 维分成 2 个头，每头 8 维。n_inner=32 是 FFN 的中间宽度。位置表容纳 16 个位置，本实验输入最长只有 6。
+
+**从 config 构造 model 得到随机权重，不是下载一个缩小的预训练 GPT-2。** config 说明“神经网络长什么样”，训练后的参数才承载学到的信息。这一区别在 [GPT2Config 的固定版说明](https://huggingface.co/docs/transformers/v4.51.3/en/model_doc/gpt2#transformers.GPT2Config) 中也很明确。
+
+本模型仍是 GPT-2 风格的绝对位置 embedding 和相应 block，不是把 P12 的 RoPE、P13 的 RMSNorm / SwiGLU 自动装进去。我们关掉 dropout，是为了让本章的数值对照尽量只考察训练接口，不是在建议真实训练永远不用 dropout。
+
+### tokenizer 是 ID 契约，不只是切字工具
+
+为了完全离线，脚本用 Tokenizers 的 WordLevel 构造一个 12 项词表。它只按空白分隔，输入必须像“我 爱 学习 。”这样显式隔开。这是本地测试夹具，**不是 GPT-2 的 byte-level BPE，也不是一个合格的通用中文 tokenizer**。
+
+```text
+ID:       0       1       2       3     4  5   6    7    8     9    10  11
+token:  [PAD]   [UNK]   [BOS]   [EOS]   我 爱 学习  模型 预测 下一个 词  。
+```
+
+模板在句首加 BOS，在句尾加 EOS。两个样本补齐后为：
+
+```text
+input_ids[0] = [2, 4, 5, 6, 11, 3]
+input_ids[1] = [2, 7, 8, 10, 3, 0]
+attention_mask[0] = [1, 1, 1, 1, 1, 1]
+attention_mask[1] = [1, 1, 1, 1, 1, 0]
+```
+
+因此 input_ids 的形状为 [B,T]=[2,6]。模型输出 logits 的形状是 [B,T,V]=[2,6,12]：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
+
+unknown 词会变成 ID 1。测试要求“陌生词”得到 [2,1,3]，也要求保存后加载的词表和固定句子 ID 不变。这比只检查“tokenizer.json 文件存在”更有意义。
+
+## P20.3 框架已经 shift 了，就不要再 shift 一遍
+
+GPT2LMHeadModel 接受 labels 后会在内部完成 causal language modeling 的错位：位置 t 的 logits 对应位置 t+1 的标签。我们的 labels 和 input_ids 保持相同形状，只把不该监督的位置设为 -100：
+
+```text
+labels[0] = [-100, 4, 5, 6, 11, 3]
+labels[1] = [-100, 7, 8, 10, 3, -100]
+```
+
+- PAD 不是真实文本，所以第二行末尾不进入 loss。
+- EOS 是真实的结束目标，仍然进入 loss；不能因为它“特殊”就一并忽略。
+- 第一列没有前一个输入位置来预测它。本例显式将它设为 -100，下面会解释一个与版本有关的原因。
+- attention_mask 控制注意力可见性；labels=-100 控制监督位置。二者职责不同，一个不能代替另一个。
+
+独立参考计算不调用模型返回的 loss，也不调用框架的交叉熵函数，而是自己写：
+
+$$
+\mathcal L=\frac{1}{N}\sum_{(b,t)\in\mathcal V}
+\left[\log\sum_v\exp(z_{b,t,v})-z_{b,t,y_{b,t+1}}\right],
+$$
+
+其中有效集合 \(\mathcal V\) 只包含下一位置标签不是 -100 的预测位置，N 是这些位置的数量。本例第一行 5 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。
+
+代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。测试还用 Python 标量循环、稳定的指数求和独立算一次，避免两个实现都复制同一个索引错误。
+
+### 一个真实发现的版本细节
+
+固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计**未 shift 的 labels 中非 -100 的数量**，作为 num_items_in_batch 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。
+
+这不是说所有版本、所有模型都有同一个问题，而是本章用的组合需要明确约定。这里把首位本就不会被预测的标签也设为 -100，让框架计数和实际目标对齐。对应实现可核对 [4.51.3 Trainer 的 get_batch_samples 与 compute_loss 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)。测试故意恢复首位 BOS，要求独立更新对照报错，而不是只接受一个仍然下降的 loss。
+
+**因此，loss 在下降不够，程序退出码是 0 也不够。先对齐目标、分母和梯度，再谈训练结果。** 改到其他版本、加入 packing、梯度累积或多卡时，要重新检查有效 token 计数，不能把本例补丁无条件推广。
+
+## P20.4 真正运行一次 Trainer，并保留可解释的对照
+
+本章把 TrainingArguments 的变量尽量减少：CPU、float32、固定种子 20、每批 2 条样本、3 次更新、学习率 0.02、SGD、常数学习率、无 weight decay、无梯度裁剪、不向外部日志服务上报、不向 Hub 推送。
+
+为什么不直接用 AdamW？不是说 SGD 更适合大模型，而是本实验要先回答“Trainer 是否执行了同一个更新”。SGD 的式子很简单：
+
+$$
+\theta_{k+1}=\theta_k-0.02\nabla_\theta\mathcal L_k.
+$$
+
+我们从相同的初始权重复制两份模型：
+
+1. 第一份进入真正的 Trainer，执行 train()。
+2. 第二份进入手写循环，用上一节的独立 loss、backward 和 torch.optim.SGD 更新。
+3. 每份都执行 3 步；两个样本每步都在同一个完整 batch 中，所以打乱行顺序不改变目标，只可能有很小的浮点舍入差。
+4. 逐参数比较结果，同时检查 global_step、参数是否真的变化、loss 是否有限并下降。
+
+独立对照参数使用 atol=2e-6、rtol=2e-5；不是把所有训练轨迹都要求逐位相同。本地保存后以**同一个 eager attention 后端**恢复的 logits 则要求零误差。在开发时，恢复入口曾自动选择 SDPA，造成约 6e-8 的微小差异；解决方法是固定同一个后端，而不是不问原因就放宽容差。
+
+2026-10-19，在本章下述固定组合、Linux CPU 环境得到的一次结果为：
+
+| 检查项 | 实际结果 |
+| --- | --- |
+| 模型可训练参数 | 2,704 |
+| logits 形状 / 有效目标数 | [2,6,12] / 9 |
+| Trainer 更新步数 | 3 |
+| 更新前 / 后 loss | 2.51291084 / 2.34189987 |
+| 模型 loss 与独立参考差 | 0 |
+| Trainer 与手写 SGD 参数最大差 | 约 3.73e-9 |
+| 参数最大变化量 | 约 0.0195597 |
+| 本地恢复后 logits 最大差 | 0 |
+
+这些数字是测试夹具的数值证据，不是语言质量、吞吐量或大模型收敛结论。Trainer 会额外打印 train_runtime 和 samples_per_second，它们受进程启动、机器负载等影响，本章不拿它们作 benchmark。两句话被重复训练后 loss 下降，也不证明模型具备中文能力。
+
+### 如何运行
+
+只运行标准库账本，不需要安装 PyTorch：
+
+```bash
+python code/21_training_frameworks.py
+python -m unittest discover -s tests -p 'test_training_frameworks.py' -v
+```
+
+第二条会执行标准库测试；若可选包缺失或版本不在本章验证组合中，HF 测试会明确显示 skipped。**跳过不等于 HF 通过。** 脚本默认也明确打印 HF smoke: NOT RUN，必须加 --hf 才会真正训练。
+
+需要框架实验时，另建环境，避免为了本章升级全书原有依赖。例如在支持该 CPU wheel 的 Linux / Python 3.12 环境中：
+
+```bash
+python3.12 -m venv /tmp/zero2llm-frameworks
+/tmp/zero2llm-frameworks/bin/python -m pip install \
+  --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+/tmp/zero2llm-frameworks/bin/python -m pip install -r requirements-frameworks.txt
+/tmp/zero2llm-frameworks/bin/python code/21_training_frameworks.py --hf
+/tmp/zero2llm-frameworks/bin/python -m unittest discover \
+  -s tests -p 'test_training_frameworks.py' -v
+```
+
+官方 CPU wheel 的平台列表见 [PyTorch 官方索引](https://download.pytorch.org/whl/cpu/torch/)。若平台没有匹配 wheel，不要从不明镜像拼装包；可以先完成标准库部分，再选择官方支持的环境。
+
+本章锁定 torch 2.14.1（本次 wheel 带 +cpu）、transformers 4.51.3、accelerate 1.6.0、tokenizers 0.21.4、huggingface-hub 0.30.2、safetensors 0.5.3。它是**已验证的教学组合，不是最新版推荐，也不代表任意跨版本组合都兼容**。requirements-frameworks.txt 锁定附加框架包，PyTorch 单独从官方 CPU 源安装，避免意外引入 CUDA 大包。正式归档环境还应保存完整 pip freeze、Python 版本和平台信息，因为只锁直接依赖不等于锁了全部传递依赖。
+
+本次验证为节省重复安装空间，使用独立 /tmp/zero2llm-p20-venv，并只读复用原环境的 Torch / Tokenizers 路径；新增包写入独立环境，核对原环境版本未变。上面的干净环境命令是读者的安装路线，不要求复刻这个路径优化。
+
+缺少可选包或版本不符时，--hf 输出 SKIP 并返回退出码 2；它不会临时联网补下载。满足版本但出现真正的运行错误时，程序正常报错，而不是吞掉异常并说“兼容性跳过”。
+
+## P20.5 DDP：先让每张卡各做一份完整工作
+
+rank 是分布式进程的编号；world size 是进程总数。常见 GPU 训练把一个 rank 对应一张 GPU，但这不是这些词的定义。
+
+最容易理解的数据并行是 DDP：各 rank 持有同一模型副本，读取不同数据，反向传播时同步梯度，再按一致规则更新。它提高了可以共同处理的数据量，**没有自动把模型参数、梯度和普通优化器状态都分成几份**。DDP 也不会替你切分输入数据，数据采样器必须配合。相关职责见 [PyTorch 2.7 固定版 DDP API](https://docs.pytorch.org/docs/2.7/generated/torch.nn.parallel.DistributedDataParallel.html)；这里引用其机制说明，不声称本次运行了 PyTorch 2.7 的多卡测试。
+
+假设每个 rank 一次处理 b 条，累积 A 次后更新，数据并行组有 D 个 rank，理想情况下每次更新包含 b×A×D 条样本。若长度不一，有效监督 token 数不一定按样本数平均；还要检查各 rank 的 loss 归一化与梯度汇总口径。P19 中关于有效 token 和梯度累积的约定，并不会因为加了 DDP 就消失。
+
+一个反直觉的结论是：单卡放不下的模型，简单复制到 4 张卡上仍可能每张都放不下。要减少每卡状态冗余，需要看下一节的分片。
+
+## P20.6 ZeRO：分三步去掉重复的状态
+
+训练时，模型参数不是唯一的大对象。以一种常见的低精度权重 + Adam 混合精度组织为例，每个参数元素可能对应：
+
+- 低精度参数：2 bytes。
+- 梯度：本例假设 2 bytes。
+- Adam 的一阶矩 m：4 bytes。
+- Adam 的二阶矩 v：4 bytes。
+- FP32 master weight：4 bytes，归入优化器侧状态。
+
+本例共 16 bytes/参数元素。**这不是所有 Adam、BF16 或 PyTorch 训练的固定规律。** 有的路径保留 FP32 梯度，有的没有单独 master copy；本章真实 CPU smoke 用的是 float32 + SGD，也不能套用这份 Adam 账本。
+
+设参数元素数为 P，参数 / 梯度 / 优化器侧每元素字节分别为 b_p、b_g、b_o。这里 b_o=2×moment_bytes+master_bytes，默认 12。经典 ZeRO 的分级思路是：Stage 1 切优化器状态，Stage 2 再切梯度，Stage 3 再切参数。出处是 [ZeRO 原始论文 v3](https://arxiv.org/abs/1910.02054v3) 以及 [DeepSpeed v0.16.5 的 ZeRO 官方说明源码](https://github.com/deepspeedai/DeepSpeed/blob/v0.16.5/docs/code-docs/source/zero3.rst)。
+
+| 方式 | 参数 | 梯度 | 优化器侧状态 |
+| --- | --- | --- | --- |
+| DDP / 本账本 Stage 0 | 每个 rank 完整保留 | 完整保留 | 完整保留 |
+| ZeRO-1 | 完整保留 | 完整保留 | 分片 |
+| ZeRO-2 | 完整保留 | 分片 | 分片 |
+| ZeRO-3 | 分片 | 分片 | 分片 |
+
+对于恰好整除的理想情况，每 rank 的持久状态近似为：
+
+$$
+\begin{aligned}
+M_0 &= P(b_p+b_g+b_o),\\
+M_1 &= P(b_p+b_g)+\frac{P}{D}b_o,\\
+M_2 &= Pb_p+\frac{P}{D}(b_g+b_o),\\
+M_3 &= \frac{P}{D}(b_p+b_g+b_o).
+\end{aligned}
+$$
+
+Stage 3 并不是每个 rank 永远只看自己的一小片参数。执行某层计算时仍需按实现聚合所需权重，并在合适时机释放或重新切分。节省常驻冗余往往要付出通信、调度和临时空间成本。CPU/NVMe offload 又是把状态放到别的位置，不是与 Stage 1/2/3 同义的第四个数字。
+
+### 十个参数，四个 rank，亲手算一遍
+
+P=10、D=4 不能整除。我们的教学分配不加 padding，前两个 rank 各负责 3 个元素，后两个各负责 2 个，记作 [3,3,2,2]。这只是平衡所有权模型，不模拟 DeepSpeed 内部的 bucket / 对齐布局。
+
+以 rank 0 为例：
+
+- Stage 0：10×2 + 10×2 + 10×12 = 160 bytes。
+- Stage 1：10×2 + 10×2 + 3×12 = 76 bytes。
+- Stage 2：10×2 + 3×2 + 3×12 = 62 bytes。
+- Stage 3：3×2 + 3×2 + 3×12 = 48 bytes。
+
+全部 rank 的结果是：
+
+| 方式 | rank 0 | rank 1 | rank 2 | rank 3 | 所有 rank 合计 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Stage 0 | 160 | 160 | 160 | 160 | 640 |
+| Stage 1 | 76 | 76 | 64 | 64 | 280 |
+| Stage 2 | 62 | 62 | 48 | 48 | 220 |
+| Stage 3 | 48 | 48 | 32 | 32 | 160 |
+
+单位全部是 bytes。最大的 rank 分片应使用 ceil(P/D)=3，而不是 floor(P/D)=2。若用浮点 2.5 个参数来估算最满的 rank，会低估；若每个 rank 都实际分配 3 个槽位，则又是含 padding 的另一种账本，集群合计不能仍写 10 个槽位。
+
+脚本用 divmod 得到商和余数，逐 rank 返回真实元素数，保证总和严格等于 P；D>P 时允许部分 rank 拥有 0 个分片元素，不能凭空多出参数。测试覆盖这些非整除和空分片边界，也检查 D=1 时四种策略完全相同。
+
+### 账本不是显存峰值
+
+这里明确排除：激活、模型 buffer、attention 临时张量、通信 bucket、all-gather 临时完整权重、梯度累积实现的额外副本、内存分配器保留空间、分片 padding、CPU/NVMe offload。真实峰值可能远高于持久状态的总和。
+
+bytes、GB 和 GiB 也要区分：1 GB=10^9 bytes，1 GiB=2^30 bytes。10^9 bytes 大约是 0.9313 GiB，而不是 1 GiB。本章 byte_units 同时返回两种单位；不要把 GPU 标称容量与程序输出混用后得出“刚好能放下”的结论。
+
+现在做一个修改练习：把 gradient_bytes 从 2 改成 4，同时把 master_bytes 改成 0。P=10、D=4 时，Stage 2 的每 rank 结果应为 [56,56,44,44] bytes。这个练习强迫我们把“梯度什么 dtype”和“优化器状态什么 dtype”分开，而不是机械背诵“每参数 16 字节”。
+
+## P20.7 TP、PP、EP：切的不是同一条轴
+
+ZeRO 主要回答“数据并行组中谁保存哪些训练状态”。其他并行术语回答的问题不一样：
+
+**Tensor parallel，张量并行（TP）：**把一层里的张量运算分给多个设备。例如线性层 Y=XW，可以按 W 的输出列拆成 W_1、W_2，两个设备算出部分输出；后续运算按布局拼接或归约。拆行的方式则需要合并部分和。它不是让两个 rank 各读不同样本，而是合作完成同一层的计算。通信经常落在层内，互联条件很重要。[Megatron-LM 原始论文](https://arxiv.org/abs/1909.08053)
+
+**Pipeline parallel，流水线并行（PP）：**把不同层放到不同设备。例如 4 层网络，设备 A 负责第 1–2 层，设备 B 负责第 3–4 层。样本的激活先从 A 传给 B，反向梯度再反方向流回。把大 batch 切为 microbatch 可以让不同阶段交错工作，但启动、收尾或阶段不均衡会产生空闲时间，称为 pipeline bubble。不是把层拆开就能永远满载。[Megatron 的大规模训练论文](https://arxiv.org/abs/2104.04473)
+
+**Expert parallel，专家并行（EP）：**把 MoE 专家分散到不同设备，路由后把 token 发给相应专家，再把输出送回。它和 P18 的“一个 token 只激活少数专家”有关，但不是同一概念：稀疏激活描述模型计算，EP 描述专家放在哪。路由不均衡会让某些设备忙、某些设备闲；跨设备 token 交换也有成本。[Megatron-Core core_v0.12.0 的 MoE 与并行说明](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0)
+
+这些策略可以组合，但**不能把所有并行度数字无脑相乘**。简单的纯 dense DP×TP×PP 布局常可按独立进程组规划；加入 EP、context parallel 或不同专家组后，要按框架实际 rank 分组规则检查哪些维度独立、哪些共享。不清楚自己的 data-parallel group 大小时，前一节的 D 也就可能填错。
+
+## P20.8 Transformers、TRL、DeepSpeed、Megatron 应该怎么选
+
+它们不是四个功能完全相同、只需挑“最强”的品牌。
+
+- **Transformers：**常用模型结构、配置、tokenizer 和 Trainer 接口。本章首先用它把模型训练跑通，并建立正确性对照。
+- **TRL：**在 Hugging Face 生态上提供后训练相关的训练器和数据处理入口。它与 Transformers 集成，不是另一个 tokenizer，也不是取代 PyTorch 的张量计算库。
+- **DeepSpeed：**面向训练执行和内存等系统问题；ZeRO 是其重要机制，但“用了 DeepSpeed”和“用了某个固定 ZeRO stage”不是一句话。
+- **Megatron-LM / Megatron-Core：**面向大模型训练组织与并行模块，特别要读懂 TP、PP、EP 和相应 checkpoint 约定。大规模环境的优势不能从本章 CPU 小模型直接推出。
+
+[TRL 0.17.0 官方总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 列出 SFT、DPO、GRPO、奖励模型等入口；[同版 SFTTrainer 说明](https://huggingface.co/docs/trl/v0.17.0/en/sft_trainer) 展示它与模型、数据和训练配置的连接。本章只建立定位，不安装 TRL，也不把 SFTTrainer 的名字等同于“自动正确的对话微调”。assistant-only 标签、LoRA、DPO 的偏好对和 GRPO 的奖励分组分别留给 P21、P22，那里会单独锁版本和检查目标。
+
+一个实用顺序是：先用单进程证明数据、loss 和保存加载正确；确实需要更多吞吐再试数据并行；确认状态占用是瓶颈再考虑分片；当单层或网络规模、通信条件要求进一步切分时，再研究 TP / PP / EP。这个顺序不是性能定律，而是降低排错变量的工程方法。
+
+## P20.9 保存模型，不一定等于能继续训练
+
+本章产生两类本地输出，概念上不能混用。
+
+**推理导出 export：**model.save_pretrained 保存 config 与 model.safetensors；tokenizer.save_pretrained 保存词表、特殊 token 和处理配置；experiment.json 保存版本、种子、设备、精度和 attention 后端。再次从本地目录加载，检查固定输入的 ID、logits 和 loss 一致。这个检查已经运行。
+
+**训练检查点 trainer/checkpoint-3：**本例显式设置 save_only_model=False，另检查 optimizer.pt、scheduler.pt、trainer_state.json、rng_state.pth 和 training_args.bin 等文件存在，且 global_step=3。实际保存逻辑可查 [4.51.3 Trainer 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)。不要根据概览页的一句默认行为推测所有版本和选项下都保存了什么。
+
+虽然这些训练状态文件已经产生，本章**没有运行断点续训等价实验**，所以结果中明确记录 resume_tested=false。真正验证恢复，应该比较“连续训练 K+M 步”和“训练 K 步、保存、重启、再训练 M 步”的最终状态，并检查数据采样位置、随机数、优化器、scheduler、梯度累积边界等。只有模型权重相同还不够。
+
+若想保留本章输出，给一个新的或空目录：
+
+```bash
+python code/21_training_frameworks.py --hf --output-dir /tmp/p20-checkpoint-demo
+```
+
+目录非空时脚本拒绝覆盖；默认不传目录则使用临时目录并清理。只加载本次自己产生的训练状态文件，不要随意反序列化来源不明的 optimizer 或 Python 对象。safetensors 也不能替代对模型来源、配置和代码的审核。
+
+分布式训练还要问：“这是一整份模型，还是某个 rank 的分片？”并行拓扑改变后是否需要转换？词表是否一并保存？模型实现的版本是否相同？例如 Megatron 的固定版说明区分与 TP/PP 布局绑定的旧格式及其他分布式格式，不能默认不同框架的 checkpoint 可以直接交换。
+
+## P20.10 多 GPU 选修：先写实验单，不在 CPU 假演示
+
+本章没有安装 DeepSpeed / Megatron，也没有可报告的多 GPU 运行、通信量实测、显存峰值或加速比。下面只是实验设计与配置阅读题，不是已经通过的运行命令。
+
+一个最小 ZeRO-2 配置片段可以先读成：
+
+```json
+{
+  "train_micro_batch_size_per_gpu": 1,
+  "gradient_accumulation_steps": 1,
+  "zero_optimization": {"stage": 2},
+  "bf16": {"enabled": false},
+  "fp16": {"enabled": false}
+}
+```
+
+它只说明每 rank 的 microbatch、累积次数、状态分片级别与未启用混合精度，**不是完整训练程序**。启动器模板形如：
+
+```text
+DeepSpeed：deepspeed --num_gpus=2 YOUR_GPU_TRAIN.py --deepspeed YOUR_DS_CONFIG.json
+Megatron：torchrun --nproc_per_node=2 YOUR_MEGATRON_ENTRY.py [与该入口一致的模型和数据参数]
+```
+
+大写项是待填写的占位符，不是本仓库文件。YOUR_GPU_TRAIN.py 必须自己解析配置、正确接入 DeepSpeed 或 HF Trainer；不能把本章强制 use_cpu=True 的 --hf 脚本塞进去冒充多卡训练。Megatron 入口、数据预处理和 flags 应来自选定 revision 的官方示例；仅把 --tensor-model-parallel-size=2 写在任意脚本后面没有意义。可从 [固定版官方仓库](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0) 的 examples 与训练参数说明开始。
+
+Megatron 还有一个可供选修的具体入口：[core_v0.12.0 的 run_simple_mcore_train_loop.py](https://github.com/NVIDIA/Megatron-LM/blob/core_v0.12.0/examples/run_simple_mcore_train_loop.py)。本章已读取该版本源码，确认它使用 MockGPTDataset、本地空 tokenizer、2 层模型、TP=2、PP=1，并运行 5 次更新。选好官方兼容依赖、进入该版本仓库后，待验证命令为：
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
+  examples/run_simple_mcore_train_loop.py
+```
+
+这条命令**未在本书环境执行**。需恰好暴露两张可用 CUDA GPU，因为该入口用可见 GPU 数初始化 world size，源码又把 TP 固定为 2；还会编译数据 helper，并在当前目录写 ckpt。应使用新的实验目录并先检查源码，不能直接覆盖已有检查点。它是理解 Megatron-Core 接线的入口，不是通用生产训练配方，也不自动证明保存了可恢复的优化器状态。
+
+动手前把下列内容保存成自己的实验单：
+
+1. 代码 tag / commit、PyTorch / CUDA / 驱动 / NCCL / DeepSpeed 或 Megatron 版本；与本章 CPU 依赖分开管理。
+2. 至少两张兼容 GPU 的型号、每卡显存、互联、CPU / RAM，跨机器时记录网络；是否真的支持计划使用的 BF16 / FP16 路径。
+3. 完整展开后的启动命令和配置，不只保存一张截断的终端截图；写明 DP / TP / PP / EP 的 rank 分组。
+4. 固定模型、tokenizer、数据、序列长度、有效 token 数、batch 与优化器；先用最小模型检查目标与梯度，再逐步扩张。
+5. 对比 DDP 与 ZeRO-2 时尽量只改变状态分片，分别记录持久状态估计、实测峰值分配 / 保留显存、通信和速度。
+6. warm-up、设备同步、重复次数、均值和波动；保存 checkpoint 后真正重启恢复一次。
+
+这份实验单的价值不在于把配置写得很长，而在于让别人知道结果能比较什么、不能比较什么。在条件未具备时停在“未测”，比把理论账本包装成实测更专业。
+
+## P20.11 练习、排错与验收
+
+### 练习
+
+1. “我把 config.json 改成两倍 hidden size，原权重就变强了。”这句话有什么问题？
+2. 两条长度分别为 6、5 的含 BOS/EOS 序列，右侧补齐到 6。首列与 PAD 忽略时，监督位置数是多少？若恢复首列 BOS，本例版本的 Trainer 计数和实际 next-token 目标数有什么不同？
+3. P=7、D=3，默认每元素 2+2+12 bytes。Stage 3 每个 rank 的所有权、状态字节和合计是多少？
+4. 为本章代码故意制造一个错误，说明哪条测试应该发现它。只让 loss 下降，能否作为验收？
+
+### 参考答案
+
+1. config 改的是张量结构，不会替你训练或生成匹配权重，甚至会直接导致 shape 不兼容。结构说明与已学习参数是两个不同对象。
+2. 监督目标为 5+4=9。删去首列忽略后，模型内部 shift 的目标数仍是 9，但本例 Trainer 的外部计数变成 11，因为它统计未 shift 的非忽略标签。此时会把本例梯度缩小为正确值的 9/11。
+3. 所有权为 [3,2,2]，持久状态为 [48,32,32] bytes，合计 112 bytes。不能用 112/3 作为每个 rank 都安全的容量上界。
+4. tests/test_training_frameworks.py 实际执行八种语义变异：丢掉分片余数、提前切分梯度、提前切分参数、漏算 master weight、错移 CE 标签、恢复首位 BOS 计数、取消 optimizer.step、损坏恢复后的权重。前四种被独立手算账本发现；错移标签被独立 CE 参考识别；后三种被真实 Trainer 更新、非零变化和恢复 logits 断言识别。程序能运行或 loss 下降，都不能代替这些检查。
+
+常见排错顺序：
+
+- 出现 index out of range：先查 token ID、词表大小和位置上限，不要先加 GPU。
+- loss 下降但更新对照不符：查 shift、-100、有效 token 分母、梯度累积、裁剪、dropout、优化器和 scheduler。
+- 保存加载只差几个末位：先查 dtype、attention 后端和评估模式，再判断合理容差；不把所有小误差都叫“随机性”。
+- 只装基础依赖时显示 skipped：这是清楚报告未运行，不是脚本损坏；需要框架覆盖时在隔离环境装固定组合。
+- ZeRO 账本很小但真实训练仍 OOM：检查激活、临时聚合、通信 buffer 和实际 dtype；账本从未承诺峰值。
+
+本章验收是三句话：**我能把框架对象翻译回手写循环；我能独立核对一次真实参数更新；我能说明内存账本哪些状态算了、哪些没有。** 能做到这些，再读后训练配置时，你就不必靠“这份 YAML 看起来很专业”来判断正确性。
+
+## 资料与版本边界
+
+核验日期：2026-10-19。以下优先固定官方版本或原始论文；资料中的大规模结果不算作本书复现。
+
+- [Transformers 4.51.3 Trainer](https://huggingface.co/docs/transformers/v4.51.3/en/trainer)、[GPT-2 API](https://huggingface.co/docs/transformers/v4.51.3/en/model_doc/gpt2)、[对应 Trainer 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)：对象职责、标签计数与保存逻辑。本章实际运行此版本。
+- [Transformers 4.51.3 PyPI 元数据](https://pypi.org/pypi/transformers/4.51.3/json)、[Accelerate 1.6.0 PyPI 元数据](https://pypi.org/pypi/accelerate/1.6.0/json)：附加依赖选择；实际锁定项见 requirements-frameworks.txt。
+- [TRL 0.17.0 总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 与 [SFTTrainer](https://huggingface.co/docs/trl/v0.17.0/en/sft_trainer)：仅核验框架关系和后训练入口，未安装或运行 TRL。
+- [PyTorch 2.7 DDP 文档](https://docs.pytorch.org/docs/2.7/generated/torch.nn.parallel.DistributedDataParallel.html)：固定机制参考；不代表本书跑过该版本多卡。
+- [ZeRO 论文 v3](https://arxiv.org/abs/1910.02054v3)；[DeepSpeed v0.16.5 ZeRO 文档源码](https://github.com/deepspeedai/DeepSpeed/blob/v0.16.5/docs/code-docs/source/zero3.rst)：已读取该 tag 的官方原始文件，作为分片机制参考；未安装 DeepSpeed。
+- [Megatron-LM 原始论文](https://arxiv.org/abs/1909.08053)、[流水线与大规模训练论文](https://arxiv.org/abs/2104.04473)、[Megatron-Core core_v0.12.0 仓库](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0)：并行与 checkpoint 参考，未运行其 GPU 示例。
 
 
 ---
