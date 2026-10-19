@@ -12,6 +12,7 @@ import importlib.util
 import io
 from pathlib import Path
 import re
+from torch_test_support import compatible_torch, torch_status, torch_reason
 import runpy
 import unittest
 from unittest.mock import patch
@@ -20,17 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CODE = ROOT / 'code' / '06_transformer_block.py'
 
 
-def compatible_torch(version):
-    """Allow patch releases/local wheel tags, not another minor or pre-release."""
-    return bool(version and re.fullmatch(r'2\.14\.\d+(?:\+[A-Za-z0-9.]+)?', version))
-
-
-try:
-    TORCH_VERSION = importlib.metadata.version('torch')
-except importlib.metadata.PackageNotFoundError:
-    TORCH_VERSION = None
-TORCH_READY = importlib.util.find_spec('torch') is not None and compatible_torch(TORCH_VERSION)
-TORCH_REASON = 'P07 CPU numerical checks require installed stable torch 2.14.x; install requirements.txt'
+TORCH_READY, TORCH_VERSION, TORCH_PRESENT = torch_status()
+TORCH_REASON = torch_reason('P07 CPU numerical checks', TORCH_VERSION, TORCH_PRESENT)
 
 if TORCH_READY:
     import torch

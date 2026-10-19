@@ -1,4 +1,4 @@
-# 第5章：位置编码（Positional Encoding）——给词语发“座位号”
+# 第 5 章：位置编码（Positional Encoding）——给词语发“座位号”
 
 > 注意力擅长比较内容；要理解句子，还得知道内容出现在什么位置。
 
@@ -242,6 +242,7 @@ Add=(1, 2, 4)；Concat=(1, 2, 8)
 ```python
 pe = torch.zeros(max_seq_len, d_model, dtype=torch.float32, device='cpu')
 for pos in range(max_seq_len):
+    # 向上取整，奇数宽度的最后一列也要填；k 是“第几对”。
     for k in range((d_model + 1) // 2):
         div_term = math.pow(10000.0, (2 * k) / d_model)
         pe[pos, 2 * k] = math.sin(pos / div_term)

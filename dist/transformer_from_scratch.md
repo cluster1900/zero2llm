@@ -1360,7 +1360,7 @@ print("非空行归一化，全屏蔽行权重与输出为零")
 
 ---
 
-# 第5章：位置编码（Positional Encoding）——给词语发“座位号”
+# 第 5 章：位置编码（Positional Encoding）——给词语发“座位号”
 
 > 注意力擅长比较内容；要理解句子，还得知道内容出现在什么位置。
 
@@ -1604,6 +1604,7 @@ Add=(1, 2, 4)；Concat=(1, 2, 8)
 ```python
 pe = torch.zeros(max_seq_len, d_model, dtype=torch.float32, device='cpu')
 for pos in range(max_seq_len):
+    # 向上取整，奇数宽度的最后一列也要填；k 是“第几对”。
     for k in range((d_model + 1) // 2):
         div_term = math.pow(10000.0, (2 * k) / d_model)
         pe[pos, 2 * k] = math.sin(pos / div_term)
@@ -1672,7 +1673,7 @@ python -m unittest discover -s tests -p 'test_positions.py' -v
 
 ---
 
-# 第6章：积木组件——残差连接、层归一化与前馈神经网络
+# 第 6 章：积木组件——残差连接、层归一化与前馈神经网络
 
 > 注意力负责交换信息，但交换之后，还需要保留原有表示、调整数值尺度，并在每个位置上加工特征。
 
@@ -1821,9 +1822,13 @@ $\gamma$ 与 $\beta$ 各有 D 个参数，不是整个向量共用一个标量�
 ### 对照代码：每一行对应刚才哪一步
 
 ```python
+# 1. 每个位置沿最后的特征轴求均值；不混合 batch 或 token。
 mean = x.mean(dim=-1, keepdim=True)
+# 2. 除以 D，不是 D-1：这里描述当前向量，不估计总体方差。
 variance = x.var(dim=-1, keepdim=True, unbiased=False)
+# 3. 先减均值，再除以标准差；epsilon 放在平方根里面。
 x_norm = (x - mean) / torch.sqrt(variance + self.eps)
+# 学到的 gamma/beta 之后，输出不必继续保持零均值、近单位方差。
 return self.gamma * x_norm + self.beta
 ```
 
@@ -1869,7 +1874,7 @@ Post-LN 最后一行四位小数恰好与 $\operatorname{LN}(x)$ 一样，但加
 
 所以“把支路清零，输出应等于输入”的测试有适用对象：**本章没有额外输出归一化的 Pre-LN Block**。它不是所有残差网络都必须满足的完整输出性质。
 
-2017 年原始 Transformer 的残差加法后接 LayerNorm，即 Post-LN。Pre-LN 把归一化移进支路；Xiong 等人在指定初始化和实验设置下分析了两者梯度尺度与 warm-up 的差别。这支持“位置会影响优化”的结论，不支持“Pre-LN 永不需要 warm-up”或“Post-LN 一定训练失败”。[来源：Transformer §3.1](https://arxiv.org/html/1706.03762v7#S3.SS1)、[On Layer Normalization，图1、表1、§3](https://arxiv.org/pdf/2002.04745)
+2017 年原始 Transformer 的残差加法后接 LayerNorm，即 Post-LN。Pre-LN 把归一化移进支路；Xiong 等人在指定初始化和实验设置下分析了两者梯度尺度与 warm-up 的差别。这支持“位置会影响优化”的结论，不支持“Pre-LN 永不需要 warm-up”或“Post-LN 一定训练失败”。[来源：Transformer §3.1](https://arxiv.org/html/1706.03762v7#S3.SS1)、[On Layer Normalization，图 1、表 1、§3](https://arxiv.org/pdf/2002.04745)
 
 ---
 
@@ -2003,7 +2008,7 @@ y=u+F(\operatorname{LN}_2(u))$$
 - FFN 第二层缩回 `[B,T,D]`，才可以做第二次残差相加。
 
 ```python
-# Pre-LN，默认 norm_first=True
+# Pre-LN: 残差主干不经过 LN，LN 只在计算增量的支路上。
 x = x + self._attention(self.ln1(x), mask)
 x = x + self.ffn(self.ln2(x))
 ```
@@ -2013,7 +2018,7 @@ x = x + self.ffn(self.ln2(x))
 切换 `norm_first=False` 后，代码改为：
 
 ```python
-# Post-LN
+# Post-LN: 先求增量并加回输入，然后归一化整个和。
 x = self.ln1(x + self._attention(x, mask))
 x = self.ln2(x + self.ffn(x))
 ```
@@ -2099,7 +2104,7 @@ Pre-LN zero-sublayer identity max error=0.000000
 
 后续规划 P13 会单独讲 RMSNorm 与 SwiGLU，并在相近参数预算下做对比。本章不实现它们，也不预先承诺某个通用加速比例。先把基础 Block 的路径读准，再逐个替换组件。[路标：RMSNorm 原始论文](https://arxiv.org/abs/1910.07467)、[GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202)
 
-接下来读第7章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention 和训练目标，组成不同的系统。
+接下来读第 7 章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention 和训练目标，组成不同的系统。
 
 ### 来源与核验范围
 
@@ -2108,13 +2113,13 @@ Pre-LN zero-sublayer identity max error=0.000000
 - He 等，2015：[Deep Residual Learning for Image Recognition](https://arxiv.org/pdf/1512.03385)，§3.1–3.2：残差函数与恒等捷径。
 - Ba 等，2016：[Layer Normalization](https://arxiv.org/pdf/1607.06450)，§3、§3.1：单样本统计、每维增益与偏置。
 - Vaswani 等，2017：[Attention Is All You Need](https://arxiv.org/html/1706.03762v7)，§3.1、§3.3：Post-LN 与逐位置 ReLU FFN。
-- Xiong 等，2020：[On Layer Normalization in the Transformer Architecture](https://arxiv.org/pdf/2002.04745)，图1、表1、§3：两种布局及有条件的初始化/优化分析。
+- Xiong 等，2020：[On Layer Normalization in the Transformer Architecture](https://arxiv.org/pdf/2002.04745)，图 1、表 1、§3：两种布局及有条件的初始化/优化分析。
 - [PyTorch 2.14 LayerNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html)：epsilon、方差口径、参数形状；[MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：布尔 mask 语义和参数接口。
 
 
 ---
 
-# 第7章：编码器与解码器——从文本理解到自回归生成
+# 第 7 章：编码器与解码器——从文本理解到自回归生成
 
 前面已经有了词向量、位置编码、注意力和完整积木。现在把它们接成系统：哪些位置可以互相读信息？一张预测分数表，怎样变成逐步写出的句子？
 
@@ -2169,7 +2174,7 @@ flowchart TD
 
 ![因果掩码矩阵原理](assets/diagrams/causal_mask.svg)
 
-下面完整保留原来的分数表与手算链。原始分数是人为设定；脚本的 `mask_walkthrough()` 用这些数生成三张表并验证结果，不声称它们是某个模型的测量值。本例每行至少能看见自己，没有全禁用行；全禁用行的处理约定见第3章。
+下面完整保留原来的分数表与手算链。原始分数是人为设定；脚本的 `mask_walkthrough()` 用这些数生成三张表并验证结果，不声称它们是某个模型的测量值。本例每行至少能看见自己，没有全禁用行；全禁用行的处理约定见第 3 章。
 
 ### 表 7-2：4 词序列的掩码矩阵数值演变推导表
 
@@ -2211,13 +2216,13 @@ flowchart TD
 
 ## 7.4 Cross-attention：查询来自目标，资料来自源句
 
-图书馆类比里，写作者提出问题，原文资料提供标签和内容。在经典 cross-attention 中：
+图书馆类比里，写作者提出问题，原文资料提供标签和内容。这个类比只帮助区分信息来源：Q/K/V 都是数值向量，不是人写好的问题、书签或原文摘录，也不保证检索到的内容正确。在经典 cross-attention 中：
 
 - Q 由解码器当前层的目标侧表示投影得到；
 - K/V 由编码器输出投影得到；
 - 权重沿源序列位置归一化，而不是沿译文词表归一化。
 
-例如 batch=1，译文当前有2个位置、原文有3个位置，每头宽度4。省略头轴后，Q=[1,2,4]，K=[1,3,4]，V=[1,3,4]；分数为 [1,2,3]，聚合结果为 [1,2,4]。输入输出长度不必相同，也不需要把它们硬凑成方阵。另取一个 $d_v=2$ 的手算例子：给第一行三份资料权重 [0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是 [0.7,0.8]，不是机械复制某一个词。
+例如 batch=1，译文当前有 2 个位置、原文有 3 个位置，每头宽度 4。省略头轴后，Q=[1,2,4]，K=[1,3,4]，V=[1,3,4]；分数为 [1,2,3]，聚合结果为 [1,2,4]。输入输出长度不必相同，也不需要把它们硬凑成方阵。另取一个 $d_v=2$ 的手算例子：给第一行三份资料权重 [0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是 [0.7,0.8]，不是机械复制某一个词。
 
 有源端 padding 时也要屏蔽对应 K/V 位置。这个“跨序列”的连接方式，不应和后续 P17 的 Causal Encoder-Decoder（CED）名称混为一谈；本章没有实现 CED，只学习传统翻译双塔与生成循环。
 
@@ -2286,13 +2291,13 @@ $$p_i(T)=\frac{\exp(z_i/T)}{\sum_j\exp(z_j/T)},\qquad T>0.$$
 | temperature=1.0 | 66.52% | 24.47% | 9.00% | 同上 |
 | temperature=2.0 | 50.65% | 30.72% | 18.63% | 同上 |
 
-低温使本例更集中，高温更平坦；随机抽样仍可能选择非最大项，不是“有51%就必选它”。若仍用 argmax 而不抽样，任意正温度都不会改变最大项的顺序。
+低温使本例更集中，高温更平坦；随机抽样仍可能选择非最大项，不是“有 51% 就必选它”。若仍用 argmax 而不抽样，任意正温度都不会改变最大项的顺序。
 
-数学公式不能直接除以0。教学函数的 `temperature=0` **另走greedy分支**，同分时选词表中第一个最大项。只有最大项唯一时，$T\to0^+$ 的分布才趋向该项；并列最大项的极限仍共享权重，不等于我们的“选第一个”约定。
+数学公式不能直接除以 0。教学函数的 `temperature=0` **另走 greedy 分支**，同分时选词表中第一个最大项。只有最大项唯一时，$T\to0^+$ 的分布才趋向该项；并列最大项的极限仍共享权重，不等于我们的“选第一个”约定。
 
 ## 7.8 表 7-3：从真实脚本输出逐步追踪停止
 
-为了让每个数都可核对，原先的示意概率换成脚本的固定四词输出词表：[明，月，光，`<EOS>`]。提示中的“床前”由示例直接给定。预测器按前缀长度选用写好的 logits 行，**没有学习诗歌**；固定行不需要随机种子，下面使用 greedy。显示的概率统一是温度1的参考分布，并非greedy必须先算的东西。
+为了让每个数都可核对，原先的示意概率换成脚本的固定四词输出词表：[明，月，光，`<EOS>`]。提示中的“床前”由示例直接给定。预测器按前缀长度选用写好的 logits 行，**没有学习诗歌**；固定行不需要随机种子，下面使用 greedy。显示的概率统一是温度 1 的参考分布，并非 greedy 必须先算的东西。
 
 | 步数 | 本轮前缀 | logits（按四词顺序） | 温度1概率（同序，%） | greedy新增 | 累计新增数 / 是否停止 |
 |---|---|---|---|---|---|
@@ -2302,23 +2307,27 @@ $$p_i(T)=\frac{\exp(z_i/T)}{\sum_j\exp(z_j/T)},\qquad T>0.$$
 | 4 | 床前明月光 | [0,0,0,4] | [1.74,1.74,1.74,94.79] | `<EOS>` | 4 / EOS停止 |
 
 两种上限分别运行，不要混在一条追踪里：
-- `max_new_tokens=8`：第4步生成 EOS，立即停止，不用等到8步。返回列表保留 EOS，界面可另行隐藏特殊符号。
-- `max_new_tokens=2`：第2步后就达到新增上限，返回“床前明月”，没有生成 EOS，停止原因是长度预算。
+- `max_new_tokens=8`：第 4 步生成 EOS，立即停止，不用等到 8 步。返回列表保留 EOS，界面可另行隐藏特殊符号。
+- `max_new_tokens=2`：第 2 步后就达到新增上限，返回“床前明月”，没有生成 EOS，停止原因是长度预算。
 - `max_new_tokens=0`：不调用预测函数、无新增 token。若前缀本来已以 EOS 结尾，本教学函数立即按 EOS 停止。
 
-这里的上限计**新增token**，不把2个提示token算进去；实际框架里的 `max_length` 与 `max_new_tokens` 含义可能不同，调用时需查版本文档。长度停止可能截断一句话；模型预测 EOS 也不代表内容必然完整或正确。
+这里的上限计**新增 token**，不把 2 个提示 token 算进去；实际框架里的 `max_length` 与 `max_new_tokens` 含义可能不同，调用时需查版本文档。长度停止可能截断一句话；模型预测 EOS 也不代表内容必然完整或正确。
 
 把循环逐行拆开看：
 
 ```python
 logits = list(logits_fn(list(tokens)))
+if len(logits) != len(vocab):
+    raise ValueError("one logit per vocabulary token required")
 chosen = vocab[choose_token(logits, temperature, rng)]
+trace.append({"step": step + 1, "prefix": list(tokens),
+              "probs_at_t1": probabilities(logits), "chosen": chosen})
 tokens.append(chosen)
 if chosen == eos:
     return tokens, trace, "eos"
 ```
 
-外层 `for step in range(max_new_tokens)` 保证有限次数；每轮取得词表分数、选择一个token、追加前缀，再检查EOS。源码在追加前记录 `trace`，以便显示本轮旧前缀。EOS检查不能等到下一轮才做，否则会多调用一次模型。输出格式检查保证每个词表项恰好一个logit。若启用抽样，固定seed便于复查本例，但不承诺跨框架和版本逐位一致。
+外层 `for step in range(max_new_tokens)` 保证有限次数；每轮取得词表分数、选择一个 token、追加前缀，再检查 EOS。源码在追加前记录 `trace`，以便显示本轮旧前缀。EOS 检查不能等到下一轮才做，否则会多调用一次模型。输出格式检查保证每个词表项恰好一个 logit。若启用抽样，固定 seed 便于复查本例，但不承诺跨框架和版本逐位一致。
 
 ## 7.9 自测、运行与下一步
 
@@ -2327,65 +2336,280 @@ python3 code/10_generation_loop.py
 python3 -m unittest discover -s tests -v
 ```
 
-本章无 PyTorch/GPU 依赖。回归覆盖三步mask数值、标签错位、温度数表、低温唯一最大项、EOS、最大新增数、零预算、固定seed及非法输入。
+本章无 PyTorch/GPU 依赖。回归覆盖三步 mask 数值、标签错位、温度数表、低温唯一最大项、EOS、最大新增数、零预算、固定 seed 及非法输入。
 
-1. 原文3个位置、目标2个位置，cross-attention分数该为几行几列？2×3；两行目标query，各查询三份源资料。若三份二维V及权重如§7.4，输出是[0.7,0.8]。
-2. 输入“BOS 我 爱”，标签是“BOS 我 爱”吗？不是。若完整样本是“BOS 我 爱 EOS”，输入是“BOS 我 爱”，标签是“我 爱 EOS”，最后一个位置预测停止符。
-3. logits=[2,1,0]，温度0.5一定选A吗？抽样不一定，A约86.68%；greedy才确定选A。T趋0的结论还要检查是否唯一最大。
-4. 表7-3在新增上限2时何时停止？第2步，得到4个总token（2提示+2新增），不是等EOS出现才停。
-5. encoder-only没有因果mask，所以可以不处理padding吗？不可以；允许前后文不代表补位是有用内容。
-6. 第一次生成“明”之前有没有decode输出“明”的表示？不需要。prefill的最后位置logits已可选出“明”；再将“明”作为下一次条件输入。我们的示例是全前缀重算，不是KV缓存实现。
+### 先回答六个问题
 
-下一章保留现有 Baby-GPT 训练实践。扩展大纲的训练闭环与评估章节将另批完成，本章不把固定logits演示当成它们已经落地。
+1. 原文 3 个位置、目标 2 个位置，cross-attention 分数该为几行几列？若三份二维 V 及权重如 §7.4，输出是多少？
+2. 输入“BOS 我 爱”，标签是“BOS 我 爱”吗？
+3. logits=[2,1,0]，温度 0.5 一定选 A 吗？
+4. 表 7-3 在新增上限 2 时何时停止？
+5. encoder-only 没有因果 mask，所以可以不处理 padding 吗？
+6. 第一次生成“明”之前有没有 decode 输出“明”的表示？
+
+### 参考答案
+
+1. 2×3；两行目标 query，各查询三份源资料。若三份二维 V 及权重如 §7.4，输出是 [0.7,0.8]。
+2. 不是。若完整样本是“BOS 我 爱 EOS”，输入是“BOS 我 爱”，标签是“我 爱 EOS”，最后一个位置预测停止符。
+3. 抽样不一定，A 约 86.68%；greedy 才确定选 A。T 趋 0 的结论还要检查是否唯一最大。
+4. 第 2 步，得到 4 个总 token（2 提示 + 2 新增），不是等 EOS 出现才停。
+5. 不可以；允许前后文不代表补位是有用内容。
+6. 不需要。prefill 的最后位置 logits 已可选出“明”；再将“明”作为下一次条件输入。我们的示例是全前缀重算，不是 KV 缓存实现。
+
+下一章保留现有 Baby-GPT 训练实践。扩展大纲的训练闭环与评估章节将另批完成，本章不把固定 logits 演示当成它们已经落地。
 
 ## 原始来源与版本
 
 - [Attention Is All You Need，v7，§3.1、§3.2.3、§3.4](https://arxiv.org/html/1706.03762v7)：双塔结构、因果约束、目标右移和输出层。
 - [BERT 原始论文，§3](https://arxiv.org/abs/1810.04805)：双向编码器预训练；“双向”不是任何任务都可看未来答案。
-- [Transformers 4.57.1 生成参数文档](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation)：temperature、EOS及长度参数的接口语义；本章不用这个库执行实验。
-- [Transformers 4.57.1 缓存说明](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：理解历史K/V复用的概念路标。文档核验日期：2026-10-19。
+- [Transformers 4.57.1 生成参数文档](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation)：temperature、EOS 及长度参数的接口语义；本章不用这个库执行实验。
+- [Transformers 4.57.1 缓存说明](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：理解历史 K/V 复用的概念路标。文档核验日期：2026-10-19。
+
+
+---
+
+# 训练基础（P09）：让一次猜字变成一次学习
+
+前面我们已经装好了注意力、残差和因果掩码。但“能算出下一个字的分数”不等于“已经学会猜字”。本章先把训练循环慢放，再到下一章《Baby-GPT》拼完整模型。
+
+**读完你应该能回答：这一批题从哪里来，答案对齐哪一格，错多少，谁计算梯度，谁修改参数，以及凭什么说模型变好了。** 先懂 Python 切片与前几章的 `[B,T,C]` 就够了；导数只用“向哪个方向微调”的直觉。
+
+## 1. 练习册、答题纸与考试卷
+
+训练像练习默写：模型交一份答题纸，损失函数评分，梯度告诉我们怎样微调，优化器实施调整。类比的边界是：模型没有老师式理解；一次更新是数值计算，不保证每道题都改对，也不保证下一次总分必然更好。
+
+```text
+原文 -> 按文档分组 -> 训练文档 -> 抽一个 batch
+                         |           |
+                         |       前向得到 logits
+                         |           |
+                         |       对齐答案算 loss
+                         |           |
+                         |       backward 算梯度
+                         |           |
+                         +------ step 改参数
+
+独立保留文档 -----------------> 只评分，不更新
+```
+
+先分文档，再抽窗口。把同一首诗的许多重叠窗口随机分成“训练/验证”，相当于考试卷藏着练习册里几乎相同的题。窗口不相同，也不代表来源独立。
+
+本章把三首诗中的前两首作为训练来源，把整首《春晓》留下。每个窗口只取自一首诗，不把上一首最后一字接到下一首首字。这个划分可演示评估流程，**只有一个保留文档，不是可靠的泛化基准**；共同标点、体裁与小样本噪声都会影响结果。真正做项目，还要按来源去重，留出更多文档；用于选择超参数的是验证集，最终测试集不能反复拿来调参。本章没有声称拥有独立最终测试集。
+
+为复用下一章词表，本实验预先用三首诗的全部字符定义 57 字词表。训练不读取第三首的标签，但词表知道第三首出现哪些字：这是 **transductive（利用了保留数据的词汇信息）设置**，不是严格训练集独立构建的 tokenizer。更严格的方案要预先固定词表，或只在训练文档建词表并明确未知字符策略。即使知道字符 ID，模型也没有学到这些字符在第三首中的顺序。
+
+## 2. 输入与标签只错开一个位置
+
+假设文本是“床前明月光”，取长度 `T=4`，需要先取 **5 个字符**：
+
+| 时间格 t | 0 | 1 | 2 | 3 |
+| --- | --- | --- | --- | --- |
+| 输入 x | 床 | 前 | 明 | 月 |
+| 目标 y | 前 | 明 | 月 | 光 |
+| 这一格能看的输入 | 床 | 床前 | 床前明 | 床前明月 |
+
+Python 切片是 `x = ids[start:start+T]`，`y = ids[start+1:start+T+1]`。右端不包含。`start+T` 必须小于文档长度，否则最后一个输入没有答案。
+
+为什么整行输入包含“明”，预测“前”的时候不会偷看？因为前面学过的因果掩码限制每一格只能看自己和左边。标签是评分依据，不能作为当前格输入的额外通道。训练中一次并行算全部位置，生成时则只有已有前缀。
+
+脚本的 `shifted_pair` 负责切片，`assert_shift` 用原始文档核对，不只比较 x/y 的长度。若误写 `y=x`，形状完全正确，训练目标却从“预测下一个字”变成了“抄当前字”。
+
+### 亲手做一次作弊反例
+
+给定输入 ID `[0,1,2]`，每一格都把当前输入 ID 的分数设成 12，其他三个类别设成 0。这个“模型”没有训练：
+
+- 错误答案 `[0,1,2]`：平均 loss 约 **0.00001843**。
+- 正确的下一字答案 `[1,2,3]`：平均 loss 约 **12.00001843**。
+
+一个漂亮的 loss 可以来自一道错误的题。因果掩码不能修好 `y=x`，因为当前格本来就允许看见自己。
+
+## 3. 损失到底在罚什么：手算交叉熵
+
+模型输出的是任意实数分数 logits，不必为正，也不要求总和为 1。softmax 将分数变成概率；交叉熵取正确答案概率的负自然对数：`loss = -ln(p_correct)`。正确答案概率越小，罚得越重。对数底数为 e，单位可称 nats。
+
+下面只有 A/B 两类、两个待评分位置，二者正确答案都是 A。令 `ln(3)=1.098612289`：
+
+| 位置 | logits (A,B) | softmax (A,B) | 正确答案 | 单位置 loss |
+| --- | --- | --- | --- | --- |
+| 0 | (ln(3), 0) | (0.75, 0.25) | A | -ln(0.75) = 0.287682072 |
+| 1 | (0, ln(3)) | (0.25, 0.75) | A | -ln(0.25) = 1.386294361 |
+
+默认平均损失为 `(0.287682072 + 1.386294361) / 2 = 0.836988217`。不是先把正确答案概率平均成 0.5 再取负对数，后者是不同的量。PyTorch 的 `cross_entropy` 已包含稳定的 log-softmax 计算，**传 logits，不要先 softmax 再传进去**。
+
+一般 batch 有 B 行、每行 T 格、词表 V 个字：
+
+| 对象 | 形状 / 类型 | 含义 |
+| --- | --- | --- |
+| x、y | `[B,T]`，整数 long | 输入 ID、正确目标 ID |
+| logits | `[B,T,V]`，浮点 | 每格每个候选字的分数 |
+| 用于 CE 的 logits | `[B*T,V]` | 把格子排成一个题目列表 |
+| 用于 CE 的 y | `[B*T]` | 每题一个类别编号 |
+| mean loss | 标量 | 本 batch 所有格子的平均损失 |
+
+这里没有 padding、类别权重或忽略标签，每格权重相同。以后有 padding 时，分母应是有效标签数，不能把 padding 算进去。评估多份长度不同的文档时，也要按预测 token 数加权，不是把每份文档的平均 loss 再简单平均。
+
+## 4. backward 不更新参数，step 才更新
+
+先把模型缩到最小：只有两个可训练分数 `z=[ln(3),0]`，正确答案 A。此时梯度是“预测概率减真实 one-hot”：
+
+```text
+预测概率             [0.75, 0.25]
+真实答案             [1.00, 0.00]
+loss 对 z 的梯度     [-0.25, 0.25]
+学习率 0.1 的 SGD:
+新 z = 旧 z - 0.1 * 梯度 = [1.123612289, -0.025]
+```
+
+A 分数上升、B 分数下降，新 loss 为 **0.275414489**，小于原来的 0.287682072。脚本用标准库生成这些数值；测试另用微小扰动的有限差分验证梯度，不只检查输出里是否有这串数字。这个例子是直接优化 logits 的单题 SGD，真实模型要把梯度沿计算图反传到 embedding、投影矩阵等参数。
+
+两格取 mean 时，每格梯度还要除以 2，因此上表两个位置的梯度分别是 `[-0.125,0.125]` 和 `[-0.375,0.375]`。换成 sum，梯度也会跟着变；学习率不能脱离 loss reduction 讨论。
+
+下面是[实验源码](../code/11_training_loop.py)的 `train_step` 核心：
+
+```python
+model.train()
+optimizer.zero_grad(set_to_none=True)  # backward adds; do not mix batches accidentally
+logits, loss = model(x, y)
+loss.backward()
+optimizer.step()
+```
+
+逐行拆开：
+
+1. `train()` 设置训练模式，不是“开始训练”的魔法按钮。
+2. `zero_grad` 清掉上一轮梯度。这不是把权重清零。
+3. 前向调用模型，得到分数和当前损失；autograd 记录需要求导的运算。
+4. `backward()` 按链式法则算梯度并写入参数的 `.grad`，还没有修改权重。
+5. `step()` 根据梯度更新权重。脚本使用 AdamW，下面的手算则用 SGD；不要把 SGD 的一步公式当成 AdamW 的精确公式。
+
+为什么每轮清零？PyTorch 默认把新梯度加到旧梯度上。对同一个参数、不更新参数地反传同一道题两次，`[-0.25,0.25]` 会变成 `[-0.5,0.5]`。有意积累多个 micro-batch 可以节省显存，但需要设计缩放和更新时机；本实验每 batch 更新一次，不需要跨 batch 积累。
+
+## 5. train、eval 与 no_grad 是三件不同的事
+
+`eval()` 影响 Dropout、BatchNorm 等有模式差异的层，**不禁止梯度**；`no_grad()` 不记录求导图，**不自动切成 eval 模式**。评估通常两者一起使用，且不调用 optimizer。下面是独立示意代码，不是源码摘录：
+
+```python
+was_training = model.training
+model.eval()
+with torch.no_grad():
+    logits, loss = model(x, y)
+model.train(was_training)
+```
+
+实验的 `evaluate` 还通过 `try/finally` 保证恢复模式。当前 BabyGPT 没有 Dropout/BatchNorm，因此切换模式可能不改变它的数值输出；测试用一个 `Dropout(p=1)` 小对照说明模式的真实作用，而不虚构 BabyGPT 的随机层。
+
+评估 loss 时，保留诗的前面字符作为已知前缀是允许的，这是条件概率评分；没有用其标签更新参数。不要把“不给梯度”误写为“连保留文档都不能前向读取”。不过，反复根据这个 loss 挑种子、调步数，会让它成为调参验证集，不能再声称是从未碰过的最终测试。
+
+## 6. CPU 实验：同一个种子再跑一次
+
+从仓库根目录执行。无需下载模型、无需 GPU，也不写 checkpoint：
+
+```bash
+python code/11_training_loop.py --scalar-only
+python code/11_training_loop.py --steps 40 --seeds 7 7 11
+python -m unittest discover -s tests -p test_training_loop.py -v
+```
+
+第一条只用标准库；第二条需要稳定版 PyTorch **2.14.x**。缺失或不兼容版本时它解释原因并退出，不自动安装；测试仍运行标量部分，只跳过张量部分。已配置仓库环境可把 `python` 换成 `.venv/bin/python`。
+
+教学配置是 CPU 单线程、`d_model=16`、4 头、1 层、最大位置 32、B=4、T=8、AdamW 学习率 0.003、40 次更新。每次从两首训练诗随机取 4 个窗口；共消费 40×4×8=1280 个预测位置，**包含重复，不等于 1280 个独立样本**。每次运行重新初始化模型与优化器，同时固定 Python 抽样 RNG 和 PyTorch 种子，并开启确定性算法。
+
+下面是 2026-10-19、PyTorch 2.14.1+cpu 实际输出的四舍五入值。训练/保留 loss 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：
+
+| 运行 | 首 batch loss | 训练文档 loss 前→后 | 保留文档 loss 前→后 |
+| --- | --- | --- | --- |
+| seed 7 | 4.280819 | 4.219313 → 3.175501 | 4.494203 → 4.843005 |
+| seed 7 再跑 | 4.280819 | 4.219313 → 3.175501 | 4.494203 → 4.843005 |
+| seed 11 | 4.219005 | 4.189975 → 3.263426 | 3.923873 → 4.397413 |
+
+模型更适应练习材料，保留诗的 loss 却上升了。这与过拟合现象一致，**不是证明所有设置下都会这样，也不是语言能力排行榜**。第三首存在训练中没学过的字符，且评估上下文长度不同，不能把全部差异都归因于单一原因。同种子同环境重复是复现实验的检查，不是跨硬件/版本逐位相同的承诺；换种子也不是新增独立测试语料。
+
+下一章的 S0 会在三首诗上训练并检查背诵，它是 **同语料记忆/工程基线**。本章两首训练、一首保留是另一种评估演示，不要把两个 loss 混在同一条曲线上。生成检查能发现乱码、循环、提示词接不上等直观问题，但背出训练诗并不证明新诗写作或通用语言能力。只有 loss 和生成片段一起看，再核对数据来源，才不会被“出口成章”迷惑。
+
+## 7. 自测：先答，再看后面的答案
+
+1. 对 ID `[4,7,1,9,3]`，start=1、T=3，x/y 各是什么？把 y 设为 x，因果掩码能否补救？
+2. 表中两道题的 mean loss 是多少？为什么不是 `-ln(0.5)`？
+3. 单题 logits `[ln(3),0]`、答案 A，梯度与学习率 0.1 的 SGD 更新后 logits 是什么？若两题取 mean，梯度怎样变化？
+4. 不调用 step，连续 backward 同一道题两次会怎样？在哪一行清零？
+5. `eval()` 是否关闭 autograd？`no_grad()` 是否关闭 Dropout？当前 BabyGPT 切换模式为什么可能没有数值变化？
+6. 把同诗重叠窗口分到训练和验证有什么问题？本实验整首保留后，为什么仍不能据此声称通用语言能力？
+
+### 参考答案与可执行测试对应
+
+1. x=`[7,1,9]`，y=`[1,9,3]`；不能。当前格合法地能看见自己，错误任务变成复制。对应 `test_shift_and_wrong_shift_mutation` 与 `test_copy_cheat_is_not_next_token_skill`，错误标签会被拒绝，而作弊低 loss 会被实际计算出来。
+2. 0.836988217。交叉熵是各题负对数的均值，不是概率均值的负对数。对应 `test_hand_calculated_cross_entropy` 与 `test_reduction_and_autograd_match_handcalc`。
+3. 梯度 `[-0.25,0.25]`，更新后 `[1.123612289,-0.025]`；两题取 mean 时每题梯度除以 2。对应 `test_gradient_finite_difference_and_update` 与 `test_reduction_and_autograd_match_handcalc`。
+4. 梯度累加成两倍；下一批前调用 `optimizer.zero_grad(set_to_none=True)`。对应 `test_gradient_accumulation_and_clear`；`test_train_step_rejects_zero_grad_omission_numerically` 另跑不清零的错误循环，确认其参数偏离正确参考，避免仅靠搜一行源码“证明正确”。
+5. 两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。对应 `test_eval_no_grad_and_restore_mode`：确认梯度、权重、恢复模式，并用 Dropout 对照。
+6. 重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；下一章 S0 更只是同语料记忆。对应 `test_split_and_leakage_mutation`：将训练文档混入保留集合会报错；`test_fixed_seed_repeat_and_heldout_report` 检查报告与重复运行，不断言“训练必能改善保留 loss”。
+
+## 来源与边界
+
+核验日期：2026-10-19。API 依据锁定为 PyTorch 2.14 文档，运行数值使用 2.14.1+cpu：
+
+- [CrossEntropyLoss](https://docs.pytorch.org/docs/2.14/generated/torch.nn.CrossEntropyLoss.html)：logits 输入、类别标签与 reduction。
+- [Optimizer.zero_grad](https://docs.pytorch.org/docs/2.14/generated/torch.optim.Optimizer.zero_grad.html)：梯度清理与 `set_to_none`。
+- [Autograd mechanics](https://docs.pytorch.org/docs/2.14/notes/autograd.html)：梯度记录、no-grad 与 eval 的区别。
+- 大纲 S14 的 [Transformers 文档入口](https://huggingface.co/docs/transformers/index) 是进一步学习训练框架的导航；本实验不调用 Transformers，也不把动态文档版本冒充已验证依赖。
+- 大纲 S18 [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556) 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出 scaling law，也不据此承诺增加步数就能提升泛化。
 
 
 ---
 
 # 第8章：实战——手搭一个微型大语言模型（Baby-GPT）
 
-> “纸上得来终觉浅，绝知此事要躬行。没有什么比亲眼看着一行行代码从乱码训练到出口成章更令人震撼的了。”
+上一单元 P09 把“数据 → 预测 → 损失 → 梯度 → 更新”走了一遍。现在不再换一套神秘组件，而是把已经学过的嵌入、注意力和 Block 接起来，留下一份后续改进都能比较的 **S0 基线**。
 
----
+本章的目标是训练一个能背三首诗的微型自回归模型，不是训练通用聊天助手。先确认它算对，再看它记住了什么，最后保存与重新载入同一套参数。下一单元 P11 只改变生成的计算方法，加 KV cache；不会偷偷换模型再宣称提速。
 
-## 8.1 我们的任务目标：诗词小才子 Baby-GPT
+## 8.1 任务、边界与运行
 
-在本章中，我们将抛开一切复杂的工业级封装，从第一行代码开始，亲手搭建一个真正的、完整的自回归大语言模型——**Baby-GPT**！
+配套 [code/07_baby_gpt.py](../code/07_baby_gpt.py) 保留三首完整诗：《静夜思》《登鹳雀楼》《春晓》。每首 24 个字符（含标点），共 72 个字符；字符词表 57 项。
 
-我们让它学习李白《静夜思》、王之涣《登鹳雀楼》和孟浩然《春晓》。三首诗分开喂，不粘成一条。
-训练前，给它“床前”，它会吐出乱码。训练 80 轮后，损失会降到接近 0，三个课文开头都能接回去。再给一个不是开头的“明月”，它就接错。请把这个限度一起看完。
+```bash
+OMP_NUM_THREADS=1 python3 code/07_baby_gpt.py
+python3 -m unittest discover -s tests -p 'test_baby_gpt.py' -v
+```
 
----
+需要 `requirements.txt` 中的 CPU PyTorch；本文数值来自 Python 3.12、PyTorch 2.14.1+cpu、种子 42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同 seed 承诺跨平台逐位相同。
 
-## 8.2 模型超参数与配置规格表
+本章把三首诗全用于训练，观察的是**训练集记忆**。P09 的整首留出实验才有训练与验证之分，而且数据仍小到不足以评价通用语言能力。本章的生成例子也不是盲测集。不要将每首诗的重叠窗口随机分组后叫作独立泛化评估。
 
-为了让这个实验在普通笔记本的 CPU 上也能较快跑完，我们把数据和模型都控制得很小。实际耗时会随电脑、PyTorch 版本和线程数变化，不把“2 秒”当成硬性承诺：
+## 8.2 先读配置与参数账
 
-### 表 8-1：Baby-GPT 架构超参数规格表
+### 表 8-1：S0 的固定配置
 
-| 超参数名称 | 变量名 | 数值 | 通俗初学者解释 |
-| :--- | :--- | :---: | :--- |
-| **字符词表大小** | `vocab_size` | **57** | 训练诗句中所有出现过的不同汉字与标点总数 |
-| **词向量特征维度** | `d_model` | **48** | 每个汉字用 48 个特征数字（坐标）来描述 |
-| **注意力头数** | `num_heads` | **4** | 分成 4 个专家小分队，每个分队维度为 $48/4 = 12$ |
-| **积木块层数** | `num_layers` | **2** | 堆叠 2 层 Pre-LN Transformer Block |
-| **最大上下文窗口** | `max_seq_len` | **128** | 模型单次能够阅读和记忆的最长汉字数 |
-| **学习率** | `learning_rate` | **0.01** | 每次梯度下山微调参数的步伐大小 |
-| **总参数量** | `Parameters` | **67872** | 运行脚本时会打印这个整数。聊天模型的参数量比它大很多个数量级，GPT-4 的准确数字官方没有公布 |
+| 字段 | 数值 | 在模型中的作用 |
+| --- | --- | --- |
+| `vocab_size` | 57 | 每个位置输出 57 个 logits |
+| `d_model` | 48 | 残差主干的宽度 |
+| `num_heads` | 4 | 每头宽度 48 / 4 = 12，不是 4 个独立语言模型 |
+| `num_layers` | 2 | 两个 Pre-LN 因果 Block |
+| `max_seq_len` | 128 | 可学习位置表和因果 mask 的容量 |
+| FFN 中间宽度 | 192 | 4 × 48，激活使用 GELU |
+| 学习率 / 更新次数 | 0.01 / 80 | 本章记忆实验，不是通用推荐参数 |
+| 参数总数 | 67872 | 不包含不训练的 mask 缓冲区 |
 
----
+可以自己逐项加总，而不是只相信打印结果：
 
-## 8.3 数据流与模型前向传播全景图
+| 部件 | 算式 | 参数 |
+| --- | --- | --- |
+| 词嵌入 | 57 × 48 | 2736 |
+| 可学习位置表 | 128 × 48 | 6144 |
+| 每个 Block 的 Q/K/V/O（无偏置） | 4 × 48² | 9216 |
+| 每个 Block 的 FFN（有偏置） | 48 × 192 + 192 + 192 × 48 + 48 | 18672 |
+| 每个 Block 的两个 LayerNorm | 2 × (48 + 48) | 192 |
+| 两个 Block | 2 × (9216 + 18672 + 192) | 56160 |
+| 最终 LayerNorm | 48 + 48 | 96 |
+| 输出头（无偏置） | 48 × 57 | 2736 |
+| 总计 | 2736 + 6144 + 56160 + 96 + 2736 | 67872 |
 
-下图清晰展示了一个汉字序列从输入、穿过积木块、直到预测下一个字的全部旅程：
+输出头与词嵌入是两份参数，并没有权重绑定。第 6 章用 `nn.MultiheadAttention` 的带偏置示例，所以不能照搬它的 MHA 公式。GELU 不含可训练参数；它与 ReLU 都提供非线性，但函数不同。[来源 1]
 
-为了看清每一步，把这次旅程分为“准备输入 → 提炼信息 → 训练或生成”三段。图中所有形状都对应本章的 Baby-GPT 配置。
+`GPTConfig` 记录架构配置，`model.config` 可以拿回来核对。更改宽度、层数、词表或位置容量会改变参数形状，不能把不兼容 checkpoint 硬塞进去。
+
+## 8.3 一个短句的完整数据流
 
 ```mermaid
 flowchart TD
@@ -2415,32 +2639,9 @@ flowchart TD
     C --> E["除以温度 → Softmax<br/>采样下一字，例如：，"]
 ```
 
----
+三张图沿用同一配置。最后一张的温度采样是温度大于 0 的路径；`temperature=0` 走 argmax，不做除零。
 
-## 8.4 完整源代码深度精讲（保姆级逐行拆解）
-
-让我们逐段拆解配套脚本 [code/07_baby_gpt.py](../code/07_baby_gpt.py)。
-
-### 1. 词表与分词器（Tokenizer）
-
-```python
-# 训练语料：三首经典唐诗
-text_corpus = (
-    "床前明月光，疑是地上霜。举头望明月，低头思故乡。"
-    "白日依山尽，黄河入海流。欲穷千里目，更上一层楼。"
-    "春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。"
-)
-
-# 提取不重复汉字构建字典
-unique_chars = sorted(list(set(text_corpus)))
-vocab_size = len(unique_chars)  # 57 个字符
-char2idx = {ch: i for i, ch in enumerate(unique_chars)}
-idx2char = {i: ch for i, ch in enumerate(unique_chars)}
-```
-
-#### 表 8-2：部分汉字与数字 ID（运行脚本时的真实编号）
-
-`sorted` 按 Unicode 编码排序。句号“。”排在汉字前面，全角逗号“，”排在汉字后面。这些编号只是座位号，没有“逗号比霜更大”这种含义。
+### 表 8-2：真实字符编号
 
 | 汉字 | 数字 ID | 汉字 | 数字 ID | 汉字 | 数字 ID |
 | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -2449,177 +2650,345 @@ idx2char = {i: ch for i, ch in enumerate(unique_chars)}
 | **地** | 13 | **床** | 23 | **明** | 27 |
 | **月** | 32 | **霜** | 52 | **，** | 56 |
 
-所以“床前明月光”五个字的编号是 23、10、27、32、8。请用脚本打印核对，不要凭感觉给汉字编号。
+编号来自 `sorted(set(text_corpus))` 的 Unicode 顺序，没有语义大小关系。“床前明月光”编码为 `[23,10,27,32,8]`；输入张量形状 `[1,5]`，不是 `[5,57]`。
 
----
-
-### 2. 因果自注意力模块（CausalSelfAttention）
-
-这是模型的“灵魂中枢”，注意看我们是如何将因果掩码注册进 PyTorch 缓冲区的：
-
-```python
-class CausalSelfAttention(nn.Module):
-    def __init__(self, d_model, num_heads, max_seq_len):
-        super().__init__()
-        self.num_heads = num_heads
-        self.head_dim = d_model // num_heads
-
-        # 线性投影层
-        self.W_q = nn.Linear(d_model, d_model, bias=False)
-        self.W_k = nn.Linear(d_model, d_model, bias=False)
-        self.W_v = nn.Linear(d_model, d_model, bias=False)
-        self.W_o = nn.Linear(d_model, d_model, bias=False)
-
-        # 核心：下三角掩码缓冲区（不需要计算梯度）
-        mask = torch.tril(torch.ones(max_seq_len, max_seq_len))
-        self.register_buffer("mask", mask)
-
-    def forward(self, x):
-        B, T, C = x.shape  # Batch(批次), Time(序列长度), Channel(维度)
-
-        # 投影并切分多头: [B, num_heads, T, head_dim]
-        Q = self.W_q(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
-        K = self.W_k(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
-        V = self.W_v(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
-
-        # 点乘打分并缩放
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
-        
-        # 施加掩码：将右上角未来位置填入 -1e9 (-∞)
-        scores = scores.masked_fill(self.mask[:T, :T] == 0, -1e9)
-        
-        # Softmax 归一化
-        weights = F.softmax(scores, dim=-1)
-        
-        # 加权求和并拼回原状
-        out = torch.matmul(weights, V).transpose(1, 2).contiguous().view(B, T, C)
-        return self.W_o(out)
+```text
+ids [B,T]          → tok_emb [B,T,48]
+positions [T]      → pos_emb [T,48]，广播到 batch 后相加
+每层 Q/K/V         → [B,4,T,12]
+注意力分数/权重     → [B,4,T,T]
+拼接、投影、FFN     → [B,T,48]
+最终 LN 与输出头    → logits [B,T,57]
 ```
 
----
+本模型用的是**可学习绝对位置表**，不是第 5 章的 sin/cos，也不是 RoPE。每次完整前向从位置 0 开始。它没有 cross-attention、外部文档输入或对话角色处理。
 
-### 3. 完整的 BabyGPT 模型组装
+## 8.4 按模块读源码，不把组件跳过去
+
+完整实现只在源码维护，下面摘出关键语句；标记 `# ...` 的位置表示省略，不是可独立运行的完整类。
+
+### 词表与样本边界
 
 ```python
-class BabyGPT(nn.Module):
-    def __init__(self, vocab_size, d_model=48, num_heads=4, num_layers=2, max_seq_len=128):
-        super().__init__()
-        self.max_seq_len = max_seq_len
-        # 词嵌入，以及可学习的座位表。
-        # 这不是第 5 章的 sin/cos。每个座位一行向量，数字在训练中自己学。
-        self.tok_emb = nn.Embedding(vocab_size, d_model)
-        self.pos_emb = nn.Embedding(max_seq_len, d_model)
-        
-        # 堆叠 2 层积木块
-        self.blocks = nn.ModuleList([
-            BabyBlock(d_model, num_heads, max_seq_len) for _ in range(num_layers)
-        ])
-        
-        # 输出头
-        self.ln_f = nn.LayerNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size, bias=False)
-
-    def forward(self, idx, targets=None):
-        B, T = idx.shape
-        pos = torch.arange(0, T, dtype=torch.long, device=idx.device)
-
-        # 融合词义与位置
-        x = self.tok_emb(idx) + self.pos_emb(pos)
-
-        for block in self.blocks:
-            x = block(x)
-
-        x = self.ln_f(x)
-        logits = self.head(x)  # [B, T, vocab_size]
-
-        loss = None
-        if targets is not None:
-            # 交叉熵损失：衡量预测分布与真实字的差距
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-
-        return logits, loss
+text_corpus = "".join(poems)
+# ...
+unique_chars = sorted(list(set(text_corpus)))
+vocab_size = len(unique_chars)
+char2idx = {ch: i for i, ch in enumerate(unique_chars)}
+idx2char = {i: ch for i, ch in enumerate(unique_chars)}
 ```
 
-训练循环不要把三首诗粘成一条。每一首单独算一次“猜下一个字”的损失，再取平均：
+合并 `text_corpus` **只用于建词表**；训练仍逐首取样。否则一首诗末尾会被错误地要求预测下一首开头。`encode` 没有未知字符回退，也没有 BPE，输入词表外字符会报错；`decode` 则将 ID 反查字符。两者的顺序也是 checkpoint 的一部分。
+
+### 因果自注意力
 
 ```python
-encoded_poems = [torch.tensor(encode(poem), dtype=torch.long) for poem in poems]
+Q = self.W_q(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+K = self.W_k(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+V = self.W_v(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+# ...
+scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
+```
+
+每个 query 只能看自己和更早的 key。未来位置先在 scores 中遮挡，再做 Softmax；不能先归一化再删掉未来权重。当前 S0 没有 padding，合法非空输入每行至少能看见自己。S0 测试会改变后缀字符，检查前缀**所有 logits** 不变，而不只看最后选出来的字碰巧一样。
+
+### Pre-LN、GELU 与最终输出
+
+```python
+x = x + self.attn(self.ln1(x))
+x = x + self.mlp(self.ln2(x))
+```
+
+`BabyBlock` 先用 LN 求增量，再把增量加回主干，与第 6 章默认 Pre-LN 顺序相同。MLP 是 `Linear(48,192) → GELU → Linear(192,48)`。GELU 可写成 x 乘标准正态分布的累计概率，负半轴并非一刀切为零；不必在这里背积分，知道它不是线性层即可。[来源 1]
+
+两个 Block 后还要经过 `ln_f` 和 `head`。`head` 输出的是实数 logits，不是已经归一化的概率。训练时直接把 logits 交给交叉熵；生成时再根据策略选择下一字。不要在交叉熵前重复 Softmax。
+
+## 8.5 从一次 loss 到 80 次更新
+
+每首诗取前 23 个字符作为输入，后 23 个字符作为标签。每个位置预测紧挨着的下一字；一首诗有 23 个监督目标，三首共 69 个。训练循环做：
+
+```python
+optimizer.zero_grad()
 losses = []
 for data in encoded_poems:
     _, loss = model(data[:-1].unsqueeze(0), data[1:].unsqueeze(0))
     losses.append(loss)
 loss = torch.stack(losses).mean()
+loss.backward()
+optimizer.step()
 ```
 
-`data[:-1]` 是输入，`data[1:]` 是紧挨着的下一个字。例如“床前明”，输入是“床前”，目标是“前明”。
+内部交叉熵是该首所有 token 的平均，外部再对三首取平均。三首长度相等，这等于 69 个 token 的平均；如果长度不同，“每首等权”不再等于“每个 token 等权”。P09 的 reduction 例子专门区分这两种目标。
+
+`zero_grad` 清掉上一轮的梯度，`backward` 算出本轮梯度，`step` 更新参数。当前脚本使用 AdamW，包含自适应状态，不是手算小节里的裸 SGD；学习率相同也不能预期更新完全一样。`train()` 不会替你反向传播，`eval()` 也不会替你关闭梯度。本模型没有 dropout，因此两种模式对当前层的数值本身没有随机开关；生成仍显式使用 eval 和 no_grad，以建立正确习惯。
+
+### 表 8-3：种子 42 的 S0 训练日志
+
+| 更新序号 | 更新前训练 loss | 解释 |
+| --- | --- | --- |
+| 1 | 4.1271 | 与均匀猜测 ln(57) ≈ 4.0431 同量级，但不是完全均匀分布 |
+| 20 | 0.0196 | 正在记住同一批目标 |
+| 40 | 0.0021 | 继续提高训练字符的概率 |
+| 60 | 0.0011 | 仍是训练集结果 |
+| 80 | 0.0009 | 不能据此推出验证集正确 |
+
+表内是本次循环算完前向、尚未 `step()` 时的值；“第 80 行”不代表更新 80 次后的另一次评估。参数有 67872 个，而语料只有 72 个字符，记忆这个微型训练集不是惊人的泛化证据。固定版本的回归核对这份四位小数日志快照；其他张量比较使用声明的数值容差，不把训练墙钟时间当成通过门槛。
+
+## 8.6 保留生成对照，也保留失败案例
+
+### 表 8-4：每次新增 15 字，温度 0
+
+| 提示 | 未训练 | 更新 80 次后 |
+| --- | --- | --- |
+| 床前 | `床前穷河前月眠欲黄头黄一日依疑，床` | `床前明月光，疑是地上霜。举头望明月` |
+| 白日 | `白日穷河前月眠欲黄头黄一日依疑，床` | `白日依山尽，黄河入海流。欲穷千里目` |
+| 春眠 | `春眠落头黄风白望入落欲一日依疑，床` | `春眠不觉晓，处处闻啼鸟。夜来风雨声` |
+
+再输入不在课文开头的“明月”，这个固定实验输出：
+
+```text
+明月不觉晓，处处闻啼鸟。夜来风雨声
+```
+
+它没有接回“明月光”，而是转入另一首诗。这个反例说明本次训练不保证任意提示都能接回原文；单个反例也不能证明模型内部完全没有学到任何词关系。不要将“背诵 vs 理解”写成可由一条输出解决的哲学判定。
+
+S0 的停止条件是新增字符数，没有训练 `<EOS>`。句号和 EOS 不是同一回事：生成句号不会自动停。温度 0 是贪心；为兼容旧 API，负温度也走贪心，新的调用建议只用 0 或正数。温度为正时按概率采样，1 是原分布，0.2 放大分数差，2 缩小分数差；都不是正确率旋钮。
+
+S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位置重新编号为 0–127。这是一个明确的**滑窗重算策略**，不是无限上下文，也不能与沿用旧绝对位置的缓存结果直接比较。P11 的缓存演示到容量上限就报错，不伪装成同一滑窗策略。
+
+## 8.7 保存再加载：基线必须能回来
+
+只有 loss 日志不够。后续要比较 S0/S1，必须复用完全相同的权重、配置和词表。配套 `save_checkpoint(path, model)` 保存配置、参数与字符顺序；`load_checkpoint(path)` 在 CPU 创建对应模型并恢复权重。测试在临时目录保存后加载，对同一批输入比较所有 logits。
+
+```python
+# 在已导入本脚本的 Python 会话内；model 是你的 BabyGPT 实例。
+save_checkpoint("baby_gpt.pt", model)
+restored = load_checkpoint("baby_gpt.pt")
+restored.eval()
+```
+
+这里只提供**推理基线恢复**，不承诺训练中途精确续跑。续训通常还需 optimizer 状态、随机数状态、数据采样位置与步数；不能将本 checkpoint 的 round-trip 测试当成全部续训条件已经实现。
+
+只加载自己生成或可信来源的文件。实现显式使用 `torch.load(..., weights_only=True)` 并核对格式；这不是允许任意陌生文件的安全保证，不要为载入来历不明文件改成不受限反序列化。[来源 2]
+
+## 8.8 先预测，再看答案
+
+1. `[2,5]` 的字符 ID 输入在默认配置下，logits 是什么形状？
+2. 三首 24 字诗各自 shift，监督目标一共多少个？直接拼接后会多出什么？
+3. 为什么不能把表 8-3 叫验证 loss？长度不同时，平均每首 loss 等于平均每个 token 吗？
+4. 默认模型参数为什么不是把 57×48 只算一次？mask 是训练参数吗？
+5. 生成遇到句号会停吗？保存 checkpoint 后是否能精确恢复优化器继续训练？
+6. 改掉输入后两个字符，因果模型前面位置的 logits 应该变化吗？只看 argmax 是否足够？
+
+### 参考答案
+
+1. `[2,5,57]`。每个 batch、每个位置都给整个词表打分。
+2. 3×23=69。拼成 72 字会有 71 个目标，其中两个跨诗边界是本任务不想训练的连接。
+3. 全部诗都参与了参数更新。长度不同时每首等权与 token 等权不同。
+4. 输入嵌入和输出头没有绑定，各有 2736 个参数。mask 是固定 buffer，不算可训练参数；总计 67872。
+5. 不会，本模型无 EOS，只按新增预算停。checkpoint 恢复配置/权重/词表，不保存全部续训状态。
+6. 不应该；要逐位置比较 logits。两个分布变化后仍可能选同一个最大项，argmax 相同不能证明计算等价。
+
+这些结论对应 `tests/test_baby_gpt.py` 的形状/loss、词表与参数、因果性、训练与 checkpoint 检查。P09 负责训练基础的梯度和数据边界；下一单元 P11 负责缓存与完整计算的数值等价，不用一次庞大测试掩盖各自的契约。
+
+## 原始来源与实现版本
+
+核验日：2026-10-19。S0 是本仓库教学实现，不是某个商业模型的精确复刻。
+
+1. [PyTorch 2.14 GELU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.GELU.html)：激活定义。模型结构以 [code/07_baby_gpt.py](../code/07_baby_gpt.py) 为准。
+2. [PyTorch 2.14 torch.save](https://docs.pytorch.org/docs/2.14/generated/torch.save.html)、[torch.load](https://docs.pytorch.org/docs/2.14/generated/torch.load.html)：序列化、设备映射与 weights_only 边界。
+3. [Transformers 4.57.1 生成参数](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation)：用于比较长度/采样接口概念；本章不依赖 Transformers 运行，不声称它的参数语义与旧 Baby-GPT 每处相同。
+
 
 ---
 
-## 8.5 训练过程与 Loss 下降实验数据表
+# 生成优化（P11）：KV Cache，不再重复算历史
 
-运行训练后，模型在 80 个步长内展现出了惊人的学习速度：
+第 8 章得到一份明确的 S0：相同字符词表、可学习绝对位置、两个 Pre-LN Block。现在实现 S1，**权重一项都不改，只缓存生成中可以复用的中间结果**。先证明 logits 对齐，再问时间和内存，不能把“生成的字看起来一样”当作正确性证明。
 
-三首诗**分开**训练，每首都从座位 0 开始，损失取三次的平均。随机种子是 42。如果把三首诗粘成一条，模型会只记住“第 i 个座位的下一个字”；这时提示“白日”仍会被放到第 0 号座位，于是接着背《静夜思》。
+配套 [code/12_kv_cache.py](../code/12_kv_cache.py) 直接使用 S0 的模型模块，不另训一份近似模型。实验是 CPU、float32、无 dropout、eval 模式；不下载权重，不用 GPU。
 
-前馈网络用的是 GELU。它在 0 附近是一条平滑曲线。第 6 章的小演示用的是 ReLU，两种都能把积木跑通。
+## 11.1 重算发生在哪里
 
-### 表 8-3：种子 42、三首诗分开训练时的损失
+假设提示有“床前”两个字符。S0 先计算这两个位置，再选出“明”；下一轮把“床前明”三个位置全部送进模型，先前“床”“前”的计算又做一次。
 
-完全瞎猜下一个字时，损失大约是 $-\ln(1/57) = \ln 57 \approx 4.04$。第 1 轮测到的 4.1271 和这个数很接近。
+在因果模型中，较早位置不能看后来追加的 token。如果权重、位置、历史 token 和确定性的前向计算都不变，较早位置在每层的表示也不会因追加后缀而变化。因此它们的 K 和 V 可以保存，下一步直接读。Q 是本次新位置要发出的查询，不必保存整个历史 Q。
 
-| 训练轮次 | 损失值 | 这时实际发生了什么 |
-| :---: | :---: | :--- |
-| **第 1 轮** | **4.1271** | 接近盲目乱猜 |
-| **第 20 轮** | **0.0196** | 三首课文的下一个字已经大体背出来 |
-| **第 40 轮** | **0.0021** | 仍在把同一份课文背得更死 |
-| **第 60 轮** | **0.0011** | 训练损失继续变小 |
-| **第 80 轮** | **0.0009** | 对这三首诗的下一个字几乎没有误差 |
+```text
+S0：床 前          → 全部位置前向 → 选 明
+    床 前 明       → 全部位置前向 → 选 月
 
-损失接近 0，是因为课文只有 72 个字，67872 个参数足够把它记住。这不是学会了作诗。
+S1：床 前          → prefill，存各层 K/V → 选 明
+          明       → 新 Q/K/V + 历史 K/V → 选 月
+             月    → 新 Q/K/V + 历史 K/V → ...
+```
 
----
+可以把它比作保存已经整理好的借阅索引，下一次只补新条目。类比的边界是：真实缓存不是保存自然语言摘要，也不是模型长期记忆；它保存的是当前请求、当前参数与位置下的浮点张量。缓存本身不会让模型学会新的事实。
 
-## 8.6 见证奇迹：真实生成效果对比
+## 11.2 Prefill 与 decode，首字到底从哪来
 
-让我们看看训练前后的生成效果对比：
+**Prefill** 一次处理提示，建立每一层的 K/V。提示最后一个位置的 logits 已经能选出第一个新 token；不用先把这个尚未选出的 token 输入模型。
 
-下表用的是贪心解码：每一步都选当前分数最高的字，所以种子 42 下每次运行都是这几句。温度大于 0 时会掷骰子，句子可能变化。
+**Decode** 通常每次送入刚选出的一个 token。这个新位置产生 Q、K、V；把新 K/V 接在对应层的历史后面，Q 对全部可见 K 打分，然后更新本层缓存。下一层使用的是本层更新后的新 token 表示，而不是直接复用第一层的 K/V。
 
-### 表 8-4：训练前后的贪心续写（每次再生成 15 个字）
+模型有两层就有两组缓存。每组分别保存 K 和 V，共四个张量。我们的接口：
 
-| 输入提示 | 未训练 | 训练 80 轮后 |
-| :--- | :--- | :--- |
-| **床前** | `床前穷河前月眠欲黄头黄一日依疑，床` | `床前明月光，疑是地上霜。举头望明月` |
-| **白日** | `白日穷河前月眠欲黄头黄一日依疑，床` | `白日依山尽，黄河入海流。欲穷千里目` |
-| **春眠** | `春眠落头黄风白望入落欲一日依疑，床` | `春眠不觉晓，处处闻啼鸟。夜来风雨声` |
+```python
+logits, cache = cached_forward(model, prompt_ids, cache=None)
+# logits: [B, prompt_T, vocab_size]
+# ... 选出 next_ids: [B,1]
+new_logits, cache = cached_forward(model, next_ids, cache)
+# new_logits: [B,1,vocab_size]
+```
 
-三个课文开头都能接回去。再试一个课文里有、但不是开头的提示：
+这里的片段是调用顺序，完整可运行示例在源码。`cached_forward` 不选 token，只返回当前新块的 logits；`generate_cached` 才负责选择与循环。它每次调用从空缓存开始，防止第二个请求误接在第一个请求后面。
 
-`明月` → `明月不觉晓，处处闻啼鸟。夜来风雨声`
+## 11.3 逐层形状与位置偏移
 
-它没有接成“明月**光，疑是地上霜**”，而是滑进了《春晓》。小模型记住的是三首短课文的开头，不是“月光”这个意思。
+设已有 P 个位置，本次新输入 C 个位置；头数 H，每头宽度 d，主干宽度 D=H×d。
 
-> [!TIP]
-> **关于采样温度（Temperature）的数学直觉**：
-> 在生成代码中，有一行：
-> `logits = logits / temperature`
-> - 当 `temperature = 1.0` 时：保持原有概率；
-> - 当 `temperature = 0.2` 时：所有得分被除以 0.2（相当于放大 5 倍！）。经过 Softmax 后，概率会更偏向当前最高分的字，模型通常更**保守、集中**，但不保证达到 100%；
-> - 当 `temperature = 2.0` 时：分数差距被缩小，概率会更平均，模型通常更**随机**，也更容易生成训练语料里没有出现过的组合。
+| 张量 | 形状 | 本次是否新算 |
+| --- | --- | --- |
+| 输入 ID | [B,C] | 本次输入 |
+| 新 Q/K/V | [B,H,C,d] | 是 |
+| 历史 K/V | [B,H,P,d] | 否 |
+| 拼接后的 K/V | [B,H,P+C,d] | 保存历史和新块 |
+| 注意力 scores / weights | [B,H,C,P+C] | 是，通常不是方阵 |
+| 当前块输出 | [B,C,D] | 是 |
+| 当前块 logits | [B,C,57] | 是 |
 
----
+默认模型 H=4、d=12。当 B=1、P=3、C=2 时，新 Q 是 `[1,4,2,12]`，K/V 总长为 5，scores 是 `[1,4,2,5]`。
 
-## 8.7 本章小结
+新块位置必须是 **P,P+1,…,P+C−1**。不是每次 decode 都从 0 开始，否则每一个新字都会拿到错误的可学习位置向量。源码的关键语句：
 
-在本章中，我们从 0 到 1：
-1. 制作了一个字符级分词器；
-2. 搭建了带因果掩码的多头自注意力层与完整的 Transformer 积木块；
-3. 编写了训练循环与自回归生成函数；
-4. 看到损失从 $4.13$ 降到 $0.0009$，以及这种下降的限度：三首诗的开头被背下来了，没学过的提示不会。
+```python
+pos = torch.arange(offset, offset + T, device=idx.device)
+x = model.tok_emb(idx) + model.pos_emb(pos)
+```
 
-到这里，主干计算已经能亲手走通。
-然而，真实世界中的 ChatGPT、Claude、DeepSeek 拥有上千亿参数，它们在此基础上又进化出了哪些现代武器？
-请看最后一章：**走向未来——从经典 Transformer 到 GPT-4、DeepSeek**！
+这里 T 是本次新块长度，`offset` 是缓存长度。旧位置向量已经进入旧 K/V 的计算，不应给旧缓存再加一次位置向量。参数表最大 128 行，索引只能是 0–127。
+
+## 11.4 矩形 mask：最容易写错的两行
+
+把提示分块计算，或者一次追加两个 token，同样必须阻止本块早位置看到本块未来。P=3、C=2 时，新 query 的绝对位置是 3、4，key 的位置是 0–4。可见规则仍是 **key_position ≤ query_position**。
+
+### 表 11-1：三格历史加两格新输入
+
+| 新 query 位置 | key 0 | key 1 | key 2 | key 3 | key 4 |
+| --- | --- | --- | --- | --- | --- |
+| 3 | True | True | True | True | False |
+| 4 | True | True | True | True | True |
+
+直接 `tril(ones(2,5))` 会得到第一行只看 key0、第二行只看 key0/1，错误地屏蔽了大部分历史。反过来完全不加 mask，又会让位置 3 偷看位置 4。C=1 时本行可以看全部历史加自己，但这个特殊情况不能代替通用实现。
+
+```python
+query_positions = torch.arange(offset, offset + T, device=x.device)[:, None]
+key_positions = torch.arange(offset + T, device=x.device)[None, :]
+allowed = key_positions <= query_positions
+scores = q @ k.transpose(-2, -1) / math.sqrt(attn.head_dim)
+weights = scores.masked_fill(~allowed, float("-inf")).softmax(dim=-1)
+```
+
+这是源码片段，`True` 表示允许；先填负无穷，再 Softmax。本实现不接受空块，也不提供 padding，因此每行至少有自己可见，不会产生全 mask 行。带 padding/变长批次是另一层接口契约，不能把这个限制忘掉后套到任意批次。
+
+### 表 11-2：把可见性变成可手算的输出
+
+暂时只看一个头，让两行 scores 都是 `[ln1,ln2,ln3,ln4,ln5]`，五个标量 V 是 `[10,20,30,40,50]`。这些是独立手算输入，不是随机模型碰巧得到的分数。
+
+| query | 允许项 exp(score) | 分母 | weights | 加权 V |
+| --- | --- | --- | --- | --- |
+| 位置 3 | [1,2,3,4,0] | 10 | [0.1,0.2,0.3,0.4,0] | 30.000000 |
+| 位置 4 | [1,2,3,4,5] | 15 | [1/15,2/15,3/15,4/15,5/15] | 36.666667 |
+
+第一行分子是 10+40+90+160=300，除以 10 得 30；第二行再加 250，550/15≈36.666667。错误的小矩形下三角会分别得到 10 和 50/3≈16.666667。这张表由脚本手算函数与测试核对，不用生成句子的表面效果来掩盖错误。
+
+## 11.5 证明 S0 与 S1 等价，要比较什么
+
+对同一个 eval 模型与同一串 ID，先完整前向取得 `[B,T,57]` 的参考 logits，再分块调用缓存路径，将新块 logits 沿时间拼起来。比较的是每个位置的每个词表项，而不是仅比较选出的 token。
+
+检查覆盖：
+
+- 一次完整 prefill、逐 token 输入、7-token chunked prefill，最后一块不足 7 也要正确。
+- T=1 和 B>1；每层 K/V 长度应随新块增加。
+- 同一请求分支：保留旧 cache，从它分别追加不同后缀，不应偷偷原地修改旧 cache。
+- 两次独立请求：重新传 `None`，第二次结果不能包含第一次历史。
+- 错误边界：train 模式、空输入、超过位置上限、错误 batch/层数/头维、不同模型或更新权重后的旧缓存。
+
+float32 的运算顺序可能因为矩阵大小不同而有微小舍入差；测试使用明确的 `atol/rtol`，不是要求逐位相同，也不是放宽到“都能生成一句诗”。脚本打印最大绝对误差，超出容差时必须排查位置、mask、拼接维度或参数是否相同。
+
+`KVCache` 的容器不可重赋字段，但其中的张量仍可被调用者修改。因此约定缓存张量只读，不承诺 Python 的 frozen dataclass 能深度冻结 Tensor。它不是持久化 checkpoint，也不要跨模型、跨参数更新复用。
+
+## 11.6 用空间换计算：先算真实 K/V 负担
+
+MHA 有 L 层，batch 为 B，缓存 T 个 token，H 个头，每头 d 个数，每个元素 s 字节，则：
+
+$$M_{KV}=2LBHTds=2LBTDs$$
+
+前面的 2 是 K 和 V 两份，不是两个 Block。默认 L=2、B=1、H=4、d=12、float32 的 s=4。
+
+| 缓存长度 T | 计算 | K/V 逻辑字节数 |
+| --- | --- | --- |
+| 5 | 2×2×1×4×5×12×4 | 3840 |
+| 48 | 2×2×1×4×48×12×4 | 36864 |
+| 128 | 2×2×1×4×128×12×4 | 98304 |
+
+脚本用 `numel() * element_size()` 把每层 K/V 实际相加，再与公式比较；float64 会将这些数字翻倍。此处的“内存”仅指逻辑张量载荷，不包括 Python 对象、模型权重、临时 scores、分配器保留空间和拼接复制的峰值。
+
+S1 用 `torch.cat` 动态增长，旧新张量可能在某一瞬间同时存在。因此公式不是进程 RSS 或显存峰值。每步注意力仍需读全部历史 K/V；缓存不把任意长注意力变成与历史长度无关的常数成本。
+
+GQA/MQA 会改变 KV 头数，量化会改变元素存储，分页会改变分配策略；都不在 S1 实现。这里用 MHA 的 H 直接计算，只把后续主题留作路线，不能用本章数字声称完成了 PagedAttention。[来源 2]
+
+## 11.7 长度、重置与批处理的诚实边界
+
+S0 的旧 `generate` 超长后保留最后 128 字、重置位置编号。S1 **拒绝超过容量**：只删掉最老 K/V 并不能重现这种重编号，因为保留下来的 K/V 已含旧位置与旧上下文影响。需要新的窗口语义和重算策略才能比较，不能静默丢缓存就声称等价。
+
+`generate_cached` 采用保守规则：提示长度+请求新增预算 ≤128。最后一个选出的 token 不一定还需送回模型，但预算规则仍把它计算在内，方便调用者预先知道边界。零新增返回原输入，不做模型前向。它和 S0 一样没有 EOS，按预算停止。
+
+批量实验只支持同长、无 padding 的 B 个请求，位置从 0 开始对齐。若要把长短不一的用户请求动态加入/退出，需要分别记录有效长度、注意力可见性与缓存所有权，本教学实现没有做到。对不同 batch 直接复用旧 cache 会报错，不会替你猜如何重排请求。
+
+## 11.8 计时：首 token 与后续 token 分开记
+
+```bash
+OMP_NUM_THREADS=1 python3 code/12_kv_cache.py
+python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
+```
+
+基准使用同一个默认 S0 的随机权重，固定 48 个输入 ID，前 16 个作提示，后 32 个逐个回放。随机权重足以检查数值等价和计算路径，不用于评价文本质量。
+
+- 首 token 指标：提示前向产生可选择首字的 logits 的耗时；不含分词、采样、网络或排队，不是端到端服务 TTFT。
+- 后续 token 指标：同一次运行中 32 次后续前向的平均耗时，再跨重复运行取统计量；不是逐 token 尾延迟分位数。
+- 先预热 2 轮，再计 7 轮；交替 S0/S1 测量顺序，输出各指标 min/median/max。
+- CPU 单线程用 `perf_counter`；没有异步 GPU 工作，因此本实验不涉及 CUDA 同步。将方法搬到 GPU 时需要另外处理同步。
+
+本机测量值和版本见本批验证记录；每次运行都会重新打印，不将抖动的毫秒数写成单元测试常数。小矩阵下 Python 验证、`cat` 和分配可能抵消省下的计算，缓存不保证在这个微型 CPU 例子里更快。正确的优化报告应同时列出两条路径和计时范围，而不是只挑最漂亮的一次。
+
+## 11.9 先预测，再看答案
+
+1. P=3、C=2 时 scores 的最后两维是什么？第二个新 query 能看几个 key？
+2. 已缓存 5 个 token，下一块 2 个 token 的位置编号是什么？可以重新从 0 开始吗？
+3. 默认模型 float32、B=1、T=5 时，K/V 逻辑载荷多少字节？等于进程总内存吗？
+4. 提示 prefill 结束后，第一个新 token 是否还要先输入模型才能被选出？
+5. 两次独立请求使用同一个模型，第二次如何开始？能在更新权重后继续旧 cache 吗？
+6. 缓存与完整前向生成相同贪心 token 就算验证通过吗？删最老缓存能重现 S0 的超长滑窗吗？
+
+### 参考答案
+
+1. `[2,5]`；第二行能看 5 个。矩形可见性由绝对位置比较得到。
+2. 5、6。重新从 0 开始会查错位置嵌入。
+3. 3840 字节。不是总内存，也不是 `cat` 时的峰值。
+4. 不需要；提示最后位置的 logits 已可选首字。选出后才将它作为后续 decode 输入。
+5. 传 `cache=None`；`generate_cached` 自动为每次调用创建空缓存。参数更新后旧缓存无效。实现核对参数对象身份、版本、dtype 与 device，包含 `assign=True` 替换参数的情况；不支持通过 `.data` 等方式故意绕过 PyTorch 版本跟踪。
+6. 不算，需比较每个位置完整 logits；也不能，因为旧 K/V 的位置与上下文没有重新计算。
+
+`tests/test_kv_cache.py` 对应形状/偏移、矩形 mask、全 logits 对齐、内存公式、独立请求和上限契约；还实际构造错误 offset 和错误 mask 的负面对照。后续 RoPE、GQA 或缓存布局的改动，都要继续通过这种同参数对齐，而不是跳过 S0 直接看速度。
+
+## 原始来源与版本
+
+核验日期：2026-10-19。本章 S1 是教学实现，既不是 HF Cache API 的完整实现，也不是 vLLM 服务实现。
+
+1. [Transformers 4.57.1 Caching](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：逐层 K/V、增量计算、cache position 与组合注意力 mask；只在推理使用缓存的边界。
+2. Kwon 等，[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，§2–3：KV cache 与服务内存管理动机。分页和连续批处理留给后续，不将本地 `cat` 称为 PagedAttention。
+3. [code/07_baby_gpt.py](../code/07_baby_gpt.py) 与 [code/12_kv_cache.py](../code/12_kv_cache.py)：本章形状、容量策略、计时范围及可运行数值的直接依据。
 
 
 ---
