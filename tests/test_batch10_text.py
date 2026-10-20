@@ -24,6 +24,12 @@ class FinalBatchTextTests(unittest.TestCase):
             self.assertIn('已实现',body)
             self.assertNotIn('P27–P28 尚未',body)
             self.assertNotIn('P28 新附录仍按批次推进',body)
+            for stale in ('尚未完成的扩展', '尚未全部按新大纲改写',
+                          '不是已完成全部 29 个单元的新书', '每批审核后才继续'):
+                self.assertNotIn(stale,body)
+        for path in ('README.md','chapters/00_preface.md'):
+            self.assertIn('原大纲 29 个单元的内容已实现',(ROOT/path).read_text())
+        self.assertNotIn('本次 PR', (ROOT/'chapters/09a_minigpt_healthcheck.md').read_text())
         self.assertIn('不等于所有生产技术', (ROOT/'README.md').read_text())
 
     def test_old_appendix_heading_aliases_not_lost(self):

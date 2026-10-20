@@ -83,7 +83,9 @@ def make_stages(include_mtp=False, seed=SEED):
             torch.manual_seed(seed)
             result.append(Stage(name, construct(name, config).eval(), forward))
         if include_mtp:
-            torch.manual_seed(seed)
+            # A distinct initialization makes the subsequent copy observable:
+            # omitting it must NOT accidentally pass because RNG draws match S5.
+            torch.manual_seed(seed + 1)
             model = construct('S6', specs[-1][1], depth=2).eval()
             # Hold all S5 tensors fixed: added heads alone define the S6 treatment.
             model.load_state_dict({**model.state_dict(), **result[-1].model.state_dict()}, strict=True)
@@ -299,8 +301,9 @@ def mutate_function(function, old, new):
     """Compile an actual in-memory source mutant; leave lesson files untouched.
 
     A changed upstream source anchor is a HARD failure, never a passing negative.
-    No exception is converted to 'caught': negatives must produce finite logits
-    and must violate a quantitative oracle below.
+    Numerical negative_controls must produce finite wrong logits, never treat
+    an exception as 'caught'. Guard tests separately require a specific refusal
+    and inspect the bad state accepted when that actual source guard is removed.
     """
     raw = inspect.unwrap(function)
     source = textwrap.dedent(inspect.getsource(raw))
@@ -429,18 +432,27 @@ def run_healthcheck(include_mtp=False):
     report = {'environment': {'python': platform.python_version(), 'torch': str(torch.__version__),
               'machine': platform.machine(), 'platform': platform.platform(),
               'device': 'cpu', 'dtype': 'float32', 'threads': torch.get_num_threads(), 'seed': SEED,
-              'batch': 2, 'length': 8, 'atol': ATOL, 'rtol': RTOL}, 'stages': []}
+              'batch': 2, 'length': 8, 'atol': ATOL, 'rtol': RTOL,
+              's6_initialization_seed': SEED + 1 if include_mtp else None}, 'stages': []}
     for stage in stages:
         model = stage.model
+        loss = finite_backward(model, tokens, targets)
+        causal_checks = [{'cut': cut, 'max_logit_error': causal_error(model, tokens, cut)}
+                         for cut in range(1, tokens.shape[1])]
         row = {'stage': stage.name, 'parameters': s3.parameter_count(model),
-               'loss': finite_backward(model, tokens, targets),
-               'causal_error': causal_error(model, tokens),
+               'loss': loss,
+               'causal_checks': causal_checks,
+               'causal_error': max(check['max_logit_error'] for check in causal_checks),
                'checkpoint_error': checkpoint_error(stage, tokens)}
         if stage.cached_forward:
             # Chunked prefill, T=1 decode, whole request; different seam positions.
-            errors = [cache_equivalence(stage, tokens, sizes)[0]
-                      for sizes in ((3, 1, 4), (1,) * 8, (8,), (7, 1))]
-            row['cache_error'], row['kv_bytes'] = max(errors), cache_equivalence(stage, tokens)[1]
+            row['chunk_checks'] = []
+            for sizes in ((3, 1, 4), (1,) * 8, (8,), (7, 1)):
+                error, payload = cache_equivalence(stage, tokens, sizes)
+                row['chunk_checks'].append({'sizes': list(sizes), 'max_logit_error': error,
+                                            'kv_bytes': payload})
+            row['cache_error'] = max(check['max_logit_error'] for check in row['chunk_checks'])
+            row['kv_bytes'] = row['chunk_checks'][-1]['kv_bytes']
             other = tokens.flip(1)
             fresh, _ = stage.cached_forward(model, other, None)
             check_close(fresh, model(other)[0])
@@ -489,6 +501,7 @@ def main():
         print(f"{row['stage']}: params={row['parameters']} loss={row['loss']:.6f} "
               f"causal={row['causal_error']:.3g} checkpoint={row['checkpoint_error']:.3g} "
               f"cache={row.get('cache_error', 'n/a')} KV_bytes={row.get('kv_bytes', 0)}")
+        print('  causal cuts checked:', [check['cut'] for check in row['causal_checks']])
         if 'expert_loads' in row:
             print('  expert requested assignments:', row['expert_loads'])
     for row in report['ablation']:

@@ -676,18 +676,18 @@ CPU 参考实现；跳过 GPU
 <p>性能要另外记：同一模型、相同输入输出长度、相同 batch
 和设备，才适合比较；首 token 延迟和后续 token
 速度也不能混成一个数字。本书后续会专章展开，此时先记住：<strong>结果正确，不代表速度快；速度快，也不代表结果正确。</strong></p>
-<h2 id="当前阅读顺序与尚未完成的扩展">0.5
-当前阅读顺序与尚未完成的扩展</h2>
-<p>本书正在按审核通过的扩展大纲分批更新。P00–P28 正文与配套 CPU
+<h2 id="当前阅读顺序与实现边界">0.5 当前阅读顺序与实现边界</h2>
+<p>本书按审核通过的扩展大纲组织。P00–P28 正文与配套 CPU
 实验已实现；这里的“已实现”描述内容覆盖，不代替各批次的审核与发布记录。当前阅读材料包括阅读基础、注意力、训练闭环、Baby-GPT
 与 KV cache / RoPE / 现代 Block /
 GQA，以及独立的注意力系统、稀疏/线性机制与 CED 数据流，新增教学
 MoE、预训练数据与恢复训练、框架与 SFT/LoRA/偏好优化对照及可选教学
 MTP，量化与推理路线、Qwen3 和 DeepSeek 的固定版本案例；这些 P
 编号是扩展计划的编号，不会立即替换旧版全部章号。</p>
-<p>为了保留已有链接，Tokenizer 暂放在“第 1A 章”，紧跟第 1 章；旧第 2～10
-章仍可阅读，但尚未全部按新大纲改写。当前 HTML/EPUB
-会按这个顺序包含新单元，不是已完成全部 29 个单元的新书。</p>
+<p>原大纲 29 个单元的内容已实现。为了保留已有链接，Tokenizer 放在“第 1A
+章”，紧跟第 1 章；旧文件名与兼容锚点保留，HTML/EPUB
+按整书阅读顺序包含新单元。内容实现不等于已审核或生产验证，审核和发布以
+PR / Release 为准；#28/#29 前沿更新是后续范围，不混入本轮交付。</p>
 <figure>
 <a href="assets/rendered/batch1_route.svg" title="点击查看原尺寸图"><img
 src="assets/rendered/batch1_route.svg" class="book-diagram" width="520"
@@ -15003,6 +15003,13 @@ token”，也不会自动给答案另留一份额度。<code>completion_budget<
 擅自当作最终答案。此练习把第一个闭合标记作为分界，假设输入是单个正常完成序列；不是任意嵌套标签、工具输出或流式协议的通用解析器。non-thinking
 模式则把后续生成序列全记为答案段，包括末尾 EOS 等控制 ID，并不声称所有
 ID 都是可显示文本。</p>
+<p>这里必须区分教学约定与官方解析：上述固定 revision
+的模型卡示例用最后一个闭合标记（反向查找 151668）；同 revision 的 chat
+template 对 reasoning 取第一个 <code>&lt;/think&gt;</code> 之前，对
+content
+取最后一个之后。多个闭合标记时这些口径会不同，本练习仅为记账选择第一个，不宣称它是官方统一口径，也不把最后闭合的官方示例称为错误。<a
+href="https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md">固定模型卡</a>；<a
+href="https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json">固定模板</a>。</p>
 <p>此外还有上下文预算：<code>prompt token 数 + max_new_tokens</code>
 不能超过选用的运行限额。模板中的角色边界、空 thinking 块、历史消息也属于
 prompt；字符数不能代替 token 数。<code>context_budget(12,8,20)</code>
@@ -15087,13 +15094,13 @@ Q/K、input/post-attention 和最终 norm gain 用独立种子 251 均匀抽到
 也计入答案段的约定。</li>
 </ol>
 <p>还实际执行 <strong>16
-个语义错误变体</strong>，并要求独立断言能抓住它们：重复计算绑定 head、用
-D/Hq 代替显式 d、漏掉 QK norm 参数、漏计闭合
+个偏离本练习契约的变体</strong>，并要求独立断言能抓住它们：重复计算绑定
+head、用 D/Hq 代替显式 d、漏掉 QK norm 参数、漏计闭合
 token、把未闭合思考误作答案、错排 GQA 头、丢失缓存 offset、错用相邻 RoPE
 配对、跳过 Q norm、取消选中权重归一化、计算全部专家、再次旋转旧 K、K
 错用 Q 的 norm gain、交换 input/post-attention norm、最终输出错用层内
-norm、把多个闭合标签中的最后一个错当作第一次闭合。三种 norm
-错接是形状仍合法的真实源码替换，独立标量参考和可选官方参考都在
+norm、在多个闭合标签下改用最后一个作为分界（偏离本练习的首个闭合约定，并非官方做法错误）。三种
+norm 错接是形状仍合法的真实源码替换，独立标量参考和可选官方参考都在
 dense／MoE
 两条路径上拒绝它们。不是在注释里列出错误后就算“做过负例”。</p>
 <p>此外，利用已有的独立环境，实际运行了可选官方参照测试
@@ -16222,9 +16229,10 @@ S0”：脚本把<strong>同一个模型对象</strong>分别交给普通前向�
 是分别建立的教学阶段，不宣称已经转换、继承或训练好上一阶段的权重。S3
 默认还涉及 bias 策略，所以不能把 S2 与默认 S3 的所有差异都归因于
 RMSNorm；真正的单变量控制组在 P27.7 单独建立。</p>
-<p>S6 则显式复制 S5 的所有已有状态，再保留新建的两个旁路
-head。因此没有训练更新之前，S5 与 S6 的<strong>普通主 head
-输出</strong>相同；S6 的辅助目标不同。MTP
+<p>S6 先用独立种子 271 初始化，再显式复制种子 270 的 S5
+所有已有状态，保留新建的两个旁路
+head。这样，删掉复制步骤时主干权重确实不同，不会被相同种子的巧合掩盖。因此没有训练更新之前，S5
+与 S6 的<strong>普通主 head 输出</strong>相同；S6 的辅助目标不同。MTP
 并不自动修改普通生成算法，也不是生产 DeepSeek 的顺序 MTP 或 DSpark
 实现。<a href="https://arxiv.org/abs/2412.19437v2">DeepSeek-V3 报告
 v2，MTP</a></p>
@@ -16241,10 +16249,12 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb178-1"><a href
 <div class="sourceCode" id="cb179"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb179-1"><a href="#cb179-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> healthcheck.json</span>
 <span id="cb179-2"><a href="#cb179-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_minigpt_healthcheck.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
-<p><code>--json</code>
-只改变输出格式，不跳过任何检查。默认路径不下载模型、不访问外部服务、不使用
-GPU。脚本把 CPU 线程设为 1，随机种子为 270，使用
-float32。版本、设备、线程、种子、形状和容差写进报告，不只打印一个绿色
+<p><code>--json</code> 只改变输出格式，不跳过任何检查；每个缓存阶段的
+<code>chunk_checks</code>
+记录实际运行的四种分块及各自误差、字节数，汇总误差取其中最大值。默认路径不下载模型、不访问外部服务、不使用
+GPU。脚本把 CPU 线程设为 1，主线随机种子为 270，使用 float32；S6
+独立初始化使用 271，随后复制 S5
+主干。版本、设备、线程、种子、形状和容差写进报告，不只打印一个绿色
 PASS。</p>
 <p>缺少 PyTorch 时，CLI 给出安装提示并以状态码 2 退出，明确写
 <code>NOT RUN, not passed</code>；作为模块导入时仍抛出真实依赖错误。测试可以因没有受支持
@@ -16310,6 +16320,42 @@ logits。</li>
 smoke</strong>，不是训练完成。参数没有更新，checkpoint 也不包含
 optimizer 或 RNG
 状态。想验证中断后能否继续同一条训练轨迹，需要回到训练流水线章节，保存更完整的恢复状态。</p>
+<p>正常实现从不触发某道防线，不代表防线已经被测试。这里另外包装真实计算，逐一制造下列坏行为；正常体检必须拒绝，删掉对应检查的源码变异则会放过它，其他检查保持原样。</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>注入的坏行为</th>
+<th>应报警的位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>处理了 8 个 token，返回的缓存却声称长度为 9</td>
+<td>缓存长度与已消耗前缀比较</td>
+</tr>
+<tr>
+<td>长度 16 后再输入 1 个，静默丢掉最老 K/V</td>
+<td>容量溢出必须被拒绝</td>
+</tr>
+<tr>
+<td>新请求传入 <code>None</code>，实现却沿用旧的 3-token 历史</td>
+<td>新请求输出与独立完整前向比较</td>
+</tr>
+<tr>
+<td>路由 logits 不变，但负载账本从 32 写成 33</td>
+<td>MoE 请求总数核对</td>
+</tr>
+<tr>
+<td>loss 加上 NaN 常量，梯度仍然有限非零</td>
+<td>反向之前检查 loss 有限</td>
+</tr>
+</tbody>
+</table></div>
+<p>最后一行尤其容易误判：常量加法不改变对参数的导数，因此“梯度有限”不能代替“目标有限”。</p>
 <h2 id="p27.4-一张张量账本先抓形状再抓数值">P27.4
 一张张量账本，先抓形状再抓数值</h2>
 <div class="table-wrapper"><table>
@@ -16367,7 +16413,9 @@ optimizer 或 RNG
 <p>第一个 2 是 K 和 V 两份，s 是每元素字节数。MHA 时 Hkv=Hq=4；因此
 <code>2×2×2×4×8×4×4=4096</code>。GQA 把 Hkv 改为 2，结果为
 2048。这是从实际缓存张量 <code>numel×element_size</code>
-求和后，再与独立整数账本对照的值。</p>
+求和后，再与独立整数账本对照的值。 测试还把同样形状的模型改为
+float64，逐个确认缓存张量每元素 8 字节：MHA 为 8192 字节，GQA 为 4096
+字节。若把元素大小写死为 4，这个独立 dtype 对照会失败。</p>
 <p>这里<strong>不是测出来的进程内存，更不是显存峰值</strong>。模型权重、注意力分数、临时复制、Python
 对象、分配器缓存都没计入。S4 计算注意力时还会临时展开共享
 K/V；存储的缓存必须保留 Hkv 头，不能把展开后的 Hq 份偷偷存回去。</p>
@@ -16426,7 +16474,14 @@ token。</p>
 bit 相等；也不能随意把容差放宽到“看起来差不多”。</p>
 <p>为什么跑四种分块？单 token decode 擅长暴露位置偏移错误，多 token
 chunk 擅长暴露矩形 mask 错误，整段前向则给出没有历史缓存的边界。如果只测
-<code>T=1</code> 或只测一次完整 prefill，某些错误永远不触发。</p>
+<code>T=1</code> 或只测一次完整 prefill，某些错误永远不触发。
+测试另外只破坏第一块或中间块的输出，保留正确 K/V
+和最后一块，确认完整比较会报警；把检查器改成只看最后一块的真实源码变异则会漏过，因此该错误不能再被正常输出样本掩盖。</p>
+<p>对照对象也必须锁住：若把完整前向换成“缓存路径一次喂完”，两边可能共享同一个错误。测试让缓存路径的每块
+logits 都加
+0.25，四种分块都应被真正的完整前向抓住；缓存路径与自己比较却会漏掉。另一个测试只把第一块乘
+1.5，包括整段 <code>[8]</code> 在内也都应报警。这里没有改
+K/V，错误只在返回的 logits，不能依靠后续缓存崩溃碰巧抓住它。</p>
 <p>最小实现轮廓如下，真正模型仍来自旧章节：</p>
 <div class="sourceCode" id="cb180"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb180-1"><a href="#cb180-1" aria-hidden="true" tabindex="-1"></a>cache, pieces <span class="op">=</span> <span class="va">None</span>, []</span>
@@ -16439,11 +16494,16 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb180-1"><a 
 dropout，但固定推理模式是接口契约；不能依靠“这次碰巧没有随机层”。缓存也不能在权重更新、dtype
 改变后继续使用。</p>
 <h3 id="不变量-b改变未来不改过去">不变量 B：改变未来，不改过去</h3>
-<p>把输入前三个位置保留，后五个位置全部换成别的合法
+<p>先用切点 3 举例：把输入前三个位置保留，后五个位置全部换成别的合法
 ID，再比较前三个位置的全部 logits。因果 decoder
-的过去输出不应依赖未来输入。</p>
+的过去输出不应依赖未来输入。实际 CLI 会遍历 1–7 的全部切点，JSON 的
+<code>causal_checks</code> 逐项记录误差，<code>causal_error</code>
+是其中的最大值；不能只抽查切点 3。</p>
 <p>这里检查的是<strong>干预</strong>，不是“注意力图看起来是三角形”：如果程序画出一个正确的
 mask，却没有真的把它用进计算，干预测试仍会失败。</p>
+<p>为什么遍历所有切点？测试只让最后一层的位置 5 偷看位置 6。切点 3
+看不见这次泄漏，切点 6 才会暴露它；CLI
+必须在进入缓存比较之前就因未来依赖报警。</p>
 <p>数值测试进一步遍历每一个切点，并用 float64
 检查。稠密阶段要求过去输出精确不变；MoE 给出极小的 <code>1e-12</code>
 绝对容差、相对容差 0，因为不同未来路由可能改变专家 GEMM
@@ -16562,7 +16622,15 @@ monkey-patch 后的任意运行时结构。</p>
 <p>保存文件不包含请求缓存。缓存是特定模型对象、权重版本和 token
 历史的临时产物；即使新模型加载了相同权重，也不应把旧对象的缓存直接交给它。正确顺序是加载模型、<code>eval()</code>、对当前请求重新
 prefill。</p>
-<p>只加载自己生成或明确可信的文件。代码使用 CPU 映射与
+<p>保存端拒绝本实验不支持的 bf16 与含 NaN 的状态，加载端拒绝 envelope
+多出的键。相应测试先检查正常路径，再观察坏数据确实被拒绝；移除对应守卫的源码变异会让坏文件被写出或被接受。</p>
+<p>逐张量核对也不能被“本次输出相同”替代：S0 的 mask 是 16×16，本次 T=8
+只用左上角。测试改变 <code>[15,15]</code>，本次 logits 仍完全相同，但
+checkpoint
+的状态已经不忠实，往返检查必须报警。兼容性测试还区分拒绝原因：一个文件若先因不支持的
+dtype 被拒绝，不能把这次异常算作“架构语义不兼容已验证”。</p>
+<p>只加载自己生成或明确可信的文件。测试使用没有自定义还原方法、没有执行副作用的普通字典子类，确认限制型反序列化会拒绝未允许的对象，而不是用危险载荷演示风险。代码使用
+CPU 映射与
 <code>weights_only=True</code>，这是收窄反序列化行为，不是“网上任何文件都安全”的承诺。<a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.load.html">PyTorch
 2.14 的 torch.load 文档</a></p>
@@ -16753,7 +16821,8 @@ id="负例三第二个用户接上了第一个用户的历史">负例三：第�
 </tbody>
 </table></div>
 <p>这些数是本次 CPU
-浮点实测，不保证跨平台最后几位相同；“显著超出容差且仍为有限输出”才是测试契约。测试还反向验证：如果变异器根本没改源码，负例检查必须失败；如果缺依赖而抛异常，也必须继续报错，不能算成功捕获数学错误。</p>
+浮点实测，不保证跨平台最后几位相同；“显著超出容差且仍为有限输出”才是测试契约。测试还反向验证：如果变异器根本没改源码，负例检查必须失败；如果缺依赖而抛异常，也必须继续报错，不能算成功捕获数学错误。
+数值反例必须产生有限的错误输出；dtype、owner、反序列化与梯度守卫则检查具体拒绝原因，并独立观察删掉守卫后被放过的坏状态。这两类证据不混算。</p>
 <p>此外，测试对真实模型取消因果 mask，对旋转符号、RMS 统计、门控、GQA
 映射、checkpoint 元数据检查、消融权重与 MTP
 标签做实际行为变异。作用是验证这些 oracle
@@ -16792,7 +16861,9 @@ token 0。</p>
 <code>logsumexp(logits)-正确类别logit</code> 手工汇总有效位置损失，与
 MTP 的各 head CE 比较。合成目标为主 CE，加 0.2 倍额外 head 平均
 CE，再加已经缩放过的 MoE 辅助项。之后检查旁路 head
-收到有限非零梯度。</p>
+收到有限非零梯度。测试通过真实 backward hook 分别制造全零／NaN
+梯度，或仅 detach 主 head、旁路 head 的权重，验证有限 loss
+不会掩盖断开的学习路径；同时保留其他正常路径，避免把无关崩溃当成守卫有效。</p>
 <p>最后拿前两个 token 作 prompt，生成 7 个新
 token：一边用最简单的<strong>完整前缀重新计算</strong>循环做
 greedy，另一边用 S6 的 drafter 与缓存验证。二者生成的整个 token
@@ -16857,8 +16928,9 @@ greedy 结果仍可能通过算法检查。</p>
 总参数一定更少”。S6 多出的 <code>2×17×16=544</code> 来自两个线性
 head；普通主干 KV
 不变。激活参数、参数总数、缓存字节、算子次数和运行时内存不是同一种指标。</p>
-<p>本机各阶段缓存／完整前向最大误差不超过约
-<code>3e-7</code>；保存加载输出误差为
+<p>本机各阶段缓存／完整前向误差远低于 <code>3e-6</code>
+的绝对容差；实际通过条件仍联合使用上文的
+<code>atol=3e-6</code>、<code>rtol=1e-5</code>，保存加载输出误差为
 0。重新运行应看自己的报告与容差，不要把这组末位数值当成所有机器必须逐字匹配的截图。</p>
 <h3 id="同权重-cpu-时间小实验">同权重 CPU 时间小实验</h3>
 <p>计时只比较 S0 普通前向与 S1 缓存路径，使用同一模型、同一固定
@@ -16968,7 +17040,7 @@ dtype。把首个出错位置保存下来，比抄十屏日志更有用。</p>
 </tr>
 <tr>
 <td>架构与版本</td>
-<td>S0–S5 与可选 S6；源代码与本次 PR 固定版本一起保存</td>
+<td>S0–S5 与可选 S6；源代码与仓库固定 commit / Release 版本一起保存</td>
 </tr>
 <tr>
 <td>数据与 tokenizer</td>
@@ -17082,10 +17154,10 @@ href="https://docs.pytorch.org/docs/2.14/generated/torch.load.html">PyTorch
 <p><span id="附录-数学公式速查卡与深度学习黑话翻译词典"></span> <span
 id="附录数学公式速查卡与深度学习黑话翻译词典"></span></p>
 <blockquote>
-<p>这不是要背完的最后一章，而是读书时随手翻的工具箱。先修只有前言：遇到公式查
-A，遇到术语查 B，不知道下一步读什么查 C，准备运行实验查
-D，看到新模型新闻查
-E。公式手算、自测与固定配置证据由仓库测试核对；本页不宣布任何未运行硬件的性能。</p>
+<p>这不是要背完的最后一章，而是读书时随手翻的工具箱。先修只有前言：遇到公式查附录
+A，遇到术语查附录 B，不知道下一步读什么查附录 C，准备运行实验查附录
+D，看到新模型新闻查附录 E，自测查附录 F，来源查附录
+G。公式手算、自测与固定配置证据由仓库测试核对；本页不宣布任何未运行硬件的性能。</p>
 </blockquote>
 <h2 id="附录-a大模型核心数学公式速查卡">附录
 A：大模型核心数学公式速查卡</h2>
@@ -17463,8 +17535,8 @@ href="#p26-deepseek">P26</a>
 <p>读论文时可以画四栏：<strong>问题、假设、方法、证据</strong>。例如“减少
 KV 内存”是问题，“共享哪些层/哪些头”是方法，“同长度同 dtype
 的字节数”是一个证据；“因此所有机器生成更快”仍是未经测试的外推。</p>
-<h2 id="p28.d-运行与硬件先做小实验再决定是否扩展">P28.D
-运行与硬件：先做小实验，再决定是否扩展</h2>
+<h2 id="p28.d-运行与硬件先做小实验再决定是否扩展">附录
+D：运行与硬件：先做小实验，再决定是否扩展</h2>
 <p>本书的必需路线是小规模 CPU 教学，不要求购买 GPU。安装命令以仓库
 README 与固定 requirements 为准；按平台选安装包时查 <a
 href="https://pytorch.org/get-started/locally/">PyTorch
@@ -17519,8 +17591,8 @@ seed 不保证所有硬件逐位相同。本书给 tiny float64 MoE 1e-12
 <p><strong>不要为了跑通教程关闭浏览器 sandbox 或忽略证书警告。</strong>
 正常构建受限时，说明实际错误、使用有源码匹配检查的备用制品路线，并请有条件的环境补验；“未验证”比伪造
 PASS 更有用。</p>
-<h2 id="p28.e-看到一条新模型新闻怎样不被标题带着走">P28.E
-看到一条新模型新闻，怎样不被标题带着走</h2>
+<h2 id="p28.e-看到一条新模型新闻怎样不被标题带着走">附录
+E：看到一条新模型新闻，怎样不被标题带着走</h2>
 <h3 id="e.1-四种状态四种不同承诺">E.1 四种状态，四种不同承诺</h3>
 <div class="table-wrapper"><table>
 <colgroup>
@@ -17605,7 +17677,7 @@ HTTP 200 也只说明能打开，不说明内容支持当前句子。</p>
 PR。既往正常浏览器检查属于既往 head，不能复制到新
 head。源代码、README、章节状态、HTML/EPUB
 与验证报告应同批更新；旧的来源与验证记录作为历史保留。</p>
-<h2 id="p28.f-自测校验与最后一步">P28.F 自测、校验与最后一步</h2>
+<h2 id="p28.f-自测校验与最后一步">附录 F：自测、校验与最后一步</h2>
 <ol type="1">
 <li>A.2 的两头 KV 若换为四头，单层 float32 K+V payload
 变为多少？它证明生成速度减半吗？</li>
@@ -17629,7 +17701,7 @@ hash。6）对本书而言待核实；若官方论文确有该结果，可另标
 检查已生成制品的资源/链接，<code>npm run check:layout</code>
 检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当批验证记录为准，不在这里保留会迅速过时的全书总数。</p>
 <p>学习的终点不是背熟每个缩写，而是能说清：<strong>我改了什么，为什么这样改，哪些证据支持它，还有什么没有验证。</strong></p>
-<h2 id="p28.g-本页原始来源与版本">P28.G 本页原始来源与版本</h2>
+<h2 id="p28.g-本页原始来源与版本">附录 G：本页原始来源与版本</h2>
 <ul>
 <li><a href="https://arxiv.org/abs/1706.03762v7">Attention Is All You
 Need，arXiv:1706.03762v7</a>，§3.2 attention
