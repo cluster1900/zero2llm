@@ -131,12 +131,16 @@
     "width": 1120.0,
     "height": 1060.0
   },
-  "flow-11": {
-    "width": 460.2265625,
-    "height": 294
+  "p24-quantization": {
+    "width": 1120.0,
+    "height": 1050.0
   },
-  "flow-12": {
-    "width": 464,
-    "height": 194
+  "p25-qwen3": {
+    "width": 1200.0,
+    "height": 1060.0
+  },
+  "p26-deepseek": {
+    "width": 960.0,
+    "height": 780.0
   }
 }

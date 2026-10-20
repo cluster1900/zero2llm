@@ -1,11 +1,12 @@
 # 从基础 Transformer 到现代大模型：扩展大纲（已审核）
 
-状态：**大纲已审核；P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)），P03–P05 正文与 CPU 示例已实现（[第二批验证](batch2-validation.md)），P06–P08 正文与 CPU 示例已实现（[第三批验证](batch3-validation.md)），P24–P28 尚未按本大纲实现**。原大纲日期 2026-10-18，基于 `72c39df`。
+状态：**大纲已审核；P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)），P03–P05 正文与 CPU 示例已实现（[第二批验证](batch2-validation.md)），P06–P08 正文与 CPU 示例已实现（[第三批验证](batch3-validation.md)），P27–P28 尚未按本大纲实现**。原大纲日期 2026-10-18，基于 `72c39df`。
 P09–P11 正文、S0/S1 代码与 CPU 实验已实现，见[第四批验证](batch4-validation.md)。P09/P11 用 07a/08a 文件插入；旧章节编号与链接保留。
 P12–P14 正文与 S2/S3/S4 CPU 示例已实现，见[第五批验证](batch5-validation.md)；YaRN 机制导读与独立 MLA 小矩阵不等于完整生产实现。新增 08b/08c/08d，继续保留旧链接。
 P15–P17 正文与独立 CPU 机制实验已实现，见[第六批验证](batch6-validation.md)；不把教学模拟、官方激活参数口径或路径计数当成 GPU 性能或真实 CED 权重复现。新增 08e/08f/08g，S4 主线不变。
 P18–P20 正文与 CPU 实验已实现，见[第七批验证](batch7-validation.md)。S5 为教学 MoE；框架/多卡的实际验证边界见记录，不将安装说明视为运行结果。新增 08h/08i/08j。
 P21–P23 正文与 CPU 实验已实现，见[第八批验证](batch8-validation.md)。S6 为可选教学 MTP；SFT/LoRA/偏好优化与草稿验证均限定实际测试范围。新增 08k/08l/08m。
+P24–P26 正文与 CPU 实验已实现，实际 CPU 验证与未运行范围见[第九批验证](batch9-validation.md)。新增 08n/08o，P26 改写旧 09 并保留旧链接；固定官方配置、教学实验与未运行框架路线分别标明。
 任务：[bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14)；对照[原目录快照](https://github.com/cluster1900/bot-hub/blob/main/materials/14/current-toc.md)。
 Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1#issuecomment-6246985285)通过大纲。按每批 2–3 章撰写并逐批审核；本文保留设计方案，实际进度以 [README](../README.md) 为准。
 
@@ -16,7 +17,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - CPU 必修主线止于教学级实现；GPU 性能、多卡训练、大模型权重为选修，必须写明显存、版本、耗时和跳过条件。不宣称普通电脑可完整复现 DeepSeek。
 - 基础篇 P00–P10；架构与推理篇 P11–P18；训练与应用篇 P19–P24；案例与更新篇 P25–P28。
 - P 编号是**规划 ID**，不重命名现有章节，也不生成不存在的链接。当前可读正文仍见 [README](../README.md)。
-- 每章以下“实验”描述设计计划；P00–P23 的实际结果见各批次记录，其余不是已实现功能。新增代码路径、文件名等到对应批次落地再登记。
+- 每章以下“实验”描述设计计划；P00–P26 的实际结果见各批次记录，其余不是已实现功能。新增代码路径、文件名等到对应批次落地再登记。
 
 ## 逐章大纲
 

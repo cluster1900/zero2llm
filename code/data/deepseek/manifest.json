@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "checked_date": "2026-10-19",
+  "notice": "配置原始字节为官方固定版本快照；文献主张是人工核对记录，哈希只能发现本地变更，不证明论文结论或联网可用性。",
+  "models": {
+    "v3": {
+      "repo": "deepseek-ai/DeepSeek-V3",
+      "revision": "e815299b0bcbac849fa540c768ef21845365c9eb",
+      "observed_at": "2026-10-19",
+      "api_url": "https://huggingface.co/api/models/deepseek-ai/DeepSeek-V3"
+    },
+    "r1": {
+      "repo": "deepseek-ai/DeepSeek-R1",
+      "revision": "56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad",
+      "observed_at": "2026-10-19",
+      "api_url": "https://huggingface.co/api/models/deepseek-ai/DeepSeek-R1"
+    },
+    "distill": {
+      "repo": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+      "revision": "ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562",
+      "observed_at": "2026-10-19",
+      "api_url": "https://huggingface.co/api/models/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+    },
+    "v41": {
+      "repo": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "revision": "314113f8a7dadb388215396ba5fbee2c610a04d6",
+      "observed_at": "2026-10-19",
+      "api_url": "https://huggingface.co/api/models/deepseek-ai/DeepSeek-V4.1-Flash"
+    }
+  },
+  "files": {
+    "distill.config.json": {
+      "model": "distill",
+      "remote_path": "config.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B/resolve/ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562/config.json",
+      "sha256": "37bd455e9679d2959536270fed49d25cc7c290a64f6e52abb97c71345a9cee41"
+    },
+    "r1.config.json": {
+      "model": "r1",
+      "remote_path": "config.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-R1/resolve/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/config.json",
+      "sha256": "79ddea672a62e95d3f0be27be434375538e1988975971cffcf87c96c1de84a65"
+    },
+    "v41.config.json": {
+      "model": "v41",
+      "remote_path": "config.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/config.json",
+      "sha256": "8be45ce0476004a3f529fd896115a4a2e800a129ad2d3ec05b16050f52e21879"
+    },
+    "v3.config.json": {
+      "model": "v3",
+      "remote_path": "config.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/resolve/e815299b0bcbac849fa540c768ef21845365c9eb/config.json",
+      "sha256": "cbf0b95dc614de208a109bb5fd4e7eed11385e9c68411d2c17db5319443035d9"
+    },
+    "v41.inference_config.json": {
+      "model": "v41",
+      "remote_path": "inference/config.json",
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/config.json",
+      "sha256": "2e84f45cf1dac8c7fcbb200e96667d4b913275690668ed496f24c7747207a809"
+    }
+  },
+  "references": {
+    "v3-paper": {
+      "url": "https://arxiv.org/html/2412.19437v2",
+      "version": "2412.19437v2",
+      "kind": "paper"
+    },
+    "r1-paper": {
+      "url": "https://arxiv.org/html/2501.12948v1",
+      "version": "2501.12948v1",
+      "kind": "paper"
+    },
+    "v41-paper": {
+      "url": "https://arxiv.org/html/2609.19969v1",
+      "version": "2609.19969v1",
+      "kind": "paper"
+    },
+    "v3-card": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V3/blob/e815299b0bcbac849fa540c768ef21845365c9eb/README.md",
+      "version": "e815299b0bcbac849fa540c768ef21845365c9eb",
+      "kind": "official_repo",
+      "reviewed_sha256": "3739763a851074c810f1565f9823956f3a095231f8c591dd3c254581bdd3cf08"
+    },
+    "r1-card": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/README.md",
+      "version": "56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad",
+      "kind": "official_repo",
+      "reviewed_sha256": "d26d26ddb518fee60c6c6bf7a708bd751b1619d93a4944f188143693d956c77f"
+    },
+    "v41-card": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/README.md",
+      "version": "314113f8a7dadb388215396ba5fbee2c610a04d6",
+      "kind": "official_repo",
+      "reviewed_sha256": "347c9db4e5506acb531cbc3b724407ab88e9af8781679152f0823d7bac16d251"
+    },
+    "v41-model": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py",
+      "version": "314113f8a7dadb388215396ba5fbee2c610a04d6",
+      "kind": "official_repo",
+      "reviewed_sha256": "e5decd76fe70fd56ef2f10124d245c6f64fb6a0003cc9068a1d3182a168b8d2d"
+    },
+    "v41-vision": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/vision.py",
+      "version": "314113f8a7dadb388215396ba5fbee2c610a04d6",
+      "kind": "official_repo",
+      "reviewed_sha256": "5d49edc196a4ef22384abe76d35a40098cbe1e74b586c8f66a2edff4f076b26c"
+    },
+    "v41-inference-readme": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/README.md",
+      "version": "314113f8a7dadb388215396ba5fbee2c610a04d6",
+      "kind": "official_repo",
+      "reviewed_sha256": "2834402823199ee24e9a42bdf36a0fc6daf94448f444cb062c042a057a798f1c"
+    }
+  }
+}

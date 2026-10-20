@@ -1,0 +1,3 @@
+# SSE events end with a blank line; keep all other whitespace checks.
+code/fixtures/*.sse whitespace=-blank-at-eof
+dist/code/fixtures/*.sse whitespace=-blank-at-eof

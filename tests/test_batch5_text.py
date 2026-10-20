@@ -53,12 +53,12 @@ class Batch5TextTests(unittest.TestCase):
         self.assertIn(f'{code_count} 个配套代码实验', readme)
         for link in re.findall(r'\]\(((?:chapters|code|docs)/[^)#]+)(?:#[^)]*)?\)', readme):
             self.assertTrue((ROOT / link).is_file(), link)
-        self.assertIn('P24–P28', readme)
+        self.assertIn('P27–P28', readme)
         self.assertIn('第五批验证', readme)
 
     def test_scope_and_source_links(self):
         outline = (ROOT / 'docs/expansion-outline.md').read_text()
-        self.assertIn('P24–P28 尚未', outline)
+        self.assertIn('P27–P28 尚未', outline)
         for chapter, _, _ in LESSONS:
             text = (ROOT / 'chapters' / chapter).read_text()
             self.assertIn('https://', text)
