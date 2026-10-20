@@ -30,6 +30,10 @@ class FinalBatchTextTests(unittest.TestCase):
         for path in ('README.md','chapters/00_preface.md'):
             self.assertIn('原大纲 29 个单元的内容已实现',(ROOT/path).read_text())
         self.assertNotIn('本次 PR', (ROOT/'chapters/09a_minigpt_healthcheck.md').read_text())
+        p25 = (ROOT/'chapters/08o_qwen3_case.md').read_text()
+        self.assertNotIn('最后一个错当作第一次闭合', p25)
+        self.assertIn('并非官方做法错误', p25)
+        self.assertIn('本练习仅为记账选择第一个', p25)
         self.assertIn('不等于所有生产技术', (ROOT/'README.md').read_text())
 
     def test_old_appendix_heading_aliases_not_lost(self):

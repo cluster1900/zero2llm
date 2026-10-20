@@ -16,8 +16,27 @@ class ReferenceAppendixTests(unittest.TestCase):
         # Every extraction is anchored to its worked paragraph, not a common
         # numeral elsewhere in the book. Arithmetic below is independent.
         vector = re.search(r"\*\*向量。\*\*[^\n]+", body).group()
-        dot = int(re.search(r"点积 (\d+)", vector).group(1))
-        self.assertEqual(dot, sum(a*b for a,b in zip((3,4),(4,0))))
+        # Read both input vectors from the prose before computing the oracle.
+        # A changed input must not pass just because the old printed answer stays.
+        a_text, b_text = re.search(r"a=\(([^)]+)\).*?b=\(([^)]+)\)", vector).groups()
+        a = tuple(float(x) for x in a_text.split(','))
+        b = tuple(float(x) for x in b_text.split(','))
+        self.assertEqual(len(a), len(b))
+        number = r'[-+]?[0-9]+(?:\.[0-9]+)?'
+        norm_a, norm_b = map(float, re.search(
+            rf'长度分别 ({number}) 和 ({number})', vector).groups())
+        dot = float(re.search(rf"点积 ({number})", vector).group(1))
+        numerator, denominator, cosine = map(float, re.search(
+            rf'余弦 \$({number})/({number})=({number})\$', vector).groups())
+        actual_a = math.sqrt(sum(x*x for x in a))
+        actual_b = math.sqrt(sum(x*x for x in b))
+        actual_dot = sum(x*y for x,y in zip(a,b))
+        self.assertAlmostEqual(norm_a, actual_a)
+        self.assertAlmostEqual(norm_b, actual_b)
+        self.assertAlmostEqual(dot, actual_dot)
+        self.assertAlmostEqual(numerator, actual_dot)
+        self.assertAlmostEqual(denominator, actual_a*actual_b)
+        self.assertAlmostEqual(cosine, actual_dot/(actual_a*actual_b))
 
         probability = re.search(r"\*\*概率。\*\*[^\n]+", body).group()
         target_word = re.search(r"目标是第(.)类", probability).group(1)
@@ -52,7 +71,9 @@ class ReferenceAppendixTests(unittest.TestCase):
 
     def test_actual_prose_mutations_fail_the_same_arithmetic_contract(self):
         self.assert_worked_prose_arithmetic(BODY)  # valid baseline first
-        changes = [('点积 12', '点积 13'),
+        changes = [('a=(3,4)', 'a=(2,4)'),
+                   ('b=(4,0)', 'b=(4,1)'),
+                   ('点积 12', '点积 13'),
                    ('目标是第三类', '目标是第二类'),
                    ('(z-y)x=4', '(z-y)x=2'),
                    ('z=2,L=2', 'z=2,L=4'),
@@ -149,6 +170,11 @@ class ReferenceAppendixTests(unittest.TestCase):
                 self.assertAlmostEqual(math.sin(omega*(t+period)), math.sin(omega*t), places=13)
 
     def test_vector_card_and_zero_denominator_boundary(self):
+        # A coherent different example also passes: this is extraction, not a
+        # pinned old-vector literal masquerading as an independent computation.
+        original = re.search(r"\*\*向量。\*\*[^\n]+", BODY).group()
+        revised = "**向量。** $a=(-3,4)$、$b=(4,0)$：长度分别 5 和 4，点积 -12，余弦 $-12/20=-0.6$。"
+        self.assert_worked_prose_arithmetic(BODY.replace(original, revised, 1))
         a,b = (3,4),(4,0)
         dot = sum(x*y for x,y in zip(a,b))
         norm = lambda v: math.sqrt(sum(x*x for x in v))
