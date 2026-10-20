@@ -1003,26 +1003,28 @@ class HealthcheckTests(unittest.TestCase):
                 self.assertEqual(len(observations), 1)
                 self.assertGreater(observations[0], .1)
 
-    def _wrong_cache_length(self):
+    def _wrong_cache_length(self, delta=1):
         from types import SimpleNamespace
         stage = self.by['S1']
         observations = []
         def forward(model, chunk, cache=None):
             output, result = stage.cached_forward(model, chunk, cache)
             if result.length == self.tokens.shape[1]:
-                observations.append((result.length, result.length + 1))
+                observations.append((result.length, result.length + delta))
                 # Return a malformed cache-interface object at the final chunk;
                 # tensors/logits stay intact, so only the length guard detects it.
-                result = SimpleNamespace(length=result.length + 1, layers=result.layers)
+                result = SimpleNamespace(length=result.length + delta, layers=result.layers)
             return output, result
         return m.Stage('S1', stage.model, forward), observations
 
     def test_plain_behavior_wrong_cache_length_is_refused(self):
         m.cache_equivalence(self.by['S1'], self.tokens)
-        stage, observations = self._wrong_cache_length()
-        with self.assertRaisesRegex(AssertionError, 'cache length differs from consumed prefix'):
-            m.cache_equivalence(stage, self.tokens)
-        self.assertEqual(observations, [(8, 9)])
+        for delta in (-1, 1):
+            with self.subTest(delta=delta):
+                stage, observations = self._wrong_cache_length(delta)
+                with self.assertRaisesRegex(AssertionError, 'cache length differs from consumed prefix'):
+                    m.cache_equivalence(stage, self.tokens)
+                self.assertEqual(observations, [(8, 8 + delta)])
 
     def test_plain_behavior_capacity_overflow_cannot_silently_truncate(self):
         self.assertTrue(m.run_healthcheck()['stages'][1]['capacity_rejected'])
@@ -1113,11 +1115,22 @@ class HealthcheckTests(unittest.TestCase):
     def test_source_mutant_wrong_cache_length_guard_accepts_malformed_state(self):
         self.test_plain_behavior_wrong_cache_length_is_refused()
         mutant = m.mutate_function(m.cache_equivalence, 'if cache.length != start:', 'if False:')
-        stage, observations = self._wrong_cache_length()
-        error, payload = mutant(stage, self.tokens)
+        for delta in (-1, 1):
+            with self.subTest(delta=delta):
+                stage, observations = self._wrong_cache_length(delta)
+                error, payload = mutant(stage, self.tokens)
+                self.assertLess(error, 3e-6)
+                self.assertEqual(payload, 4096)
+                self.assertEqual(observations, [(8, 8 + delta)])
+        # A one-sided replacement still rejects oversized lengths but silently
+        # accepts undersized ones. The plain behavior test above must catch it.
+        one_sided = m.mutate_function(m.cache_equivalence, 'if cache.length != start:',
+                                     'if cache.length > start:')
+        shorter, observations = self._wrong_cache_length(-1)
+        error, payload = one_sided(shorter, self.tokens)
         self.assertLess(error, 3e-6)
         self.assertEqual(payload, 4096)
-        self.assertEqual(observations, [(8, 9)])
+        self.assertEqual(observations, [(8, 7)])
 
     def test_source_mutants_pipeline_guards_accept_specific_bad_behaviors(self):
         cases = [('overflow', "raise AssertionError('cache capacity overflow accepted')", 'pass'),
