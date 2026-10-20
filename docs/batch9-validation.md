@@ -69,3 +69,8 @@ P24 为 35 tests / 15 实际变异，P25 为 27 tests / 15 实际变异，P26 �
 正常构建/布局本次再尝试仍报 Chromium `socket() failed: Operation not permitted (1)`，未改安全设置。备用构建以源码精确匹配的 `45ecf45` 为基准，10 Mermaid + 26 SVG 均复用已审图，正文重建，Pandoc 无 warning；check_book 通过，35 XML、46 代码/数据文件、26 SVG、15 兼容 ID 全部核验。没有新增图，也没有把首稿 84 项布局通过结果冒充返修 head 验收。请 Normal Work 在新 head 再跑正常浏览器布局。
 
 `.gitattributes` 后 `git diff --check` 无需人工排除 SSE；不修改原始协议字节，不停用其他 whitespace 检查。
+
+
+## 已完成的独立复审与合并
+
+Normal Work [复审5578093405](https://github.com/cluster1900/zero2llm/pull/10#pullrequestreview-5578093405) 在固定 head `0648ba5` 重新确认完整479、基线468+11skip、系统207+272skip，提交/重建两版本正常Chromium84/84布局。审核侧100个变异：95行为拦截、5当时fixture等价、0存活。PR10于2026-10-20 00:25:11 UTC合并，merge `69e5c87ed4b5762a89127ab395738f688fac6299`。该结果只属于此head；下一批新增GGUF非对齐及多闭合标签回归会另记测试数字。

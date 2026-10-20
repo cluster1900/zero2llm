@@ -58,7 +58,7 @@ class Batch5TextTests(unittest.TestCase):
 
     def test_scope_and_source_links(self):
         outline = (ROOT / 'docs/expansion-outline.md').read_text()
-        self.assertIn('P27–P28 尚未', outline)
+        self.assertIn('P27–P28 正文', outline)
         for chapter, _, _ in LESSONS:
             text = (ROOT / 'chapters' / chapter).read_text()
             self.assertIn('https://', text)

@@ -36,10 +36,10 @@ class Batch9TextTests(unittest.TestCase):
 
     def test_progress_counts_match_files(self):
         readme = (ROOT / "README.md").read_text()
-        self.assertEqual(len(list((ROOT / "chapters").glob("*.md"))), 28)
-        self.assertEqual(len(list((ROOT / "code").glob("[0-9][0-9]_*.py"))), 27)
-        self.assertIn("28 个章节文件", readme)
-        self.assertIn("27 个配套代码实验", readme)
+        self.assertEqual(len(list((ROOT / "chapters").glob("*.md"))), 29)
+        self.assertEqual(len(list((ROOT / "code").glob("[0-9][0-9]_*.py"))), 28)
+        self.assertIn("29 个章节文件", readme)
+        self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
         self.assertIn("第九批验证", readme)
         for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):

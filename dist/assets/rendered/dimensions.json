@@ -142,5 +142,9 @@
   "p26-deepseek": {
     "width": 960.0,
     "height": 780.0
+  },
+  "p27-healthcheck": {
+    "width": 1120.0,
+    "height": 700.0
   }
 }

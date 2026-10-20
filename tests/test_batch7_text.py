@@ -41,8 +41,8 @@ class Batch7TextTests(unittest.TestCase):
 
     def test_progress_and_optional_framework_contract(self):
         readme = (ROOT / "README.md").read_text()
-        self.assertIn("28 个章节文件", readme)
-        self.assertIn("27 个配套代码实验", readme)
+        self.assertIn("29 个章节文件", readme)
+        self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
         self.assertIn("第七批验证", readme)
         self.assertTrue((ROOT / "requirements-frameworks.txt").is_file())

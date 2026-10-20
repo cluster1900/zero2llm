@@ -272,6 +272,19 @@ class MetadataTests(unittest.TestCase):
             with self.assertRaises(ValueError): m.completion_budget(ids,limit)
         self.assertEqual(m.completion_budget([],0)['answer_ids'],0)
 
+    def test_exercise_first_closure_contract_differs_from_official_last_closure(self):
+        # This is the exercise contract, not a claim that the official last-closure
+        # model-card example is incorrect. Multiple closures distinguish policies.
+        ids = [7, 151668, 8, 151668, 9]
+        expected = dict(reasoning_ids=1, closing_ids=1, answer_ids=3,
+                        generated_ids=5, remaining=1, thinking_closed=True)
+        self.assertEqual(m.completion_budget(ids, 6), expected)
+        bad = mutant('ids.index(think_end) if enable_thinking',
+                     '(len(ids)-1-list(reversed(ids)).index(think_end)) if enable_thinking')
+        last_policy = bad.completion_budget(ids, 6)
+        self.assertEqual(last_policy['reasoning_ids'], 3)
+        self.assertNotEqual(last_policy, expected)
+
     def test_nonthinking_control_ids_are_counted_in_answer_budget(self):
         # The mode is supplied by the caller; control-looking output IDs do not
         # retroactively turn non-thinking accounting into thinking parsing.
