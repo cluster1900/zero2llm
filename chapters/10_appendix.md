@@ -183,6 +183,8 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 ## 附录 G：本页原始来源与版本 {#p28.g-本页原始来源与版本}
 
+来源校验的最小账本是 $h=SHA256(bytes)$。例如，若固定配置文件的字节序列为 `b`，则先计算 `sha256(b)`，再将长度、revision 和摘要一起记录；长度相同不能推出内容相同。手算时，1 KiB = 1024 bytes，因此 726 bytes = 0.708984 KiB。该算例只说明来源核对方法，不替代实际下载和哈希命令。
+
 - [Attention Is All You Need，arXiv:1706.03762v7][attention]，§3.2 attention 定义；历史书单保留，非新性能复现。
 - [PyTorch 2.14 reproducibility][repro]，固定文档版本；[官方安装选择器][install]为动态页，核对日期2026-10-20。
 - [Qwen3-0.6B 固定官方 config][qwen-config]，revision/hash 如 E.2；相关官方实现版本见 P25。
