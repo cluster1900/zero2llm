@@ -42,8 +42,8 @@ class Batch6TextTests(unittest.TestCase):
     def test_review_followups_and_current_progress(self):
         readme = (ROOT / "README.md").read_text()
         self.assertIn("pandoc-3.9-2026-02-03", readme)
-        self.assertIn("28 个章节文件", readme)
-        self.assertIn("27 个配套代码实验", readme)
+        self.assertIn("29 个章节文件", readme)
+        self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
         self.assertIn("第六批验证", readme)
         self.assertNotIn("固定 query 投影。 原始论文", (ROOT / "chapters/08d_grouped_kv_mla.md").read_text())

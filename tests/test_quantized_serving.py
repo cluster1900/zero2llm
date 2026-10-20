@@ -464,6 +464,59 @@ class FixtureTests(unittest.TestCase):
             expected = json.loads((ROOT / "code/fixtures/p24_llama_smoke.json").read_text())
             self.assertEqual(hashlib.sha256(raw).hexdigest(), expected["f32_sha256"])
 
+    def test_non_aligned_tensor_payload_preserves_gguf_offsets(self):
+        # Add a three-float format-only probe before normal tensors. This is not
+        # a new runnable Llama architecture; production smoke remains unchanged.
+        original = SCRIPT.read_text()
+        shape_line = 'shapes = [("token_embd.weight", [32, 259]), ("output_norm.weight", [32])]'
+        self.assertEqual(original.count(shape_line), 1)
+        fixture = original.replace(shape_line,
+            'shapes = [("alignment_probe", [3]), ("token_embd.weight", [32, 259]), ("output_norm.weight", [32])]')
+        def read_directory(raw):
+            position = 24
+            def take(fmt):
+                nonlocal position
+                value = struct.unpack_from(fmt, raw, position)
+                position += struct.calcsize(fmt)
+                return value[0] if len(value) == 1 else value
+            def string():
+                nonlocal position
+                size = take('<Q'); value = raw[position:position+size]
+                position += size
+                return value.decode()
+            def skip(kind):
+                if kind == 8: string()
+                elif kind == 9:
+                    subtype, count = take('<IQ')
+                    for _ in range(count): skip(subtype)
+                else: take({4:'<I', 5:'<i', 6:'<f', 7:'<?'}[kind])
+            tensors, keys = struct.unpack_from('<QQ', raw, 8)
+            for _ in range(keys): string(); skip(take('<I'))
+            directory = []
+            for _ in range(tensors):
+                name = string(); ndim = take('<I')
+                dims = [take('<Q') for _ in range(ndim)]
+                kind, offset = take('<IQ')
+                directory.append((name, dims, kind, offset))
+            start = ((position + 31)//32)*32
+            return directory, start
+        def verify(source, name):
+            module = types.ModuleType(name); sys.modules[name] = module
+            exec(compile(source, str(SCRIPT), 'exec'), module.__dict__)
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp)/'format-only.gguf'; module.write_tiny_gguf(path)
+                raw = path.read_bytes()
+            entries, start = read_directory(raw)
+            self.assertEqual(entries[0], ('alignment_probe', [3], 0, 0))
+            self.assertEqual(entries[1][3], 32)  # 12 data bytes + 20 padding bytes
+            self.assertEqual(raw[start+12:start+32], bytes(20))
+            self.assertTrue(all(offset % 32 == 0 for _,_,_,offset in entries))
+        verify(fixture, 'p24_alignment_baseline')
+        target = 'padded = blob + b"\\0" * (-len(blob) % 32)'
+        self.assertEqual(fixture.count(target), 1)
+        with self.assertRaises(AssertionError):
+            verify(fixture.replace(target, 'padded = blob'), 'p24_alignment_mutant')
+
     def test_default_command_is_offline_stdlib_and_finite(self):
         result = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True, check=True, timeout=20)
         data = json.loads(result.stdout)

@@ -272,6 +272,17 @@ class MetadataTests(unittest.TestCase):
             with self.assertRaises(ValueError): m.completion_budget(ids,limit)
         self.assertEqual(m.completion_budget([],0)['answer_ids'],0)
 
+    def test_first_thinking_closure_defines_answer_even_with_later_closure(self):
+        ids = [7, 151668, 8, 151668, 9]
+        expected = dict(reasoning_ids=1, closing_ids=1, answer_ids=3,
+                        generated_ids=5, remaining=1, thinking_closed=True)
+        self.assertEqual(m.completion_budget(ids, 6), expected)
+        bad = mutant('ids.index(think_end) if enable_thinking',
+                     '(len(ids)-1-list(reversed(ids)).index(think_end)) if enable_thinking')
+        wrong = bad.completion_budget(ids, 6)
+        self.assertEqual(wrong['reasoning_ids'], 3)
+        self.assertNotEqual(wrong, expected)
+
     def test_nonthinking_control_ids_are_counted_in_answer_budget(self):
         # The mode is supplied by the caller; control-looking output IDs do not
         # retroactively turn non-thinking accounting into thinking parsing.

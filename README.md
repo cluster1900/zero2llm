@@ -17,7 +17,7 @@
 [扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
 
 - **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
-- **当前可读**：28 个章节文件（含前言、插入的第 1A 章与附录），27 个编号示例脚本及共享 attention_core.py 辅助模块；HTML / EPUB 随源码同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
+- **当前可读**：29 个章节文件（含前言、插入的第 1A 章与附录），28 个编号示例脚本及共享 attention_core.py 辅助模块；HTML / EPUB 随源码同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
 - **P03–P05 正文与 CPU 示例已实现**：注意力动机、QKV/稳定 Softmax/掩码、多头张量账本；因果性、padding/全 mask 行、形状与参考实现回归。验收记录见[第二批验证](docs/batch2-validation.md)。
 - **P06–P08 正文与 CPU 示例已实现**：位置编码、残差/LayerNorm/FFN、三类架构与生成循环；保留手算表，增加数值、自测和变异回归。见[第三批验证](docs/batch3-validation.md)。
 - **P09–P11 正文与 CPU 示例已实现**：训练最小闭环、Baby-GPT S0 基线和 S1 KV cache；训练/留出边界、checkpoint、完整/增量 logits 对齐与内存账。见[第四批验证](docs/batch4-validation.md)。
@@ -26,14 +26,14 @@
 - **P18–P20 正文与 CPU 实验已实现**：S5 教学 MoE、预训练数据与恢复训练、Transformers 小模型 CPU 对照与分片内存账本；TRL/DeepSpeed/Megatron 的角色及未运行多卡边界另行说明。见[第七批验证](docs/batch7-validation.md)。
 - **P21–P23 正文与 CPU 实验已实现**：对话 SFT / assistant-only loss / LoRA，DPO / GRPO 手算与策略更新，以及 S6 教学 MTP、可验证预算和草稿验证。教学模型、框架配置与真实生产训练严格区分。见[第八批验证](docs/batch8-validation.md)。
 - **P24–P26 正文与 CPU 实验已实现**：量化与推理框架路线、固定 revision 的 Qwen3 配置案例，以及 DeepSeek V3/R1/V4.1 的组件与证据地图。官方报告、教学实验和未运行硬件路线分别标明，见[第九批验证](docs/batch9-validation.md)。实现与验证范围见记录，审核和发布状态以对应 PR / Release 为准。
-- **尚未按扩展大纲实现**：P27–P28；旧附录仍保留可读，不代表新附录方案已完成。
+- **P27–P28 正文与综合 CPU 体检已实现**：S0–S6 的同配置验证、checkpoint 边界、负例与单变量报告；附录汇总术语/数学/证据更新流程。原 P00–P28 大纲的内容已覆盖，不等于所有生产技术或 GPU 性能都已复现。见[第十批验证](docs/batch10-validation.md)，审核/发布状态仍以 PR 和 Release 为准。
 - **后续路线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP；每批审核后才继续，不把路线图当成已有功能。
 
-为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，P15–P17 以 08e/08f/08g 插入，P18–P20 以 08h/08i/08j 插入，P21–P23 以 08k/08l/08m 插入，P24/P25 以 08n/08o 插入；P26 改写旧第 9 章案例并保留旧文件名与锚点，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)、[第五批记录](docs/batch5-validation.md)、[第六批记录](docs/batch6-validation.md)、[第七批记录](docs/batch7-validation.md)、[第八批记录](docs/batch8-validation.md)与[第九批记录](docs/batch9-validation.md)。
+为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，P15–P17 以 08e/08f/08g 插入，P18–P20 以 08h/08i/08j 插入，P21–P23 以 08k/08l/08m 插入，P24/P25 以 08n/08o 插入；P26 改写旧第 9 章案例并保留旧文件名与锚点，P27 插为 09a，P28 保留附录旧链接，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)、[第五批记录](docs/batch5-validation.md)、[第六批记录](docs/batch6-validation.md)、[第七批记录](docs/batch7-validation.md)、[第八批记录](docs/batch8-validation.md)、[第九批记录](docs/batch9-validation.md)与[第十批记录](docs/batch10-validation.md)。
 
 ## 📖 当前版本目录导航
 
-当前版本包含 28 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
+当前版本包含 29 个章节文件（含前言、Tokenizer 插入单元与附录）。每一章都配有生活类比、数学原理拆解、表格或流程图；能运行的部分同时提供纯 Python 手算版或 PyTorch 实验：
 
 | 章节与标题 | 核心生活类比 / 几何直觉 | 用到的数学知识 | 配套可运行代码 |
 | :--- | :--- | :--- | :---: |
@@ -64,15 +64,16 @@
 | [**P24. 量化与推理框架**](chapters/08n_quantized_serving.md) | 有限刻度与部署账本 | scale、zero-point、误差与服务边界 | [`code/25_quantized_serving.py`](code/25_quantized_serving.py) |
 | [**P25. Qwen3 配置案例**](chapters/08o_qwen3_case.md) | 沿配置找到组件证据 | 固定版本、参数与缓存形状 | [`code/26_qwen3_case.py`](code/26_qwen3_case.py) |
 | [**09 / P26. DeepSeek 跨版本案例**](chapters/09_modern_llms.md) | 架构、训练与服务的证据地图 | MLA / MoE / CED 的形状与版本边界 | [`code/27_deepseek_case.py`](code/27_deepseek_case.py) |
-| [**10. 附录与黑话词典**](chapters/10_appendix.md) | 数学公式速查卡、深度学习黑话翻译大白话词典 | 全书数理汇总 | - |
+| [**P27. miniGPT 综合体检**](chapters/09a_minigpt_healthcheck.md) | 单变量验证、checkpoint 与失败定位 | S0–S6 CPU smoke 与负例 | [`code/28_minigpt_healthcheck.py`](code/28_minigpt_healthcheck.py) |
+| [**10 / P28. 附录与证据更新**](chapters/10_appendix.md) | 数学公式速查卡、深度学习黑话翻译大白话词典 | 术语、数学卡、硬件边界与来源更新 | 标准库附录回归 |
 
 ---
 
-## 💻 27 个配套代码实验（含可选框架对照）
+## 💻 28 个配套代码实验（含可选框架对照）
 
-历史第二批验证了当时的 9 个编号示例；当前共有 27 个，最新执行环境与结果见[第九批记录](docs/batch9-validation.md)。
+历史第二批验证了当时的 9 个编号示例；当前共有 28 个，最新执行环境与结果见[第十批记录](docs/batch10-validation.md)。
 
-原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10、16 个，以及第 21 个的默认账本、第 22/23 个的默认手算模式只依赖标准库；第 3～7、12～15、17～19、24 个需要 PyTorch；第 11 个的 --scalar-only、第 20 个的 --data-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4；第 21 个 --hf 对照另需 requirements-frameworks.txt 中固定的依赖；第 22 个 --train 和第 23 个 --torch 才运行真实 PyTorch CPU 更新，默认手算退出成功不等于训练已运行。第 25/27 个默认实验只依赖标准库，固定配置与证据文件随仓库提供；第 26 个默认同样只用标准库，`--torch` 可选小尺寸探针另需 PyTorch 与 Jinja2；它不加载官方模型权重。llama.cpp 等外部框架不作为默认 Python 测试的隐含依赖。
+原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10、16 个，以及第 21 个的默认账本、第 22/23 个的默认手算模式只依赖标准库；第 3～7、12～15、17～19、24 个需要 PyTorch；第 11 个的 --scalar-only、第 20 个的 --data-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4；第 21 个 --hf 对照另需 requirements-frameworks.txt 中固定的依赖；第 22 个 --train 和第 23 个 --torch 才运行真实 PyTorch CPU 更新，默认手算退出成功不等于训练已运行。第 25/27 个默认实验只依赖标准库，固定配置与证据文件随仓库提供；第 26 个默认同样只用标准库，`--torch` 可选小尺寸探针另需 PyTorch 与 Jinja2；它不加载官方模型权重。第 28 个综合体检需要 CPU PyTorch，缺依赖会明确说明，不把空跑记为通过。llama.cpp 等外部框架不作为默认 Python 测试的隐含依赖。
 
 1. **[`code/01_vector_similarity.py`](code/01_vector_similarity.py)**：纯 Python 手写向量内积与余弦相似度，验证水果空间距离与国王-女王向量平移。
 2. **[`code/02_manual_attention.py`](code/02_manual_attention.py)**：纯 Python 零依赖手算 3 个字（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化。
@@ -108,6 +109,7 @@
 25. **[`code/25_quantized_serving.py`](code/25_quantized_serving.py)**：CPU 量化与误差、推理服务边界。
 26. **[`code/26_qwen3_case.py`](code/26_qwen3_case.py)**：固定官方配置与 Qwen3 组件账本。
 27. **[`code/27_deepseek_case.py`](code/27_deepseek_case.py)**：跨版本证据矩阵与小尺寸形状实验。
+28. **[`code/28_minigpt_healthcheck.py`](code/28_minigpt_healthcheck.py)**：复用 S0–S5 主线的 CPU 体检；`--mtp` 加入 S6 支线，不作跨结构 logits 等价或 GPU 性能承诺。
 
 ### CPU 快速验证
 
@@ -122,6 +124,18 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-tokenizer.txt
 .venv/bin/python code/09_hf_tokenizer.py
 ```
+
+### P27 一条命令做综合体检
+
+在已按 README 安装 CPU PyTorch 的环境中：
+
+```bash
+python code/28_minigpt_healthcheck.py --json
+# 可选：加入教学 MTP 支线
+python code/28_minigpt_healthcheck.py --mtp --json
+```
+
+这些结果证明当前 tiny 配置的实现契约，不证明真实模型质量、GPU 吞吐或跨架构 checkpoint 兼容。
 
 ### P20 可选框架 CPU 对照
 
