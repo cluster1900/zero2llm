@@ -2,9 +2,9 @@
 
 ## 读者可复现范围
 
-P27 的入口是 `code/28_minigpt_healthcheck.py`；P28 的内容是参考附录与数学自测。本文只保留读者需要的运行步骤、输入约束和结果解释。合并提交、tree 哈希、UTC 过程时间和发布状态应放在 Release notes，不属于本复现文档。
+P27 的入口是 `code/28_minigpt_healthcheck.py`；P28 是参考附录与数学自测。本页只保留读者需要的复现步骤、输入约束和结果解释。合并提交、过程时间和发布状态另见 Release notes。
 
-运行默认检查：
+复现步骤：
 
 ```bash
 python code/28_minigpt_healthcheck.py --json
@@ -12,33 +12,33 @@ python code/28_minigpt_healthcheck.py --mtp --json
 python -m unittest discover -s tests -v
 ```
 
+预期输出是 JSON 对象，包含 environment、stages、causal_checks、chunk_checks、components、compatibility、negatives、timing 和 scope。S0–S5 会报告缓存/因果误差与 KV payload；加 `--mtp` 才出现 S6 的标签、梯度和贪心检查。没有 PyTorch 时 CLI 应退出码 2 并写明 NOT RUN，不把跳过当通过。
+
 ## P25 口径边界
 
-本练习把首闭合位置作为记账约定，用于说明字符串分段；官方模型卡采用最后闭合位置。测试应核对正文中的“官方做法 / 本练习选择”对照关系，而不是依赖某个固定句子的精确匹配，也不能把官方口径称为错误。
+本练习把首闭合位置作为记账约定，官方模型卡采用最后闭合位置；两种口径必须在同一段中明确区分。
 
 ## 复现前提
 
-- 使用仓库固定的代码与模型配置；
-- 记录 Python、Torch、NumPy、可选 HF/llama.cpp 依赖版本；
-- 真实外部引擎不可用时标为跳过，不把跳过计为通过；
-- 生成图表时同时保存输入、参数、输出和检查命令；
-- 不将示意图、随机 tiny 模型或 CPU 结果外推为真实模型质量或 GPU 收益。
+- 使用仓库固定的代码、模型配置和随机种子；
+- 记录 Python、Torch、NumPy、可选 HF/llama.cpp 版本；
+- 真实外部引擎不可用时标为跳过；
+- 图表输入、参数、输出和命令应一起保存；
+- 随机 tiny 模型与 CPU 结果只支持教学正确性，不外推模型质量或 GPU 收益。
 
 ## P27 输出检查
 
-至少核对：
-
-1. S0–S6 的整段与增量 logits 误差；
+1. S0–S6 的整段/增量 logits 误差与全部 causal cut；
 2. 实际 KV payload 字节、位置/掩码和请求隔离；
-3. 三个负例在报警前后的数值变化；
-4. P27.10 CPU 时间小实验，并将结果画成图而不是只留表格。
+3. 三个负例的 caught 状态与 max_logit_error；
+4. P27.10 CPU timing 中 full/cache、first/later 的中位数与 min/max。
 
-每张数据图都要有生成脚本和回归测试；图注写清输入路径、版本和采样范围。
+每张数据图均由当前 JSON 生成，并在图注中写入输入路径、版本和采样范围。
 
 ## P28 速查附录
 
-D–G 每节应同时给出公式与手算例，或给出一张可读的速查图。附录中的旧锚点必须保留，新增锚点使用稳定、唯一的 ID。重复的模型卡、自测和章节小结只保留一个权威位置。
+D–G 每节各有公式与手算例或速查图；旧锚点保留，新锚点唯一。模型卡、自测和章节小结各保留一个权威位置。
 
-## 状态边界
+## 结果解释
 
-本文件描述复现方法，不宣称 GPU、多卡、生产服务收益或完整模型训练已经运行。Normal Work 应针对当前 PR head 重新执行正常构建、布局和 EPUB 检查；历史 head 的通过数不能移用。
+`scope` 字段明确本实验是 CPU toy correctness/timing；`timing` 的毫秒值只适用于当前机器、线程和随机输入。完整报告可用于复核字段，但不能替代真实 GPU、生产服务或完整训练验收。
