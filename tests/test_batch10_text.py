@@ -31,7 +31,7 @@ class FinalBatchTextTests(unittest.TestCase):
             self.assertIn('原大纲 29 个单元的内容已实现',(ROOT/path).read_text())
         self.assertNotIn('本次 PR', (ROOT/'chapters/09a_minigpt_healthcheck.md').read_text())
         p25 = (ROOT/'chapters/08o_qwen3_case.md').read_text()
-        match = re.search(r'(?ms)^## P25\\.9 .*?(?=^## P25\\.10 )', p25)
+        match = re.search(r'(?ms)^## P25\.9 .*?(?=^## P25\.10 )', p25)
         self.assertIsNotNone(match)
         section = match.group(0)
         self.assertIn('教学约定与官方解析', section)
