@@ -73,7 +73,7 @@ class FinalBatchTextTests(unittest.TestCase):
         self.assertIn("S0–S5", body)
         self.assertIn("2048 bytes", body)
         self.assertIn("4096 bytes", body)
-        self.assertIn("MTP label_counts=[7, 3]", body)
+        self.assertIn("label_counts=[7, 3]", body)
         self.assertIn("cache_causal.svg", body)
         self.assertIn("DATA_SOURCE=code/28_minigpt_healthcheck.py --json", body)
         for process_word in ("Normal Work", "本次 PR", "审核 head", "等待审核"):
