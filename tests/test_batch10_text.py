@@ -13,7 +13,7 @@ class FinalBatchTextTests(unittest.TestCase):
         self.assertEqual(names[-3:], ["09_modern_llms.md", "09a_minigpt_healthcheck.md", "10_appendix.md"])
         self.assertEqual(len(names), 29)
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        canonical_scripts = set(re.findall(r"\\]\\((code/[0-9][0-9]_[^)]+\\.py)\\)", readme))
+        canonical_scripts = set(re.findall(r"\]\((code/[0-9][0-9]_[^)]+\.py)\)", readme))
         self.assertEqual(len(canonical_scripts), 28)
         for marker in ("29 个章节文件", "28 个配套代码实验", "P27–P28", "第十批验证"):
             self.assertIn(marker, readme)
