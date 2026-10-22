@@ -1,46 +1,38 @@
-# P27–P28：综合体检与参考附录验证
+# P27–P28：读者复现与结果解释
 
-固定前置基线：zero2llm `69e5c87ed4b5762a89127ab395738f688fac6299`（P24–P26 案例基线）。
+固定前置基线：zero2llm \`69e5c87ed4b5762a89127ab395738f688fac6299\`（P24–P26 案例基线）。
 
-## 读者可复现范围
+## 复现步骤
 
-P27 的入口是 `code/28_minigpt_healthcheck.py`；P28 是参考附录与数学自测。本页只保留读者需要的复现步骤、输入约束和结果解释。合并提交、过程时间和发布状态另见 Release notes。
+在仓库根目录运行：
 
-复现步骤：
-
-```bash
-python code/28_minigpt_healthcheck.py --json
-python code/28_minigpt_healthcheck.py --mtp --json
+\`\`\`bash
+OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --json > healthcheck.json
+OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json > healthcheck-mtp.json
+python scripts/plot_p27_healthcheck.py healthcheck-mtp.json --out-dir assets/diagrams/p27
 python -m unittest discover -s tests -v
-```
+\`\`\`
 
-预期输出是 JSON 对象，包含 environment、stages、causal_checks、chunk_checks、components、compatibility、negatives、timing 和 scope。S0–S5 会报告缓存/因果误差与 KV payload；加 `--mtp` 才出现 S6 的标签、梯度和贪心检查。没有 PyTorch 时 CLI 应退出码 2 并写明 NOT RUN，不把跳过当通过。
+两个 JSON 都是对象，顶层字段包含 \`environment\`、\`stages\`、\`components\`、\`compatibility\`、\`negatives\`、\`timing\` 和 \`scope\`。默认报告有 S0–S5；加 \`--mtp\` 后增加 S6。每个有缓存的阶段同时包含 \`chunk_checks\`、\`cache_error\`、\`kv_bytes\`；P27 教学配置的 MHA 对照为 4096 bytes，GQA 对照为 2048 bytes。三种负例的 \`caught\` 必须都是 \`true\`，并且 \`max_logit_error\` 是有限正数。
+
+MTP 报告的稳定计数为 \`label_counts=[7, 3]\`；\`greedy_equal=true\` 表示 draft/verify 与独立完整前缀贪心结果一致。缓存与因果误差使用脚本写出的 \`atol=3e-6\`、\`rtol=1e-5\` 解释，具体末位随 CPU BLAS 与线程设置变化；报告保留每个 chunk 的最大误差，不用单个摘要数字掩盖分块差异。
+
+绘图命令只接受这份 JSON 的结构。它会写入：
+
+- \`assets/diagrams/p27/cache_causal.svg\`：S0–S5（或 S6）的缓存/因果误差对数柱；
+- \`assets/diagrams/p27/negative_controls.svg\`：三个负例的 before/after 数值柱；
+- \`assets/diagrams/p27/cpu_timing.svg\`：full/cache 与 first/later 的 median，误差线是 min–max。
+
+三张图的 SVG \`desc\` 都记录 \`DATA_SOURCE=code/28_minigpt_healthcheck.py --json\`。缺少报告字段时渲染器以非零状态退出并且不写出半成品图。
 
 ## P25 口径边界
 
-本练习把首闭合位置作为记账约定，官方模型卡采用最后闭合位置；两种口径必须在同一段中明确区分。
+P25.9 把练习的首闭合记账位置与固定 revision 的模型卡最后闭合示例并列；同一节也给出 chat template 的第一个/最后一个闭合差异。这个对照帮助读者复算标签边界，不把教学选择改写成官方实现结论。
 
-## 复现前提
+## 可选依赖的结果
 
-- 使用仓库固定的代码、模型配置和随机种子；
-- 记录 Python、Torch、NumPy、可选 HF/llama.cpp 版本；
-- 真实外部引擎不可用时标为跳过；
-- 图表输入、参数、输出和命令应一起保存；
-- 随机 tiny 模型与 CPU 结果只支持教学正确性，不外推模型质量或 GPU 收益。
-
-## P27 输出检查
-
-1. S0–S6 的整段/增量 logits 误差与全部 causal cut；
-2. 实际 KV payload 字节、位置/掩码和请求隔离；
-3. 三个负例的 caught 状态与 max_logit_error；
-4. P27.10 CPU timing 中 full/cache、first/later 的中位数与 min/max。
-
-每张数据图均由当前 JSON 生成，并在图注中写入输入路径、版本和采样范围。
-
-## P28 速查附录
-
-D–G 每节各有公式与手算例或速查图；旧锚点保留，新锚点唯一。模型卡、自测和章节小结各保留一个权威位置。
+没有 PyTorch 时，两个 healthcheck CLI 以状态码 2 输出 \`NOT RUN, not passed\`；这表示数值路径没有运行。标准库章节测试仍可运行，跳过的官方参考测试会明确显示为 skipped。安装依赖后重新执行上面的命令，不能把旧 JSON 或旧图复制到新代码。
 
 ## 结果解释
 
-`scope` 字段明确本实验是 CPU toy correctness/timing；`timing` 的毫秒值只适用于当前机器、线程和随机输入。完整报告可用于复核字段，但不能替代真实 GPU、生产服务或完整训练验收。
+\`environment\` 记录 Python、Torch、线程、随机种子、dtype 和 CPU；\`timing.milliseconds\` 的 min/median/max 只描述当前输入与机器。这个实验验证小型随机模型的形状、缓存、因果和反例检查，不提供预训练质量、GPU 吞吐或生产服务结论。
