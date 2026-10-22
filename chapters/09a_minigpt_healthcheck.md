@@ -12,6 +12,14 @@
 
 ![miniGPT 的 S0–S6 主线经过配置对账、数值不变量和错误反例三道检查；通过后仍需说明 CPU 教学边界](assets/diagrams/p27-healthcheck.svg)
 
+本批图表由 `scripts/plot_p27_healthcheck.py` 从当前 `--json` 报告生成，不使用手填基准值：
+
+![缓存与因果误差](assets/diagrams/p27/cache_causal.svg)
+
+![负例控制](assets/diagrams/p27/negative_controls.svg)
+
+![CPU 计时](assets/diagrams/p27/cpu_timing.svg)
+
 ## P27.1 先分清三种“相同”
 
 做实验最容易犯的错误，不是写错一个公式，而是比较了不应该相同的东西。
