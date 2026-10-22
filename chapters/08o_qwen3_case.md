@@ -252,7 +252,7 @@ False 比 True 多加的后缀（空行有意义）：
 
 若额度只有 3，已拿到 `[151667,7,8]`，还没有 `</think>`：应报告“思考未闭合、答案段长度 0”，不能把末尾 8 擅自当作最终答案。此练习把第一个闭合标记作为分界，假设输入是单个正常完成序列；不是任意嵌套标签、工具输出或流式协议的通用解析器。non-thinking 模式则把后续生成序列全记为答案段，包括末尾 EOS 等控制 ID，并不声称所有 ID 都是可显示文本。
 
-这里必须区分教学约定与官方解析：上述固定 revision 的模型卡示例用最后一个闭合标记（反向查找 151668）；同 revision 的 chat template 对 reasoning 取第一个 `</think>` 之前，对 content 取最后一个之后。教学练习把这个第一个闭合称为首闭合，方便在一条序列里记账。多个闭合标记时这些口径会不同，本练习仅为记账选择第一个，不宣称它是官方统一口径，也不把最后闭合的官方示例称为错误。[固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)；[固定模板](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json)。
+这里必须区分教学约定与官方解析：上述固定 revision 的官方模型卡采用最后一个闭合位置（反向查找 151668）；同 revision 的 chat template 对 reasoning 取第一个 `</think>` 之前，对 content 取最后一个之后。教学练习把这个第一个闭合称为首闭合，方便在一条序列里记账。多个闭合标记时这些口径会不同，本练习仅为记账选择第一个，不宣称它是官方统一口径，并保留最后闭合的官方示例口径。[固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)；[固定模板](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json)。
 
 此外还有上下文预算：`prompt token 数 + max_new_tokens` 不能超过选用的运行限额。模板中的角色边界、空 thinking 块、历史消息也属于 prompt；字符数不能代替 token 数。`context_budget(12,8,20)` 正好用完 20，`context_budget(12,9,20)` 必须拒绝。
 
