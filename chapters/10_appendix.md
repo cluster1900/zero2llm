@@ -111,6 +111,14 @@ Q 的第 0、1 头共享 KV 第 0 头；Q 第 2、3 头共享 KV 第 1 头。对
 
 本书的必需路线是小规模 CPU 教学，不要求购买 GPU。安装命令以仓库 README 与固定 requirements 为准；按平台选安装包时查 [PyTorch 官方安装页][install]。这个动态页面核对日期为 **2026-10-20**，不是永远不变的安装承诺。
 
+### D.1 KV cache 载荷速查
+
+对未量化的 K/V 张量，按实际保存的头数计算：
+
+$$\mathrm{bytes}=2\times L\times B\times H_{kv}\times T\times d_{\mathrm{head}}\times s.$$
+
+用 P27 教学配置 $L=2,B=2,H_{kv}=2,T=8,d_{\mathrm{head}}=4,s=4$（float32）代入：$2\times2\times2\times2\times8\times4\times4=2048$ bytes。把 GQA 的 $H_{kv}=2$ 改成 MHA 的 $H_{kv}=4$，同一账本得到 4096 bytes。这只核算缓存张量 payload，可与 `numel × element_size` 核对，不代替进程内存峰值。
+
 | 你要做的事 | 先运行什么 | 不能据此声称什么 |
 |---|---|---|
 | 学数学与证据提取 | 标准库手算、P24/P26 默认 CLI | 不能说 Torch 模型前向已运行 |
@@ -125,6 +133,14 @@ Q 的第 0、1 头共享 KV 第 0 头；Q 第 2、3 头共享 KV 第 1 头。对
 **不要为了跑通教程关闭浏览器 sandbox 或忽略证书警告。** 正常构建受限时，说明实际错误、使用有源码匹配检查的备用制品路线，并请有条件的环境补验；“未验证”比伪造 PASS 更有用。
 
 ## 附录 E：看到一条新模型新闻，怎样不被标题带着走 {#p28.e-看到一条新模型新闻怎样不被标题带着走}
+
+### E.0 证据变化率速查
+
+比较两个固定版本的同一字段时，先把绝对差和相对差分开：
+
+$$\Delta=x_{\mathrm{new}}-x_{\mathrm{old}},\qquad r=\Delta/x_{\mathrm{old}}.$$
+
+例如旧配置最大长度为 40960，新版本为 32768，则 $\Delta=-8192$，$r=-8192/40960=-0.20$，即减少 20%。这个结果只描述已锁定字段；硬件速度或模型质量需要另外的测量记录。
 
 ### E.1 四种状态，四种不同承诺
 
@@ -168,6 +184,10 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 ## 附录 F：自测、校验与最后一步 {#p28.f-自测校验与最后一步}
 
+### F.0 平均值与一步更新速查
+
+文档平均与 token 平均使用不同分母：$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。单参数例子 $z=wx$、$L=(z-y)^2/2$ 取 $w=1,x=2,y=0$，则 $z=2$，梯度 $(z-y)\cdot x$ 等于 4；学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
+
 1. A.2 的两头 KV 若换为四头，单层 float32 K+V payload 变为多少？它证明生成速度减半吗？
 2. A.3 的三个 logits 都加 1000，第三类交叉熵是否仍为约 0.693147？为什么不能直接指数？
 3. 两文档有效目标数为 1、3，平均 loss 为 2、4，token 平均和文档平均分别是多少？
@@ -182,6 +202,8 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 学习的终点不是背熟每个缩写，而是能说清：**我改了什么，为什么这样改，哪些证据支持它，还有什么没有验证。**
 
 ## 附录 G：本页原始来源与版本 {#p28.g-本页原始来源与版本}
+
+来源校验把长度和摘要同时锁定。对固定配置字节串计算 SHA-256，并记录 `(bytes, sha256, revision)`。本地 `code/data/qwen3/dense/config.json` 是 726 bytes，摘要为 `660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd`。把最后一个字节从 125 改为 124（异或 1），长度仍为 726 bytes，但摘要变为 `e338758cad0bc78e2ac6b2e298c0e621b78a6d2e80bac7df11df3a828bf8b73e`；同长度、不同内容必须同时查 hash。
 
 - [Attention Is All You Need，arXiv:1706.03762v7][attention]，§3.2 attention 定义；历史书单保留，非新性能复现。
 - [PyTorch 2.14 reproducibility][repro]，固定文档版本；[官方安装选择器][install]为动态页，核对日期2026-10-20。
