@@ -1,0 +1,584 @@
+{
+  "environment": {
+    "python": "3.13.5",
+    "torch": "2.14.1+cpu",
+    "machine": "x86_64",
+    "platform": "Linux-6.12.94+-x86_64-with-glibc2.41",
+    "device": "cpu",
+    "dtype": "float32",
+    "threads": 1,
+    "seed": 270,
+    "batch": 2,
+    "length": 8,
+    "atol": 3e-06,
+    "rtol": 1e-05,
+    "s6_initialization_seed": null
+  },
+  "stages": [
+    {
+      "stage": "S0",
+      "parameters": 7264,
+      "loss": 3.0209648609161377,
+      "causal_checks": [
+        {
+          "cut": 1,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 2,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 3,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 4,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 5,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 6,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 7,
+          "max_logit_error": 0.0
+        }
+      ],
+      "causal_error": 0.0,
+      "checkpoint_error": 0.0
+    },
+    {
+      "stage": "S1",
+      "parameters": 7264,
+      "loss": 3.0209648609161377,
+      "causal_checks": [
+        {
+          "cut": 1,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 2,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 3,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 4,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 5,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 6,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 7,
+          "max_logit_error": 0.0
+        }
+      ],
+      "causal_error": 0.0,
+      "checkpoint_error": 0.0,
+      "chunk_checks": [
+        {
+          "sizes": [
+            3,
+            1,
+            4
+          ],
+          "max_logit_error": 2.384185791015625e-07,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "max_logit_error": 1.7881393432617188e-07,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            8
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            7,
+            1
+          ],
+          "max_logit_error": 1.1920928955078125e-07,
+          "kv_bytes": 4096
+        }
+      ],
+      "cache_error": 2.384185791015625e-07,
+      "kv_bytes": 4096,
+      "capacity_rejected": true
+    },
+    {
+      "stage": "S2",
+      "parameters": 7008,
+      "loss": 3.0687427520751953,
+      "causal_checks": [
+        {
+          "cut": 1,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 2,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 3,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 4,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 5,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 6,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 7,
+          "max_logit_error": 0.0
+        }
+      ],
+      "causal_error": 0.0,
+      "checkpoint_error": 0.0,
+      "chunk_checks": [
+        {
+          "sizes": [
+            3,
+            1,
+            4
+          ],
+          "max_logit_error": 3.5762786865234375e-07,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "max_logit_error": 2.980232238769531e-07,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            8
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            7,
+            1
+          ],
+          "max_logit_error": 1.4901161193847656e-07,
+          "kv_bytes": 4096
+        }
+      ],
+      "cache_error": 3.5762786865234375e-07,
+      "kv_bytes": 4096,
+      "capacity_rejected": true
+    },
+    {
+      "stage": "S3",
+      "parameters": 6800,
+      "loss": 3.0517234802246094,
+      "causal_checks": [
+        {
+          "cut": 1,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 2,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 3,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 4,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 5,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 6,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 7,
+          "max_logit_error": 0.0
+        }
+      ],
+      "causal_error": 0.0,
+      "checkpoint_error": 0.0,
+      "chunk_checks": [
+        {
+          "sizes": [
+            3,
+            1,
+            4
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            8
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 4096
+        },
+        {
+          "sizes": [
+            7,
+            1
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 4096
+        }
+      ],
+      "cache_error": 0.0,
+      "kv_bytes": 4096,
+      "capacity_rejected": true
+    },
+    {
+      "stage": "S4",
+      "parameters": 6288,
+      "loss": 3.091593027114868,
+      "causal_checks": [
+        {
+          "cut": 1,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 2,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 3,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 4,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 5,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 6,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 7,
+          "max_logit_error": 0.0
+        }
+      ],
+      "causal_error": 0.0,
+      "checkpoint_error": 0.0,
+      "chunk_checks": [
+        {
+          "sizes": [
+            3,
+            1,
+            4
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 2048
+        },
+        {
+          "sizes": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "max_logit_error": 5.960464477539063e-08,
+          "kv_bytes": 2048
+        },
+        {
+          "sizes": [
+            8
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 2048
+        },
+        {
+          "sizes": [
+            7,
+            1
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 2048
+        }
+      ],
+      "cache_error": 5.960464477539063e-08,
+      "kv_bytes": 2048,
+      "capacity_rejected": true
+    },
+    {
+      "stage": "S5",
+      "parameters": 5456,
+      "loss": 3.085716485977173,
+      "causal_checks": [
+        {
+          "cut": 1,
+          "max_logit_error": 5.960464477539063e-08
+        },
+        {
+          "cut": 2,
+          "max_logit_error": 5.960464477539063e-08
+        },
+        {
+          "cut": 3,
+          "max_logit_error": 5.960464477539063e-08
+        },
+        {
+          "cut": 4,
+          "max_logit_error": 0.0
+        },
+        {
+          "cut": 5,
+          "max_logit_error": 5.960464477539063e-08
+        },
+        {
+          "cut": 6,
+          "max_logit_error": 5.960464477539063e-08
+        },
+        {
+          "cut": 7,
+          "max_logit_error": 0.0
+        }
+      ],
+      "causal_error": 5.960464477539063e-08,
+      "checkpoint_error": 0.0,
+      "chunk_checks": [
+        {
+          "sizes": [
+            3,
+            1,
+            4
+          ],
+          "max_logit_error": 1.7881393432617188e-07,
+          "kv_bytes": 2048
+        },
+        {
+          "sizes": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "max_logit_error": 2.384185791015625e-07,
+          "kv_bytes": 2048
+        },
+        {
+          "sizes": [
+            8
+          ],
+          "max_logit_error": 0.0,
+          "kv_bytes": 2048
+        },
+        {
+          "sizes": [
+            7,
+            1
+          ],
+          "max_logit_error": 1.1920928955078125e-07,
+          "kv_bytes": 2048
+        }
+      ],
+      "cache_error": 2.384185791015625e-07,
+      "kv_bytes": 2048,
+      "capacity_rejected": true,
+      "expert_loads": [
+        [
+          7,
+          8,
+          8,
+          9
+        ],
+        [
+          4,
+          9,
+          9,
+          10
+        ]
+      ]
+    }
+  ],
+  "components": {
+    "RoPE": [
+      -4,
+      3
+    ],
+    "GQA_mapping": [
+      0,
+      0,
+      1,
+      1
+    ],
+    "MoE_load": [
+      2,
+      2,
+      1,
+      1
+    ],
+    "RMSNorm_and_SwiGLU": "scalar hand oracles passed"
+  },
+  "compatibility": {
+    "S0_to_S1": "same family and identical tensors",
+    "rejected": [
+      "S0_to_S2",
+      "vocabulary_order",
+      "rope_base_same_shapes",
+      "GQA_head_count",
+      "S4_to_S5"
+    ]
+  },
+  "ablation": [
+    {
+      "name": "A_LN_GELU",
+      "treatment": "bias-free control",
+      "unchanged_tensors": 0,
+      "width": 64,
+      "parameters": 6768,
+      "ffn_parameters": 2048,
+      "loss": 3.0467703342437744,
+      "cache_error": 2.384185791015625e-07
+    },
+    {
+      "name": "B_RMS_GELU",
+      "treatment": "normalization only",
+      "unchanged_tensors": 14,
+      "width": 64,
+      "parameters": 6768,
+      "ffn_parameters": 2048,
+      "loss": 3.0581846237182617,
+      "cache_error": 2.384185791015625e-07
+    },
+    {
+      "name": "C_RMS_SwiGLU",
+      "treatment": "FFN family and matched width",
+      "unchanged_tensors": 15,
+      "width": 43,
+      "parameters": 6800,
+      "ffn_parameters": 2064,
+      "loss": 3.0517234802246094,
+      "cache_error": 0.0
+    }
+  ],
+  "negatives": [
+    {
+      "name": "wrong_mask",
+      "caught": true,
+      "max_logit_error": 0.4909290671348572
+    },
+    {
+      "name": "wrong_position",
+      "caught": true,
+      "max_logit_error": 1.4532501697540283
+    },
+    {
+      "name": "cache_pollution",
+      "caught": true,
+      "max_logit_error": 1.488387942314148
+    }
+  ],
+  "mtp": {
+    "status": "not requested; use --mtp"
+  },
+  "timing": {
+    "protocol": {
+      "prompt": 3,
+      "later_tokens": 5,
+      "warmup": 2,
+      "repeats": 5,
+      "clock": "perf_counter",
+      "synchronization": "CPU synchronous; no GPU"
+    },
+    "milliseconds": {
+      "full_first_ms": {
+        "min": 0.2067869936581701,
+        "median": 0.21003899746574461,
+        "max": 0.2585540059953928
+      },
+      "cache_first_ms": {
+        "min": 0.2786570112220943,
+        "median": 0.28563899104483426,
+        "max": 0.3160299966111779
+      },
+      "full_later_ms": {
+        "min": 0.2188869984820485,
+        "median": 0.22570039727725089,
+        "max": 0.23368459951598197
+      },
+      "cache_later_ms": {
+        "min": 0.3118235996225849,
+        "median": 0.3285070008132607,
+        "max": 0.3847423999104649
+      }
+    }
+  },
+  "scope": "CPU toy correctness/timing only; random weights; synthetic IDs; no GPU, general speedup or language-quality claim"
+}

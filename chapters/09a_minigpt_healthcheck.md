@@ -12,6 +12,20 @@
 
 ![miniGPT 的 S0–S6 主线经过配置对账、数值不变量和错误反例三道检查；通过后仍需说明 CPU 教学边界](assets/diagrams/p27-healthcheck.svg)
 
+本批三张结果图由 `scripts/plot_p27_healthcheck.py` 读取仓库内金标报告 `docs/gold/p27_healthcheck_mtp.json`（`OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json` 在 CPU float32、种子 270/271 下写出）生成，不使用手填基准值。复现：
+
+```bash
+OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json > docs/gold/p27_healthcheck_mtp.json
+python scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json --out-dir assets/diagrams/p27
+```
+
+![S0–S6 缓存等价误差与因果干预误差（对数柱；0 单独标注）](assets/diagrams/p27/cache_causal.svg)
+
+![三个负例控制：报警前后最大 logit 误差](assets/diagrams/p27/negative_controls.svg)
+
+![CPU 计时：full/cache × first/later 的 median，误差线为 min–max](assets/diagrams/p27/cpu_timing.svg)
+
+
 ## P27.1 先分清三种“相同”
 
 做实验最容易犯的错误，不是写错一个公式，而是比较了不应该相同的东西。
