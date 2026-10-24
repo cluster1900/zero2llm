@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="460" viewBox="0 0 960 460" role="img" aria-labelledby="title desc">
+<title id="title">P27 CPU timing: full/cache first/later</title>
+<desc id="desc">Generated from code/28_minigpt_healthcheck.py --json; values are not hand-entered.</desc>
+<rect width="100%" height="100%" fill="white"/>
+<text x="90" y="28" font-size="18" font-family="sans-serif">P27 CPU timing (milliseconds)</text>
+<line x1="90" y1="355" x2="900" y2="355" stroke="#222"/>
+<line x1="90" y1="70" x2="90" y2="355" stroke="#222"/>
+<text x="18" y="212" font-size="12" font-family="sans-serif" transform="rotate(-90 18 212)">median ms; whisker=min..max</text>
+<text x="292.5" y="379" text-anchor="middle" font-size="12">first token</text>
+<rect x="250.5" y="281.9" width="42.0" height="73.1" fill="#1565c0" data-series="full" data-category="first token" data-min="0.221134003368" data-median="0.256572006037" data-max="0.337428995408"/>
+<line x1="271.5" y1="292.0" x2="271.5" y2="258.8" stroke="#222"/>
+<line x1="265.5" y1="292.0" x2="277.5" y2="292.0" stroke="#222"/>
+<line x1="265.5" y1="258.8" x2="277.5" y2="258.8" stroke="#222"/>
+<text x="271.5" y="275.9" text-anchor="middle" font-size="10">0.2566</text>
+<rect x="292.5" y="267.2" width="42.0" height="87.8" fill="#ef6c00" data-series="cache" data-category="first token" data-min="0.281767002889" data-median="0.307939000777" data-max="0.336450000759"/>
+<line x1="313.5" y1="274.7" x2="313.5" y2="259.1" stroke="#222"/>
+<line x1="307.5" y1="274.7" x2="319.5" y2="274.7" stroke="#222"/>
+<line x1="307.5" y1="259.1" x2="319.5" y2="259.1" stroke="#222"/>
+<text x="313.5" y="261.2" text-anchor="middle" font-size="10">0.3079</text>
+<text x="697.5" y="379" text-anchor="middle" font-size="12">later token</text>
+<rect x="655.5" y="286.5" width="42.0" height="68.5" fill="#1565c0" data-series="full" data-category="later token" data-min="0.234467998962" data-median="0.240225001471" data-max="0.269281398505"/>
+<line x1="676.5" y1="288.2" x2="676.5" y2="278.3" stroke="#222"/>
+<line x1="670.5" y1="288.2" x2="682.5" y2="288.2" stroke="#222"/>
+<line x1="670.5" y1="278.3" x2="682.5" y2="278.3" stroke="#222"/>
+<text x="676.5" y="280.5" text-anchor="middle" font-size="10">0.2402</text>
+<rect x="697.5" y="258.2" width="42.0" height="96.8" fill="#ef6c00" data-series="cache" data-category="later token" data-min="0.332419999177" data-median="0.339706000523" data-max="0.375174600049"/>
+<line x1="718.5" y1="260.3" x2="718.5" y2="248.1" stroke="#222"/>
+<line x1="712.5" y1="260.3" x2="724.5" y2="260.3" stroke="#222"/>
+<line x1="712.5" y1="248.1" x2="724.5" y2="248.1" stroke="#222"/>
+<text x="718.5" y="252.2" text-anchor="middle" font-size="10">0.3397</text>
+<rect x="90" y="390" width="14" height="14" fill="#1565c0"/><text x="110" y="402" font-size="12">full forward</text>
+<rect x="240" y="390" width="14" height="14" fill="#ef6c00"/><text x="260" y="402" font-size="12">cache forward</text>
+</svg>

@@ -146,5 +146,17 @@
   "p27-healthcheck": {
     "width": 1120.0,
     "height": 700.0
+  },
+  "cache_causal": {
+    "width": 960.0,
+    "height": 460.0
+  },
+  "negative_controls": {
+    "width": 960.0,
+    "height": 460.0
+  },
+  "cpu_timing": {
+    "width": 960.0,
+    "height": 460.0
   }
 }

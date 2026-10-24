@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="460" viewBox="0 0 960 460" role="img" aria-labelledby="title desc">
+<title id="title">P27 cache and causal errors (S6)</title>
+<desc id="desc">Generated from code/28_minigpt_healthcheck.py --json; values are not hand-entered.</desc>
+<rect width="100%" height="100%" fill="white"/>
+<text x="90" y="28" font-size="18" font-family="sans-serif">P27 cache and causal errors (S0–S6)</text>
+<line x1="90" y1="355" x2="900" y2="355" stroke="#222"/>
+<line x1="90" y1="70" x2="90" y2="355" stroke="#222"/>
+<text x="18" y="212" font-size="12" font-family="sans-serif" transform="rotate(-90 18 212)">max absolute error (log10)</text>
+<line x1="90" y1="355.0" x2="900" y2="355.0" stroke="#ddd"/>
+<text x="82" y="359.0" text-anchor="end" font-size="11">1e-12</text>
+<line x1="90" y1="331.2" x2="900" y2="331.2" stroke="#ddd"/>
+<text x="82" y="335.2" text-anchor="end" font-size="11">1e-11</text>
+<line x1="90" y1="307.5" x2="900" y2="307.5" stroke="#ddd"/>
+<text x="82" y="311.5" text-anchor="end" font-size="11">1e-10</text>
+<line x1="90" y1="283.8" x2="900" y2="283.8" stroke="#ddd"/>
+<text x="82" y="287.8" text-anchor="end" font-size="11">1e-09</text>
+<line x1="90" y1="260.0" x2="900" y2="260.0" stroke="#ddd"/>
+<text x="82" y="264.0" text-anchor="end" font-size="11">1e-08</text>
+<line x1="90" y1="236.2" x2="900" y2="236.2" stroke="#ddd"/>
+<text x="82" y="240.2" text-anchor="end" font-size="11">1e-07</text>
+<line x1="90" y1="212.5" x2="900" y2="212.5" stroke="#ddd"/>
+<text x="82" y="216.5" text-anchor="end" font-size="11">1e-06</text>
+<line x1="90" y1="188.8" x2="900" y2="188.8" stroke="#ddd"/>
+<text x="82" y="192.8" text-anchor="end" font-size="11">1e-05</text>
+<line x1="90" y1="165.0" x2="900" y2="165.0" stroke="#ddd"/>
+<text x="82" y="169.0" text-anchor="end" font-size="11">1e-04</text>
+<line x1="90" y1="141.2" x2="900" y2="141.2" stroke="#ddd"/>
+<text x="82" y="145.2" text-anchor="end" font-size="11">1e-03</text>
+<line x1="90" y1="117.5" x2="900" y2="117.5" stroke="#ddd"/>
+<text x="82" y="121.5" text-anchor="end" font-size="11">1e-02</text>
+<line x1="90" y1="93.8" x2="900" y2="93.8" stroke="#ddd"/>
+<text x="82" y="97.8" text-anchor="end" font-size="11">1e-01</text>
+<line x1="90" y1="70.0" x2="900" y2="70.0" stroke="#ddd"/>
+<text x="82" y="74.0" text-anchor="end" font-size="11">1e+00</text>
+<text x="147.9" y="379" text-anchor="middle" font-size="12">S0</text>
+<text x="133.9" y="349" text-anchor="middle" font-size="10" fill="#666">n/a</text>
+<rect x="147.9" y="353.0" width="28.0" height="2.0" fill="#ef6c00" data-stage="S0" data-series="causal" data-value="0"/>
+<text x="161.9" y="347" text-anchor="middle" font-size="10">0</text>
+<text x="263.6" y="379" text-anchor="middle" font-size="12">S1</text>
+<rect x="235.6" y="227.3" width="28.0" height="127.7" fill="#1565c0" data-stage="S1" data-series="cache" data-value="2.38418579102e-07"/>
+<rect x="263.6" y="353.0" width="28.0" height="2.0" fill="#ef6c00" data-stage="S1" data-series="causal" data-value="0"/>
+<text x="277.6" y="347" text-anchor="middle" font-size="10">0</text>
+<text x="379.3" y="379" text-anchor="middle" font-size="12">S2</text>
+<rect x="351.3" y="223.1" width="28.0" height="131.9" fill="#1565c0" data-stage="S2" data-series="cache" data-value="3.57627868652e-07"/>
+<rect x="379.3" y="353.0" width="28.0" height="2.0" fill="#ef6c00" data-stage="S2" data-series="causal" data-value="0"/>
+<text x="393.3" y="347" text-anchor="middle" font-size="10">0</text>
+<text x="495.0" y="379" text-anchor="middle" font-size="12">S3</text>
+<rect x="467.0" y="353.0" width="28.0" height="2.0" fill="#1565c0" data-stage="S3" data-series="cache" data-value="0"/>
+<text x="481.0" y="347" text-anchor="middle" font-size="10">0</text>
+<rect x="495.0" y="353.0" width="28.0" height="2.0" fill="#ef6c00" data-stage="S3" data-series="causal" data-value="0"/>
+<text x="509.0" y="347" text-anchor="middle" font-size="10">0</text>
+<text x="610.7" y="379" text-anchor="middle" font-size="12">S4</text>
+<rect x="582.7" y="241.6" width="28.0" height="113.4" fill="#1565c0" data-stage="S4" data-series="cache" data-value="5.96046447754e-08"/>
+<rect x="610.7" y="353.0" width="28.0" height="2.0" fill="#ef6c00" data-stage="S4" data-series="causal" data-value="0"/>
+<text x="624.7" y="347" text-anchor="middle" font-size="10">0</text>
+<text x="726.4" y="379" text-anchor="middle" font-size="12">S5</text>
+<rect x="698.4" y="227.3" width="28.0" height="127.7" fill="#1565c0" data-stage="S5" data-series="cache" data-value="2.38418579102e-07"/>
+<rect x="726.4" y="241.6" width="28.0" height="113.4" fill="#ef6c00" data-stage="S5" data-series="causal" data-value="5.96046447754e-08"/>
+<text x="842.1" y="379" text-anchor="middle" font-size="12">S6</text>
+<rect x="814.1" y="227.3" width="28.0" height="127.7" fill="#1565c0" data-stage="S6" data-series="cache" data-value="2.38418579102e-07"/>
+<rect x="842.1" y="241.6" width="28.0" height="113.4" fill="#ef6c00" data-stage="S6" data-series="causal" data-value="5.96046447754e-08"/>
+<rect x="90" y="390" width="14" height="14" fill="#1565c0"/><text x="110" y="402" font-size="12">cache equivalence</text>
+<rect x="270" y="390" width="14" height="14" fill="#ef6c00"/><text x="290" y="402" font-size="12">causal intervention</text>
+</svg>

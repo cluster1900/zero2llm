@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-10-19
+% 2026-10-24
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -7964,7 +7964,7 @@ False 比 True 多加的后缀（空行有意义）：
 
 完整模板还包含历史 assistant、工具调用等分支；本章只测试单轮文本路径，不假装单轮测试已经覆盖所有工具／多轮语义。
 
-## P25.9 Thinking、non-thinking、预算是三件事
+## P25.9 Thinking、non-thinking、预算是三件事 {#p25.9-thinking-budget}
 
 对这两个 checkpoint，模型卡描述了硬开关 `enable_thinking`，以及在启用 thinking 时使用 `/think`、`/no_think` 的软提示机制。**软提示是给模型的文本，不是模板解析器里的另一个布尔开关。** 测试会确认：在 user 文本里加 `/no_think`，模板仍保留这段文本，不自动追加 False 的空块。[0.6B 固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)
 
@@ -7983,7 +7983,7 @@ False 比 True 多加的后缀（空行有意义）：
 
 若额度只有 3，已拿到 `[151667,7,8]`，还没有 `</think>`：应报告“思考未闭合、答案段长度 0”，不能把末尾 8 擅自当作最终答案。此练习把第一个闭合标记作为分界，假设输入是单个正常完成序列；不是任意嵌套标签、工具输出或流式协议的通用解析器。non-thinking 模式则把后续生成序列全记为答案段，包括末尾 EOS 等控制 ID，并不声称所有 ID 都是可显示文本。
 
-这里必须区分教学约定与官方解析：上述固定 revision 的模型卡示例用最后一个闭合标记（反向查找 151668）；同 revision 的 chat template 对 reasoning 取第一个 `</think>` 之前，对 content 取最后一个之后。多个闭合标记时这些口径会不同，本练习仅为记账选择第一个，不宣称它是官方统一口径，也不把最后闭合的官方示例称为错误。[固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)；[固定模板](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json)。
+这里必须区分教学约定与官方解析：上述固定 revision 的官方模型卡采用最后一个闭合位置（反向查找 151668）；同 revision 的 chat template 对 reasoning 取第一个 `</think>` 之前，对 content 取最后一个之后。教学练习把这个第一个闭合称为首闭合，方便在一条序列里记账。多个闭合标记时这些口径会不同，本练习仅为记账选择第一个，不宣称它是官方统一口径，并保留最后闭合的官方示例口径。[固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)；[固定模板](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json)。
 
 此外还有上下文预算：`prompt token 数 + max_new_tokens` 不能超过选用的运行限额。模板中的角色边界、空 thinking 块、历史消息也属于 prompt；字符数不能代替 token 数。`context_budget(12,8,20)` 正好用完 20，`context_budget(12,9,20)` 必须拒绝。
 
@@ -8480,6 +8480,20 @@ $$
 
 ![miniGPT 的 S0–S6 主线经过配置对账、数值不变量和错误反例三道检查；通过后仍需说明 CPU 教学边界](assets/diagrams/p27-healthcheck.svg)
 
+本批三张结果图由 `scripts/plot_p27_healthcheck.py` 读取仓库内金标报告 `docs/gold/p27_healthcheck_mtp.json`（`OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json` 在 CPU float32、种子 270/271 下写出）生成，不使用手填基准值。复现：
+
+```bash
+OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json > docs/gold/p27_healthcheck_mtp.json
+python scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json --out-dir assets/diagrams/p27
+```
+
+![S0–S6 缓存等价误差与因果干预误差（对数柱；0 单独标注）](assets/diagrams/p27/cache_causal.svg)
+
+![三个负例控制：报警前后最大 logit 误差](assets/diagrams/p27/negative_controls.svg)
+
+![CPU 计时：full/cache × first/later 的 median，误差线为 min–max](assets/diagrams/p27/cpu_timing.svg)
+
+
 ## P27.1 先分清三种“相同”
 
 做实验最容易犯的错误，不是写错一个公式，而是比较了不应该相同的东西。
@@ -8631,22 +8645,60 @@ $$
 
 对照对象也必须锁住：若把完整前向换成“缓存路径一次喂完”，两边可能共享同一个错误。测试让缓存路径的每块 logits 都加 0.25，四种分块都应被真正的完整前向抓住；缓存路径与自己比较却会漏掉。另一个测试只把第一块乘 1.5，包括整段 `[8]` 在内也都应报警。这里没有改 K/V，错误只在返回的 logits，不能依靠后续缓存崩溃碰巧抓住它。
 
-最小实现轮廓如下，真正模型仍来自旧章节：
+下面是 [`code/28_minigpt_healthcheck.py`](../code/28_minigpt_healthcheck.py) 中 `cache_equivalence` 的前 14 行（第 120–133 行），原样摘录，由 `scripts/sync_code_excerpts.py` 从源码生成并由测试锁定：
 
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L120-L133 -->
 ```python
-cache, pieces = None, []
-for chunk in chunks:
-    logits, cache = cached_forward(model, chunk, cache)
-    pieces.append(logits)
-actual = torch.cat(pieces, dim=1)
-check_close(actual, model(tokens)[0])
+@torch.no_grad()
+def cache_equivalence(stage, tokens, sizes=(3, 1, 4)):
+    if stage.cached_forward is None:
+        raise ValueError('stage has no cache path')
+    if any(type(size) is not int or size <= 0 for size in sizes) or sum(sizes) != tokens.shape[1]:
+        raise ValueError('positive chunks must cover tokens exactly')
+    expected = stage.model(tokens)[0]
+    cache, pieces, start = None, [], 0
+    for size in sizes:
+        output, cache = stage.cached_forward(stage.model, tokens[:, start:start + size], cache)
+        pieces.append(output)
+        start += size
+        if cache.length != start:
+            raise AssertionError('cache length differs from consumed prefix')
 ```
+
+逐行读：
+
+- 第 120 行 `@torch.no_grad()`：体检只做前向，不建计算图，避免缓存张量意外挂上梯度。
+- 第 122–125 行：先拒绝没有缓存路径的阶段，再要求分块全为正整数且**恰好覆盖**整段输入；少喂或多喂一个 token 都不允许进入比较。
+- 第 126 行：参照答案来自同一个 `stage.model` 的完整前向，而不是缓存路径自己再跑一遍——这正是上文“对照对象必须锁住”的落点。
+- 第 127 行：缓存从 `None` 开始，`pieces` 收集每块 logits，`start` 记录已消费的前缀长度。
+- 第 128–131 行：每次只把 `tokens[:, start:start + size]` 这一块和上一轮的 `cache` 交给 `cached_forward`，拿回本块 logits 与新缓存。
+- 第 132–133 行：每块之后立刻核对 `cache.length` 与已消费长度相等；位置记账一旦偏移，在第一块就报警，不等到最后比 logits。
+
+紧接着的第 134 行用 `check_close(torch.cat(pieces, 1), expected)` 比较**所有**位置，之后再用独立整数公式核对 KV 字节数。
 
 必须先 `eval()`。当前小模型没有 dropout，但固定推理模式是接口契约；不能依靠“这次碰巧没有随机层”。缓存也不能在权重更新、dtype 改变后继续使用。
 
 ### 不变量 B：改变未来，不改过去
 
 先用切点 3 举例：把输入前三个位置保留，后五个位置全部换成别的合法 ID，再比较前三个位置的全部 logits。因果 decoder 的过去输出不应依赖未来输入。实际 CLI 会遍历 1–7 的全部切点，JSON 的 `causal_checks` 逐项记录误差，`causal_error` 是其中的最大值；不能只抽查切点 3。
+
+对应源码是 `causal_error`（第 110–117 行）：
+
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L110-L117 -->
+```python
+@torch.no_grad()
+def causal_error(model, tokens, cut=3):
+    """Intervene only on FUTURE inputs, then inspect all earlier logits."""
+    if not 0 < cut < tokens.shape[1]:
+        raise ValueError('cut must split prefix and nonempty future')
+    changed = tokens.clone()
+    changed[:, cut:] = (changed[:, cut:] + 5) % model.config.vocab_size
+    return check_close(model(changed)[0][:, :cut], model(tokens)[0][:, :cut])
+```
+
+- 第 113–114 行：切点必须把序列分成非空的过去与非空的未来，否则这次干预什么也没检验。
+- 第 115–116 行：复制输入，只改 `cut` 之后的 token（加 5 后对词表取模，保证仍是合法 ID）。
+- 第 117 行：两次完整前向，只比较前 `cut` 个位置的 logits；`check_close` 同时拒绝形状不符与非有限值。
 
 这里检查的是**干预**，不是“注意力图看起来是三角形”：如果程序画出一个正确的 mask，却没有真的把它用进计算，干预测试仍会失败。
 
@@ -8689,6 +8741,39 @@ check_close(actual, model(tokens)[0])
 S3 特殊设置可以在数学上退化成之前的结构，S6 depth=0 也可以与 S5 主干相同；本章加载器仍采取保守阶段边界，**没有声称所有理论上可转换的情况都已实现转换器**。需要转换时，应另写显式映射，记录丢弃、初始化和需要重新训练的部分，再独立验证。
 
 保存文件不包含请求缓存。缓存是特定模型对象、权重版本和 token 历史的临时产物；即使新模型加载了相同权重，也不应把旧对象的缓存直接交给它。正确顺序是加载模型、`eval()`、对当前请求重新 prefill。
+
+加载顺序的核心是 `load_checkpoint` 第 182–199 行：
+
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L182-L199 -->
+```python
+    checkpoint = torch.load(source, map_location='cpu', weights_only=True)
+    if not isinstance(checkpoint, dict) or set(checkpoint) != {'metadata', 'state_dict'}:
+        raise ValueError('checkpoint envelope mismatch')
+    meta = checkpoint['metadata']
+    if not isinstance(meta, dict) or meta.get('dtype') not in ('torch.float32', 'torch.float64'):
+        raise ValueError('unsupported checkpoint dtype/metadata')
+    model.to(dtype={'torch.float32': torch.float32, 'torch.float64': torch.float64}[meta['dtype']])
+    if meta != _metadata(stage, model, vocabulary):
+        raise ValueError('checkpoint architecture/config/vocabulary/depth mismatch')
+    state = checkpoint['state_dict']
+    if not isinstance(state, dict) or any(not isinstance(t, torch.Tensor) for t in state.values()):
+        raise ValueError('checkpoint state must contain tensors')
+    expected_state = model.state_dict()
+    # load_state_dict can silently cast integer/bool/complex tensors. Validate
+    # each named target's exact dtype, including any non-floating buffers, first.
+    if any(key in expected_state and tensor.dtype != expected_state[key].dtype
+           for key, tensor in state.items()):
+        raise ValueError('checkpoint tensor dtype mismatch')
+```
+
+- 第 182 行：`map_location='cpu'` 加 `weights_only=True`，只允许张量与基础容器被反序列化。
+- 第 183–184 行：信封必须**恰好**是 `metadata` 与 `state_dict` 两个键，多一个也拒绝。
+- 第 186–188 行：dtype 只接受 float32/float64，并先把目标模型转成该 dtype，后面才能逐键比较。
+- 第 189–190 行：元数据（阶段、完整配置、词表、depth、dtype）与调用方**期望**重建的结果整体比较；RoPE base 或词表顺序不同就在这里被拒，根本不会走到张量加载。
+- 第 191–193 行：`state_dict` 必须是全为张量的字典。
+- 第 194–199 行：逐个命名张量比较 dtype，包括非浮点 buffer，堵住 `load_state_dict` 悄悄转型的口子。
+
+随后第 200–203 行拒绝非有限值，再 `load_state_dict(state, strict=True)` 并返回 `eval()` 模式的模型。
 
 保存端拒绝本实验不支持的 bf16 与含 NaN 的状态，加载端拒绝 envelope 多出的键。相应测试先检查正常路径，再观察坏数据确实被拒绝；移除对应守卫的源码变异会让坏文件被写出或被接受。
 
@@ -8745,6 +8830,23 @@ A→B 只换归一化，复制并核对所有非 norm 状态。B→C 只换 FFN 
 
 CLI 在内存里从 S1 的真实函数源码生成变异版本，只替换这一行 mask，不修改磁盘上的旧课例。源码锚点如果找不到或出现多次，直接失败，不能悄悄跳过。
 
+变异器 `mutate_function` 的函数体只有 7 行（第 308–314 行）：
+
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L308-L314 -->
+```python
+    raw = inspect.unwrap(function)
+    source = textwrap.dedent(inspect.getsource(raw))
+    if source.count(old) != 1:
+        raise AssertionError('mutation anchor must occur exactly once')
+    namespace = dict(raw.__globals__)
+    exec(compile(source.replace(old, new, 1), '<p27-behavior-mutant>', 'exec'), namespace)
+    return namespace[raw.__name__]
+```
+
+- 第 308–309 行：取被装饰前的原函数，读出它的真实源码。
+- 第 310–311 行：替换锚点必须恰好出现一次；源码改了导致锚点消失，是硬失败而不是“负例通过”。
+- 第 312–314 行：在原函数全局命名空间的副本里编译变异版本并返回，磁盘上的课例文件不变。
+
 ### 负例二：每个块都从位置 0 开始
 
 第一块 `[1,2,3]` 使用位置 0、1、2。第二块的第一个 token 应使用位置 3，而不是又回到位置 0。
@@ -8764,6 +8866,29 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 本次负例没有伪造签名，也没有禁用缓存防护。它展示防护的边界：校验对象与权重，不等于自动识别请求历史。真实系统还要考虑租户隔离、前缀缓存授权、并发取消和缓存回收，本章没有实现这些服务功能。
 
 ### 本机实际结果怎么读
+
+前两个负例的判定循环在 `negative_controls` 第 329–338 行：
+
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L329-L338 -->
+```python
+    for name, forward in variants.items():
+        first, cache = forward(base, tokens[:, :3], None)
+        rest, _ = forward(base, tokens[:, 3:], cache)
+        actual = torch.cat((first, rest), 1)
+        if not torch.isfinite(actual).all():
+            raise AssertionError('negative must return finite logits, not crash/NaN')
+        delta = float((actual - expected).abs().max())
+        if torch.allclose(actual, expected, atol=ATOL, rtol=RTOL):
+            raise AssertionError(f'{name} survived the equivalence oracle')
+        rows.append({'name': name, 'caught': True, 'max_logit_error': delta})
+```
+
+- 第 330–332 行：变异版本先喂 3 个 token、再带着自己的缓存喂剩下 5 个，拼成完整 logits。
+- 第 333–334 行：输出必须有限；崩溃或 NaN 不算“抓住”，而是直接失败。
+- 第 335 行：记录与完整前向的最大绝对差，即下表的数。
+- 第 336–337 行：若变异结果仍落在容差内，说明检查器没能区分好坏，直接报错。
+- 第 338 行：只有通过上面两道检查，才写入 `caught: True`。
+
 
 2026-10-20，Python 3.12.14、PyTorch 2.14.1+cpu、单线程、seed=270，按上述固定输入运行：
 
@@ -8876,29 +9001,25 @@ CPU 模拟无法推出 GPU kernel、显存峰值、多请求吞吐或长上下�
 
 ## P27.13 自测：能解释失败，比记住 PASS 更重要
 
+这里只保留本章新增的综合判断；矩形 mask 的手算见 [P11 KV cache](#p11.1-重算发生在哪里)，MoE 的 N×k 负载记账见 [P18](#p18-moe)，独立手算 oracle 见上文 P27.7。
+
 1. S0 和 S1 为什么必须用同一组权重？固定随机种子是否足够？
-2. P=3、C=2 时，正确矩形 mask 的第一行应该看见几个 key？为什么直接 tril 错了却仍可能通过因果测试？
-3. GQA 把本次缓存从 4096 字节降到 2048 字节，是否证明进程内存或 GPU 显存下降一半？
-4. 两个 checkpoint 张量形状都相同，举两个仍可能不兼容的原因。
-5. S3 的 C 组每层 FFN 比 A/B 多多少参数？这还能叫“只换激活函数”吗？
-6. 同一个模型对象、同一组权重、相同 batch，为何仍可能发生请求缓存污染？
-7. MoE 的 16 个 token、top-2，为何负载总数应为 32？空专家没有梯度一定是 bug 吗？
-8. S6 horizon=3、两行各 8 个输入，为什么只有 10 个有效标签？贪心一致能证明随机采样分布一致吗？
-9. 同权重缓存前向和完整前向都调用了错误的 RMSNorm，缓存等价测试能抓到吗？需要补什么？
-10. 测试因缺 Torch 跳过、负例因导入失败退出、负例输出有限但偏离 oracle，哪一种才是本章想看到的负例证据？
+2. GQA 把本次缓存从 4096 字节降到 2048 字节，是否证明进程内存或 GPU 显存下降一半？
+3. 两个 checkpoint 张量形状都相同，举两个仍可能不兼容的原因。
+4. S3 的 C 组每层 FFN 比 A/B 多多少参数？这还能叫“只换激活函数”吗？
+5. 同一个模型对象、同一组权重、相同 batch，为何仍可能发生请求缓存污染？
+6. S6 horizon=3、两行各 8 个输入，为什么只有 10 个有效标签？贪心一致能证明随机采样分布一致吗？
+7. 测试因缺 Torch 跳过、负例因导入失败退出、负例输出有限但偏离 oracle，哪一种才是本章想看到的负例证据？
 
 ### 参考答案
 
 1. 缓存改变计算安排，不应同时改变模型；同一对象最直接。不同架构消耗随机数的顺序不同，仅种子相同不足以保证对应张量相同。
-2. 看见 4 个。直接 tril 用的是局部行号；它可能只少看过去，没有看未来，故需要完整前向对照。
-3. 不能。只核算 KV 张量载荷，不含权重、临时张量、分配器等。
-4. 词表 ID 顺序、RoPE base、norm epsilon、执行语义等都可能不同。
-5. 多 16 个。改了 FFN 家族和匹配宽度，不是 activation-only 对照。
-6. 缓存的内容属于具体 token 历史。owner 相同不代表请求相同；新请求必须明确重置。
-7. 每个 token 请求两个路由分支。空专家可能没有参与图，梯度为 `None` 合理，但要核对路由、主干和被用到的路径。
-8. 每行只有前 5 个位置有第三个未来 token，故 5×2=10；不能推导随机采样分布保持。
-9. 未必，两个路径可能一起错。补独立标量公式、字面手算答案及能被抓住的实际变异。
-10. 只有最后一种。前两种应标未运行或失败，不能装成数学正确性证据。
+2. 不能。只核算 KV 张量载荷，不含权重、临时张量、分配器等。
+3. 词表 ID 顺序、RoPE base、norm epsilon、执行语义等都可能不同。
+4. 多 16 个。改了 FFN 家族和匹配宽度，不是 activation-only 对照。
+5. 缓存的内容属于具体 token 历史。owner 相同不代表请求相同；新请求必须明确重置。
+6. 每行只有前 5 个位置有第三个未来 token，故 5×2=10；不能推导随机采样分布保持。
+7. 只有最后一种。前两种应标未运行或失败，不能装成数学正确性证据。
 
 ## 本章小结 {#p27-summary}
 
@@ -9033,6 +9154,14 @@ Q 的第 0、1 头共享 KV 第 0 头；Q 第 2、3 头共享 KV 第 1 头。对
 
 本书的必需路线是小规模 CPU 教学，不要求购买 GPU。安装命令以仓库 README 与固定 requirements 为准；按平台选安装包时查 [PyTorch 官方安装页][install]。这个动态页面核对日期为 **2026-10-20**，不是永远不变的安装承诺。
 
+### D.1 KV cache 载荷速查
+
+对未量化的 K/V 张量，按实际保存的头数计算：
+
+$$\mathrm{bytes}=2\times L\times B\times H_{kv}\times T\times d_{\mathrm{head}}\times s.$$
+
+用 P27 教学配置 $L=2,B=2,H_{kv}=2,T=8,d_{\mathrm{head}}=4,s=4$（float32）代入：$2\times2\times2\times2\times8\times4\times4=2048$ bytes。把 GQA 的 $H_{kv}=2$ 改成 MHA 的 $H_{kv}=4$，同一账本得到 4096 bytes。这只核算缓存张量 payload，可与 `numel × element_size` 核对，不代替进程内存峰值。
+
 | 你要做的事 | 先运行什么 | 不能据此声称什么 |
 |---|---|---|
 | 学数学与证据提取 | 标准库手算、P24/P26 默认 CLI | 不能说 Torch 模型前向已运行 |
@@ -9047,6 +9176,14 @@ Q 的第 0、1 头共享 KV 第 0 头；Q 第 2、3 头共享 KV 第 1 头。对
 **不要为了跑通教程关闭浏览器 sandbox 或忽略证书警告。** 正常构建受限时，说明实际错误、使用有源码匹配检查的备用制品路线，并请有条件的环境补验；“未验证”比伪造 PASS 更有用。
 
 ## 附录 E：看到一条新模型新闻，怎样不被标题带着走 {#p28.e-看到一条新模型新闻怎样不被标题带着走}
+
+### E.0 证据变化率速查
+
+比较两个固定版本的同一字段时，先把绝对差和相对差分开：
+
+$$\Delta=x_{\mathrm{new}}-x_{\mathrm{old}},\qquad r=\Delta/x_{\mathrm{old}}.$$
+
+例如旧配置最大长度为 40960，新版本为 32768，则 $\Delta=-8192$，$r=-8192/40960=-0.20$，即减少 20%。这个结果只描述已锁定字段；硬件速度或模型质量需要另外的测量记录。
 
 ### E.1 四种状态，四种不同承诺
 
@@ -9090,6 +9227,10 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 ## 附录 F：自测、校验与最后一步 {#p28.f-自测校验与最后一步}
 
+### F.0 平均值与一步更新速查
+
+文档平均与 token 平均使用不同分母：$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。单参数例子 $z=wx$、$L=(z-y)^2/2$ 取 $w=1,x=2,y=0$，则 $z=2$，梯度 $(z-y)\cdot x$ 等于 4；学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
+
 1. A.2 的两头 KV 若换为四头，单层 float32 K+V payload 变为多少？它证明生成速度减半吗？
 2. A.3 的三个 logits 都加 1000，第三类交叉熵是否仍为约 0.693147？为什么不能直接指数？
 3. 两文档有效目标数为 1、3，平均 loss 为 2、4，token 平均和文档平均分别是多少？
@@ -9104,6 +9245,8 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 学习的终点不是背熟每个缩写，而是能说清：**我改了什么，为什么这样改，哪些证据支持它，还有什么没有验证。**
 
 ## 附录 G：本页原始来源与版本 {#p28.g-本页原始来源与版本}
+
+来源校验把长度和摘要同时锁定。对固定配置字节串计算 SHA-256，并记录 `(bytes, sha256, revision)`。本地 `code/data/qwen3/dense/config.json` 是 726 bytes，摘要为 `660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd`。把最后一个字节从 125 改为 124（异或 1），长度仍为 726 bytes，但摘要变为 `e338758cad0bc78e2ac6b2e298c0e621b78a6d2e80bac7df11df3a828bf8b73e`；同长度、不同内容必须同时查 hash。
 
 - [Attention Is All You Need，arXiv:1706.03762v7][attention]，§3.2 attention 定义；历史书单保留，非新性能复现。
 - [PyTorch 2.14 reproducibility][repro]，固定文档版本；[官方安装选择器][install]为动态页，核对日期2026-10-20。
