@@ -14975,7 +14975,7 @@ href="https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485
 tokenizer 配置</a></p>
 <p>完整模板还包含历史
 assistant、工具调用等分支；本章只测试单轮文本路径，不假装单轮测试已经覆盖所有工具／多轮语义。</p>
-<h2 id="p25.9-thinkingnon-thinking预算是三件事">P25.9
+<h2 id="p25.9-thinking-budget">P25.9
 Thinking、non-thinking、预算是三件事</h2>
 <p>对这两个 checkpoint，模型卡描述了硬开关
 <code>enable_thinking</code>，以及在启用 thinking 时使用
@@ -15004,10 +15004,10 @@ token”，也不会自动给答案另留一份额度。<code>completion_budget<
 模式则把后续生成序列全记为答案段，包括末尾 EOS 等控制 ID，并不声称所有
 ID 都是可显示文本。</p>
 <p>这里必须区分教学约定与官方解析：上述固定 revision
-的模型卡示例用最后一个闭合标记（反向查找 151668）；同 revision 的 chat
+的官方模型卡采用最后一个闭合位置（反向查找 151668）；同 revision 的 chat
 template 对 reasoning 取第一个 <code>&lt;/think&gt;</code> 之前，对
 content
-取最后一个之后。多个闭合标记时这些口径会不同，本练习仅为记账选择第一个，不宣称它是官方统一口径，也不把最后闭合的官方示例称为错误。<a
+取最后一个之后。教学练习把这个第一个闭合称为首闭合，方便在一条序列里记账。多个闭合标记时这些口径会不同，本练习仅为记账选择第一个，不宣称它是官方统一口径，并保留最后闭合的官方示例口径。<a
 href="https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md">固定模型卡</a>；<a
 href="https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json">固定模板</a>。</p>
 <p>此外还有上下文预算：<code>prompt token 数 + max_new_tokens</code>
@@ -16106,6 +16106,34 @@ alt="miniGPT 的 S0–S6 主线经过配置对账、数值不变量和错误反�
 主线经过配置对账、数值不变量和错误反例三道检查；通过后仍需说明 CPU
 教学边界</figcaption>
 </figure>
+<p>本批三张结果图由 <code>scripts/plot_p27_healthcheck.py</code>
+读取仓库内金标报告
+<code>docs/gold/p27_healthcheck_mtp.json</code>（<code>OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json</code>
+在 CPU float32、种子 270/271 下写出）生成，不使用手填基准值。复现：</p>
+<div class="sourceCode" id="cb177"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb177-1"><a href="#cb177-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> docs/gold/p27_healthcheck_mtp.json</span>
+<span id="cb177-2"><a href="#cb177-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json <span class="at">--out-dir</span> assets/diagrams/p27</span></code></pre></div>
+<figure>
+<a href="assets/rendered/cache_causal.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/cache_causal.svg" class="book-diagram" width="720"
+alt="S0–S6 缓存等价误差与因果干预误差（对数柱；0 单独标注）" /></a>
+<figcaption>S0–S6 缓存等价误差与因果干预误差（对数柱；0
+单独标注）</figcaption>
+</figure>
+<figure>
+<a href="assets/rendered/negative_controls.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/negative_controls.svg" class="book-diagram"
+width="720" alt="三个负例控制：报警前后最大 logit 误差" /></a>
+<figcaption>三个负例控制：报警前后最大 logit 误差</figcaption>
+</figure>
+<figure>
+<a href="assets/rendered/cpu_timing.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/cpu_timing.svg" class="book-diagram" width="720"
+alt="CPU 计时：full/cache × first/later 的 median，误差线为 min–max" /></a>
+<figcaption>CPU 计时：full/cache × first/later 的 median，误差线为
+min–max</figcaption>
+</figure>
 <h2 id="p27.1-先分清三种相同">P27.1 先分清三种“相同”</h2>
 <p>做实验最容易犯的错误，不是写错一个公式，而是比较了不应该相同的东西。</p>
 <div class="table-wrapper"><table>
@@ -16240,15 +16268,15 @@ v2，MTP</a></p>
 <h3 id="运行入口与失败含义">运行入口与失败含义</h3>
 <p>在仓库根目录、已安装 <code>requirements.txt</code> 的 Python
 环境中运行：</p>
-<div class="sourceCode" id="cb177"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb177-1"><a href="#cb177-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py</span></code></pre></div>
-<p>加上可选 MTP 检查：</p>
 <div class="sourceCode" id="cb178"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb178-1"><a href="#cb178-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span></span></code></pre></div>
-<p>需要保存可比较的机器可读报告时：</p>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb178-1"><a href="#cb178-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py</span></code></pre></div>
+<p>加上可选 MTP 检查：</p>
 <div class="sourceCode" id="cb179"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb179-1"><a href="#cb179-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> healthcheck.json</span>
-<span id="cb179-2"><a href="#cb179-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_minigpt_healthcheck.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb179-1"><a href="#cb179-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span></span></code></pre></div>
+<p>需要保存可比较的机器可读报告时：</p>
+<div class="sourceCode" id="cb180"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb180-1"><a href="#cb180-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> healthcheck.json</span>
+<span id="cb180-2"><a href="#cb180-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_minigpt_healthcheck.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p><code>--json</code> 只改变输出格式，不跳过任何检查；每个缓存阶段的
 <code>chunk_checks</code>
 记录实际运行的四种分块及各自误差、字节数，汇总误差取其中最大值。默认路径不下载模型、不访问外部服务、不使用
@@ -16482,14 +16510,48 @@ logits 都加
 0.25，四种分块都应被真正的完整前向抓住；缓存路径与自己比较却会漏掉。另一个测试只把第一块乘
 1.5，包括整段 <code>[8]</code> 在内也都应报警。这里没有改
 K/V，错误只在返回的 logits，不能依靠后续缓存崩溃碰巧抓住它。</p>
-<p>最小实现轮廓如下，真正模型仍来自旧章节：</p>
-<div class="sourceCode" id="cb180"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb180-1"><a href="#cb180-1" aria-hidden="true" tabindex="-1"></a>cache, pieces <span class="op">=</span> <span class="va">None</span>, []</span>
-<span id="cb180-2"><a href="#cb180-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> chunk <span class="kw">in</span> chunks:</span>
-<span id="cb180-3"><a href="#cb180-3" aria-hidden="true" tabindex="-1"></a>    logits, cache <span class="op">=</span> cached_forward(model, chunk, cache)</span>
-<span id="cb180-4"><a href="#cb180-4" aria-hidden="true" tabindex="-1"></a>    pieces.append(logits)</span>
-<span id="cb180-5"><a href="#cb180-5" aria-hidden="true" tabindex="-1"></a>actual <span class="op">=</span> torch.cat(pieces, dim<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb180-6"><a href="#cb180-6" aria-hidden="true" tabindex="-1"></a>check_close(actual, model(tokens)[<span class="dv">0</span>])</span></code></pre></div>
+<p>下面是 <a
+href="code/28_minigpt_healthcheck.py"><code>code/28_minigpt_healthcheck.py</code></a>
+中 <code>cache_equivalence</code> 的前 14 行（第 120–133
+行），原样摘录，由 <code>scripts/sync_code_excerpts.py</code>
+从源码生成并由测试锁定：</p>
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L120-L133 -->
+<div class="sourceCode" id="cb181"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb181-1"><a href="#cb181-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
+<span id="cb181-2"><a href="#cb181-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cache_equivalence(stage, tokens, sizes<span class="op">=</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">4</span>)):</span>
+<span id="cb181-3"><a href="#cb181-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> stage.cached_forward <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb181-4"><a href="#cb181-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;stage has no cache path&#39;</span>)</span>
+<span id="cb181-5"><a href="#cb181-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(<span class="bu">type</span>(size) <span class="kw">is</span> <span class="kw">not</span> <span class="bu">int</span> <span class="kw">or</span> size <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">for</span> size <span class="kw">in</span> sizes) <span class="kw">or</span> <span class="bu">sum</span>(sizes) <span class="op">!=</span> tokens.shape[<span class="dv">1</span>]:</span>
+<span id="cb181-6"><a href="#cb181-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;positive chunks must cover tokens exactly&#39;</span>)</span>
+<span id="cb181-7"><a href="#cb181-7" aria-hidden="true" tabindex="-1"></a>    expected <span class="op">=</span> stage.model(tokens)[<span class="dv">0</span>]</span>
+<span id="cb181-8"><a href="#cb181-8" aria-hidden="true" tabindex="-1"></a>    cache, pieces, start <span class="op">=</span> <span class="va">None</span>, [], <span class="dv">0</span></span>
+<span id="cb181-9"><a href="#cb181-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> size <span class="kw">in</span> sizes:</span>
+<span id="cb181-10"><a href="#cb181-10" aria-hidden="true" tabindex="-1"></a>        output, cache <span class="op">=</span> stage.cached_forward(stage.model, tokens[:, start:start <span class="op">+</span> size], cache)</span>
+<span id="cb181-11"><a href="#cb181-11" aria-hidden="true" tabindex="-1"></a>        pieces.append(output)</span>
+<span id="cb181-12"><a href="#cb181-12" aria-hidden="true" tabindex="-1"></a>        start <span class="op">+=</span> size</span>
+<span id="cb181-13"><a href="#cb181-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> cache.length <span class="op">!=</span> start:</span>
+<span id="cb181-14"><a href="#cb181-14" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;cache length differs from consumed prefix&#39;</span>)</span></code></pre></div>
+<p>逐行读：</p>
+<ul>
+<li>第 120 行
+<code>@torch.no_grad()</code>：体检只做前向，不建计算图，避免缓存张量意外挂上梯度。</li>
+<li>第 122–125
+行：先拒绝没有缓存路径的阶段，再要求分块全为正整数且<strong>恰好覆盖</strong>整段输入；少喂或多喂一个
+token 都不允许进入比较。</li>
+<li>第 126 行：参照答案来自同一个 <code>stage.model</code>
+的完整前向，而不是缓存路径自己再跑一遍——这正是上文“对照对象必须锁住”的落点。</li>
+<li>第 127 行：缓存从 <code>None</code> 开始，<code>pieces</code>
+收集每块 logits，<code>start</code> 记录已消费的前缀长度。</li>
+<li>第 128–131 行：每次只把 <code>tokens[:, start:start + size]</code>
+这一块和上一轮的 <code>cache</code> 交给
+<code>cached_forward</code>，拿回本块 logits 与新缓存。</li>
+<li>第 132–133 行：每块之后立刻核对 <code>cache.length</code>
+与已消费长度相等；位置记账一旦偏移，在第一块就报警，不等到最后比
+logits。</li>
+</ul>
+<p>紧接着的第 134 行用
+<code>check_close(torch.cat(pieces, 1), expected)</code>
+比较<strong>所有</strong>位置，之后再用独立整数公式核对 KV 字节数。</p>
 <p>必须先 <code>eval()</code>。当前小模型没有
 dropout，但固定推理模式是接口契约；不能依靠“这次碰巧没有随机层”。缓存也不能在权重更新、dtype
 改变后继续使用。</p>
@@ -16499,6 +16561,25 @@ ID，再比较前三个位置的全部 logits。因果 decoder
 的过去输出不应依赖未来输入。实际 CLI 会遍历 1–7 的全部切点，JSON 的
 <code>causal_checks</code> 逐项记录误差，<code>causal_error</code>
 是其中的最大值；不能只抽查切点 3。</p>
+<p>对应源码是 <code>causal_error</code>（第 110–117 行）：</p>
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L110-L117 -->
+<div class="sourceCode" id="cb182"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb182-1"><a href="#cb182-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
+<span id="cb182-2"><a href="#cb182-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> causal_error(model, tokens, cut<span class="op">=</span><span class="dv">3</span>):</span>
+<span id="cb182-3"><a href="#cb182-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Intervene only on FUTURE inputs, then inspect all earlier logits.&quot;&quot;&quot;</span></span>
+<span id="cb182-4"><a href="#cb182-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="dv">0</span> <span class="op">&lt;</span> cut <span class="op">&lt;</span> tokens.shape[<span class="dv">1</span>]:</span>
+<span id="cb182-5"><a href="#cb182-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;cut must split prefix and nonempty future&#39;</span>)</span>
+<span id="cb182-6"><a href="#cb182-6" aria-hidden="true" tabindex="-1"></a>    changed <span class="op">=</span> tokens.clone()</span>
+<span id="cb182-7"><a href="#cb182-7" aria-hidden="true" tabindex="-1"></a>    changed[:, cut:] <span class="op">=</span> (changed[:, cut:] <span class="op">+</span> <span class="dv">5</span>) <span class="op">%</span> model.config.vocab_size</span>
+<span id="cb182-8"><a href="#cb182-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> check_close(model(changed)[<span class="dv">0</span>][:, :cut], model(tokens)[<span class="dv">0</span>][:, :cut])</span></code></pre></div>
+<ul>
+<li>第 113–114
+行：切点必须把序列分成非空的过去与非空的未来，否则这次干预什么也没检验。</li>
+<li>第 115–116 行：复制输入，只改 <code>cut</code> 之后的 token（加 5
+后对词表取模，保证仍是合法 ID）。</li>
+<li>第 117 行：两次完整前向，只比较前 <code>cut</code> 个位置的
+logits；<code>check_close</code> 同时拒绝形状不符与非有限值。</li>
+</ul>
 <p>这里检查的是<strong>干预</strong>，不是“注意力图看起来是三角形”：如果程序画出一个正确的
 mask，却没有真的把它用进计算，干预测试仍会失败。</p>
 <p>为什么遍历所有切点？测试只让最后一层的位置 5 偷看位置 6。切点 3
@@ -16622,6 +16703,44 @@ monkey-patch 后的任意运行时结构。</p>
 <p>保存文件不包含请求缓存。缓存是特定模型对象、权重版本和 token
 历史的临时产物；即使新模型加载了相同权重，也不应把旧对象的缓存直接交给它。正确顺序是加载模型、<code>eval()</code>、对当前请求重新
 prefill。</p>
+<p>加载顺序的核心是 <code>load_checkpoint</code> 第 182–199 行：</p>
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L182-L199 -->
+<div class="sourceCode" id="cb183"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb183-1"><a href="#cb183-1" aria-hidden="true" tabindex="-1"></a>    checkpoint <span class="op">=</span> torch.load(source, map_location<span class="op">=</span><span class="st">&#39;cpu&#39;</span>, weights_only<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb183-2"><a href="#cb183-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(checkpoint, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">set</span>(checkpoint) <span class="op">!=</span> {<span class="st">&#39;metadata&#39;</span>, <span class="st">&#39;state_dict&#39;</span>}:</span>
+<span id="cb183-3"><a href="#cb183-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint envelope mismatch&#39;</span>)</span>
+<span id="cb183-4"><a href="#cb183-4" aria-hidden="true" tabindex="-1"></a>    meta <span class="op">=</span> checkpoint[<span class="st">&#39;metadata&#39;</span>]</span>
+<span id="cb183-5"><a href="#cb183-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(meta, <span class="bu">dict</span>) <span class="kw">or</span> meta.get(<span class="st">&#39;dtype&#39;</span>) <span class="kw">not</span> <span class="kw">in</span> (<span class="st">&#39;torch.float32&#39;</span>, <span class="st">&#39;torch.float64&#39;</span>):</span>
+<span id="cb183-6"><a href="#cb183-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;unsupported checkpoint dtype/metadata&#39;</span>)</span>
+<span id="cb183-7"><a href="#cb183-7" aria-hidden="true" tabindex="-1"></a>    model.to(dtype<span class="op">=</span>{<span class="st">&#39;torch.float32&#39;</span>: torch.float32, <span class="st">&#39;torch.float64&#39;</span>: torch.float64}[meta[<span class="st">&#39;dtype&#39;</span>]])</span>
+<span id="cb183-8"><a href="#cb183-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> meta <span class="op">!=</span> _metadata(stage, model, vocabulary):</span>
+<span id="cb183-9"><a href="#cb183-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint architecture/config/vocabulary/depth mismatch&#39;</span>)</span>
+<span id="cb183-10"><a href="#cb183-10" aria-hidden="true" tabindex="-1"></a>    state <span class="op">=</span> checkpoint[<span class="st">&#39;state_dict&#39;</span>]</span>
+<span id="cb183-11"><a href="#cb183-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(state, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">any</span>(<span class="kw">not</span> <span class="bu">isinstance</span>(t, torch.Tensor) <span class="cf">for</span> t <span class="kw">in</span> state.values()):</span>
+<span id="cb183-12"><a href="#cb183-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint state must contain tensors&#39;</span>)</span>
+<span id="cb183-13"><a href="#cb183-13" aria-hidden="true" tabindex="-1"></a>    expected_state <span class="op">=</span> model.state_dict()</span>
+<span id="cb183-14"><a href="#cb183-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># load_state_dict can silently cast integer/bool/complex tensors. Validate</span></span>
+<span id="cb183-15"><a href="#cb183-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># each named target&#39;s exact dtype, including any non-floating buffers, first.</span></span>
+<span id="cb183-16"><a href="#cb183-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(key <span class="kw">in</span> expected_state <span class="kw">and</span> tensor.dtype <span class="op">!=</span> expected_state[key].dtype</span>
+<span id="cb183-17"><a href="#cb183-17" aria-hidden="true" tabindex="-1"></a>           <span class="cf">for</span> key, tensor <span class="kw">in</span> state.items()):</span>
+<span id="cb183-18"><a href="#cb183-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint tensor dtype mismatch&#39;</span>)</span></code></pre></div>
+<ul>
+<li>第 182 行：<code>map_location='cpu'</code> 加
+<code>weights_only=True</code>，只允许张量与基础容器被反序列化。</li>
+<li>第 183–184 行：信封必须<strong>恰好</strong>是 <code>metadata</code>
+与 <code>state_dict</code> 两个键，多一个也拒绝。</li>
+<li>第 186–188 行：dtype 只接受 float32/float64，并先把目标模型转成该
+dtype，后面才能逐键比较。</li>
+<li>第 189–190
+行：元数据（阶段、完整配置、词表、depth、dtype）与调用方<strong>期望</strong>重建的结果整体比较；RoPE
+base 或词表顺序不同就在这里被拒，根本不会走到张量加载。</li>
+<li>第 191–193 行：<code>state_dict</code> 必须是全为张量的字典。</li>
+<li>第 194–199 行：逐个命名张量比较 dtype，包括非浮点 buffer，堵住
+<code>load_state_dict</code> 悄悄转型的口子。</li>
+</ul>
+<p>随后第 200–203 行拒绝非有限值，再
+<code>load_state_dict(state, strict=True)</code> 并返回
+<code>eval()</code> 模式的模型。</p>
 <p>保存端拒绝本实验不支持的 bf16 与含 NaN 的状态，加载端拒绝 envelope
 多出的键。相应测试先检查正常路径，再观察坏数据确实被拒绝；移除对应守卫的源码变异会让坏文件被写出或被接受。</p>
 <p>逐张量核对也不能被“本次输出相同”替代：S0 的 mask 是 16×16，本次 T=8
@@ -16770,6 +16889,24 @@ tril</h3>
 tril 为 10 和 50/3。一个 mask 的局部行号偏移，就把计算换了问题。</p>
 <p>CLI 在内存里从 S1 的真实函数源码生成变异版本，只替换这一行
 mask，不修改磁盘上的旧课例。源码锚点如果找不到或出现多次，直接失败，不能悄悄跳过。</p>
+<p>变异器 <code>mutate_function</code> 的函数体只有 7 行（第 308–314
+行）：</p>
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L308-L314 -->
+<div class="sourceCode" id="cb184"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb184-1"><a href="#cb184-1" aria-hidden="true" tabindex="-1"></a>    raw <span class="op">=</span> inspect.unwrap(function)</span>
+<span id="cb184-2"><a href="#cb184-2" aria-hidden="true" tabindex="-1"></a>    source <span class="op">=</span> textwrap.dedent(inspect.getsource(raw))</span>
+<span id="cb184-3"><a href="#cb184-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> source.count(old) <span class="op">!=</span> <span class="dv">1</span>:</span>
+<span id="cb184-4"><a href="#cb184-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;mutation anchor must occur exactly once&#39;</span>)</span>
+<span id="cb184-5"><a href="#cb184-5" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="bu">dict</span>(raw.__globals__)</span>
+<span id="cb184-6"><a href="#cb184-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">exec</span>(<span class="bu">compile</span>(source.replace(old, new, <span class="dv">1</span>), <span class="st">&#39;&lt;p27-behavior-mutant&gt;&#39;</span>, <span class="st">&#39;exec&#39;</span>), namespace)</span>
+<span id="cb184-7"><a href="#cb184-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> namespace[raw.<span class="va">__name__</span>]</span></code></pre></div>
+<ul>
+<li>第 308–309 行：取被装饰前的原函数，读出它的真实源码。</li>
+<li>第 310–311
+行：替换锚点必须恰好出现一次；源码改了导致锚点消失，是硬失败而不是“负例通过”。</li>
+<li>第 312–314
+行：在原函数全局命名空间的副本里编译变异版本并返回，磁盘上的课例文件不变。</li>
+</ul>
 <h3 id="负例二每个块都从位置-0-开始">负例二：每个块都从位置 0 开始</h3>
 <p>第一块 <code>[1,2,3]</code> 使用位置 0、1、2。第二块的第一个 token
 应使用位置 3，而不是又回到位置 0。</p>
@@ -16792,6 +16929,31 @@ id="负例三第二个用户接上了第一个用户的历史">负例三：第�
 <code>None</code> 或自己的独立状态。</p>
 <p>本次负例没有伪造签名，也没有禁用缓存防护。它展示防护的边界：校验对象与权重，不等于自动识别请求历史。真实系统还要考虑租户隔离、前缀缓存授权、并发取消和缓存回收，本章没有实现这些服务功能。</p>
 <h3 id="本机实际结果怎么读">本机实际结果怎么读</h3>
+<p>前两个负例的判定循环在 <code>negative_controls</code> 第 329–338
+行：</p>
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L329-L338 -->
+<div class="sourceCode" id="cb185"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb185-1"><a href="#cb185-1" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, forward <span class="kw">in</span> variants.items():</span>
+<span id="cb185-2"><a href="#cb185-2" aria-hidden="true" tabindex="-1"></a>        first, cache <span class="op">=</span> forward(base, tokens[:, :<span class="dv">3</span>], <span class="va">None</span>)</span>
+<span id="cb185-3"><a href="#cb185-3" aria-hidden="true" tabindex="-1"></a>        rest, _ <span class="op">=</span> forward(base, tokens[:, <span class="dv">3</span>:], cache)</span>
+<span id="cb185-4"><a href="#cb185-4" aria-hidden="true" tabindex="-1"></a>        actual <span class="op">=</span> torch.cat((first, rest), <span class="dv">1</span>)</span>
+<span id="cb185-5"><a href="#cb185-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> torch.isfinite(actual).<span class="bu">all</span>():</span>
+<span id="cb185-6"><a href="#cb185-6" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;negative must return finite logits, not crash/NaN&#39;</span>)</span>
+<span id="cb185-7"><a href="#cb185-7" aria-hidden="true" tabindex="-1"></a>        delta <span class="op">=</span> <span class="bu">float</span>((actual <span class="op">-</span> expected).<span class="bu">abs</span>().<span class="bu">max</span>())</span>
+<span id="cb185-8"><a href="#cb185-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> torch.allclose(actual, expected, atol<span class="op">=</span>ATOL, rtol<span class="op">=</span>RTOL):</span>
+<span id="cb185-9"><a href="#cb185-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="ss">f&#39;</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss"> survived the equivalence oracle&#39;</span>)</span>
+<span id="cb185-10"><a href="#cb185-10" aria-hidden="true" tabindex="-1"></a>        rows.append({<span class="st">&#39;name&#39;</span>: name, <span class="st">&#39;caught&#39;</span>: <span class="va">True</span>, <span class="st">&#39;max_logit_error&#39;</span>: delta})</span></code></pre></div>
+<ul>
+<li>第 330–332 行：变异版本先喂 3 个 token、再带着自己的缓存喂剩下 5
+个，拼成完整 logits。</li>
+<li>第 333–334 行：输出必须有限；崩溃或 NaN
+不算“抓住”，而是直接失败。</li>
+<li>第 335 行：记录与完整前向的最大绝对差，即下表的数。</li>
+<li>第 336–337
+行：若变异结果仍落在容差内，说明检查器没能区分好坏，直接报错。</li>
+<li>第 338 行：只有通过上面两道检查，才写入
+<code>caught: True</code>。</li>
+</ul>
 <p>2026-10-20，Python 3.12.14、PyTorch
 2.14.1+cpu、单线程、seed=270，按上述固定输入运行：</p>
 <div class="table-wrapper"><table>
@@ -17087,10 +17249,11 @@ dtype。把首个出错位置保存下来，比抄十屏日志更有用。</p>
 <p>如果以后换成真实训练数据，应补充来源、许可、过滤、去重、切分、隐私处理与评测污染检查；如果训练了权重，应补训练预算、优化器、数据版本、已知失败和可重现实验。不要把本章不存在的内容填成“已完成”。</p>
 <h2 id="p27.13-自测能解释失败比记住-pass-更重要">P27.13
 自测：能解释失败，比记住 PASS 更重要</h2>
+<p>这里只保留本章新增的综合判断；矩形 mask 的手算见 <a
+href="#p11.1-重算发生在哪里">P11 KV cache</a>，MoE 的 N×k 负载记账见 <a
+href="#p18-moe">P18</a>，独立手算 oracle 见上文 P27.7。</p>
 <ol type="1">
 <li>S0 和 S1 为什么必须用同一组权重？固定随机种子是否足够？</li>
-<li>P=3、C=2 时，正确矩形 mask 的第一行应该看见几个 key？为什么直接 tril
-错了却仍可能通过因果测试？</li>
 <li>GQA 把本次缓存从 4096 字节降到 2048 字节，是否证明进程内存或 GPU
 显存下降一半？</li>
 <li>两个 checkpoint 张量形状都相同，举两个仍可能不兼容的原因。</li>
@@ -17098,30 +17261,21 @@ dtype。把首个出错位置保存下来，比抄十屏日志更有用。</p>
 多多少参数？这还能叫“只换激活函数”吗？</li>
 <li>同一个模型对象、同一组权重、相同
 batch，为何仍可能发生请求缓存污染？</li>
-<li>MoE 的 16 个 token、top-2，为何负载总数应为 32？空专家没有梯度一定是
-bug 吗？</li>
 <li>S6 horizon=3、两行各 8 个输入，为什么只有 10
 个有效标签？贪心一致能证明随机采样分布一致吗？</li>
-<li>同权重缓存前向和完整前向都调用了错误的
-RMSNorm，缓存等价测试能抓到吗？需要补什么？</li>
 <li>测试因缺 Torch 跳过、负例因导入失败退出、负例输出有限但偏离
 oracle，哪一种才是本章想看到的负例证据？</li>
 </ol>
 <h3 id="参考答案-10">参考答案</h3>
 <ol type="1">
 <li>缓存改变计算安排，不应同时改变模型；同一对象最直接。不同架构消耗随机数的顺序不同，仅种子相同不足以保证对应张量相同。</li>
-<li>看见 4 个。直接 tril
-用的是局部行号；它可能只少看过去，没有看未来，故需要完整前向对照。</li>
 <li>不能。只核算 KV 张量载荷，不含权重、临时张量、分配器等。</li>
 <li>词表 ID 顺序、RoPE base、norm epsilon、执行语义等都可能不同。</li>
 <li>多 16 个。改了 FFN 家族和匹配宽度，不是 activation-only 对照。</li>
 <li>缓存的内容属于具体 token 历史。owner
 相同不代表请求相同；新请求必须明确重置。</li>
-<li>每个 token 请求两个路由分支。空专家可能没有参与图，梯度为
-<code>None</code> 合理，但要核对路由、主干和被用到的路径。</li>
 <li>每行只有前 5 个位置有第三个未来 token，故
 5×2=10；不能推导随机采样分布保持。</li>
-<li>未必，两个路径可能一起错。补独立标量公式、字面手算答案及能被抓住的实际变异。</li>
 <li>只有最后一种。前两种应标未运行或失败，不能装成数学正确性证据。</li>
 </ol>
 <h2 id="p27-summary">本章小结</h2>
@@ -17542,6 +17696,17 @@ README 与固定 requirements 为准；按平台选安装包时查 <a
 href="https://pytorch.org/get-started/locally/">PyTorch
 官方安装页</a>。这个动态页面核对日期为
 <strong>2026-10-20</strong>，不是永远不变的安装承诺。</p>
+<h3 id="d.1-kv-cache-载荷速查">D.1 KV cache 载荷速查</h3>
+<p>对未量化的 K/V 张量，按实际保存的头数计算：</p>
+<p><span class="math display">\[\mathrm{bytes}=2\times L\times B\times
+H_{kv}\times T\times d_{\mathrm{head}}\times s.\]</span></p>
+<p>用 P27 教学配置 <span
+class="math inline">\(L=2,B=2,H_{kv}=2,T=8,d_{\mathrm{head}}=4,s=4\)</span>（float32）代入：<span
+class="math inline">\(2\times2\times2\times2\times8\times4\times4=2048\)</span>
+bytes。把 GQA 的 <span class="math inline">\(H_{kv}=2\)</span> 改成 MHA
+的 <span class="math inline">\(H_{kv}=4\)</span>，同一账本得到 4096
+bytes。这只核算缓存张量 payload，可与 <code>numel × element_size</code>
+核对，不代替进程内存峰值。</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -17593,6 +17758,15 @@ seed 不保证所有硬件逐位相同。本书给 tiny float64 MoE 1e-12
 PASS 更有用。</p>
 <h2 id="p28.e-看到一条新模型新闻怎样不被标题带着走">附录
 E：看到一条新模型新闻，怎样不被标题带着走</h2>
+<h3 id="e.0-证据变化率速查">E.0 证据变化率速查</h3>
+<p>比较两个固定版本的同一字段时，先把绝对差和相对差分开：</p>
+<p><span
+class="math display">\[\Delta=x_{\mathrm{new}}-x_{\mathrm{old}},\qquad
+r=\Delta/x_{\mathrm{old}}.\]</span></p>
+<p>例如旧配置最大长度为 40960，新版本为 32768，则 <span
+class="math inline">\(\Delta=-8192\)</span>，<span
+class="math inline">\(r=-8192/40960=-0.20\)</span>，即减少
+20%。这个结果只描述已锁定字段；硬件速度或模型质量需要另外的测量记录。</p>
 <h3 id="e.1-四种状态四种不同承诺">E.1 四种状态，四种不同承诺</h3>
 <div class="table-wrapper"><table>
 <colgroup>
@@ -17654,9 +17828,9 @@ class="math inline">\(16\times128=2048\)</span>，不能擅自改成 1024。新
 revision 即使文件长度不变也可能改字段，必须同时检查 hash 和语义
 diff，不能只看文件大小。</p>
 <p><strong>第四步，小实验验证。</strong> 在仓库根目录运行：</p>
-<div class="sourceCode" id="cb181"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb181-1"><a href="#cb181-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
-<span id="cb181-2"><a href="#cb181-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_reference_appendix.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb186"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb186-1"><a href="#cb186-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
+<span id="cb186-2"><a href="#cb186-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_reference_appendix.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>第一条仅读取固定小文件并打印账本；第二条用标准库重新核对原始字节、上述三个字段、形状/概率/梯度卡和本节自测。若另运行
 P25 <code>--torch</code>
 或官方参考测试，记录它们的独立依赖和实际结果。没有下载真实权重，所以不能把此处称作“复现
@@ -17678,6 +17852,18 @@ PR。既往正常浏览器检查属于既往 head，不能复制到新
 head。源代码、README、章节状态、HTML/EPUB
 与验证报告应同批更新；旧的来源与验证记录作为历史保留。</p>
 <h2 id="p28.f-自测校验与最后一步">附录 F：自测、校验与最后一步</h2>
+<h3 id="f.0-平均值与一步更新速查">F.0 平均值与一步更新速查</h3>
+<p>文档平均与 token 平均使用不同分母：<span class="math inline">\(\bar
+L_{\mathrm{doc}}=(2+4)/2=3\)</span>，而 <span class="math inline">\(\bar
+L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5\)</span>。单参数例子 <span
+class="math inline">\(z=wx\)</span>、<span
+class="math inline">\(L=(z-y)^2/2\)</span> 取 <span
+class="math inline">\(w=1,x=2,y=0\)</span>，则 <span
+class="math inline">\(z=2\)</span>，梯度 <span
+class="math inline">\((z-y)\cdot x\)</span> 等于 4；学习率 <span
+class="math inline">\(0.1\)</span> 后 <span
+class="math inline">\(w&#39;=1-0.1\times4=0.6\)</span>，新损失 <span
+class="math inline">\(L&#39;=(0.6\times2)^2/2=0.72\)</span>。这两个分母和更新顺序是核对训练日志的最小账本。</p>
 <ol type="1">
 <li>A.2 的两头 KV 若换为四头，单层 float32 K+V payload
 变为多少？它证明生成速度减半吗？</li>
@@ -17702,6 +17888,13 @@ hash。6）对本书而言待核实；若官方论文确有该结果，可另标
 检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当批验证记录为准，不在这里保留会迅速过时的全书总数。</p>
 <p>学习的终点不是背熟每个缩写，而是能说清：<strong>我改了什么，为什么这样改，哪些证据支持它，还有什么没有验证。</strong></p>
 <h2 id="p28.g-本页原始来源与版本">附录 G：本页原始来源与版本</h2>
+<p>来源校验把长度和摘要同时锁定。对固定配置字节串计算 SHA-256，并记录
+<code>(bytes, sha256, revision)</code>。本地
+<code>code/data/qwen3/dense/config.json</code> 是 726 bytes，摘要为
+<code>660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd</code>。把最后一个字节从
+125 改为 124（异或 1），长度仍为 726 bytes，但摘要变为
+<code>e338758cad0bc78e2ac6b2e298c0e621b78a6d2e80bac7df11df3a828bf8b73e</code>；同长度、不同内容必须同时查
+hash。</p>
 <ul>
 <li><a href="https://arxiv.org/abs/1706.03762v7">Attention Is All You
 Need，arXiv:1706.03762v7</a>，§3.2 attention
