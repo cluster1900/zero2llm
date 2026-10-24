@@ -1,0 +1,36 @@
+name: CI
+
+# Pull-request checks only. Read-only: no Pages permissions, no deploy step.
+# Deployment stays in pages.yml (push to main).
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU torch and pinned deps
+        run: |
+          set -euo pipefail
+          python -m pip install -q torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -q -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+
+      - name: Validate committed book artifacts
+        run: python scripts/check_book.py
