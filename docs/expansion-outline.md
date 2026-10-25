@@ -85,6 +85,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P05–P06；梯度的直觉。
 - 旧章关系：保留 `06_residual_layernorm_ffn.md` 基础主体，RMSNorm / SwiGLU 系统讲解移 P13。
 - 来源：S01、S06、S07。
+- 前沿补充（bot-hub #28，待审）：扩展阅读框“AttnRes：沿深度做注意力的残差”——每层用可学习 pseudo-query 对 embedding 与此前各 block 输出做 softmax 加权，而非等权累加；与 P26 的残差/混合连接内容交叉引用。CPU 玩具：N 个 block 的权重和为 1，权重均等时与普通残差对照。来源：S29（AttnRes 原论文在写正文时从 S29 参考文献找到原文再引）。
 
 ### P08 编码器、解码器与生成循环
 - 目标：明确三类 Transformer 架构和 token 生成过程，避免把 CED 与传统翻译模型混为一谈。
@@ -125,6 +126,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P06、P11。
 - 旧章关系：新增，扩写旧第 9 章 RoPE，衔接旧第 5 章。
 - 来源：S03、S04。
+- 前沿补充（bot-hub #28，待审）：NoPE 层对照——Muse Spark Open 用 `layer_rope_theta` 让部分层关闭 RoPE（S33：θ=0 即 NoPE，默认从最后一层倒数每第 4 层）；与线性递推“靠衰减隐式编码位置”（P16）对照。
 
 ### P13 RMSNorm 与 SwiGLU：现代 Block
 - 目标：理解现代归一化和门控 FFN 的变化及公平对比方法。
@@ -133,6 +135,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P07、P10–P12。
 - 旧章关系：新增，扩写旧第 6 / 9 章相关摘要。
 - 来源：S06、S07。
+- 前沿补充（bot-hub #28，待审）：SiTU-GLU 与 SwiGLU 对照（对门控两个因子做有界 softcap，抑制低精度溢出）；公式与动机写正文时按 S29 对应章节逐条核对。
 
 ### P14 MHA、MQA、GQA 与 MLA
 - 目标：区分共享 KV 头与潜变量压缩，不把所有压缩都叫 GQA。
@@ -157,6 +160,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P11–P15。
 - 旧章关系：新增；不在主线默认替换 attention，以免把多个改动混在一起。
 - 来源：S11、S12。
+- 前沿补充（bot-hub #28，待审）：“生产级混合架构”小节——Kimi Delta Attention（KDA，带通道级遗忘门的 delta-rule 递推）与 MLA 混合（S29）；Mamba-2 / 注意力 / MoE 混合（Nemotron 3.5 Lightning：52 层 = 23 Mamba-2 + 6 注意力 + 23 MoE，MoE 为 128 路由专家 top-6 + 1 共享，S31）；局部（sliding_window 默认 2048）/ 全局交替与 GQA 128Q/16KV（Muse Spark Open，S33）；以及为什么仍保留少量全局注意力层。CPU 实验：delta-rule 逐步递推与 chunkwise 并行形式一致（unittest 断言误差），带下界 decay 时 `1/Γ` 不溢出的数值演示。
 
 ### P17 CED：DeepSeek-V4.1-Flash 的因果编码器—解码器
 - 目标：回答 CED 在架构哪里、为什么用于输入密集长上下文，而不是只说“encode/decode 分离”。
@@ -173,6 +177,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P13–P14；P15 性能指标。
 - 旧章关系：新增，扩写旧第 9 章 MoE。
 - 来源：S09、S19。
+- 前沿补充（bot-hub #28，待审）：Stable LatentMoE（路由专家在压缩 latent 宽度上计算，每 token 激活 896 个路由专家中的 16 个，S29 摘要）与 Quantile Balancing；CPU 实验复现 S29 中 m=8、n=4、k=1 的小例子（写正文时核对图号与定义）。
 
 ### P19 预训练：从三首诗到数据流水线
 - 目标：理解数据质量、计算预算和评估决定什么。
@@ -205,6 +210,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P21；对数概率和期望的补充小节。
 - 旧章关系：新增。
 - 来源：S17、S23、S24。
+- 前沿补充（bot-hub #29，待审）：“on-policy 蒸馏与多教师合并（MOPD）”小节，讲清与 off-policy SFT 蒸馏的区别；案例为 Kimi K3（按领域与推理强度训练多个 RL 专家再合并，S29 §4.1）与 Nemotron 3.5 Super（S30/S32）。CPU 实验：小词表 teacher/student 分布上手算逐 token 奖励 `clip(sg(log π_teacher/π_θ), −R_max, R_max)` 并验证 clip。公式与数字在写正文时逐条对照原文，原始 on-policy 蒸馏论文从参考文献找到后引原文。
 
 ### P23 推理模型、MTP 与投机解码
 - 目标：区分训练目标、多步预测、草稿验证及测试时计算，不把“多说话”当成更会推理。
@@ -213,6 +219,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P18、P22、P11。
 - 旧章关系：新增。
 - 来源：S09、S25、S12（仅用于比较 V4.1 的 DSpark 与 V3 的 MTP，不混写训练方案）。
+- 前沿补充（bot-hub #29，待审）：推理强度预算控制（K3：超出 τ·b0 的轨迹奖励置为 −1，S29 §4.1.2）；MTP → 草稿模型与 LK loss `−log Σ_x min(p,q)`；接受率 Σmin(p,q)。PR #23（待审）已实现 Σmin(p,q) 的 Monte Carlo 对照（DSpark 的置信目标），本项只补预算控制与 LK loss。
 
 ### P24 量化与推理框架实战
 - 目标：能依据硬件、模型格式和延迟需求选择工具，并理解量化精度损失。
@@ -221,6 +228,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P15、P20–P23。
 - 旧章关系：新增；不保证任一框架支持任一最新模型。
 - 来源：S15、S16、S26、S27、S22。
+- 前沿补充（bot-hub #29，待审）：MXFP4 / NVFP4 块缩放格式；PTQ vs QAT vs QAD；“训练与 rollout 用同一量化”的意义（K3 MXFP4 QAT，S29）；Nemotron 3.5 Super NVFP4 checkpoint（S30/S32）；与 V4.1-Flash 的 FP4 KV（S12）对照“权重 / 激活 / KV”三种量化对象。CPU 实验：FP4 E2M1 + 每 16 通道一个 scale 的量化误差，对比 per-tensor scale。格式规范写正文时引 OCP MX 规范原文。
 
 ### P25 Qwen3 案例：读配置而不是背参数表
 - 目标：把一个明确版本的开源模型映射到全书机制。
@@ -229,6 +237,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P02、P12–P14、P18、P21–P24。
 - 旧章关系：新增，替换旧第 9 章笼统架构对照表的一部分。
 - 来源：S28；具体 checkpoint 在撰写时锁定，不能将 Qwen3 全系列当成同一架构。
+- 前沿补充（bot-hub #28，待审）：在 P25/P26 之后加“读配置”对照表：Kimi K3（S29）/ Nemotron 3.5（S30–S32）/ Muse Spark Open（S33），只列官方配置字段与报告中能逐条找到的数字。
 
 ### P26 DeepSeek 案例：V3、R1 与 V4.1-Flash
 - 目标：把架构、训练方法与服务优化分开，建立可追溯的跨版本地图。
@@ -346,3 +355,8 @@ MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入
 - S26：[llama.cpp 官方仓库](https://github.com/ggml-org/llama.cpp)。
 - S27：[TensorRT-LLM 官方文档](https://nvidia.github.io/TensorRT-LLM/)。
 - S28：[Qwen3 官方介绍](https://qwenlm.github.io/blog/qwen3/)，模型族、思考模式和官方模型入口。
+- S29：[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（提交 2026-07-27，核验 2026-10-25：摘要确认 2.8T 总参 / 104B 激活、1M 上下文、KDA、Attention Residuals、Stable LatentMoE 16/896）。
+- S30：[Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（核验可访问 2026-10-25；MOPD、NVFP4 数字写正文时逐条核对）。
+- S31：[Nemotron 3.5 Lightning 官方预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)（核验 2026-10-25：52 层 = 23 Mamba-2 + 6 注意力 + 23 MoE，128 路由专家 top-6 + 1 共享）。
+- S32：[Nemotron 3.5 Super & Lightning 技术报告（PDF）](https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3.5-Super-and-Lightning-Technical-Report.pdf)（核验可访问 2026-10-25）。
+- S33：[Muse Spark Open 的 Transformers 官方模型文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)（核验 2026-10-25：816B 总参 / 42B 激活，sliding_window=2048，128 注意力头 / 16 KV 头，`layer_rope_theta` 的 NoPE 约定）；[Meta 官方博客](https://research.meta.ai/blog/muse-spark-open)。
