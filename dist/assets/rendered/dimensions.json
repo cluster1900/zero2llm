@@ -131,6 +131,10 @@
     "width": 1120.0,
     "height": 1060.0
   },
+  "echo_loss": {
+    "width": 480.0,
+    "height": 240.0
+  },
   "p24-quantization": {
     "width": 1120.0,
     "height": 1050.0
