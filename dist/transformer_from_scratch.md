@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-10-24
+% 2026-10-25
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -4675,6 +4675,18 @@ python -m unittest discover -s tests -p test_sparse_linear_attention.py -v
 
 下一章 [P17](#p17-ced) 再用这些信息路径概念理解因果编码器—解码器。不要把“局部窗口”“低维 KV”“固定状态”或“编码/解码”几个词互相替代。
 
+## P16.13 延伸：MSA，按块挑选远处的 K/V
+
+P16.4 的固定窗口和全局位置是“事先定好看哪里”。2026-06-11 提交的 [MSA（arXiv 2606.13392）](https://arxiv.org/abs/2606.13392) 改为**每个 query 动态挑块**：把历史切成长度 B_k=128 的块，用块内最大分数（max-pool）代表整块，每个 GQA 组共享一次 top-k（k=16）选择，并且当前所在的局部块总是保留。论文里打分来自一个单独训练的轻量 indexer：用 KL 损失向“组内平均注意力分布”蒸馏，教师分布和 indexer 输入都做 stop-grad，并先有一段 indexer warmup。论文在 109B 模型（64 个 query 头、4 个 KV 头）上报告 1M 上下文时注意力 FLOPs 降低 28.4×，H800 上 prefill 14.2×、decode 7.6× 加速。这些数字本书没有复现。
+
+[`../code/17b_msa_block_topk.py`](../code/17b_msa_block_topk.py) 只做选择规则本身，并且故意用精确的 `q·k` 代替学到的 indexer，所以测到的只是“按块挑”带来的损失：
+
+- `block_scores`：一个 query 的逐 token 分数按块取最大值，最后不满一块的部分用 −∞ 填充。
+- `select_blocks`：组内各头的块分数取平均，每组选 top-(k−1) 个远处块，再加上局部块。
+- `token_recall`：每个头精确前 16 个 key 中，有多少落在被选中的块里。T=4096、B_k=128 的随机例子里，k=1/4/16 时召回分别为 0.008/0.250/0.836，读取的 key 数分别少 32×/8×/2×。
+
+测试手算了 max-pool 与不完整末块，检查局部块必选、组内共享、预算覆盖全部块时召回为 1，并给出一个变异：把 max-pool 换成 mean-pool 会漏掉只有一个尖峰的块。脚本最后打印 1M token、B_k=128、k=16 时只读 1/512 的 key——这是选择预算的上限比，不是论文 28.4× 的 FLOPs 账，两者口径不同，不能直接比较。
+
 ## 资料与实现边界
 
 - [Mistral 7B，arXiv:2310.06825v1，§2](https://arxiv.org/html/2310.06825v1#S2)：窗口及叠层传播的原始模型说明；本章另行固定 W 包含当前位的契约，不复制论文性能数字。
@@ -4682,7 +4694,9 @@ python -m unittest discover -s tests -p test_sparse_linear_attention.py -v
 - [Transformers are RNNs，ICML 2020 定稿，PMLR 119:5156–5165](https://proceedings.mlr.press/v119/katharopoulos20a.html)：正特征核、因果归一化和递推的原始依据，不把其他新架构混入该公式。
 - [FLA 官方实现入口](https://github.com/fla-org/flash-linear-attention)：动态仓库链接，仅作选读；不是本章固定算法或性能证据。
 
-上述原始来源与官方入口核验于 2026-10-19。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
+- [MSA，arXiv:2606.13392](https://arxiv.org/abs/2606.13392)（提交 2026-06-11，核验 2026-10-25）：块大小、top-k、局部块、indexer KL 训练与 1M 上下文效率数字，见 P16.13。
+
+上述原始来源与官方入口核验于 2026-10-19（MSA 除外）。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
 
 
 ---
