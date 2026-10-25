@@ -317,11 +317,28 @@ Rank example: 3 -> 2, Frobenius error=1.0
 
 到这里，S4 仍是一条普通 decoder-only 主线，只更换了 KV 共享方式。下一单元 [P15](#p15-attention-systems) 研究 kernel、缓存管理和服务调度时，要把“模型表示减少了什么”与“系统怎样高效执行”分开记账。
 
+## P14.13 延伸：VHA，用“虚拟头”让 GQA 缓存接近 MHA 质量
+
+GQA 省缓存的代价，是多个 query 头只能读同一份 K/V。2026-10-13 提交的 [VHA 论文（arXiv 2610.17959）](https://arxiv.org/abs/2610.17959) 换了个思路：**缓存仍按 GQA 只存少数 KV 头，但训练时让每个真实 query 头对每个 KV 组各派生一个“虚拟头”，再在头之间做一次低秩混合。**推理前，这两步混合都能吸收到普通权重里，部署形态还是一个 GQA。
+
+两个可训练的小矩阵（下式按论文记号）：
+
+- **Premix**：真实 query 头 i 面对 KV 组 g 时，多乘一个 `W_g^premix`，初始化为 `I + αε`（论文取 α=0.1，ε 为标准正态）。吸收后 `W̃_Q^(i,g) = W_Q^(i) W_g^premix`，只是 query 投影变多，缓存不变。
+- **Postmix**：把所有虚拟头输出 Y 按头混合，`Y' = (I + B Aᵀ) Y`，秩 r 取**物理 query 头数**的一半（论文 r = H_q′/2；1.7B 模型里虚拟头有 16 个，r=4），不是虚拟头数的一半，B 初始化为 0，所以训练开始时 Postmix 就是恒等映射。吸收到输出投影：`W_O' = ((I + A Bᵀ) ⊗ I_d) W_O`。注意吸收后是 `A Bᵀ`，转置来自“先混头再乘 W_O”等于“对 W_O 的行块做转置混合”。
+
+[`../code/15b_vha.py`](../code/15b_vha.py) 用 float64 在 CPU 上做三件事，均为断言而非打印：训练形式（显式 Premix/Postmix）与吸收后的 GQA-2 形式最大误差小于 1e-5；B=0 时 Postmix 精确等于恒等；并打印 MHA 与 GQA-2 每层每 token（BF16）的 KV 缓存字节数（d=4 时分别为 128 与 32 字节）。`tests/test_vha.py` 另外检查两个故意写错的吸收：把 `A Bᵀ` 写成 `B Aᵀ`、或忘记把 Premix 并进 W_Q，都必须让输出明显偏离。
+
+论文报告的结果（均为原文表格，本书未复现）：1.7B 规模下，相对基线的平均分差 GQA 16-2-2 为 −1.00、8-2-2 为 −1.71，VHA 为 +0.41，每层每 token（BF16）KV 缓存由 4 KB 降到 1 KB（Table 2）；1.7B、序列长 4096 时训练/prefill FLOPs 降低 7.9%（Table 5）；30B-A3B MoE 上 VHA 50.36、MLA 49.66、GQA 47.76（Table 3）。消融中给混合加 SiLU 反而变差，Postmix 秩 r=4/32/128 的分数 54.50/54.24/54.15 相差很小。
+
+边界：本节代码只验证吸收恒等式和缓存账，不训练模型、不复现论文分数，虚拟头与 KV 组的排列方式是本书按论文公式做的教学重建。
+
 ## 资料与实现边界
 
 - [GQA 原论文 v3](https://arxiv.org/html/2305.13245v3)：核验 MHA/MQA/GQA 边界及分组均值初始化、继续预训练的区别。
 - [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日 2026-10-19。
 - [DeepSeek-V3 技术报告 v2，§2.1.1](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1)：核验 MLA 的联合内容压缩、解耦位置项与缩放维度。
 - [DeepSeek-V3 官方推理源码](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py)：核验内容/位置缓存分离的实现入口；动态链接核验日 2026-10-19。
+
+- [VHA 论文 arXiv 2610.17959](https://arxiv.org/abs/2610.17959)（提交日 2026-10-13；核验日 2026-10-25）：Premix/Postmix 初始化、吸收公式与 Table 2/3/5 数字。
 
 本章实现 GQA 的完整 tiny-model 前向和紧凑缓存；MLA 仅实现独立矩阵教学实验，未实现完整训练模型、checkpoint 转换流程、分布式部署或生产性能复现。
