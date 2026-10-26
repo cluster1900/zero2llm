@@ -145,6 +145,40 @@ weights = [e / sum(exps) for e in exps]
 
 `code/02_manual_attention.py` 逐步打印投影、点积、权重与输出；入口先要求列表非空且每项有限，拒绝 NaN/正负无穷。这个简化函数处理普通分数，不把负无穷掩码混入它。测试在小分数上与朴素公式对照，在大分数上验证不溢出，并检查整体平移不改结果。
 
+### 3.3a 前沿补充：减了最大值，梯度仍可能“塌掉” {#p04-softmax-collapse}
+
+> [!NOTE]
+> 减最大值解决了上溢，但没有解决另一种精度问题。这一框只讲现象和修法，依据是 [A Fix for Softmax and Cross-Entropy](https://arxiv.org/abs/2610.31642) 的 §1–§2。
+
+**现象。** 设正确类为 $t$，论文定义 logit 间隔（Eq. 2）：
+
+$$m = z_t - \log\sum_{j\ne t} e^{z_j}.$$
+
+交叉熵对目标 logit 的梯度是 $1/(1+e^{-m})-1$（Eq. 3）。$m$ 很大时，$1+e^{-m}$ 会被舍入成恰好 1。于是目标梯度变成 0，其他类的梯度却仍为正。全部梯度之和本应为 0，现在大于 0（Eq. 4）。论文把这叫 Softmax Collapse。
+
+**悬崖在哪。** 论文给出的阈值是：bf16 约 5.5，fp32 约 16.6，fp64 约 36.7（§1）。本书脚本逐格搜索 $1+e^{-m}=1$ 的最小 $m$，实测如下：
+
+| 精度 | 论文值 | 本书实测 |
+| --- | --- | --- |
+| bf16 | 5.5 | 5.55 |
+| fp32 | 16.6 | 16.64 |
+| fp64 | 36.7 | 36.74 |
+
+三个实测值恰好等于尾数位数乘 $\ln 2$。这个对应关系是本书的推断，论文未这样表述（未验证）。
+
+**修法。** 不把目标项放进求和，直接写成 $\text{CE}=\operatorname{softplus}(-m)$（Eq. 6）。目标梯度变成 $-e^{-m}/(1+e^{-m})$，不会被 1 吞掉（Eq. 3）。log-softmax 同理：最大项置为精确 0，再减 softplus（Eq. 5）。
+
+**跑一下。** `code/03b_softmax_collapse.py` 把论文 §2 的 JAX 代码逐行改写成 PyTorch。输入取论文的例子 $z=[9,-9,-9]$、$t=0$、fp32：
+
+| 实现 | loss | 目标梯度 | 梯度和 |
+| --- | --- | --- | --- |
+| `torch.log_softmax` | 0 | 0 | 3.046e-8 |
+| 论文修正版 | 3.046e-8 | -3.046e-8 | 0 |
+
+这组数与论文项目页列出的值一致。换成 bf16 时，$z=[4,-4,-4]$（$m\approx7.31$）就已塌掉；同一输入在 fp32 下正常。`tests/test_softmax_fix.py` 固定输入断言这些结果。
+
+**边界。** 这里只演示单行梯度，不训练模型。论文认为这种偏差会在训练后期引发损失尖峰（§4），见 P09.3 的说明。本书没有复现训练实验。
+
 ## 3.4 两类掩码：不能看未来，不要看补位
 
 把多句话放入同一批时，短句常用 padding 补到相同长度。这些补位不是正文，不能成为有信息的键。自回归语言模型还要遵守 causal mask：第 i 行只能看 $j\le i$ 的位置。
@@ -223,3 +257,4 @@ python3 -m unittest discover -s tests -v
 - [Attention Is All You Need，v7，§3.2 与 §3.1](https://arxiv.org/html/1706.03762v7)：缩放点积、多头与解码因果约束。上面的数值小例子与边界策略为本书构造。
 - [PyTorch 2.14：scaled_dot_product_attention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.functional.scaled_dot_product_attention.html)：官方接口及布尔 mask 约定。
 - [PyTorch 2.14：MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：对照不同接口的 mask 语义。动态文档核验日期：2026-10-19。
+- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642，§1–§2，Eq. 2–7](https://arxiv.org/abs/2610.31642)（[项目页](https://jonbarron.info/softmaxfix/)）：Softmax Collapse 与修正版代码。核验日期：2026-10-26。

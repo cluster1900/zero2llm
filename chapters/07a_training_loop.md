@@ -66,6 +66,9 @@ Python 切片是 `x = ids[start:start+T]`，`y = ids[start+1:start+T+1]`。右�
 
 默认平均损失为 `(0.287682072 + 1.386294361) / 2 = 0.836988217`。不是先把正确答案概率平均成 0.5 再取负对数，后者是不同的量。PyTorch 的 `cross_entropy` 已包含稳定的 log-softmax 计算，**传 logits，不要先 softmax 再传进去**。
 
+> [!NOTE]
+> 稳定版也有精度极限。正确答案的 logit 间隔超过约 16.6（fp32）时，目标梯度会舍入成 0。详见 [P04 的 3.3a 框](#p04-softmax-collapse)。论文把训练后期的损失尖峰归因于此（[arXiv:2610.31642](https://arxiv.org/abs/2610.31642) §4）。本书没有复现那组训练实验。
+
 一般 batch 有 B 行、每行 T 格、词表 V 个字：
 
 | 对象 | 形状 / 类型 | 含义 |
@@ -198,3 +201,4 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 - [Autograd mechanics](https://docs.pytorch.org/docs/2.14/notes/autograd.html)：梯度记录、no-grad 与 eval 的区别。
 - 大纲 S14 的 [Transformers 文档入口](https://huggingface.co/docs/transformers/index) 是进一步学习训练框架的导航；本实验不调用 Transformers，也不把动态文档版本冒充已验证依赖。
 - 大纲 S18 [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556) 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出 scaling law，也不据此承诺增加步数就能提升泛化。
+- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642，§4](https://arxiv.org/abs/2610.31642)：大间隔下目标梯度为 0，以及训练后期尖峰的归因。核验日期：2026-10-26。
