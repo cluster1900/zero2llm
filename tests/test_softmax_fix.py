@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 from torch_test_support import torch_status, torch_reason
 
@@ -66,11 +67,20 @@ class SoftmaxCollapseTests(unittest.TestCase):
         self.assertLess(float(c.fixed_log_softmax(z)[0]), 0.0)
         self.assertEqual(float(torch.log_softmax(z, -1)[0]), 0.0)
 
-    def test_mutation_including_target_reintroduces_collapse(self):
-        def bad_ce(z, t):  # keep target in the sum: same as the standard formula
-            return torch.logsumexp(z - z[t], -1)
-        _, g = c.grad_of(bad_ce, torch.tensor([9.0, -9.0, -9.0]), 0)
-        self.assertEqual(float(g[0]), 0.0)
+    def test_mutant_summing_target_in_repo_helper_reintroduces_collapse(self):
+        orig = c._shifted_and_rest
+
+        def mutant(z, idx):  # form 1 + e^{-m} first (target kept in the sum), then remove the 1
+            shifted, _ = orig(z, idx)
+            return shifted, torch.log(torch.expm1(torch.logsumexp(shifted, -1, keepdim=True)))
+
+        z = torch.tensor([9.0, -9.0, -9.0])
+        loss, _ = c.grad_of(c.fixed_cross_entropy, z, 0)
+        self.assertGreater(float(loss), 0.0)
+        with mock.patch.object(c, '_shifted_and_rest', mutant):
+            loss, g = c.grad_of(c.fixed_cross_entropy, z, 0)
+        self.assertEqual(float(loss), 0.0)
+        self.assertFalse(float(g[0]) < 0.0)  # target gradient lost (0 or nan), no longer -3.046e-8
 
     def test_cli(self):
         out = subprocess.run([sys.executable, str(P04)], capture_output=True, text=True, check=True).stdout
@@ -112,13 +122,21 @@ class SoftmaxCancellationTests(unittest.TestCase):
             self.assertAlmostEqual(a, b, places=12)  # far branch: u = q - p
         self.assertAlmostEqual(sum(grad), 0.0, places=14)
 
-    def test_mutation_without_centering_breaks_zero_sum(self):
-        z_S, z_T = k.paper_case()
-        p = torch.softmax(z_T, -1)
-        d = z_S - z_T
-        s = d - torch.log1p((p * torch.expm1(d)).sum())
-        u = p * torch.expm1(s)
-        self.assertNotEqual(float(u.sum()), 0.0)  # the final g = u - q*sum(u) step is what makes it 0
+    def test_mutant_without_zero_sum_projection_leaves_larger_residual(self):
+        # Patch the real repo helper to a no-op: the final g = u - q*sum(u) step is removed.
+        g = torch.Generator().manual_seed(0)
+        z_T = torch.randn(256, 8, generator=g) * 3
+        z_S = z_T + 1e-4 * torch.randn(256, 8, generator=g)
+
+        def residual():
+            z = z_S.clone().requires_grad_(True)
+            k.soft_target_cross_entropy(z, z_T).sum().backward()
+            return float(z.grad.sum(-1).abs().mean())
+
+        real = residual()
+        with mock.patch.object(k, 'remove_leftover_sum', lambda diff, q: diff):
+            mutant = residual()
+        self.assertLess(real, 0.6 * mutant)  # measured: ~4.6e-13 vs ~1.1e-12 (fp32)
 
     def test_cli(self):
         out = subprocess.run([sys.executable, str(P22)], capture_output=True, text=True, check=True).stdout
