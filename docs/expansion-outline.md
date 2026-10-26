@@ -213,7 +213,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 旧章关系：新增。
 - 来源：S17、S23、S24。
 - 前沿补充（bot-hub #29，待审）：“on-policy 蒸馏与多教师合并（MOPD）”小节，讲清与 off-policy SFT 蒸馏的区别；案例为 Kimi K3（按领域与推理强度训练多个 RL 专家再合并，S29 §4.1）与 Nemotron 3.5 Super（S30/S32）。CPU 实验：小词表 teacher/student 分布上手算逐 token 奖励 `clip(sg(log π_teacher/π_θ), −R_max, R_max)` 并验证 clip。公式与数字在写正文时逐条对照原文，原始 on-policy 蒸馏论文从参考文献找到后引原文。
-- 前沿补充（bot-hub #91，待审）：P22.12“学生等于老师，梯度却不为 0”（Softmax Cancellation，S34 §3 Eq. 8–9、§7）；`code/23c_softmax_cancellation.py` 复现项目页 fp32 例子并验证学生等于老师时修正版梯度精确为 0。与 #29 MOPD 小节交叉引用，不重复其内容。
+- 前沿补充（bot-hub #91，待审）：P22.12“学生等于老师，梯度却不为 0”（Softmax Cancellation，S34 §3 Eq. 8–9、§7）；`code/23c_softmax_cancellation.py` 复现项目页 fp32 例子并验证学生等于老师时修正版梯度精确为 0。与 #29 MOPD 小节（P22.11）交叉引用，不重复其内容。
 
 ### P23 推理模型、MTP 与投机解码
 - 目标：区分训练目标、多步预测、草稿验证及测试时计算，不把“多说话”当成更会推理。

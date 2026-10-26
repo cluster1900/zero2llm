@@ -428,6 +428,7 @@ grpo_config = GRPOConfig(
 不 clip 时，按学生分布求期望，正好等于 `−KL(学生 ‖ 老师)` = −0.603100。所以这是一个逐 token 的反向 KL 信号。测试还检查：学生与老师一致时奖励为 0，所以起点处的 self-anchor 给出零奖励；没认领的领域会路由到 self-anchor；把比值写反，符号就翻转。本书没有跑任何蒸馏训练。
 
 P22.11 资料（核验 2026-10-26）：S29 [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.1–4.1.3；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（厂商文档）。K3 §4.1.3 同时引用 [MiMo-V2-Flash，arXiv:2601.02780](https://arxiv.org/abs/2601.02780) 与 [DeepSeek-V4，arXiv:2606.19348](https://arxiv.org/abs/2606.19348) 的多教师蒸馏做法，本书未逐条核对这两篇的细节。
+
 ## P22.12 前沿补充：学生等于老师，梯度却不为 0 {#p22.12-softmax-cancellation}
 
 > [!NOTE]
@@ -461,4 +462,4 @@ P22.11 资料（核验 2026-10-26）：S29 [Kimi K3 技术报告，arXiv:2607.24
 
 再取固定种子 0，生成 4 行 8 类的 bf16 logits，令学生等于老师。标准版最大梯度约 3.5e-3，修正版恰好为 0。论文报告的残差量级是：fp64 约 1e-17，fp32 约 1e-8，bf16 约 1e-3（§7）。本书的 bf16 实测与之同一量级。
 
-**边界。** 论文在 bf16 下观察到学生持续漂离老师（§7），本书没有复现。on-policy 蒸馏与多教师合并另见 MOPD 小节，本书不在这里重复。`tests/test_softmax_fix.py` 固定输入断言上表的修正版数字、梯度和为 0 以及学生等于老师时的精确 0。
+**边界。** 论文在 bf16 下观察到学生持续漂离老师（§7），本书没有复现。on-policy 蒸馏与多教师合并另见 [P22.11 的 MOPD 小节](#p22.11-mopd)，本书不在这里重复。`tests/test_softmax_fix.py` 固定输入断言上表的修正版数字、梯度和为 0 以及学生等于老师时的精确 0。
