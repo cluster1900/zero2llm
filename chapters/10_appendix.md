@@ -183,6 +183,20 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 维护记录至少包含：日期、对象/revision、主张、证据路径、验证命令、环境、通过/失败/跳过、限制、对应 PR。既往正常浏览器检查属于既往 head，不能复制到新 head。源代码、README、章节状态、HTML/EPUB 与验证报告应同批更新；旧的来源与验证记录作为历史保留。
 
+### E.4 前沿跟踪记录 {#p28.e4-前沿跟踪记录}
+
+下表按 E.1 的四种状态登记新论文。状态附在具体主张上，不给整篇论文盖章。
+
+| 日期 | 来源 | 主张 | 状态 | 本书位置 |
+| --- | --- | --- | --- | --- |
+| 2026-10-26 | [arXiv:2610.31642][softmax-fix] §1 | 精度悬崖：bf16 约 5.5，fp32 约 16.6，fp64 约 36.7 | 本书复现（5.55/16.64/36.74） | [P04 3.3a](#p04-softmax-collapse) |
+| 2026-10-26 | 同上 §2，Eq. 3–6 | 大间隔下标准 CE 目标梯度为 0，修正版不为 0 | 本书复现（单行 fp32/bf16） | [P04 3.3a](#p04-softmax-collapse) |
+| 2026-10-26 | 同上 §4、§8 | grokking 实验中，记住训练集后的 Slingshot 尖峰由该偏差引起；§8 称此类大间隔在标准大规模训练中少见 | 作者报告，本书未复现 | P09.3 |
+| 2026-10-26 | 同上 §3，Eq. 8–9；项目页代码 | 修正版蒸馏梯度与 fp64 精确值一致 | 本书复现（项目页 fp32 例子） | [P22.12](#p22.12-softmax-cancellation) |
+| 2026-10-26 | 同上 §7 | bf16 蒸馏中学生持续漂离老师 | 作者报告，本书未复现 | [P22.12](#p22.12-softmax-cancellation) |
+
+项目页代码比 arXiv 正文多一个 $\lvert s\rvert\ge1$ 分支，本书照项目页实现。项目页未标注代码许可证。
+
 ## 附录 F：自测、校验与最后一步 {#p28.f-自测校验与最后一步}
 
 ### F.0 平均值与一步更新速查
@@ -210,6 +224,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 - [PyTorch 2.14 reproducibility][repro]，固定文档版本；[官方安装选择器][install]为动态页，核对日期2026-10-20。
 - [Qwen3-0.6B 固定官方 config][qwen-config]，revision/hash 如 E.2；相关官方实现版本见 P25。
 - [3Blue1Brown 原作者 attention 页面][visual]与 [nanoGPT 原作者仓库][nanogpt]：阅读入口，核对日期2026-10-20，不当作本书实验版本。
+- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642][softmax-fix]（[项目页][softmax-fix-page]），§1–§4、§7，核对日期2026-10-26；E.4 的登记依据。
 
 [attention]: https://arxiv.org/abs/1706.03762v7
 [repro]: https://docs.pytorch.org/docs/2.14/notes/randomness.html
@@ -217,3 +232,5 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 [qwen-config]: https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/config.json
 [visual]: https://www.3blue1brown.com/lessons/attention/
 [nanogpt]: https://github.com/karpathy/nanoGPT
+[softmax-fix]: https://arxiv.org/abs/2610.31642
+[softmax-fix-page]: https://jonbarron.info/softmaxfix/

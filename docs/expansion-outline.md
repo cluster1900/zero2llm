@@ -61,6 +61,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P03；矩阵乘法和概率归一化。
 - 旧章关系：改写 `03_qkv_self_attention.md`，引入旧第 7 章的掩码细节但不提前堆叠模型。
 - 来源：S01。
+- 前沿补充（bot-hub #91，待审）：3.3a 框“减了最大值，梯度仍可能塌掉”（Softmax Collapse，S34 §1–§2，Eq. 2–7）；`code/03b_softmax_collapse.py` 实测 bf16/fp32/fp64 精度悬崖 5.55/16.64/36.74，对照论文 5.5/16.6/36.7，并比较标准版与修正版梯度。
 
 ### P05 多头注意力与张量账本
 - 目标：读懂 B、T、H、D 维度，形成后续 GQA / KV 内存分析基础。
@@ -102,6 +103,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P02、P07–P08；导数只需直觉。
 - 旧章关系：新增，从 `08_baby_transformer.md` 拆出训练基础；不将三首诗随机窗口当成独立泛化集。
 - 来源：S14、S18。
+- 前沿补充（bot-hub #91，待审）：P09.3 加一条交叉引用到 P04 的 3.3a 框，说明大间隔下目标梯度为 0 及论文在 grokking 实验中对 Slingshot 尖峰的归因（S34 §4，§8 称标准大规模训练中少见；未复现）。
 
 ### P10 实战：Baby-GPT 基线
 - 目标：把前面已讲过的组件拼成可运行模型，保留一个后续可比较的基线。
@@ -211,6 +213,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 旧章关系：新增。
 - 来源：S17、S23、S24。
 - 前沿补充（bot-hub #29，待审）：“on-policy 蒸馏与多教师合并（MOPD）”小节，讲清与 off-policy SFT 蒸馏的区别；案例为 Kimi K3（按领域与推理强度训练多个 RL 专家再合并，S29 §4.1）与 Nemotron 3.5 Super（S30/S32）。CPU 实验：小词表 teacher/student 分布上手算逐 token 奖励 `clip(sg(log π_teacher/π_θ), −R_max, R_max)` 并验证 clip。公式与数字在写正文时逐条对照原文，原始 on-policy 蒸馏论文从参考文献找到后引原文。
+- 前沿补充（bot-hub #91，待审）：P22.12“学生等于老师，梯度却不为 0”（Softmax Cancellation，S34 §3 Eq. 8–9、§7）；`code/23c_softmax_cancellation.py` 复现项目页 fp32 例子并验证学生等于老师时修正版梯度精确为 0。与 #29 MOPD 小节（P22.11）交叉引用，不重复其内容。
 
 ### P23 推理模型、MTP 与投机解码
 - 目标：区分训练目标、多步预测、草稿验证及测试时计算，不把“多说话”当成更会推理。
@@ -262,6 +265,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P00；按需查询，其余章节非强制前置。
 - 旧章关系：改写 `10_appendix.md`，保留词典、公式卡与书单，新增持续更新流程。
 - 来源：本文件来源索引与仓库构建工具。
+- 前沿补充（bot-hub #91，待审）：附录 E.4 前沿跟踪记录，登记 S34 的核验状态（已核实 / 本书复现 / 未复现）。
 
 ## miniGPT 代码主线与验收边界
 
@@ -360,3 +364,4 @@ MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入
 - S31：[Nemotron 3.5 Lightning 官方预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)（核验 2026-10-25：52 层 = 23 Mamba-2 + 6 注意力 + 23 MoE，128 路由专家 top-6 + 1 共享）。
 - S32：[Nemotron 3.5 Super & Lightning 技术报告（PDF）](https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3.5-Super-and-Lightning-Technical-Report.pdf)（核验可访问 2026-10-25）。
 - S33：[Muse Spark Open 的 Transformers 官方模型文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)（核验 2026-10-25：816B 总参 / 42B 激活，sliding_window=2048，128 注意力头 / 16 KV 头，`layer_rope_theta` 的 NoPE 约定）；[Meta 官方博客](https://research.meta.ai/blog/muse-spark-open)。
+- S34：[A Fix for Softmax and Cross-Entropy，arXiv:2610.31642](https://arxiv.org/abs/2610.31642)（Barron、Gnanapragasam、Tschannen，Google DeepMind；核验 2026-10-26：§1 精度悬崖 5.5/16.6/36.7，§2 Eq. 2–7，§3 Eq. 8–9，§4、§7）；[项目页与代码](https://jonbarron.info/softmaxfix/)（未标注代码许可证）。

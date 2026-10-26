@@ -890,6 +890,40 @@ weights = [e / sum(exps) for e in exps]
 
 `code/02_manual_attention.py` 逐步打印投影、点积、权重与输出；入口先要求列表非空且每项有限，拒绝 NaN/正负无穷。这个简化函数处理普通分数，不把负无穷掩码混入它。测试在小分数上与朴素公式对照，在大分数上验证不溢出，并检查整体平移不改结果。
 
+### 3.3a 前沿补充：减了最大值，梯度仍可能“塌掉” {#p04-softmax-collapse}
+
+> [!NOTE]
+> 减最大值解决了上溢，但没有解决另一种精度问题。这一框只讲现象和修法，依据是 [A Fix for Softmax and Cross-Entropy](https://arxiv.org/abs/2610.31642) 的 §1–§2。
+
+**现象。** 设正确类为 $t$，论文定义 logit 间隔（Eq. 2）：
+
+$$m = z_t - \log\sum_{j\ne t} e^{z_j}.$$
+
+交叉熵对目标 logit 的梯度是 $1/(1+e^{-m})-1$（Eq. 3）。$m$ 很大时，$1+e^{-m}$ 会被舍入成恰好 1。于是目标梯度变成 0，其他类的梯度却仍为正。全部梯度之和本应为 0，现在大于 0（Eq. 4）。论文把这叫 Softmax Collapse。
+
+**悬崖在哪。** 论文给出的阈值是：bf16 约 5.5，fp32 约 16.6，fp64 约 36.7（§1）。本书脚本逐格搜索 $1+e^{-m}=1$ 的最小 $m$，实测如下：
+
+| 精度 | 论文值 | 本书实测 |
+| --- | --- | --- |
+| bf16 | 5.5 | 5.55 |
+| fp32 | 16.6 | 16.64 |
+| fp64 | 36.7 | 36.74 |
+
+设 $p$ 为含隐含位的有效位数：bf16、fp32、fp64 分别为 8、24、53。$p\ln 2$ 约为 5.545、16.636、36.737。它们与实测值在 0.01 网格内一致。若不计隐含位（7、23、52），会得到 4.85、15.94、36.04，对不上。这个对应关系是本书的推断，论文未这样表述（未验证）。
+
+**修法。** 不把目标项放进求和，直接写成 $\text{CE}=\operatorname{softplus}(-m)$（Eq. 6）。目标梯度变成 $-e^{-m}/(1+e^{-m})$，不会被 1 吞掉（Eq. 3）。log-softmax 同理：最大项置为精确 0，再减 softplus（Eq. 5）。
+
+**跑一下。** `code/03b_softmax_collapse.py` 按论文 §2 的算法（Eq. 5–6）用 PyTorch 重新实现，并注明出处。输入取论文的例子 $z=[9,-9,-9]$、$t=0$、fp32：
+
+| 实现 | loss | 目标梯度 | 梯度和 |
+| --- | --- | --- | --- |
+| `torch.log_softmax` | 0 | 0 | 3.046e-8 |
+| 论文修正版 | 3.046e-8 | -3.046e-8 | 0 |
+
+这组数与论文 §2 代码示例列出的值一致。换成 bf16 时，$z=[4,-4,-4]$（$m\approx7.31$）就已塌掉；同一输入在 fp32 下正常。`tests/test_softmax_fix.py` 固定输入断言这些结果。
+
+**边界。** 这里只演示单行梯度，不训练模型。论文 §4 只在 grokking 实验里讨论它：记住训练集之后，Slingshot 损失尖峰由它引起。见 P09.3 的说明。论文 §8 也指出，这么大的间隔在标准大规模训练中并不常见。本书没有复现训练实验。
+
 ## 3.4 两类掩码：不能看未来，不要看补位
 
 把多句话放入同一批时，短句常用 padding 补到相同长度。这些补位不是正文，不能成为有信息的键。自回归语言模型还要遵守 causal mask：第 i 行只能看 $j\le i$ 的位置。
@@ -968,6 +1002,7 @@ python3 -m unittest discover -s tests -v
 - [Attention Is All You Need，v7，§3.2 与 §3.1](https://arxiv.org/html/1706.03762v7)：缩放点积、多头与解码因果约束。上面的数值小例子与边界策略为本书构造。
 - [PyTorch 2.14：scaled_dot_product_attention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.functional.scaled_dot_product_attention.html)：官方接口及布尔 mask 约定。
 - [PyTorch 2.14：MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：对照不同接口的 mask 语义。动态文档核验日期：2026-10-19。
+- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642，§1–§2，Eq. 2–7](https://arxiv.org/abs/2610.31642)（[项目页](https://jonbarron.info/softmaxfix/)）：Softmax Collapse 与修正版代码。核验日期：2026-10-26。
 
 
 ---
@@ -2455,6 +2490,9 @@ Python 切片是 `x = ids[start:start+T]`，`y = ids[start+1:start+T+1]`。右�
 
 默认平均损失为 `(0.287682072 + 1.386294361) / 2 = 0.836988217`。不是先把正确答案概率平均成 0.5 再取负对数，后者是不同的量。PyTorch 的 `cross_entropy` 已包含稳定的 log-softmax 计算，**传 logits，不要先 softmax 再传进去**。
 
+> [!NOTE]
+> 稳定版也有精度极限。正确答案的 logit 间隔超过约 16.6（fp32）时，目标梯度会舍入成 0。详见 [P04 的 3.3a 框](#p04-softmax-collapse)。论文在 grokking 实验中，把记住训练集后的 Slingshot 损失尖峰归因于此（[arXiv:2610.31642](https://arxiv.org/abs/2610.31642) §4）。论文 §8 也说，这么大的间隔在标准大规模训练中并不常见。本书没有复现那组训练实验。
+
 一般 batch 有 B 行、每行 T 格、词表 V 个字：
 
 | 对象 | 形状 / 类型 | 含义 |
@@ -2587,6 +2625,7 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 - [Autograd mechanics](https://docs.pytorch.org/docs/2.14/notes/autograd.html)：梯度记录、no-grad 与 eval 的区别。
 - 大纲 S14 的 [Transformers 文档入口](https://huggingface.co/docs/transformers/index) 是进一步学习训练框架的导航；本实验不调用 Transformers，也不把动态文档版本冒充已验证依赖。
 - 大纲 S18 [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556) 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出 scaling law，也不据此承诺增加步数就能提升泛化。
+- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642，§4](https://arxiv.org/abs/2610.31642)：大间隔下目标梯度为 0，以及 grokking 实验中 Slingshot 尖峰的归因；§8 关于标准大规模训练中少见的说明。核验日期：2026-10-26。
 
 
 ---
@@ -7113,6 +7152,41 @@ grpo_config = GRPOConfig(
 
 P22.11 资料（核验 2026-10-26）：S29 [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.1–4.1.3；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（厂商文档）。K3 §4.1.3 同时引用 [MiMo-V2-Flash，arXiv:2601.02780](https://arxiv.org/abs/2601.02780) 与 [DeepSeek-V4，arXiv:2606.19348](https://arxiv.org/abs/2606.19348) 的多教师蒸馏做法，本书未逐条核对这两篇的细节。
 
+## P22.12 前沿补充：学生等于老师，梯度却不为 0 {#p22.12-softmax-cancellation}
+
+> [!NOTE]
+> 本节依据 [A Fix for Softmax and Cross-Entropy](https://arxiv.org/abs/2610.31642) 的 §3 与 §7，以及[项目页](https://jonbarron.info/softmaxfix/)的代码。本书只做单行梯度演示，没有复现蒸馏训练。
+
+**问题从哪来。** 蒸馏常用软目标交叉熵：老师分布 $p=\operatorname{softmax}(z_T)$，学生分布 $q=\operatorname{softmax}(z_S)$。它对学生 logits 的梯度是 $q-p$。它与 KL$(p\Vert q)$ 只差一个与学生无关的常数，所以梯度相同。
+
+学生接近老师时，$q$ 和 $p$ 是两个几乎相等的数。浮点里相减，有效位会大量抵消。论文把这叫 Softmax Cancellation（§3）。学生完全等于老师时，真梯度是 0，算出来却可能不是。
+
+**修法。** 论文不先算两个概率再相减，而是从 logit 差 $\delta=z_S-z_T$ 出发（Eq. 8–9）：
+
+1. 在 $p$ 下中心化：$d=\delta-\sum_j p_j\delta_j$。
+2. 求 $s=d-\operatorname{log1p}\left(\sum_j p_j\operatorname{expm1}(d_j)\right)$，它等于 $\log(q/p)$。
+3. 求 $u=p\cdot\operatorname{expm1}(s)$，它等于 $q-p$。
+4. 令 $g=u-q\sum_j u_j$，保证梯度和为 0。
+
+`log1p` 和 `expm1` 专为接近 0 的输入设计，不会先加 1 再减 1。$\delta=0$ 时每一步都是精确 0。项目页代码多了一个分支：$\lvert s\rvert\ge1$ 时直接用 $q-p$。arXiv 正文的式子没有写这个分支。
+
+**跑一下。** `code/23c_softmax_cancellation.py` 按论文 §3 的算法（Eq. 8–9）用 PyTorch 重新实现，并注明出处。前向 loss 不变，只替换梯度。项目页没有标注代码许可证，所以本书代码与注释均为自写，不复制原代码。
+
+论文例子是 $z_T=[2,1,0]$，$z_S=z_T+[-10^{-7},10^{-7},0]$，fp32：
+
+| 实现 | 学生梯度 |
+| --- | --- |
+| 论文 §3 示例：JAX 标准版 | [-5.960e-8, 1.452e-8, -1.123e-9] |
+| 本书：PyTorch 标准版 | [-5.960e-8, 4.470e-8, 7.451e-9] |
+| 修正版（两者相同） | [-4.596e-8, 4.144e-8, 4.513e-9] |
+| fp64 精确值 | [-4.596e-8, 4.144e-8, 4.513e-9] |
+
+两个标准版的误差不同，因为舍入顺序依赖框架实现。修正版与 fp64 精确值一致，也与论文 §3 示例的数字一致。
+
+再取固定种子 0，生成 4 行 8 类的 bf16 logits，令学生等于老师。标准版最大梯度约 3.5e-3，修正版恰好为 0。论文报告的残差量级是：fp64 约 1e-17，fp32 约 1e-8，bf16 约 1e-3（§7）。本书的 bf16 实测与之同一量级。
+
+**边界。** 论文在 bf16 下观察到学生持续漂离老师（§7），本书没有复现。on-policy 蒸馏与多教师合并另见 [P22.11 的 MOPD 小节](#p22.11-mopd)，本书不在这里重复。`tests/test_softmax_fix.py` 固定输入断言上表的修正版数字、梯度和为 0 以及学生等于老师时的精确 0。
+
 
 ---
 
@@ -9523,6 +9597,20 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 维护记录至少包含：日期、对象/revision、主张、证据路径、验证命令、环境、通过/失败/跳过、限制、对应 PR。既往正常浏览器检查属于既往 head，不能复制到新 head。源代码、README、章节状态、HTML/EPUB 与验证报告应同批更新；旧的来源与验证记录作为历史保留。
 
+### E.4 前沿跟踪记录 {#p28.e4-前沿跟踪记录}
+
+下表按 E.1 的四种状态登记新论文。状态附在具体主张上，不给整篇论文盖章。
+
+| 日期 | 来源 | 主张 | 状态 | 本书位置 |
+| --- | --- | --- | --- | --- |
+| 2026-10-26 | [arXiv:2610.31642][softmax-fix] §1 | 精度悬崖：bf16 约 5.5，fp32 约 16.6，fp64 约 36.7 | 本书复现（5.55/16.64/36.74） | [P04 3.3a](#p04-softmax-collapse) |
+| 2026-10-26 | 同上 §2，Eq. 3–6 | 大间隔下标准 CE 目标梯度为 0，修正版不为 0 | 本书复现（单行 fp32/bf16） | [P04 3.3a](#p04-softmax-collapse) |
+| 2026-10-26 | 同上 §4、§8 | grokking 实验中，记住训练集后的 Slingshot 尖峰由该偏差引起；§8 称此类大间隔在标准大规模训练中少见 | 作者报告，本书未复现 | P09.3 |
+| 2026-10-26 | 同上 §3，Eq. 8–9；项目页代码 | 修正版蒸馏梯度与 fp64 精确值一致 | 本书复现（项目页 fp32 例子） | [P22.12](#p22.12-softmax-cancellation) |
+| 2026-10-26 | 同上 §7 | bf16 蒸馏中学生持续漂离老师 | 作者报告，本书未复现 | [P22.12](#p22.12-softmax-cancellation) |
+
+项目页代码比 arXiv 正文多一个 $\lvert s\rvert\ge1$ 分支，本书照项目页实现。项目页未标注代码许可证。
+
 ## 附录 F：自测、校验与最后一步 {#p28.f-自测校验与最后一步}
 
 ### F.0 平均值与一步更新速查
@@ -9550,6 +9638,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 - [PyTorch 2.14 reproducibility][repro]，固定文档版本；[官方安装选择器][install]为动态页，核对日期2026-10-20。
 - [Qwen3-0.6B 固定官方 config][qwen-config]，revision/hash 如 E.2；相关官方实现版本见 P25。
 - [3Blue1Brown 原作者 attention 页面][visual]与 [nanoGPT 原作者仓库][nanogpt]：阅读入口，核对日期2026-10-20，不当作本书实验版本。
+- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642][softmax-fix]（[项目页][softmax-fix-page]），§1–§4、§7，核对日期2026-10-26；E.4 的登记依据。
 
 [attention]: https://arxiv.org/abs/1706.03762v7
 [repro]: https://docs.pytorch.org/docs/2.14/notes/randomness.html
@@ -9557,6 +9646,8 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 [qwen-config]: https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/config.json
 [visual]: https://www.3blue1brown.com/lessons/attention/
 [nanogpt]: https://github.com/karpathy/nanoGPT
+[softmax-fix]: https://arxiv.org/abs/2610.31642
+[softmax-fix-page]: https://jonbarron.info/softmaxfix/
 
 
 ---
