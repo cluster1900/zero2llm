@@ -455,3 +455,33 @@ P24.7 说过 GGUF 只是容器，同一个文件里不同张量可以用不同�
 ## P24.14 量化感知训练（QAT）：MiniMax-M3.1-Flash 的公开范围
 
 前面所有方法都是**训练后量化**：权重训练完再找 scale。QAT 则在训练中就让前向经过量化，让模型适应舍入误差。MiniMax 在 [M3.1-Flash 官方模型卡](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash)（核验日 2026-10-25）中说明，相对 M3 的三项改动之一是 QAT：**routed MoE 专家和注意力路径在训练中被量化**，用于降低显存占用、提升服务效率。模型卡给出约 428B 总参数、每 token 激活 23B、最长 1M 上下文；另外两项改动是把前三层全注意力也换成稀疏注意力、从而全模型使用 MSA（见 [P16](#p16-sparse-linear) 的 P16.13）和改用 DSpark 草稿头（见 [P23](#p23-mtp)）。**QAT 用的位宽、数据格式、训练阶段与步数，模型卡均未公开**，本书不作推测，也不提供 QAT 代码。
+
+## P24.15 FP4 块缩放：MXFP4、NVFP4 与“训练和 rollout 用同一种量化” {#p24.15-fp4-block}
+
+**先看动机。** 4 bit 只有 16 个码。P24.4 已经说过，一个异常值会撑大整组的 scale。FP4 块格式的办法是：每一小块共享一个 scale，块越小，异常值影响的范围越小。
+
+**格式本身。** 元素都是 FP4 E2M1：1 位符号、2 位指数、1 位尾数，绝对值只有 0、0.5、1、1.5、2、3、4、6 八种。
+
+- **MXFP4**：每 32 个元素共享一个 E8M0 scale，即纯 2 的幂。规范原文是 [OCP Microscaling Formats (MX) v1.0](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) §5.2 Table 1。[MX 格式论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537) 的 Table 1 与之一致。论文 Algorithm 1 的取法是 `X = 2^(⌊log2 max|V|⌋ − emax_elem)`，E2M1 的 `emax_elem = 2`，超出范围的元素截到 ±6。
+- **NVFP4**：每 16 个元素共享一个 FP8 E4M3 scale，另有一个整张量的 FP32 scale。来源是 [NVIDIA Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)：`x = x_e2m1 · s_block · s_global`，`s_global = amax / (448 · 6)`。E4M3 scale 不必是 2 的幂，所以更贴近块的真实最大值。
+
+只算块 scale，MXFP4 是 4 + 8/32 = 4.25 bit/元素，NVFP4 是 4 + 8/16 = 4.5 bit/元素。
+
+[`../code/25c_fp4_block.py`](../code/25c_fp4_block.py) 用 1024 个高斯值加 4 个 ±40 的离群值（种子 0，自造数据）：
+
+| 方案 | 相对 MSE |
+|---|---|
+| 每张量一个 scale | 0.0982 |
+| MXFP4，块 32 | 0.0497 |
+| NVFP4 式，块 16 | 0.0069 |
+
+这只验证舍入算术，不代表任何模型的精度。测试检查：E2M1 网格值往返不变且在 6 饱和；E4M3 舍入；MX scale 是 2 的幂；块方案误差低于每张量方案。还有一个变异：把块设成整张量，结果退回每张量方案。
+
+**PTQ、QAT、QAD。** PTQ 是训练完再量化（P24.3）。QAT 在训练中就让前向经过量化（P24.14）。QAD（Quantization-Aware Distillation）也让前向经过量化，但用原精度模型做老师来蒸馏。
+
+- **Kimi K3（S29 §4.1.4）。** MoE 专家权重用 MXFP4，激活用 MXFP8。注意力投影、latent MoE 投影、共享专家和路由器保持更高精度。QAT 覆盖整个后训练，包括 SFT 和 RL。RL 中 rollout 与训练使用同一种量化，报告说这样就消除了训练与推理不一致。这一点的意义是：策略梯度假设样本来自正在训练的那个策略；若 rollout 用的是另一套数值，样本就有一部分是 off-policy 的。
+- **Nemotron 3.5 Super（S30）。** 发布的 NVFP4 checkpoint 先用预设的 aggressive PTQ 配方（4.82 bit/元素），再做 200 步基于 SFT 的 QAD。官方文档称，35 个基准上相对 BF16 的准确率恢复中位数为 99.52%。它在 Blackwell 上以 W4A4 部署，在其他 GPU 上以 W4A16 部署。这些都是厂商报告的数字，本书没有复现。
+
+**三种量化对象别混。** K3 量化的是专家**权重**（加 MXFP8 激活）。Nemotron 的 W4A4 同时量化权重与**激活**。P26 讨论的 V4.1-Flash FP4 量化的是 **KV cache**（S12，报告 §2.4.4）。三者误差进入模型的位置不同，P24.6 已经说明 KV 量化的误差会落在每一步注意力上。
+
+P24.15 资料（核验 2026-10-26）：[OCP MX v1.0 规范](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) §5.2；[MX 论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537)；[Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)（厂商文档）；QAT 原文 [Jacob et al., arXiv:1712.05877](https://arxiv.org/abs/1712.05877)；S29 [Kimi K3，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.4；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html) §4.1（厂商报告）。
