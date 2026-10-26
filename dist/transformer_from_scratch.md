@@ -4760,7 +4760,7 @@ P16.4 的固定窗口和全局位置是“事先定好看哪里”。2026-06-11 
 
 P16.7 的递推状态大小固定。代价是它会“记混”。生产模型的做法不是全换成线性层。它们保留少量全局注意力层，专门做任意两个 token 的内容匹配。下面三家公开资料，各自给出一种配比。
 
-**Kimi K3（S29 §2.1）。** 每个 block 是 3 层 KDA 加 1 层 Gated MLA，比例 3:1。主干末尾再加一层 Gated MLA，保证最后一层是全局注意力。Table 1 给出总层数 93。按这个图样，本书算出 23 个 block 加 1 层，即 69 层 KDA、24 层 MLA。这是本书的算术，报告没有直接列这两个数。
+**Kimi K3（S29 §2.1）。** 每个 block 是 3 层 KDA 加 1 层 Gated MLA，比例 3:1。主干末尾再加一层 Gated MLA，保证最后一层是全局注意力。Table 1 给出总层数 93。Table 1 直接列出 69 层 KDA + 24 层 MLA，与 23×(3+1)+1 的图样一致。
 
 KDA 的递推是 S29 的 Eq.1：
 
@@ -4782,7 +4782,7 @@ K3 的改法是 Eq.5：`g = g_min · Sigmoid(e^{A_h} z)`，`α = exp(g)`，`g_mi
 
 **位置从哪里来。** K3 的全部 MLA 层都不用位置编码（NoPE，S29 §2.1.2）。位置与远近信息由 KDA 层提供。报告说，这样扩展上下文时，不需要重调 RoPE 底数或使用 YaRN。见 [P12.13](#p12.13-nope)。
 
-**Nemotron 3.5 Lightning（S31）。** 官方预训练文档给出 52 层：23 层 Mamba-2、6 层注意力、23 层 MoE。每个 MoE 层有 128 个路由专家，选 top-6，另加 1 个共享专家。Mamba-2 的原始来源是 [Dao 与 Gu，arXiv:2405.21060](https://arxiv.org/abs/2405.21060)。这里注意力只有 6 层，状态模型承担了大部分序列混合。
+**Nemotron 3.5 Lightning（S31）。** 官方预训练文档给出 52 层：23 层 Mamba-2、6 层注意力、23 层 MoE。每个 MoE 层有 128 个路由专家，选 top-6，另加 1 个共享专家（NVIDIA 官方文档给出，厂商口径；本书未独立核验）。注意力层用 GQA，32 个头、2 个 KV 组。同一页说明，文档里的训练配方不是发布版 Base 的实际训练过程，两者只在训练配方上不同，层结构相同。Mamba-2 的原始来源是 [Dao 与 Gu，arXiv:2405.21060](https://arxiv.org/abs/2405.21060)。这里注意力只有 6 层，状态模型承担了大部分序列混合。
 
 **Muse Spark Open（S33）。** 它没有线性层，而是局部与全局注意力交替。HF 配置默认 `sliding_window=2048`，128 个 query 头配 16 个 KV 头（GQA，见 [P14](#p14-grouped-kv)）。每层是局部还是全局，由 `layer_types` 决定。文档只说它“未提供时自动生成”，没写出默认图样。本书没有读源码核对，这一点未验证。
 
@@ -8258,7 +8258,7 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 
 ## P25.14 读配置对照：Kimi K3、Nemotron 3.5、Muse Spark Open {#p25.14-config-compare}
 
-本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。
+本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。S31 列的数字都由 NVIDIA 官方文档给出，属于厂商口径，本书未独立核验。
 
 | 字段 | Kimi K3（S29） | Nemotron 3.5 Lightning（S31） | Muse Spark Open（S33） |
 |---|---|---|---|
@@ -8266,8 +8266,8 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 | 层数 | 93（Table 1） | 52 | 62 |
 | 序列混合 | KDA:Gated MLA = 3:1，末层 MLA（§2.1） | 23 Mamba-2 + 6 注意力 | 局部 `sliding_window=2048` 与全局，按 `layer_types` |
 | 位置编码 | MLA 层全为 NoPE（§2.1.2） |  | `layer_rope_theta`，默认倒数每第 4 层 NoPE |
-| 注意力头 | 96（Table 1） |  | 128 Q / 16 KV，`head_dim=64` |
-| 隐藏宽度 | 7,168 |  | 8192 |
+| 注意力头 | 96（Table 1） | 32 Q / 2 KV 组（GQA） | 128 Q / 16 KV，`head_dim=64` |
+| 隐藏宽度 | 7,168 | 2688（由 Nano 的 4096 剪枝） | 8192 |
 | MoE | 896 选 16，2 共享，latent 3584（Table 1） | 23 层，128 选 6，1 共享 | 256 选 8，`moe_hidden_size=4096` |
 | FFN 激活 | SiTU-GLU（Table 1） |  | `hidden_act=silu` |
 | 词表 | 160K（Table 1） |  | 202048 |

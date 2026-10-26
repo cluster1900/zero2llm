@@ -9219,9 +9219,8 @@ indexer，所以测到的只是“按块挑”带来的损失：</p>
 token 的内容匹配。下面三家公开资料，各自给出一种配比。</p>
 <p><strong>Kimi K3（S29 §2.1）。</strong> 每个 block 是 3 层 KDA 加 1 层
 Gated MLA，比例 3:1。主干末尾再加一层 Gated
-MLA，保证最后一层是全局注意力。Table 1 给出总层数
-93。按这个图样，本书算出 23 个 block 加 1 层，即 69 层 KDA、24 层
-MLA。这是本书的算术，报告没有直接列这两个数。</p>
+MLA，保证最后一层是全局注意力。Table 1 给出总层数 93。Table 1 直接列出
+69 层 KDA + 24 层 MLA，与 23×(3+1)+1 的图样一致。</p>
 <p>KDA 的递推是 S29 的 Eq.1：</p>
 <p><code>S_t = (I − β_t k_t k_tᵀ) Diag(α_t) S_{t−1} + β_t k_t v_tᵀ</code>，<code>o_t = S_tᵀ q_t</code>。</p>
 <p>先看动机。<code>Diag(α_t)</code> 是逐通道的遗忘门，每个 key
@@ -9263,8 +9262,11 @@ href="code/17c_kda_hybrid.py"><code>../code/17c_kda_hybrid.py</code></a>
 href="#p12.13-nope">P12.13</a>。</p>
 <p><strong>Nemotron 3.5 Lightning（S31）。</strong> 官方预训练文档给出
 52 层：23 层 Mamba-2、6 层注意力、23 层 MoE。每个 MoE 层有 128
-个路由专家，选 top-6，另加 1 个共享专家。Mamba-2 的原始来源是 <a
-href="https://arxiv.org/abs/2405.21060">Dao 与
+个路由专家，选 top-6，另加 1 个共享专家（NVIDIA
+官方文档给出，厂商口径；本书未独立核验）。注意力层用 GQA，32 个头、2 个
+KV 组。同一页说明，文档里的训练配方不是发布版 Base
+的实际训练过程，两者只在训练配方上不同，层结构相同。Mamba-2 的原始来源是
+<a href="https://arxiv.org/abs/2405.21060">Dao 与
 Gu，arXiv:2405.21060</a>。这里注意力只有 6
 层，状态模型承担了大部分序列混合。</p>
 <p><strong>Muse Spark Open（S33）。</strong>
@@ -15636,7 +15638,8 @@ checkpoint，按这些配置和实现证据使用了这些组件；我们只在�
 这也是阅读下一个模型案例时应保留的习惯。</p>
 <h2 id="p25.14-config-compare">P25.14 读配置对照：Kimi K3、Nemotron
 3.5、Muse Spark Open</h2>
-<p>本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。</p>
+<p>本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。S31
+列的数字都由 NVIDIA 官方文档给出，属于厂商口径，本书未独立核验。</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 25%" />
@@ -15681,13 +15684,13 @@ checkpoint，按这些配置和实现证据使用了这些组件；我们只在�
 <tr>
 <td>注意力头</td>
 <td>96（Table 1）</td>
-<td></td>
+<td>32 Q / 2 KV 组（GQA）</td>
 <td>128 Q / 16 KV，<code>head_dim=64</code></td>
 </tr>
 <tr>
 <td>隐藏宽度</td>
 <td>7,168</td>
-<td></td>
+<td>2688（由 Nano 的 4096 剪枝）</td>
 <td>8192</td>
 </tr>
 <tr>
