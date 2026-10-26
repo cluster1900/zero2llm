@@ -340,7 +340,7 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 
 ## P25.14 读配置对照：Kimi K3、Nemotron 3.5、Muse Spark Open {#p25.14-config-compare}
 
-本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。
+本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。S31 列的数字都由 NVIDIA 官方文档给出，属于厂商口径，本书未独立核验。
 
 | 字段 | Kimi K3（S29） | Nemotron 3.5 Lightning（S31） | Muse Spark Open（S33） |
 |---|---|---|---|
@@ -348,8 +348,8 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 | 层数 | 93（Table 1） | 52 | 62 |
 | 序列混合 | KDA:Gated MLA = 3:1，末层 MLA（§2.1） | 23 Mamba-2 + 6 注意力 | 局部 `sliding_window=2048` 与全局，按 `layer_types` |
 | 位置编码 | MLA 层全为 NoPE（§2.1.2） |  | `layer_rope_theta`，默认倒数每第 4 层 NoPE |
-| 注意力头 | 96（Table 1） |  | 128 Q / 16 KV，`head_dim=64` |
-| 隐藏宽度 | 7,168 |  | 8192 |
+| 注意力头 | 96（Table 1） | 32 Q / 2 KV 组（GQA） | 128 Q / 16 KV，`head_dim=64` |
+| 隐藏宽度 | 7,168 | 2688（由 Nano 的 4096 剪枝） | 8192 |
 | MoE | 896 选 16，2 共享，latent 3584（Table 1） | 23 层，128 选 6，1 共享 | 256 选 8，`moe_hidden_size=4096` |
 | FFN 激活 | SiTU-GLU（Table 1） |  | `hidden_act=silu` |
 | 词表 | 160K（Table 1） |  | 202048 |
