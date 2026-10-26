@@ -50,7 +50,11 @@ def student_minus_teacher(z_S, z_T):
     log_ratio = centred - torch.log1p((p * torch.expm1(centred)).sum(-1, keepdim=True))
     # Far from the teacher plain q - p is already accurate (project-page variant).
     diff = torch.where(log_ratio.abs() < 1, p * torch.expm1(log_ratio), q - p)
-    # Remove leftover rounding so the components add up to exactly zero.
+    return remove_leftover_sum(diff, q)
+
+
+def remove_leftover_sum(diff, q):
+    """Project out leftover rounding so the components sum (much closer) to zero."""
     return diff - q * diff.sum(-1, keepdim=True)
 
 

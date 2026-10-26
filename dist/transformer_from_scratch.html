@@ -2051,7 +2051,16 @@ class="math inline">\(m\)</span>，实测如下：</p>
 class="math inline">\(p\ln 2\)</span> 约为
 5.545、16.636、36.737。它们与实测值在 0.01
 网格内一致。若不计隐含位（7、23、52），会得到
-4.85、15.94、36.04，对不上。这个对应关系是本书的推断，论文未这样表述（未验证）。</p>
+4.85、15.94、36.04，对不上。这可以直接推出：<span
+class="math inline">\(1\)</span> 右侧相邻浮点数为 <span
+class="math inline">\(1+2^{1-p}\)</span>，半个 ulp 是 <span
+class="math inline">\(2^{-p}\)</span>；在就近舍入、平局取偶下，<span
+class="math inline">\(e^{-m}\le 2^{-p}\)</span> 时 <span
+class="math inline">\(1+e^{-m}\)</span> 舍回 <span
+class="math inline">\(1\)</span>（恰好平局时 <span
+class="math inline">\(1\)</span> 的尾数为偶），即 <span
+class="math inline">\(m\ge p\ln 2\)</span>
+时塌掉。论文没有这样表述，推导为本书补充。</p>
 <p><strong>修法。</strong> 不把目标项放进求和，直接写成 <span
 class="math inline">\(\text{CE}=\operatorname{softplus}(-m)\)</span>（Eq.
 6）。目标梯度变成 <span
@@ -2086,14 +2095,15 @@ class="math inline">\(t=0\)</span>、fp32：</p>
 </tr>
 </tbody>
 </table></div>
-<p>这组数与论文 §2 代码示例列出的值一致。换成 bf16 时，<span
+<p>这组数与论文 §2 末尾 JAX 代码示例注释中的值一致（arXiv v1 HTML
+版，核对日期 2026-10-26）。换成 bf16 时，<span
 class="math inline">\(z=[4,-4,-4]\)</span>（<span
 class="math inline">\(m\approx7.31\)</span>）就已塌掉；同一输入在 fp32
 下正常。<code>tests/test_softmax_fix.py</code>
 固定输入断言这些结果。</p>
 <p><strong>边界。</strong> 这里只演示单行梯度，不训练模型。论文 §4 只在
-grokking 实验里讨论它：记住训练集之后，Slingshot 损失尖峰由它引起。见
-P09.3 的说明。论文 §8
+grokking 实验里讨论它：记住训练集之后，Slingshot 损失尖峰由它引起。见 <a
+href="#p09.3-cross-entropy">P09.3 的说明</a>。论文 §8
 也指出，这么大的间隔在标准大规模训练中并不常见。本书没有复现训练实验。</p>
 <h2 id="两类掩码不能看未来不要看补位">3.4
 两类掩码：不能看未来，不要看补位</h2>
@@ -4929,8 +4939,7 @@ ID，模型也没有学到这些字符在第三首中的顺序。</p>
 </ul>
 <p>一个漂亮的 loss 可以来自一道错误的题。因果掩码不能修好
 <code>y=x</code>，因为当前格本来就允许看见自己。</p>
-<h2 id="p09.3-损失到底在罚什么手算交叉熵">P09.3
-损失到底在罚什么：手算交叉熵</h2>
+<h2 id="p09.3-cross-entropy">P09.3 损失到底在罚什么：手算交叉熵</h2>
 <p>模型输出的是任意实数分数 logits，不必为正，也不要求总和为 1。softmax
 将分数变成概率；交叉熵取正确答案概率的负自然对数：<code>loss = -ln(p_correct)</code>。正确答案概率越小，罚得越重。对数底数为
 e，单位可称 nats。</p>
@@ -13533,7 +13542,8 @@ class="math inline">\(\log(q/p)\)</span>。</li>
 class="math inline">\(u=p\cdot\operatorname{expm1}(s)\)</span>，它等于
 <span class="math inline">\(q-p\)</span>。</li>
 <li>令 <span class="math inline">\(g=u-q\sum_j
-u_j\)</span>，保证梯度和为 0。</li>
+u_j\)</span>。精确算术下梯度和为
+0；浮点下这一步把残差压到舍入量级。</li>
 </ol>
 <p><code>log1p</code> 和 <code>expm1</code> 专为接近 0
 的输入设计，不会先加 1 再减 1。<span
@@ -13556,7 +13566,7 @@ class="math inline">\(z_S=z_T+[-10^{-7},10^{-7},0]\)</span>，fp32：</p>
 </thead>
 <tbody>
 <tr>
-<td>论文 §3 示例：JAX 标准版</td>
+<td>论文 §3 末尾 JAX 代码示例：标准版</td>
 <td>[-5.960e-8, 1.452e-8, -1.123e-9]</td>
 </tr>
 <tr>
@@ -13574,7 +13584,8 @@ class="math inline">\(z_S=z_T+[-10^{-7},10^{-7},0]\)</span>，fp32：</p>
 </tbody>
 </table></div>
 <p>两个标准版的误差不同，因为舍入顺序依赖框架实现。修正版与 fp64
-精确值一致，也与论文 §3 示例的数字一致。</p>
+精确值一致，也与论文 §3 末尾 JAX 代码示例注释中的数字一致（arXiv v1 HTML
+版，核对日期 2026-10-26；表中为其 4 位有效数字舍入）。</p>
 <p>再取固定种子 0，生成 4 行 8 类的 bf16
 logits，令学生等于老师。标准版最大梯度约 3.5e-3，修正版恰好为
 0。论文报告的残差量级是：fp64 约 1e-17，fp32 约 1e-8，bf16 约
@@ -13583,8 +13594,8 @@ logits，令学生等于老师。标准版最大梯度约 3.5e-3，修正版恰�
 下观察到学生持续漂离老师（§7），本书没有复现。on-policy
 蒸馏与多教师合并另见 <a href="#p22.11-mopd">P22.11 的 MOPD
 小节</a>，本书不在这里重复。<code>tests/test_softmax_fix.py</code>
-固定输入断言上表的修正版数字、梯度和为 0 以及学生等于老师时的精确
-0。</p>
+固定输入断言上表的修正版数字、fp64 下梯度和在 1e-14 以内、去掉第 4
+步后残差变大，以及学生等于老师时的精确 0。</p>
 <hr />
 <h1 id="p23-mtp">训练与应用（P23）：推理模型、MTP 与投机解码</h1>
 <p>做一道算术题，可以把草稿写得更长，可以换一种解题方法，也可以让同桌先写几个候选步骤、再由你检查。这三件事听起来都像“多想一点”，其实改变的是不同东西。</p>
@@ -18925,7 +18936,7 @@ head。源代码、README、章节状态、HTML/EPUB
 <td>grokking 实验中，记住训练集后的 Slingshot 尖峰由该偏差引起；§8
 称此类大间隔在标准大规模训练中少见</td>
 <td>作者报告，本书未复现</td>
-<td>P09.3</td>
+<td><a href="#p09.3-cross-entropy">P09.3</a></td>
 </tr>
 <tr>
 <td>2026-10-26</td>
