@@ -295,3 +295,13 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_rope.py' -v
 - 所有 CPU 实验数字来自本仓库 `code/13_rope.py` 的上述明确配置；没有把论文指标移植成自己的结果。
 
 S2 已把“位置在哪里进入模型”和“缓存该保存什么”说明白。接下来 P13 一次只换一个部件，理解 RMSNorm 与 SwiGLU；P14 再处理共享 KV 头与压缩，而不是把 RoPE、GQA 和 MLA 都叫作“节省缓存的同一种技巧”。
+
+## P12.13 延伸：有些层干脆不转——NoPE {#p12.13-nope}
+
+RoPE 不是每一层都必须用。NoPE 指这一层的 Q、K 不加任何显式位置编码。因果 mask 仍在，所以模型仍能间接感知顺序。两个公开案例，做法不同。
+
+**Muse Spark Open（S33）。** HF 配置有 `layer_rope_theta` 字段，逐层给 RoPE 底数。值为 0 就关闭这一层的旋转，即 NoPE。默认情况下，从最后一层往前数，每第 4 层是 NoPE，其余层用全局底数。
+
+**Kimi K3（S29 §2.1.2）。** 全部 MLA 层都用 NoPE。位置与远近信息交给 KDA 层的逐通道衰减（见 [P16.14](#p16.14-production-hybrid)）。报告给出的理由是：扩展上下文时，不必重调 RoPE 底数，也不必用 P12.8 的 YaRN。
+
+这和 P12.7 的问题对上了。RoPE 外推难，是因为没见过的转角。NoPE 层没有转角可外推。但这不等于它自动读懂长文本。两份资料都没有给出单独去掉 NoPE 的消融，本书也没有做这个实验。

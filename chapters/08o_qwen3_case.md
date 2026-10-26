@@ -337,3 +337,23 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 10. **微型参数表只是公式吗？** 不是，还核对了实际模块的每个参数名字、形状和唯一总数：dense 1536，MoE 2312。见 `test_exercise_tiny_actual_named_shapes_and_unique_counts`。
 
 读完本章，应能把“Qwen3 用了 GQA 和 MoE”改写为更有信息量的句子：**这份完整 revision 的 dense／MoE checkpoint，按这些配置和实现证据使用了这些组件；我们只在这个小型、可复算的范围内验证过它们。** 这也是阅读下一个模型案例时应保留的习惯。
+
+## P25.14 读配置对照：Kimi K3、Nemotron 3.5、Muse Spark Open {#p25.14-config-compare}
+
+本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。S31 列的数字都由 NVIDIA 官方文档给出，属于厂商口径，本书未独立核验。
+
+| 字段 | Kimi K3（S29） | Nemotron 3.5 Lightning（S31） | Muse Spark Open（S33） |
+|---|---|---|---|
+| 总参数 / 激活参数 | 2.78T / 104.2B（Table 1） | 30B-A3B（Base 名称） | 816B / 42B |
+| 层数 | 93（Table 1） | 52 | 62 |
+| 序列混合 | KDA:Gated MLA = 3:1，末层 MLA（§2.1） | 23 Mamba-2 + 6 注意力 | 局部 `sliding_window=2048` 与全局，按 `layer_types` |
+| 位置编码 | MLA 层全为 NoPE（§2.1.2） |  | `layer_rope_theta`，默认倒数每第 4 层 NoPE |
+| 注意力头 | 96（Table 1） | 32 Q / 2 KV 组（GQA） | 128 Q / 16 KV，`head_dim=64` |
+| 隐藏宽度 | 7,168 | 2688（主干沿用 Nano 3 Base；取自 Super 3 Base 的 MTP 头由 4096 剪枝到 2688，厂商口径） | 8192 |
+| MoE | 896 选 16，2 共享，latent 3584（Table 1） | 23 层，128 选 6，1 共享 | 256 选 8，`moe_hidden_size=4096` |
+| FFN 激活 | SiTU-GLU（Table 1） |  | `hidden_act=silu` |
+| 词表 | 160K（Table 1） |  | 202048 |
+
+读表时注意三件事。第一，Muse 的 `moe_hidden_size=4096` 是 MoE 块先把 8192 维压到的宽度，专家全程在这个宽度计算（S33 字段说明）。这与 K3 的 latent 宽度是同一类思路，见 [P18.13](#p18.13-latent-moe-qb)。第二，Nemotron 的 52 层把 MoE 当作单独的层来计数，K3 和 Muse 不是这样计数的。层数不能直接横比。第三，K3 的约 2.5× 扩展效率提升（S29 §2）是厂商报告的说法，本书没有复现。
+
+来源：S29 [arXiv:2607.24653](https://arxiv.org/abs/2607.24653) Table 1、§2.1、§2.3；S31 [Lightning 预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)；S33 [Muse Spark Open 文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)。均核验于 2026-10-26。

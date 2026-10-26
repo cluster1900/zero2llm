@@ -287,6 +287,38 @@ P16.4 的固定窗口和全局位置是“事先定好看哪里”。2026-06-11 
 
 测试手算了 max-pool 与不完整末块，检查局部块必选、组内共享、预算覆盖全部块时召回为 1，并给出一个变异：把 max-pool 换成 mean-pool 会漏掉只有一个尖峰的块。脚本最后打印 1M token、B_k=128、k=16 时只读 1/512 的 key——这是选择预算的上限比，不是论文 28.4× 的 FLOPs 账，两者口径不同，不能直接比较。
 
+## P16.14 生产级混合：KDA、Mamba-2 与局部/全局交替 {#p16.14-production-hybrid}
+
+P16.7 的递推状态大小固定。代价是它会“记混”。生产模型的做法不是全换成线性层。它们保留少量全局注意力层，专门做任意两个 token 的内容匹配。下面三家公开资料，各自给出一种配比。
+
+**Kimi K3（S29 §2.1）。** 每个 block 是 3 层 KDA 加 1 层 Gated MLA，比例 3:1。主干末尾再加一层 Gated MLA，保证最后一层是全局注意力。Table 1 给出总层数 93。Table 1 直接列出 69 层 KDA + 24 层 MLA，与 23×(3+1)+1 的图样一致。
+
+KDA 的递推是 S29 的 Eq.1：
+
+`S_t = (I − β_t k_t k_tᵀ) Diag(α_t) S_{t−1} + β_t k_t v_tᵀ`，`o_t = S_tᵀ q_t`。
+
+先看动机。`Diag(α_t)` 是逐通道的遗忘门，每个 key 通道忘得快慢不同。`(I − β_t k_t k_tᵀ)` 是 delta rule：写入新值前，先擦掉状态里沿 `k_t` 方向的旧值。delta rule 的来源是 [Schlag 等，ICML 2021](https://proceedings.mlr.press/v139/schlag21a.html) 与 [Gated DeltaNet，ICLR 2025](https://openreview.net/forum?id=r8H7xhYPwz)。逐通道门来自 [Kimi Linear，arXiv:2510.26692](https://arxiv.org/abs/2510.26692)。
+
+训练时不能一步一步地递推。S29 的 Eq.4 把序列切块，块间传状态，块内并行。块内要用累计衰减 `Γ` 去乘 Q，用 `1/Γ` 去乘 K。`Γ` 是 (0,1) 中很多数的乘积，所以 `1/Γ` 可能溢出。
+
+K3 的改法是 Eq.5：`g = g_min · Sigmoid(e^{A_h} z)`，`α = exp(g)`，`g_min = −5`。于是每步 `α > e^{−5} ≈ 6.7×10⁻³`。一个 16 token 的 tile 里，累计 log 衰减落在 (−80, 0)。倒数小于 `e^{80}`，仍在 BF16 范围内（BF16 最大值约 `e^{88.7}`）。Kimi Linear 原来用 `g = −e^{A} Softplus(z)`，没有下界。
+
+[`../code/17c_kda_hybrid.py`](../code/17c_kda_hybrid.py) 做了三件事：
+
+- `kda_recurrent`：逐步执行 Eq.1。
+- `kda_chunked`：按块传状态，块内用逐步转移矩阵的乘积。它与逐步递推的差在 1e−12 以内。它不是 Eq.4 的 UT 变换写法，那部分本书没有实现。
+- `max_log_reciprocal`：z=8 的 16 个 token，Softplus 映射给出 `log(1/Γ) = 128`，超过 BF16 的 88.7。下界映射给出 80，没有超过。
+
+测试还手算了一步更新。β=1 且 α=1 时，用同一个单位 key 读回，得到刚写入的 v。把衰减全改成 1，块式结果就和参考对不上，这是一个故意的变异。
+
+**位置从哪里来。** K3 的全部 MLA 层都不用位置编码（NoPE，S29 §2.1.2）。位置与远近信息由 KDA 层提供。报告说，这样扩展上下文时，不需要重调 RoPE 底数或使用 YaRN。见 [P12.13](#p12.13-nope)。
+
+**Nemotron 3.5 Lightning（S31）。** 官方预训练文档给出 52 层：23 层 Mamba-2、6 层注意力、23 层 MoE。每个 MoE 层有 128 个路由专家，选 top-6，另加 1 个共享专家（NVIDIA 官方文档给出，厂商口径；本书未独立核验）。注意力层用 GQA，32 个头、2 个 KV 组。同一页说明，文档里的训练配方不是发布版 Base 的实际训练过程，两者只在训练配方上不同，层结构相同。Mamba-2 的原始来源是 [Dao 与 Gu，arXiv:2405.21060](https://arxiv.org/abs/2405.21060)。这里注意力只有 6 层，状态模型承担了大部分序列混合。
+
+**Muse Spark Open（S33）。** 它没有线性层，而是局部与全局注意力交替。HF 配置默认 `sliding_window=2048`，128 个 query 头配 16 个 KV 头（GQA，见 [P14](#p14-grouped-kv)）。每层是局部还是全局，由 `layer_types` 决定。文档只说它“未提供时自动生成”，没写出默认图样。本书没有读源码核对，这一点未验证。
+
+三者的共同点是：便宜的层占多数，少量全局层负责精确检索。比例与具体部件各不相同，不能互相套用。
+
 ## 资料与实现边界
 
 - [Mistral 7B，arXiv:2310.06825v1，§2](https://arxiv.org/html/2310.06825v1#S2)：窗口及叠层传播的原始模型说明；本章另行固定 W 包含当前位的契约，不复制论文性能数字。
@@ -295,5 +327,9 @@ P16.4 的固定窗口和全局位置是“事先定好看哪里”。2026-06-11 
 - [FLA 官方实现入口](https://github.com/fla-org/flash-linear-attention)：动态仓库链接，仅作选读；不是本章固定算法或性能证据。
 
 - [MSA，arXiv:2606.13392](https://arxiv.org/abs/2606.13392)（提交 2026-06-11，核验 2026-10-25）：块大小、top-k、局部块、indexer KL 训练与 1M 上下文效率数字，见 P16.13。
+
+- [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（S29，核验 2026-10-26）：§2.1 的 3:1 混合与末层 MLA、Eq.1/Eq.4/Eq.5、§2.1.2 NoPE、Table 1 的 93 层，见 P16.14。原始方法另引 Kimi Linear（arXiv:2510.26692）、Gated DeltaNet 与 Schlag 等。
+- [Nemotron 3.5 Lightning 预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)（S31，核验 2026-10-26）：52 层构成与 MoE 128 选 6 加 1 共享。
+- [Muse Spark Open，Transformers 文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)（S33，核验 2026-10-26）：`sliding_window`、头数与 `layer_types` 字段。
 
 上述原始来源与官方入口核验于 2026-10-19（MSA 除外）。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。

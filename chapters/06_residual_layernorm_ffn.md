@@ -440,3 +440,22 @@ Pre-LN zero-sublayer identity max error=0.000000
 - Vaswani 等，2017：[Attention Is All You Need](https://arxiv.org/html/1706.03762v7)，§3.1、§3.3：Post-LN 与逐位置 ReLU FFN。
 - Xiong 等，2020：[On Layer Normalization in the Transformer Architecture](https://arxiv.org/pdf/2002.04745)，图 1、表 1、§3：两种布局及有条件的初始化/优化分析。
 - [PyTorch 2.14 LayerNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html)：epsilon、方差口径、参数形状；[MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：布尔 mask 语义和参数接口。
+
+## 6.9 延伸：AttnRes，沿深度做注意力的残差 {#p07-attnres}
+
+先看动机。6.1 的残差把每层输出都以权重 1 加进来。层数一多，隐藏状态越加越大。每一层自己的贡献就被冲淡了。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把这件事类比成 RNN：序列方向早已用注意力替代了递推，深度方向还没有。
+
+Kimi K3 报告（S29 §2.2）采用了这个做法。第 l 层有一个可学习的 pseudo-query `w_l`。候选来源是 token embedding 和此前各层的输出。权重按 Eq.9 计算：
+
+`α_{i→l} = φ(w_l, k_i) / Σ_j φ(w_l, k_j)`，`φ(q, k) = exp(qᵀ RMSNorm(k))`，`h_l = Σ_i α_{i→l} v_i`。
+
+这里 `k_i = v_i`，就是那一层的输出（Eq.8）。RMSNorm 让输出幅度大的层不能只靠“声音大”抢走权重。
+
+保留每一层输出要 O(Ld) 显存。Block AttnRes 把 L 层分成 N 个 block，block 内求和，只在 block 之间做注意力，开销降到 O(Nd)。S29 说 N≈8 就能拿回大部分收益。K3 用 8 个 12 层的 block，末块不满，加上 embedding 共 9 个来源。
+
+[`../code/14b_attnres_situ.py`](../code/14b_attnres_situ.py) 只验证两条性质：
+
+- 任意 `w`，权重都为正，且和为 1。
+- `w = 0` 时权重均等，结果正好是普通残差之和除以来源个数。所以 AttnRes 不是“普通残差加一点”。它是加权平均，幅度不随层数线性增长。
+
+测试还把一个来源放大 100 倍。因为先做 RMSNorm，它的权重几乎不变。本书没有训练 AttnRes，没有复现论文的任何收益数字。
