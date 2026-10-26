@@ -268,6 +268,27 @@ RMSNorm 的关键是**均方缩放，不居中**；SwiGLU 的关键是**两路�
 
 下一单元 [P14](#p14-grouped-kv) 保持 S3 的 Norm 与 FFN，再改变 KV 头的共享方式。这样每次升级都有明确的变化范围，不让“现代大模型积木”变成无法追踪的名词堆叠。
 
+## P13.13 延伸：SiTU-GLU，给两个因子都装上软上限 {#p13.13-situ-glu}
+
+先看动机。P13.4 的 SwiGLU 是 `Swish(W_g x) ⊙ W_u x`。两个因子都没有上界。两个大坐标碰在一起，乘积就是一个离群值，低精度下可能溢出。原始 GLU 的 sigmoid 门有界，但丢掉了 Swish 在正半轴近似线性的形状。
+
+Kimi K3 报告（S29 §2.3.2，Eq.12）用软上限 `softcap(x, β) = β tanh(x/β)` 同时限制两个因子：
+
+`SiTU-GLU(x) = [β₁ tanh(W_g x / β₁) ⊙ Sigmoid(W_g x)] ⊙ [β₂ tanh(W_u x / β₂)]`。
+
+K3 取 `β₁ = 4`、`β₂ = 25`。所以 `|f| ≤ β₁β₂ = 100`。tanh 在原点附近近似线性，所以小输入时它和 SwiGLU 几乎一样。S29 的 Table 1 显示，K2 用 SwiGLU，K3 换成 SiTU-GLU。
+
+[`../code/14b_attnres_situ.py`](../code/14b_attnres_situ.py) 的标量对照（g = u = x）：
+
+| x | SwiGLU | SiTU-GLU |
+|---|---|---|
+| 0.1 | 0.0052 | 0.0052 |
+| 1 | 0.7311 | 0.7158 |
+| 10 | 99.9955 | 37.4846 |
+| 100 | 10000.0000 | 99.9329 |
+
+测试在 ±10⁴ 的输入上检查上界 100。它还检查原点附近两者相差小于 10⁻⁴。一个变异去掉 up 分支的上限，输出立刻超过 100。本书没有训练对比，不声称 SiTU-GLU 提高了质量。
+
 ## 来源与实现核对
 
 1. [Root Mean Square Layer Normalization，Zhang 与 Sennrich，2019](https://arxiv.org/abs/1910.07467)：RMSNorm 的原始定义与研究；本章手算、dtype 约定和 CPU 测试为独立教学例子。
@@ -275,5 +296,7 @@ RMSNorm 的关键是**均方缩放，不居中**；SwiGLU 的关键是**两路�
 3. [PyTorch 2.14 LayerNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html)：方差口径、γ/β、ε 和 bias 参数。
 4. [PyTorch 2.14 RMSNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.RMSNorm.html)：公式与 epsilon 计算类型；本代码始终显式指定 ε。
 5. [PyTorch 2.14 SiLU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.SiLU.html)：SiLU 的逐元素定义。
+
+6. [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（S29）：§2.3.2 Eq.12、β₁=4、β₂=25 与 Table 1 的激活函数一行；核验 2026-10-26。
 
 来源核对日期：2026-10-19。实际实验由固定依赖环境运行；其它设备或库版本的最后几位可能不同，应先核对配置与测试，而不是把表中的舍入值当作所有环境的逐位承诺。

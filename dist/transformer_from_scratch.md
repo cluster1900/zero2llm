@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-10-25
+% 2026-10-26
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -2116,6 +2116,25 @@ Pre-LN zero-sublayer identity max error=0.000000
 - Xiong 等，2020：[On Layer Normalization in the Transformer Architecture](https://arxiv.org/pdf/2002.04745)，图 1、表 1、§3：两种布局及有条件的初始化/优化分析。
 - [PyTorch 2.14 LayerNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html)：epsilon、方差口径、参数形状；[MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：布尔 mask 语义和参数接口。
 
+## 6.9 延伸：AttnRes，沿深度做注意力的残差 {#p07-attnres}
+
+先看动机。6.1 的残差把每层输出都以权重 1 加进来。层数一多，隐藏状态越加越大。每一层自己的贡献就被冲淡了。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把这件事类比成 RNN：序列方向早已用注意力替代了递推，深度方向还没有。
+
+Kimi K3 报告（S29 §2.2）采用了这个做法。第 l 层有一个可学习的 pseudo-query `w_l`。候选来源是 token embedding 和此前各层的输出。权重按 Eq.9 计算：
+
+`α_{i→l} = φ(w_l, k_i) / Σ_j φ(w_l, k_j)`，`φ(q, k) = exp(qᵀ RMSNorm(k))`，`h_l = Σ_i α_{i→l} v_i`。
+
+这里 `k_i = v_i`，就是那一层的输出（Eq.8）。RMSNorm 让输出幅度大的层不能只靠“声音大”抢走权重。
+
+保留每一层输出要 O(Ld) 显存。Block AttnRes 把 L 层分成 N 个 block，block 内求和，只在 block 之间做注意力，开销降到 O(Nd)。S29 说 N≈8 就能拿回大部分收益。K3 用 8 个 12 层的 block，末块不满，加上 embedding 共 9 个来源。
+
+[`../code/14b_attnres_situ.py`](../code/14b_attnres_situ.py) 只验证两条性质：
+
+- 任意 `w`，权重都为正，且和为 1。
+- `w = 0` 时权重均等，结果正好是普通残差之和除以来源个数。所以 AttnRes 不是“普通残差加一点”。它是加权平均，幅度不随层数线性增长。
+
+测试还把一个来源放大 100 倍。因为先做 RMSNorm，它的权重几乎不变。本书没有训练 AttnRes，没有复现论文的任何收益数字。
+
 
 ---
 
@@ -3309,6 +3328,16 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_rope.py' -v
 
 S2 已把“位置在哪里进入模型”和“缓存该保存什么”说明白。接下来 P13 一次只换一个部件，理解 RMSNorm 与 SwiGLU；P14 再处理共享 KV 头与压缩，而不是把 RoPE、GQA 和 MLA 都叫作“节省缓存的同一种技巧”。
 
+## P12.13 延伸：有些层干脆不转——NoPE {#p12.13-nope}
+
+RoPE 不是每一层都必须用。NoPE 指这一层的 Q、K 不加任何显式位置编码。因果 mask 仍在，所以模型仍能间接感知顺序。两个公开案例，做法不同。
+
+**Muse Spark Open（S33）。** HF 配置有 `layer_rope_theta` 字段，逐层给 RoPE 底数。值为 0 就关闭这一层的旋转，即 NoPE。默认情况下，从最后一层往前数，每第 4 层是 NoPE，其余层用全局底数。
+
+**Kimi K3（S29 §2.1.2）。** 全部 MLA 层都用 NoPE。位置与远近信息交给 KDA 层的逐通道衰减（见 [P16.14](#p16.14-production-hybrid)）。报告给出的理由是：扩展上下文时，不必重调 RoPE 底数，也不必用 P12.8 的 YaRN。
+
+这和 P12.7 的问题对上了。RoPE 外推难，是因为没见过的转角。NoPE 层没有转角可外推。但这不等于它自动读懂长文本。两份资料都没有给出单独去掉 NoPE 的消融，本书也没有做这个实验。
+
 
 ---
 
@@ -3582,6 +3611,27 @@ RMSNorm 的关键是**均方缩放，不居中**；SwiGLU 的关键是**两路�
 
 下一单元 [P14](#p14-grouped-kv) 保持 S3 的 Norm 与 FFN，再改变 KV 头的共享方式。这样每次升级都有明确的变化范围，不让“现代大模型积木”变成无法追踪的名词堆叠。
 
+## P13.13 延伸：SiTU-GLU，给两个因子都装上软上限 {#p13.13-situ-glu}
+
+先看动机。P13.4 的 SwiGLU 是 `Swish(W_g x) ⊙ W_u x`。两个因子都没有上界。两个大坐标碰在一起，乘积就是一个离群值，低精度下可能溢出。原始 GLU 的 sigmoid 门有界，但丢掉了 Swish 在正半轴近似线性的形状。
+
+Kimi K3 报告（S29 §2.3.2，Eq.12）用软上限 `softcap(x, β) = β tanh(x/β)` 同时限制两个因子：
+
+`SiTU-GLU(x) = [β₁ tanh(W_g x / β₁) ⊙ Sigmoid(W_g x)] ⊙ [β₂ tanh(W_u x / β₂)]`。
+
+K3 取 `β₁ = 4`、`β₂ = 25`。所以 `|f| ≤ β₁β₂ = 100`。tanh 在原点附近近似线性，所以小输入时它和 SwiGLU 几乎一样。S29 的 Table 1 显示，K2 用 SwiGLU，K3 换成 SiTU-GLU。
+
+[`../code/14b_attnres_situ.py`](../code/14b_attnres_situ.py) 的标量对照（g = u = x）：
+
+| x | SwiGLU | SiTU-GLU |
+|---|---|---|
+| 0.1 | 0.0052 | 0.0052 |
+| 1 | 0.7311 | 0.7158 |
+| 10 | 99.9955 | 37.4846 |
+| 100 | 10000.0000 | 99.9329 |
+
+测试在 ±10⁴ 的输入上检查上界 100。它还检查原点附近两者相差小于 10⁻⁴。一个变异去掉 up 分支的上限，输出立刻超过 100。本书没有训练对比，不声称 SiTU-GLU 提高了质量。
+
 ## 来源与实现核对
 
 1. [Root Mean Square Layer Normalization，Zhang 与 Sennrich，2019](https://arxiv.org/abs/1910.07467)：RMSNorm 的原始定义与研究；本章手算、dtype 约定和 CPU 测试为独立教学例子。
@@ -3589,6 +3639,8 @@ RMSNorm 的关键是**均方缩放，不居中**；SwiGLU 的关键是**两路�
 3. [PyTorch 2.14 LayerNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html)：方差口径、γ/β、ε 和 bias 参数。
 4. [PyTorch 2.14 RMSNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.RMSNorm.html)：公式与 epsilon 计算类型；本代码始终显式指定 ε。
 5. [PyTorch 2.14 SiLU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.SiLU.html)：SiLU 的逐元素定义。
+
+6. [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（S29）：§2.3.2 Eq.12、β₁=4、β₂=25 与 Table 1 的激活函数一行；核验 2026-10-26。
 
 来源核对日期：2026-10-19。实际实验由固定依赖环境运行；其它设备或库版本的最后几位可能不同，应先核对配置与测试，而不是把表中的舍入值当作所有环境的逐位承诺。
 
@@ -4704,6 +4756,38 @@ P16.4 的固定窗口和全局位置是“事先定好看哪里”。2026-06-11 
 
 测试手算了 max-pool 与不完整末块，检查局部块必选、组内共享、预算覆盖全部块时召回为 1，并给出一个变异：把 max-pool 换成 mean-pool 会漏掉只有一个尖峰的块。脚本最后打印 1M token、B_k=128、k=16 时只读 1/512 的 key——这是选择预算的上限比，不是论文 28.4× 的 FLOPs 账，两者口径不同，不能直接比较。
 
+## P16.14 生产级混合：KDA、Mamba-2 与局部/全局交替 {#p16.14-production-hybrid}
+
+P16.7 的递推状态大小固定。代价是它会“记混”。生产模型的做法不是全换成线性层。它们保留少量全局注意力层，专门做任意两个 token 的内容匹配。下面三家公开资料，各自给出一种配比。
+
+**Kimi K3（S29 §2.1）。** 每个 block 是 3 层 KDA 加 1 层 Gated MLA，比例 3:1。主干末尾再加一层 Gated MLA，保证最后一层是全局注意力。Table 1 给出总层数 93。按这个图样，本书算出 23 个 block 加 1 层，即 69 层 KDA、24 层 MLA。这是本书的算术，报告没有直接列这两个数。
+
+KDA 的递推是 S29 的 Eq.1：
+
+`S_t = (I − β_t k_t k_tᵀ) Diag(α_t) S_{t−1} + β_t k_t v_tᵀ`，`o_t = S_tᵀ q_t`。
+
+先看动机。`Diag(α_t)` 是逐通道的遗忘门，每个 key 通道忘得快慢不同。`(I − β_t k_t k_tᵀ)` 是 delta rule：写入新值前，先擦掉状态里沿 `k_t` 方向的旧值。delta rule 的来源是 [Schlag 等，ICML 2021](https://proceedings.mlr.press/v139/schlag21a.html) 与 [Gated DeltaNet，ICLR 2025](https://openreview.net/forum?id=r8H7xhYPwz)。逐通道门来自 [Kimi Linear，arXiv:2510.26692](https://arxiv.org/abs/2510.26692)。
+
+训练时不能一步一步地递推。S29 的 Eq.4 把序列切块，块间传状态，块内并行。块内要用累计衰减 `Γ` 去乘 Q，用 `1/Γ` 去乘 K。`Γ` 是 (0,1) 中很多数的乘积，所以 `1/Γ` 可能溢出。
+
+K3 的改法是 Eq.5：`g = g_min · Sigmoid(e^{A_h} z)`，`α = exp(g)`，`g_min = −5`。于是每步 `α > e^{−5} ≈ 6.7×10⁻³`。一个 16 token 的 tile 里，累计 log 衰减落在 (−80, 0)。倒数小于 `e^{80}`，仍在 BF16 范围内（BF16 最大值约 `e^{88.7}`）。Kimi Linear 原来用 `g = −e^{A} Softplus(z)`，没有下界。
+
+[`../code/17c_kda_hybrid.py`](../code/17c_kda_hybrid.py) 做了三件事：
+
+- `kda_recurrent`：逐步执行 Eq.1。
+- `kda_chunked`：按块传状态，块内用逐步转移矩阵的乘积。它与逐步递推的差在 1e−12 以内。它不是 Eq.4 的 UT 变换写法，那部分本书没有实现。
+- `max_log_reciprocal`：z=8 的 16 个 token，Softplus 映射给出 `log(1/Γ) = 128`，超过 BF16 的 88.7。下界映射给出 80，没有超过。
+
+测试还手算了一步更新。β=1 且 α=1 时，用同一个单位 key 读回，得到刚写入的 v。把衰减全改成 1，块式结果就和参考对不上，这是一个故意的变异。
+
+**位置从哪里来。** K3 的全部 MLA 层都不用位置编码（NoPE，S29 §2.1.2）。位置与远近信息由 KDA 层提供。报告说，这样扩展上下文时，不需要重调 RoPE 底数或使用 YaRN。见 [P12.13](#p12.13-nope)。
+
+**Nemotron 3.5 Lightning（S31）。** 官方预训练文档给出 52 层：23 层 Mamba-2、6 层注意力、23 层 MoE。每个 MoE 层有 128 个路由专家，选 top-6，另加 1 个共享专家。Mamba-2 的原始来源是 [Dao 与 Gu，arXiv:2405.21060](https://arxiv.org/abs/2405.21060)。这里注意力只有 6 层，状态模型承担了大部分序列混合。
+
+**Muse Spark Open（S33）。** 它没有线性层，而是局部与全局注意力交替。HF 配置默认 `sliding_window=2048`，128 个 query 头配 16 个 KV 头（GQA，见 [P14](#p14-grouped-kv)）。每层是局部还是全局，由 `layer_types` 决定。文档只说它“未提供时自动生成”，没写出默认图样。本书没有读源码核对，这一点未验证。
+
+三者的共同点是：便宜的层占多数，少量全局层负责精确检索。比例与具体部件各不相同，不能互相套用。
+
 ## 资料与实现边界
 
 - [Mistral 7B，arXiv:2310.06825v1，§2](https://arxiv.org/html/2310.06825v1#S2)：窗口及叠层传播的原始模型说明；本章另行固定 W 包含当前位的契约，不复制论文性能数字。
@@ -4712,6 +4796,10 @@ P16.4 的固定窗口和全局位置是“事先定好看哪里”。2026-06-11 
 - [FLA 官方实现入口](https://github.com/fla-org/flash-linear-attention)：动态仓库链接，仅作选读；不是本章固定算法或性能证据。
 
 - [MSA，arXiv:2606.13392](https://arxiv.org/abs/2606.13392)（提交 2026-06-11，核验 2026-10-25）：块大小、top-k、局部块、indexer KL 训练与 1M 上下文效率数字，见 P16.13。
+
+- [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（S29，核验 2026-10-26）：§2.1 的 3:1 混合与末层 MLA、Eq.1/Eq.4/Eq.5、§2.1.2 NoPE、Table 1 的 93 层，见 P16.14。原始方法另引 Kimi Linear（arXiv:2510.26692）、Gated DeltaNet 与 Schlag 等。
+- [Nemotron 3.5 Lightning 预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)（S31，核验 2026-10-26）：52 层构成与 MoE 128 选 6 加 1 共享。
+- [Muse Spark Open，Transformers 文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)（S33，核验 2026-10-26）：`sliding_window`、头数与 `layer_types` 字段。
 
 上述原始来源与官方入口核验于 2026-10-19（MSA 除外）。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
 
@@ -5392,6 +5480,36 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 10. 2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见 `test_full_cache_alignment_each_mode_and_extreme_k`。
 
 到这里，S0→S5 已经把“多保存一些参数”和“每 token 真正调用哪些参数”分开。接下来进入训练流水线：即使路由与缓存都正确，数据边界、去重、切分和预算没有处理好，也训练不出可靠的模型。
+
+## P18.13 延伸：Stable LatentMoE 与 Quantile Balancing {#p18.13-latent-moe-qb}
+
+**先看动机。** 专家越多、每 token 选得越多，可组合的专长就越多。但普通 MoE 里，每个被选中的专家都收到完整的 d 维向量。选 16 个，就要搬 16 份 d 维数据。[LatentMoE，arXiv:2601.18089](https://arxiv.org/abs/2601.18089) 把路由专家放到更窄的 latent 宽度 ℓ 上计算，共享专家仍走完整宽度。
+
+Kimi K3 报告（S29 §2.3，Eq.11）写成：
+
+`u = Σ_{i∈T_k(x)} p_i E_i(W↓ x)`，`y = Σ_j E_j^shared(x) + W↑ RMSNorm(u)`。
+
+S29 Table 1 的数字：隐藏宽度 7,168，latent 宽度 3584（0.5×），896 个路由专家，每 token 激活 16 个，2 个共享专家。896/16 = 56，就是报告说的稀疏度 56。RMSNorm 放在 W↑ 之前，是 K3 相对原始 LatentMoE 的改动（§2.3.1）。
+
+**负载均衡为什么要换。** 专家接近 10³ 个时，S29 说原来的定步长偏置更新不再好用。那条规则是 `b_j ← b_j + γ sign(ℓ̄ − ℓ_j)`，来自 DeepSeek-V3（[arXiv:2412.19437](https://arxiv.org/abs/2412.19437)）。γ 小就追得慢，γ 大就来回震荡。
+
+QB 的思路是：直接算出“让专家 j 正好接到 q 个 token”的偏置。设一批 m 个 token、n 个专家、每个选 k 个，目标负载 `q = mk/n`（Eq.14）：
+
+1. 用 top-(k+1) 路由。第 k+1 名的偏置分数记作截断线 `α_i`。
+2. 对专家 j，看所有 token 的余量 `s_{i,j} − α_i`。取第 q+1 大的余量，它的相反数就是新偏置 `b̂_j`。这等价于 `−quantile_{1−k/n}`。
+3. 所有偏置减去均值。整体平移不改变 top-k 的选择。
+4. 新偏置只用于下一步。一批数据从不用它自己算出的偏置路由。
+
+偏置只影响“选谁”，不进入混合权重 `p_{i,j}`（Eq.13）。所以它不改变路由器的梯度。
+
+**CPU 玩具。** S29 的 Figure 5 用 m=8、n=4、k=1，负载从 (4,3,1,0) 变成 (2,2,2,2)，q=2。报告没有给出图中的分数矩阵。[`../code/19b_latent_moe_qb.py`](../code/19b_latent_moe_qb.py) 用了两个本书自造的 8×4 矩阵，起始负载都是 (4,3,1,0)：
+
+- `SCORES_BALANCES`：用带种子的随机搜索找到。一步 QB 后负载为 (2,2,2,2)。
+- `SCORES_STALLS`：手写的。一步后为 (3,3,1,1)，在同一批上重复五次仍是 (3,3,1,1)。
+
+第二个例子很重要。S29 附录 C 把 QB 推导成一个分配问题对偶的坐标下降。一步更新不保证这一批立刻完全均衡。训练中数据每步都在变，这只是一个偏置估计。本书没有测大规模训练中的负载曲线。
+
+测试检查：两个矩阵的起始负载；第一个一步均衡；第二个不均衡；偏置均值为 0；整体平移不改变路由；混合权重与偏置无关。
 
 
 ---
@@ -8137,6 +8255,26 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 10. **微型参数表只是公式吗？** 不是，还核对了实际模块的每个参数名字、形状和唯一总数：dense 1536，MoE 2312。见 `test_exercise_tiny_actual_named_shapes_and_unique_counts`。
 
 读完本章，应能把“Qwen3 用了 GQA 和 MoE”改写为更有信息量的句子：**这份完整 revision 的 dense／MoE checkpoint，按这些配置和实现证据使用了这些组件；我们只在这个小型、可复算的范围内验证过它们。** 这也是阅读下一个模型案例时应保留的习惯。
+
+## P25.14 读配置对照：Kimi K3、Nemotron 3.5、Muse Spark Open {#p25.14-config-compare}
+
+本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。
+
+| 字段 | Kimi K3（S29） | Nemotron 3.5 Lightning（S31） | Muse Spark Open（S33） |
+|---|---|---|---|
+| 总参数 / 激活参数 | 2.78T / 104.2B（Table 1） | 30B-A3B（Base 名称） | 816B / 42B |
+| 层数 | 93（Table 1） | 52 | 62 |
+| 序列混合 | KDA:Gated MLA = 3:1，末层 MLA（§2.1） | 23 Mamba-2 + 6 注意力 | 局部 `sliding_window=2048` 与全局，按 `layer_types` |
+| 位置编码 | MLA 层全为 NoPE（§2.1.2） |  | `layer_rope_theta`，默认倒数每第 4 层 NoPE |
+| 注意力头 | 96（Table 1） |  | 128 Q / 16 KV，`head_dim=64` |
+| 隐藏宽度 | 7,168 |  | 8192 |
+| MoE | 896 选 16，2 共享，latent 3584（Table 1） | 23 层，128 选 6，1 共享 | 256 选 8，`moe_hidden_size=4096` |
+| FFN 激活 | SiTU-GLU（Table 1） |  | `hidden_act=silu` |
+| 词表 | 160K（Table 1） |  | 202048 |
+
+读表时注意三件事。第一，Muse 的 `moe_hidden_size=4096` 是 MoE 块先把 8192 维压到的宽度，专家全程在这个宽度计算（S33 字段说明）。这与 K3 的 latent 宽度是同一类思路，见 [P18.13](#p18.13-latent-moe-qb)。第二，Nemotron 的 52 层把 MoE 当作单独的层来计数，K3 和 Muse 不是这样计数的。层数不能直接横比。第三，K3 的约 2.5× 扩展效率提升（S29 §2）是厂商报告的说法，本书没有复现。
+
+来源：S29 [arXiv:2607.24653](https://arxiv.org/abs/2607.24653) Table 1、§2.1、§2.3；S31 [Lightning 预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)；S33 [Muse Spark Open 文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)。均核验于 2026-10-26。
 
 
 ---
