@@ -31,10 +31,13 @@ if READY:
 @unittest.skipUnless(READY, torch_reason('P04/P22 softmax fix', VERSION, PRESENT))
 class SoftmaxCollapseTests(unittest.TestCase):
     def test_measured_cliffs_match_paper_and_unit_roundoff(self):
+        # p counts the implicit leading bit: 8 / 24 / 53 (not 7 / 23 / 52).
         for dtype, mant in ((torch.bfloat16, 8), (torch.float32, 24), (torch.float64, 53)):
             measured = c.measured_cliff(dtype)
             self.assertAlmostEqual(measured, c.PAPER_CLIFFS[dtype], delta=0.1)
             self.assertAlmostEqual(measured, mant * math.log(2), delta=0.02)
+            # Without the implicit bit the match fails: 7/23/52 * ln2 = 4.85/15.94/36.04.
+            self.assertGreater(abs(measured - (mant - 1) * math.log(2)), 0.5)
 
     def test_margin_by_hand(self):
         # 9 - log(e^-9 + e^-9) = 18 - log 2

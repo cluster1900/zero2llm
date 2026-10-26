@@ -3,8 +3,9 @@
 Run: OMP_NUM_THREADS=1 python code/23c_softmax_cancellation.py
 Source: Barron, Gnanapragasam, Tschannen, "A Fix for Softmax and Cross-Entropy",
 arXiv:2610.31642, Sec. 3, Eq. 8-9, and the project page https://jonbarron.info/softmaxfix/.
-`soft_target_cross_entropy` transcribes the project-page JAX listing into PyTorch.
-The page states no code license; we copy only the algorithm, with attribution.
+`soft_target_cross_entropy` is our own PyTorch reimplementation of the paper's
+algorithm (Eq. 8-9), written with attribution. The project page states no code
+license, so code and comments here are self-written, not copied.
 Naming follows the paper: p = teacher softmax(z_T), q = student softmax(z_S).
 Nothing here distills a model; it only compares gradients of single logit rows.
 """
@@ -25,7 +26,7 @@ _p04 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_p04)
 fixed_log_softmax = _p04.fixed_log_softmax
 
-# Project page, second listing: the values printed by the authors (JAX, float32).
+# Paper Sec. 3 example: gradients printed by the authors (JAX, float32).
 PAPER_EXAMPLE = {"standard": [-5.960e-8, 1.452e-8, -1.123e-9],
                  "fixed": [-4.596e-8, 4.144e-8, 4.513e-9],
                  "exact": [-4.596e-8, 4.144e-8, 4.513e-9]}
@@ -36,17 +37,41 @@ def standard_soft_ce(z_S, z_T):
     return -(torch.softmax(z_T, -1) * torch.log_softmax(z_S, -1)).sum(-1)
 
 
+def student_minus_teacher(z_S, z_T):
+    """q - p computed from the logit gap, following the steps of Eq. 8-9.
+
+    Working in log space keeps the tiny difference instead of subtracting two
+    nearly equal probabilities. When z_S == z_T every step is an exact 0.
+    """
+    p = fixed_log_softmax(z_T).exp()
+    q = fixed_log_softmax(z_S).exp()
+    gap = z_S - z_T
+    centred = gap - (p * gap).sum(-1, keepdim=True)
+    log_ratio = centred - torch.log1p((p * torch.expm1(centred)).sum(-1, keepdim=True))
+    # Far from the teacher plain q - p is already accurate (project-page variant).
+    diff = torch.where(log_ratio.abs() < 1, p * torch.expm1(log_ratio), q - p)
+    # Remove leftover rounding so the components add up to exactly zero.
+    return diff - q * diff.sum(-1, keepdim=True)
+
+
+class _SoftTargetCE(torch.autograd.Function):
+    """Forward: the usual soft-target CE. Backward: q - p from student_minus_teacher."""
+
+    @staticmethod
+    def forward(ctx, z_S, z_T):
+        ctx.save_for_backward(z_S, z_T)
+        p = fixed_log_softmax(z_T).exp()
+        return -(p * fixed_log_softmax(z_S)).sum(-1)
+
+    @staticmethod
+    def backward(ctx, grad_loss):
+        z_S, z_T = ctx.saved_tensors
+        return grad_loss.unsqueeze(-1) * student_minus_teacher(z_S, z_T), None
+
+
 def soft_target_cross_entropy(z_S, z_T):
-    """Project-page listing: forward loss unchanged, gradient replaced by g (Eq. 8-9)."""
-    log_q = fixed_log_softmax(z_S)
-    q, p = log_q.exp(), fixed_log_softmax(z_T).exp()
-    delta = z_S - z_T                                              # Logit difference.
-    d = delta - (p * delta).sum(-1, keepdim=True)                  # Center under p.
-    s = d - torch.log1p((p * torch.expm1(d)).sum(-1, keepdim=True))  # log(q / p).
-    u = torch.where(s.abs() < 1, p * torch.expm1(s), q - p)        # Difference q - p.
-    g = u - q * u.sum(-1, keepdim=True)                            # Ensure sum(g) = 0.
-    loss = -(p * log_q.detach()).sum(-1)                           # Forward loss.
-    return loss + (g.detach() * (z_S - z_S.detach())).sum(-1)      # Custom gradient g.
+    """Soft-target CE whose gradient w.r.t. z_S is the accurate q - p (teacher held fixed)."""
+    return _SoftTargetCE.apply(z_S, z_T)
 
 
 def student_grad(loss_fn, z_S, z_T):

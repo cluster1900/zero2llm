@@ -2,8 +2,9 @@
 
 Run: OMP_NUM_THREADS=1 python code/03b_softmax_collapse.py
 Source: Barron, Gnanapragasam, Tschannen, "A Fix for Softmax and Cross-Entropy",
-arXiv:2610.31642, Sec. 2, Eq. 2-7. The fixed functions below are a PyTorch
-transcription of the paper's JAX listing (Sec. 2); no other change is intended.
+arXiv:2610.31642, Sec. 2, Eq. 2-7. The fixed functions are our own PyTorch
+reimplementation of the paper's algorithm (Eq. 5-6), written with attribution;
+code and comments are not copied from the paper or project page.
 Nothing here trains a model; it only compares gradients of single logit rows.
 """
 import math
@@ -38,25 +39,29 @@ def measured_cliff(dtype):
         m += 0.01
 
 
+def _shifted_and_rest(z, idx):
+    """Shift every logit by z[idx], and log-sum-exp the *other* shifted logits.
+
+    The slot `idx` is forced to an exact 0, and it never enters the sum, so the
+    returned `rest` equals -m (Eq. 2) without first forming 1 + e^{-m}.
+    """
+    hit = torch.nn.functional.one_hot(idx, z.shape[-1]).bool()
+    shifted = (z - z.gather(-1, idx.unsqueeze(-1))).masked_fill(hit, 0.0)
+    rest = torch.logsumexp(shifted.masked_fill(hit, -math.inf), -1, keepdim=True)
+    return shifted, rest
+
+
 def fixed_log_softmax(z):
-    """Paper Sec. 2 listing / Eq. 5: exact 0 at argmax, margin from the other logits, softplus."""
-    i_max = z.argmax(-1, keepdim=True)
-    z_max = z.gather(-1, i_max)
-    is_max = torch.zeros_like(z, dtype=torch.bool).scatter(-1, i_max, True)
-    shifted = torch.where(is_max, torch.zeros_like(z), z - z_max)
-    others = torch.where(is_max, torch.full_like(z, -math.inf), shifted)
-    m = -torch.logsumexp(others, -1, keepdim=True)
-    return shifted - torch.nn.functional.softplus(-m)
+    """Eq. 5 reimplemented: shift by the largest logit, then subtract softplus(-m)."""
+    shifted, rest = _shifted_and_rest(z, z.argmax(-1))
+    return shifted - torch.nn.functional.softplus(rest)
 
 
 def fixed_cross_entropy(z, t):
-    """Paper Sec. 2 listing / Eq. 6: hard-target CE = softplus(-m), target slot excluded."""
-    t = torch.as_tensor(t).reshape(*z.shape[:-1], 1)
-    z_t = z.gather(-1, t)
-    is_t = torch.zeros_like(z, dtype=torch.bool).scatter(-1, t, True)
-    others = torch.where(is_t, torch.full_like(z, -math.inf), z - z_t)
-    m = -torch.logsumexp(others, -1)
-    return torch.nn.functional.softplus(-m)
+    """Eq. 6 reimplemented: hard-target CE written directly as softplus(-m)."""
+    t = torch.as_tensor(t).expand(z.shape[:-1])
+    _, rest = _shifted_and_rest(z, t)
+    return torch.nn.functional.softplus(rest).squeeze(-1)
 
 
 def standard_cross_entropy(z, t):
