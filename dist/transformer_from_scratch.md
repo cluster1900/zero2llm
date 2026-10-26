@@ -7088,6 +7088,31 @@ grpo_config = GRPOConfig(
 
 本章可以带走的一句话是：**偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。** 下一章会把这一框架接到推理预算、MTP 和投机解码，并继续区分训练目标与推理时计算。
 
+## P22.11 延伸：on-policy 蒸馏与多教师合并（MOPD） {#p22.11-mopd}
+
+**先看动机。** 普通蒸馏是 off-policy 的：老师先写好答案，学生照着做 SFT。学生自己生成时，一旦走到老师没写过的前缀，就没人教了。On-policy 蒸馏反过来：让学生自己采样，再请老师给学生写下的**每一个 token** 打分。这个思路的公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)，K3 报告的 §4.1.3 引用了它。
+
+**Kimi K3（S29 §4.1）。** 先做 SFT。再按三个领域（通用任务、通用 agent、编程 agent）各训一个 RL 专家。每个领域又分 low、high、max 三档推理强度，共 9 个专家。最后用 MOPD 把它们合进一个模型。领域 d、强度 e 的样本，由对应的那位老师打分。逐 token 奖励是 Eq.15：
+
+`r(y_t) = clip( sg( log π_teacher^{(d,e)}(y_t | x, y_<t) / π_θ(y_t | e, x, y_<t) ), −R_max, R_max )`。
+
+`sg` 是 stop-gradient：这个比值只当作奖励数字，不让梯度穿过它。clip 限制极端的优势信号，让 RL 更稳。报告还说，他们试过更细的 top-k 蒸馏目标，在他们的设置下没有看到明显优势。
+
+**Nemotron 3.5 Super（S30）。** 官方文档列出 6 类专科老师：agent、推理、视觉工具使用、视频推理与跟踪、视觉推理、对齐（RLHF）。MOPD 分两个阶段，每个 prompt 交给拥有该领域的老师。其余 prompt 交给一个冻结的 self-anchor。文档说明，RLVR 第 120 步是 MOPD 第一阶段的学生。self-anchor 是这个学生起始 checkpoint 的冻结副本，用作没有专科老师认领的 prompt 的老师。
+
+[`../code/23b_mopd_reward.py`](../code/23b_mopd_reward.py) 在一个 4 词表上手算：
+
+| token | 老师 | 学生 | 原始 log 比 | clip(R=1) |
+|---|---|---|---|---|
+| 0 | 0.70 | 0.25 | +1.0296 | +1.0000 |
+| 1 | 0.20 | 0.25 | −0.2231 | −0.2231 |
+| 2 | 0.05 | 0.25 | −1.6094 | −1.0000 |
+| 3 | 0.05 | 0.25 | −1.6094 | −1.0000 |
+
+不 clip 时，按学生分布求期望，正好等于 `−KL(学生 ‖ 老师)` = −0.603100。所以这是一个逐 token 的反向 KL 信号。测试还检查：学生与老师一致时奖励为 0，所以起点处的 self-anchor 给出零奖励；没认领的领域会路由到 self-anchor；把比值写反，符号就翻转。本书没有跑任何蒸馏训练。
+
+P22.11 资料（核验 2026-10-26）：S29 [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.1–4.1.3；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（厂商文档）。K3 §4.1.3 同时引用 [MiMo-V2-Flash，arXiv:2601.02780](https://arxiv.org/abs/2601.02780) 与 [DeepSeek-V4，arXiv:2606.19348](https://arxiv.org/abs/2606.19348) 的多教师蒸馏做法，本书未逐条核对这两篇的细节。
+
 
 ---
 
@@ -7440,6 +7465,38 @@ P23.7 的验收规则不关心草稿从哪来：只要每轮都由目标模型�
 
 边界：三个类都是教学重建，不是论文代码（ECHO 仓库未声明许可证，本书未复制其代码）；目标规律 `x_{t+1} = (3x_t+1) mod 11` 极易学习，所以接受率接近 100%，不代表真实模型。ECHO 论文自述的局限同样适用：预训练只重复一次、微调只用单一种子；DDS 每步只抽一个 D，各步的损失构成不同，所以图中曲线本身就会抖；曲线也只是单次运行。不声称任何加速。
 
+## P23.14 延伸：推理强度预算与 LK loss {#p23.14-budget-lk}
+
+**预算控制（S29 §4.1.2）。** 想要“同一题少想一点”，K3 在 RL 中给每道题 x 估一个初始预算 `b0(x)`，来自冷启动模型。轨迹的 token 数 `T(y)` 超过 `τ · b0(x)` 时，任务奖励直接改成 −1。通用任务只数思考 token；agent 任务数全部输出，包括工具调用参数。训练先用较大的 τ 得到 max 档，再把 τ 退火变小，得到 high 和 low 档。
+
+[`../code/24c_budget_lk.py`](../code/24c_budget_lk.py) 用 4 条自造轨迹，`b0 = 1000`：
+
+| (任务奖励, token) | τ=3 | τ=2 | τ=1 |
+|---|---|---|---|
+| (1, 900) | 1 | 1 | 1 |
+| (1, 1500) | 1 | 1 | −1 |
+| (0, 700) | 0 | 0 | 0 |
+| (1, 2600) | 1 | −1 | −1 |
+
+测试检查：恰好等于阈值不罚；τ 变小后，被罚的轨迹不会恢复。
+
+**MTP 变成草稿模型（S29 §4.1.4）。** K3 预训练时带一个 MTP 层。后训练时冻结目标模型，把这个 MTP 层微调成 EAGLE-3 式草稿（[EAGLE-3，arXiv:2503.01840](https://arxiv.org/abs/2503.01840)）。训练时草稿展开 7 步。输入融合第 1、第 4 和最后一个 AttnRes block 的特征（见 [6.9](#p07-attnres)）。融合矩阵 `W_E3` 初始化为 `[0 0 I]`，所以起点就是 MTP 层预训练时见过的高层特征。
+
+**LK loss。** P23.13 已用 Monte Carlo 验证：随机投机采样的逐 token 接受率是 `Σ_x min(p(x), q(x))`。K3 直接优化它的负对数（Eq.16），来自 [LK losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881)：
+
+`L_LK = −log Σ_x min(p(x), q(x))`，p、q 都在温度 1 下取，不加交叉熵项。
+
+动机是：草稿容量有限时，KL 更小不保证接受率更高。脚本给出一个自造反例，目标 p = (0.6, 0.3, 0.1)：
+
+| 草稿 | KL(p‖q) | 接受率 | LK |
+|---|---|---|---|
+| A = (0.45, 0.40, 0.15) | 0.0458 | 0.850 | 0.1625 |
+| B = (0.65, 0.349, 0.001) | 0.3671 | 0.901 | 0.1043 |
+
+A 的 KL 更小，B 的接受率更高。原因是 KL 重罚“目标有、草稿几乎没有”的 token，而接受率只看重叠的面积。测试还核对接受率等于 1 减总变差距离，并把 min 换成 max 作为变异。
+
+**Nemotron 3.5 Super（S30）** 的做法不同：一个递归共享的 MTP 头，从 Nemotron 3 Super Base 两个头中的第一个初始化。官方文档的 Table 8 引用值是，草稿长度 7 时平均接受长度 4.287 → 4.718（greedy）、3.787 → 4.612（sampled）。这些是厂商报告的数字，本书没有复现。
+
 ## 资料版本与复现边界
 
 核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
@@ -7451,6 +7508,9 @@ P23.7 的验收规则不关心草稿从哪来：只要每轮都由目标模型�
 - [DFlash，arXiv:2602.06036](https://arxiv.org/abs/2602.06036)（提交 2026-02-05，核验 2026-10-25）：块草稿、特征注入与加速倍数，见 P23.13。
 - [DSpark，arXiv:2607.05147](https://arxiv.org/abs/2607.05147)（提交 2026-07-06，核验 2026-10-25）：置信头、`c*` 目标、Algorithm 1 调度与速度数字。
 - [ECHO，arXiv:2610.24766](https://arxiv.org/abs/2610.24766)（提交 2026-10-17，核验 2026-10-25）：式 1 递归（共享最后一层）、式 4 的 f_k、DDS 分布与 Limitations。
+- S29：[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（核验 2026-10-26）：§4.1.2 预算控制，§4.1.4 EAGLE-3 草稿与式 16，见 P23.14。
+- [EAGLE-3，arXiv:2503.01840](https://arxiv.org/abs/2503.01840) 与 [LK losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881)：K3 引用的原文，见 P23.14。
+- S30：[Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（核验 2026-10-26）：共享 MTP 头与 Table 8 引用值，厂商报告。
 
 
 ---
@@ -7912,6 +7972,36 @@ P24.7 说过 GGUF 只是容器，同一个文件里不同张量可以用不同�
 ## P24.14 量化感知训练（QAT）：MiniMax-M3.1-Flash 的公开范围
 
 前面所有方法都是**训练后量化**：权重训练完再找 scale。QAT 则在训练中就让前向经过量化，让模型适应舍入误差。MiniMax 在 [M3.1-Flash 官方模型卡](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash)（核验日 2026-10-25）中说明，相对 M3 的三项改动之一是 QAT：**routed MoE 专家和注意力路径在训练中被量化**，用于降低显存占用、提升服务效率。模型卡给出约 428B 总参数、每 token 激活 23B、最长 1M 上下文；另外两项改动是把前三层全注意力也换成稀疏注意力、从而全模型使用 MSA（见 [P16](#p16-sparse-linear) 的 P16.13）和改用 DSpark 草稿头（见 [P23](#p23-mtp)）。**QAT 用的位宽、数据格式、训练阶段与步数，模型卡均未公开**，本书不作推测，也不提供 QAT 代码。
+
+## P24.15 FP4 块缩放：MXFP4、NVFP4 与“训练和 rollout 用同一种量化” {#p24.15-fp4-block}
+
+**先看动机。** 4 bit 只有 16 个码。P24.4 已经说过，一个异常值会撑大整组的 scale。FP4 块格式的办法是：每一小块共享一个 scale，块越小，异常值影响的范围越小。
+
+**格式本身。** 元素都是 FP4 E2M1：1 位符号、2 位指数、1 位尾数，绝对值只有 0、0.5、1、1.5、2、3、4、6 八种。
+
+- **MXFP4**：每 32 个元素共享一个 E8M0 scale，即纯 2 的幂。规范原文是 [OCP Microscaling Formats (MX) v1.0](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) §5.2 Table 1。[MX 格式论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537) 的 Table 1 与之一致。论文 Algorithm 1 的取法是 `X = 2^(⌊log2 max|V|⌋ − emax_elem)`，E2M1 的 `emax_elem = 2`，超出范围的元素截到 ±6。
+- **NVFP4**：每 16 个元素共享一个 FP8 E4M3 scale，另有一个整张量的 FP32 scale。来源是 [NVIDIA Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)：`x = x_e2m1 · s_block · s_global`，`s_global = amax / (448 · 6)`。E4M3 scale 不必是 2 的幂，所以更贴近块的真实最大值。
+
+只算块 scale，MXFP4 是 4 + 8/32 = 4.25 bit/元素，NVFP4 是 4 + 8/16 = 4.5 bit/元素。
+
+[`../code/25c_fp4_block.py`](../code/25c_fp4_block.py) 用 1024 个高斯值加 4 个 ±40 的离群值（种子 0，自造数据）：
+
+| 方案 | 相对 MSE |
+|---|---|
+| 每张量一个 scale | 0.0982 |
+| MXFP4，块 32 | 0.0497 |
+| NVFP4 式，块 16 | 0.0069 |
+
+这只验证舍入算术，不代表任何模型的精度。测试检查：E2M1 网格值往返不变且在 6 饱和；E4M3 舍入；MX scale 是 2 的幂；块方案误差低于每张量方案。还有一个变异：把块设成整张量，结果退回每张量方案。
+
+**PTQ、QAT、QAD。** PTQ 是训练完再量化（P24.3）。QAT 在训练中就让前向经过量化（P24.14）。QAD（Quantization-Aware Distillation）也让前向经过量化，但用原精度模型做老师来蒸馏。
+
+- **Kimi K3（S29 §4.1.4）。** MoE 专家权重用 MXFP4，激活用 MXFP8。注意力投影、latent MoE 投影、共享专家和路由器保持更高精度。QAT 覆盖整个后训练，包括 SFT 和 RL。RL 中 rollout 与训练使用同一种量化，报告说这样就消除了训练与推理不一致。这一点的意义是：策略梯度假设样本来自正在训练的那个策略；若 rollout 用的是另一套数值，样本就有一部分是 off-policy 的。
+- **Nemotron 3.5 Super（S30）。** 发布的 NVFP4 checkpoint 先用预设的 aggressive PTQ 配方（4.82 bit/元素），再做 200 步基于 SFT 的 QAD。官方文档称，35 个基准上相对 BF16 的准确率恢复中位数为 99.52%。它在 Blackwell 上以 W4A4 部署，在其他 GPU 上以 W4A16 部署。这些都是厂商报告的数字，本书没有复现。
+
+**三种量化对象别混。** K3 量化的是专家**权重**（加 MXFP8 激活）。Nemotron 的 W4A4 同时量化权重与**激活**。P26 讨论的 V4.1-Flash FP4 量化的是 **KV cache**（S12，报告 §2.4.4）。三者误差进入模型的位置不同，P24.6 已经说明 KV 量化的误差会落在每一步注意力上。
+
+P24.15 资料（核验 2026-10-26）：[OCP MX v1.0 规范](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) §5.2；[MX 论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537)；[Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)（厂商文档）；QAT 原文 [Jacob et al., arXiv:1712.05877](https://arxiv.org/abs/1712.05877)；S29 [Kimi K3，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.4；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html) §4.1（厂商报告）。
 
 
 ---
