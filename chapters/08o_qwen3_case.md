@@ -349,7 +349,7 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 | 序列混合 | KDA:Gated MLA = 3:1，末层 MLA（§2.1） | 23 Mamba-2 + 6 注意力 | 局部 `sliding_window=2048` 与全局，按 `layer_types` |
 | 位置编码 | MLA 层全为 NoPE（§2.1.2） |  | `layer_rope_theta`，默认倒数每第 4 层 NoPE |
 | 注意力头 | 96（Table 1） | 32 Q / 2 KV 组（GQA） | 128 Q / 16 KV，`head_dim=64` |
-| 隐藏宽度 | 7,168 | 2688（由 Nano 的 4096 剪枝） | 8192 |
+| 隐藏宽度 | 7,168 | 2688（主干沿用 Nano 3 Base；取自 Super 3 Base 的 MTP 头由 4096 剪枝到 2688 以匹配，厂商口径） | 8192 |
 | MoE | 896 选 16，2 共享，latent 3584（Table 1） | 23 层，128 选 6，1 共享 | 256 选 8，`moe_hidden_size=4096` |
 | FFN 激活 | SiTU-GLU（Table 1） |  | `hidden_act=silu` |
 | 词表 | 160K（Table 1） |  | 202048 |
