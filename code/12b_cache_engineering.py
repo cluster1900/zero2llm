@@ -176,8 +176,8 @@ def main():
           ", ".join(f"{i}:{g:.1e}" for i, g in gaps.items()))
     rows, logit_gap = compare(1, use_repos=False)
     print(f"\n1 layer, drop WITHOUT repos: layer0 max|dK| = {rows[0][0]:.2e}, logits max|diff| = {logit_gap:.2e}")
-    rows, logit_gap = compare(2, dropped=[8, 9])
-    print(f"2 layers, drop the LAST two tokens + repos: max|dK|,|dV| = "
+    rows, logit_gap = compare(4, dropped=[8, 9])
+    print(f"4 layers, drop the LAST two tokens + repos (repos moves nothing here): max|dK|,|dV| = "
           f"{max(max(r) for r in rows):.2e}, logits max|diff| = {logit_gap:.2e}")
 
 

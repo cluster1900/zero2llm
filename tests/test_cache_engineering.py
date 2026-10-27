@@ -83,10 +83,18 @@ class CacheEngineeringTests(unittest.TestCase):
             _, gap = ce.compare(1)
         self.assertGreater(gap, 1e-3)
 
+    def test_mutation_reversed_rerotate_breaks_one_layer_match(self):
+        real = ce.rerotate
+        flipped = lambda k, old, new, *args: real(k, new, old, *args)  # rotate by (old - new)
+        with mock.patch.object(ce, 'rerotate', flipped):
+            _, gap = ce.compare(1)
+        self.assertGreater(gap, 1e-3)
+
     def test_cli_runs(self):
         out = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True, check=True,
                              env={'OMP_NUM_THREADS': '1', 'PATH': ''}).stdout
         self.assertIn('query logits max|diff|', out)
+        self.assertIn('4 layers, drop the LAST two tokens', out)
 
 
 if __name__ == '__main__':
