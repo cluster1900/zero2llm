@@ -194,6 +194,9 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 | 2026-10-26 | 同上 §4、§8 | grokking 实验中，记住训练集后的 Slingshot 尖峰由该偏差引起；§8 称此类大间隔在标准大规模训练中少见 | 作者报告，本书未复现 | [P09.3](#p09.3-cross-entropy) |
 | 2026-10-26 | 同上 §3，Eq. 8–9；项目页代码 | 修正版蒸馏梯度与 fp64 精确值一致 | 本书复现（项目页 fp32 例子） | [P22.12](#p22.12-softmax-cancellation) |
 | 2026-10-26 | 同上 §7 | bf16 蒸馏中学生持续漂离老师 | 作者报告，本书未复现 | [P22.12](#p22.12-softmax-cancellation) |
+| 2026-10-27 | [arXiv:2610.28577][akv] §3.3，Eq. 4–5 | `drop` 把条目排除出注意力；`repos` 对 key 乘 $R(q)R(p)^{-1}$，V 不动 | 本书复现（单序列、随机初始化小模型，float64） | [P11.10](#p11.10-cache-engineering) |
+| 2026-10-27 | 同上 §3.4，Fig. 1、Fig. 5 | 缓存状态有历史依赖：保留 token 的 K/V 带着被删内容的信息，drop + repos 不等于重 prefill | 本书复现（1 层一致；2 层 logits 差 1.53e-2，4 层 7.34e-2） | [P11.10](#p11.10-cache-engineering) |
+| 2026-10-27 | 同上摘要；§5.2 Table 1、§5.3 Table 2 | 工具结果滚动 drop 比阈值触发摘要平均 +1.7 分、成本 −27.7%；AKV 吞吐最高 1.2×、P95 延迟 1.5× 加速 | 作者报告，本书未复现 | [P11.10](#p11.10-cache-engineering) |
 
 项目页代码比 arXiv 正文多一个 $\lvert s\rvert\ge1$ 分支，本书照项目页实现。项目页未标注代码许可证。
 
@@ -225,6 +228,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 - [Qwen3-0.6B 固定官方 config][qwen-config]，revision/hash 如 E.2；相关官方实现版本见 P25。
 - [3Blue1Brown 原作者 attention 页面][visual]与 [nanoGPT 原作者仓库][nanogpt]：阅读入口，核对日期2026-10-20，不当作本书实验版本。
 - [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642][softmax-fix]（[项目页][softmax-fix-page]），§1–§4、§7，核对日期2026-10-26；E.4 的登记依据。
+- [Cache Engineering for Agents，arXiv:2610.28577][akv]（[代码 thu-nics/AKV][akv-code]，Apache-2.0），摘要、§3.3–§3.4、§4、§5.2–§5.3，核对日期2026-10-27；E.4 的登记依据。
 
 [attention]: https://arxiv.org/abs/1706.03762v7
 [repro]: https://docs.pytorch.org/docs/2.14/notes/randomness.html
@@ -234,3 +238,5 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 [nanogpt]: https://github.com/karpathy/nanoGPT
 [softmax-fix]: https://arxiv.org/abs/2610.31642
 [softmax-fix-page]: https://jonbarron.info/softmaxfix/
+[akv]: https://arxiv.org/abs/2610.28577
+[akv-code]: https://github.com/thu-nics/AKV

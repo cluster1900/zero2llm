@@ -120,6 +120,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P10。
 - 旧章关系：新增，扩展旧 `09_modern_llms.md` 的 KV Cache 简介。
 - 来源：S08、S14、S15。
+- 前沿补充（bot-hub #98，待审）：P11.10“不改文本，直接改 KV”（cache engineering，S35 §3.3 Eq. 4–5、§3.4、Fig. 5）；`code/12b_cache_engineering.py` 在 P12 RoPE 小模型上实现 `drop`（mask）与 `repos`（K 乘 $R(q)R(p)^{-1}$，V 不动），对照重 prefill：1 层完全一致，2 层起保留 token 的 K/V 带着被删内容，logits 不同。
 
 ### P12 RoPE 与 YaRN：旋转位置和长上下文
 - 目标：把位置编码落实到 Q/K 与缓存偏移，理解扩展上下文并非修改一个长度常数。
@@ -129,6 +130,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 旧章关系：新增，扩写旧第 9 章 RoPE，衔接旧第 5 章。
 - 来源：S03、S04。
 - 前沿补充（bot-hub #28，待审）：NoPE 层对照——Muse Spark Open 用 `layer_rope_theta` 让部分层关闭 RoPE（S33：θ=0 即 NoPE，默认从最后一层倒数每第 4 层）；与线性递推“靠衰减隐式编码位置”（P16）对照。
+- 前沿补充（bot-hub #98，待审）：P12.3 加一句交叉引用到 P11.10，说明 RoPE 的相对位置性质是 `repos` 只需旋转 key 的原因（S35 §3.3 Eq. 5）。
 
 ### P13 RMSNorm 与 SwiGLU：现代 Block
 - 目标：理解现代归一化和门控 FFN 的变化及公平对比方法。
@@ -266,6 +268,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 旧章关系：改写 `10_appendix.md`，保留词典、公式卡与书单，新增持续更新流程。
 - 来源：本文件来源索引与仓库构建工具。
 - 前沿补充（bot-hub #91，待审）：附录 E.4 前沿跟踪记录，登记 S34 的核验状态（已核实 / 本书复现 / 未复现）。
+- 前沿补充（bot-hub #98，待审）：E.4 登记 S35（cache engineering）各主张的状态。
 
 ## miniGPT 代码主线与验收边界
 
@@ -365,3 +368,4 @@ MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入
 - S32：[Nemotron 3.5 Super & Lightning 技术报告（PDF）](https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3.5-Super-and-Lightning-Technical-Report.pdf)（核验可访问 2026-10-25）。
 - S33：[Muse Spark Open 的 Transformers 官方模型文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)（核验 2026-10-25：816B 总参 / 42B 激活，sliding_window=2048，128 注意力头 / 16 KV 头，`layer_rope_theta` 的 NoPE 约定）；[Meta 官方博客](https://research.meta.ai/blog/muse-spark-open)。
 - S34：[A Fix for Softmax and Cross-Entropy，arXiv:2610.31642](https://arxiv.org/abs/2610.31642)（Barron、Gnanapragasam、Tschannen，Google DeepMind；核验 2026-10-26：§1 精度悬崖 5.5/16.6/36.7，§2 Eq. 2–7，§3 Eq. 8–9，§4、§7）；[项目页与代码](https://jonbarron.info/softmaxfix/)（未标注代码许可证）。
+- S35：[Cache Engineering for Agents，arXiv:2610.28577](https://arxiv.org/abs/2610.28577)（Fu、Wang 等，清华 NICS；核验 2026-10-27：§3.3 Eq. 3–5 定义 append / drop / repos，§3.4 与 Fig. 5 历史依赖，§4 AKV 服务系统，摘要报告 +1.7 分、成本 −27.7%、吞吐最高 1.2×、P95 延迟 1.5×）；[代码 thu-nics/AKV](https://github.com/thu-nics/AKV)（Apache-2.0，核对提交 `c567a42`）。
