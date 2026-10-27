@@ -178,6 +178,40 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 
 `tests/test_kv_cache.py` 对应形状/偏移、矩形 mask、全 logits 对齐、内存公式、独立请求和上限契约；还实际构造错误 offset 和错误 mask 的负面对照。后续 RoPE、GQA 或缓存布局的改动，都要继续通过这种同参数对齐，而不是跳过 S0 直接看速度。
 
+## P11.10 前沿补充：不改文本，直接改 KV（cache engineering） {#p11.10-cache-engineering}
+
+> [!NOTE]
+> 这一节讲一个新做法：不重算，直接从缓存里“删掉”旧内容。依据是清华 NICS 的 [Cache Engineering for Agents](https://arxiv.org/abs/2610.28577)（arXiv:2610.28577v1，2026-10-20）§3.3–§3.4，代码见 [thu-nics/AKV](https://github.com/thu-nics/AKV)。本书只演示单条序列上的两个操作，不实现 AKV 的服务系统。
+
+**问题。** Agent 一轮轮调用工具，历史越来越长。常见做法是改文本：删掉或摘要旧的工具结果。可本章一直在说，后面 token 的 K/V 是在前面内容的基础上算出来的。前缀一改，后面的缓存全部作废，保留下来的内容要重新 prefill。论文 §1 把这叫作重 prefill 成本与准确率之间的两难：删得越早，要重算的后缀越长。
+
+**两个新操作。** 论文 §3.3 在普通的 `append`（本章的增量写入，Eq. 3）之外定义了两个操作，文本历史本身不改：
+
+- `drop(P)`（Eq. 4）：把集合 P 里的 KV 条目排除在以后的注意力之外。保留条目的位置编码不变，下一个 `append` 的位置编号也不变。实现上可以只在 mask 里把它们设成“不看”，就像 P11.4 的矩形 mask 多了几列“不看”。
+- `repos`（Eq. 5）：把保留下来的 r 个 key 按逻辑顺序改到位置 0…r−1，下一个 token 用位置 r。对 RoPE，把一个 key 从位置 p 挪到 q 只需 $K\leftarrow R(q)R(p)^{-1}K$；**V 原样不动**，因为 V 本来就没有旋转。为什么旋转一下就够，见 [P12.3](#p12-rope) 的相对位置性质。
+
+AKV 的接口在原来的 OpenAI 格式请求上加两个字段（[README](https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/README.md) 的 Quick Start 示例和字段表）：`"drop_message": {"4": [2]}` 表示处理完第 4 条消息后丢掉第 2 条消息的 KV，`"reposition": [4]` 表示处理完第 4 条后压紧位置。论文 Fig. 6 画的是另一种写法（`"cache": {"drop": …}`），本书以仓库 README 为准。
+
+**关键：drop + repos 不等于重新 prefill。** 保留下来的 token 当初算 K/V 时，是**看过**被删内容的。第 1 层的 K/V 只由 token 本身和位置决定，所以 repos 之后能和重算完全一样；但从第 2 层起，输入已经是混入了上下文的隐藏状态，被删内容的信息就留在保留 token 的 K/V 里。论文 §3.4 和 Fig. 5 说的正是这个“历史依赖”：同样的 token、同样的位置，操作顺序不同，缓存状态就不同；Fig. 1 也注明保留的 KV 仍可能带着被删历史的信息。
+
+**跑一下。** `code/12b_cache_engineering.py` 用 P12 的 RoPE 小模型（随机初始化、float64、种子 2026）。10 个 token，删掉中间第 2–5 个（像一段旧工具结果），再追加 2 个 query token，比较两条路：A 是完整 prefill → `drop` → `repos` → 追加；B 是只把保留的 6 个 token 重新 prefill → 追加。
+
+| 模型层数 | 第 1 层（layer 0）K/V 最大差 | 更高层 K/V 最大差 | query logits 最大差 |
+| --- | --- | --- | --- |
+| 1 | 2.2e-16 / 0 | 无 | 4.4e-16 |
+| 2 | 2.2e-16 / 0 | layer 1：0.128 / 0.126 | 1.53e-2 |
+| 4 | 2.2e-16 / 0 | 最大到 layer 3：0.384 / 0.499 | 7.34e-2 |
+
+三组对照把原因钉住：
+
+- 2 层模型的 layer 1 里，排在被删段**前面**的 token 0、1 差值为 0（它们本来就看不到后面的被删段），排在**后面**的 token 6–9 差 0.03–0.13。差异只出现在“看过被删内容”的 token 上。
+- 只删最后两个 token（没人看过它们）再 repos，4 层模型每层 K/V 都与重算完全一致，logits 差 3.6e-16。
+- 1 层模型若只 drop 不 repos，layer 0 的 K 与重算差 2.23，logits 差 1.64e-2：位置没压紧，key 与 query 的相对距离就和重算不同。
+
+`tests/test_cache_engineering.py` 断言以上结论，并检查：不做任何操作时 `append` 与完整前向一致；mask 式 drop 与物理删除结果相同；先转到旧位置再 `rerotate` 等于直接转到新位置；把 `repos` 换成空操作后，1 层的相等就被破坏。
+
+**边界。** 差异不是 bug，也不说明哪条路更好：论文 §3.2 在讲直接改缓存的动机时写道，保留的缓存可能仍带着计算时用过的被删历史信息，并把直接 drop 同时提高准确率、降低成本列为实验观察；这些属于作者报告。本书只验证了“二者在数值上不同、以及为什么不同”，没有验证对准确率的影响。论文摘要报告的效果（数据见 §5.2 Table 1、§5.3 Table 2；相比阈值触发摘要平均 +1.7 分、成本 −27.7%；AKV 输出吞吐最高 1.2×、P95 延迟 1.5× 加速）均为作者报告，本书未复现。本书的 `rerotate` 在 float64 下直接转角度差；AKV 的内核 [`context_reposition.py`](https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/akv/system/sglang/kernels/ops/attention/context_reposition.py) 第 93–95 行注释说明，它刻意用 FP32 先逆转再正转，因为角度差展开会改变舍入，在深层模型里被放大；第 114–115 行注释说明只改旋转子空间，K 的其余部分和全部 V 原样复制。radix tree、淘汰与恢复（论文 §4）属于服务系统，本书不实现，P15 讲分页缓存时可以对照。
+
 ## 原始来源与版本
 
 核验日期：2026-10-19。本章 S1 是教学实现，既不是 HF Cache API 的完整实现，也不是 vLLM 服务实现。
@@ -186,5 +220,6 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 2. Kwon 等，[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，§2–3：KV cache 与服务内存管理动机。分页和连续批处理留给后续，不将本地 `cat` 称为 PagedAttention。
 3. [code/07_baby_gpt.py](../code/07_baby_gpt.py) 与 [code/12_kv_cache.py](../code/12_kv_cache.py)：本章形状、容量策略、计时范围及可运行数值的直接依据。
 4. 大纲 S15 的 [vLLM Paged Attention 设计文档](https://docs.vllm.ai/en/latest/design/paged_attention/)（动态文档，访问核验日 2026-10-19）仅作后续服务实现导航。本章不依赖 vLLM、没有运行其内核，也未实现分页缓存；本地 S1 的行为以配套脚本为准。
+5. Fu 等，[Cache Engineering for Agents](https://arxiv.org/abs/2610.28577)（arXiv:2610.28577v1），§1、§3.2–§3.4（Eq. 3–5，Fig. 1、Fig. 5）、§4，核对日期 2026-10-27；代码 [thu-nics/AKV](https://github.com/thu-nics/AKV)（Apache-2.0，核对提交 `c567a42`）的 README 与 `akv/system/sglang/kernels/ops/attention/context_reposition.py`。P11.10 的依据；[code/12b_cache_engineering.py](../code/12b_cache_engineering.py) 为本书自写实现。
 
 下一单元 [P12](#p12-rope) 将绝对位置表换成 Q/K 旋转，并继续用同参数全量/增量 logits 对照检查缓存。
