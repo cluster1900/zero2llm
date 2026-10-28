@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-10-27
+% 2026-10-28
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -7608,6 +7608,50 @@ A 的 KL 更小，B 的接受率更高。原因是 KL 重罚“目标有、草�
 
 **Nemotron 3.5 Super（S30）** 的做法不同：一个递归共享的 MTP 头，从 Nemotron 3 Super Base 两个头中的第一个初始化。官方文档的 Table 8 引用值是，草稿长度 7 时平均接受长度 4.287 → 4.718（greedy）、3.787 → 4.612（sampled）。这些是厂商报告的数字，本书没有复现。
 
+## P23.15 延伸：为什么 batch 一大投机就不划算，以及 EAGLE-4 怎么按代价选树或链 {#p23.15-eagle4}
+
+P23.13 的 DFlash 一次并行写出整块草稿；EAGLE-4 走另一条路：**自回归小草稿器 + 按实测代价决定这一轮起草多少、验证多少**。对照如下（机制列以官方说明为准；加速倍数均为厂商／作者报告，本书未复现 27B）：
+
+| | MTP 自带草稿 | EAGLE-3 | DFlash | EAGLE-4 |
+|---|---|---|---|---|
+| 草稿怎么产生 | 目标模型自带的多 token 头，常做成固定链 | 单层自回归草稿器，读目标多层隐藏状态 | 块扩散：一次并行出一整块（论文块长 16） | 沿用 EAGLE-3.1 单层归一化草稿器；读目标 **3 个分别归一化的隐藏状态 + token embedding**，输出再喂回下一步 |
+| 树还是链 | 多为固定链 | 动态树（EAGLE-2 风格） | 块（非自回归树） | **低并发动态树、高并发动态链**；每轮由代价模型改形状 |
+| 随 batch 怎么调 | 固定长度，大 batch 时验证窗浪费 | 主要按接受概率长树，不显式吃硬件代价 | 固定块长，大 batch 时可能起草过多 | 一次性测硬件上的起草／验证代价；每步比较期望收益与边际代价 |
+| 词表打分 | 完整 LM head | EAGLE-3 用截断草稿词表 | 视实现 | **低秩候选头**：先用 rank-128 投影给全部词表打分，再只对前 128 个候选用完整 LM head（Qwen3.8-27B 草稿词表 248320） |
+| 长上下文 | 视目标 | 全上下文注意力成本随长度涨 | 视实现 | 草稿注意力滑窗 **4096**；草稿 KV **只追加不淘汰** |
+
+来源：EAGLE-4 论文 PDF（[eagle-hq/EAGLE-4@`3b96ef6`](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)，Preprint，无 arXiv 号）、[LightSeek / TokenSpeed 文](https://lightseek.org/blog/eagle-4.html)（2026-10-20）、[fal 技术解读](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20）；仓库许可证为 **源码可见**（`LicenseRef-Eagle-4-Source-Available`），不是 OSI 开源。代码包 `eagle-harness` 以插件形式接到 SGLang / vLLM / TokenSpeed；本书**不复制**其源码。
+
+### 直觉：小 batch 时验证几乎免费，大 batch 时不再免费
+
+解码在小 batch 时往往是**内存带宽受限**：目标模型每次只算很少的 token，算力闲着，多验证几个草稿位置几乎不增加墙钟时间。batch 变大后，矩阵乘已经吃满算力，再塞进一棵很宽的验证树，就要付真实的算力账——这就是“投机解码收益随 batch 增大而消失”的工程原因。fal 文把同一权衡说成：更大的树给验收更多备选，但也更贵；EAGLE-4 的 harness 用 GPU 上测得的延迟表来管这个权衡。
+
+### 公式：期望收益 ÷ 边际代价
+
+论文 §3.1 把每一步都收成一次比较：
+
+`ΔA / ΔC ≥ τ`
+
+- `ΔA`：再多起草一层（或再多验证一个节点）时期望多接受的 token 数。链上若每步接受率近似为 p，第 k 个草稿位置的边际收益是 `p^k`（再加每轮必有的修正／bonus，见 P23.13 的 `E[τ]`）。树上则用根到节点的草稿概率乘积当接受可能性（EAGLE-2 风格）。
+- `ΔC`：在当前硬件、当前 batch、当前上下文长度下，**一次性测得**的起草或验证耗时增量，查表得到。
+- `τ`：阈值；论文写明起草阈值随深度升高，因为深枝估计更不可靠。
+
+Algorithm 1（论文）每轮做三件事：① 每起草一层后看要不要再深一层；② 按分数从高到低加验证节点，直到下一个节点不值它的验证代价；③ 读当前负载，轻载允许多分支、重载收成短链。同一套草稿权重，不改训练，只改这一轮的树／链形状。
+
+采样（温度 > 0）时，若按本轮已抽出的 token 决定何时停，会偏置目标分布；论文与 LightSeek 文都写明：采样轮的深度要**提前固定**为上一轮代价准则本会停下的深度，再用树拒绝采样保持目标分布。贪心时输出与目标一致。本书仍只演示贪心。
+
+### CPU 玩具：选 k，再断言贪心验收不变
+
+[`../code/24d_eagle4_cost.py`](../code/24d_eagle4_cost.py) 把上面的比较收成**链**上的教学版（不是完整动态树，也不读真实 GPU 表）：
+
+1. 给定接受率 p、单步起草代价 `c_d`、验证代价 `c0 + c1·n`，用 `ΔA/ΔC ≥ τ` 选出草稿长度 k；换一组模拟 batch（改大 `c1`）会看到选出的 k 变短，直到为 0。
+2. 用选出的 k 走本章未改动的 `greedy_decode`，草稿即便乱写也会被纠正，输出与逐 token 贪心逐 token 相同。
+3. 低秩候选头：在词表 5000、`d=64` 上用 W 的截断 SVD 得到 `A、B` 先打分、取 top-128，再只对候选行做完整 `W h`；打印 top-1 与全词表打分一致的比例，以及乘法次数对比。**这是教学简化**：论文把低秩头训练成检索器，报告 rank-128 时候选里含全头 top-1 的比例为 98.2%（作者报告，未复现）。
+
+厂商报告的速度（不是本书测量）：LightSeek / TokenSpeed 文称 Qwen3.8-27B BF16、4×B300 TP4、单请求 temperature=1 时 750 tok/s，相对不投机 2.85×、相对模型自带 MTP 1.28×；agentic coding 采样负载约 3.0×。论文 Fig.1 / Hugging Face 卡在 temperature=0 的 SPEED-Bench 定性子集上报告 EAGLE-4 863.8 tok/s、3.59×（相对 Vanilla）。两组设定不同，不要混成一个数。fal 文说明已发布模型尚未包含多层草稿、MoE 草稿和 Latent ReLU。
+
+边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗 4096 与词表 248320 来自官方仓库文档／工具注释（`docs/known-limits.md`、`tools/bench_kernels.py`，提交 `3b96ef6`）。与 DFlash 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。
+
 ## 资料版本与复现边界
 
 核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
@@ -7622,6 +7666,11 @@ A 的 KL 更小，B 的接受率更高。原因是 KL 重罚“目标有、草�
 - S29：[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（核验 2026-10-26）：§4.1.2 预算控制，§4.1.4 EAGLE-3 草稿与式 16，见 P23.14。
 - [EAGLE-3，arXiv:2503.01840](https://arxiv.org/abs/2503.01840) 与 [LK losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881)：K3 引用的原文，见 P23.14。
 - S30：[Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（核验 2026-10-26）：共享 MTP 头与 Table 8 引用值，厂商报告。
+- [EAGLE-4：One Flexible Drafter for All Batch Sizes and Hardware](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)（Preprint PDF，无 arXiv 号；仓库提交 `3b96ef6`，核验 2026-10-28）：§3.1 代价模型与 Algorithm 1，§3.2 低秩候选头，§3.3 滑窗与只追加草稿 KV；许可为源码可见。
+- [EAGLE](https://arxiv.org/abs/2401.15077)、[EAGLE-2](https://arxiv.org/abs/2406.16858)、[EAGLE-3](https://arxiv.org/abs/2503.01840)：家族原文；EAGLE-4 论文与 `CITATION.cff` 亦列出。
+- [LightSeek / TokenSpeed：EAGLE-4 training and serving](https://lightseek.org/blog/eagle-4.html)（2026-10-20，核验 2026-10-28）：750 tok/s 等厂商报告、Harness 树／链、Efficient LM Head、滑窗 4096。
+- [fal：EAGLE-4 Technical Deepdive](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20，核验 2026-10-28）：batch 权衡、与 DFlash/DSpark 对照；已发布模型不含多层／MoE／Latent ReLU。
+- 代码与权重：[eagle-hq/EAGLE-4](https://github.com/eagle-hq/EAGLE-4)（`3b96ef6`）、[PyPI eagle-harness](https://pypi.org/project/eagle-harness/)、[EAGLE-Corp/Qwen3.8-27B-EAGLE4](https://huggingface.co/EAGLE-Corp/Qwen3.8-27B-EAGLE4)；本书实验见 [`../code/24d_eagle4_cost.py`](../code/24d_eagle4_cost.py)。
 
 
 ---
