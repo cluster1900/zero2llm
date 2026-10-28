@@ -14524,6 +14524,140 @@ MTP 头，从 Nemotron 3 Super Base 两个头中的第一个初始化。官方�
 Table 8 引用值是，草稿长度 7 时平均接受长度 4.287 →
 4.718（greedy）、3.787 →
 4.612（sampled）。这些是厂商报告的数字，本书没有复现。</p>
+<h2 id="p23.15-eagle4">P23.15 延伸：为什么 batch 一大投机就不划算，以及
+EAGLE-4 怎么按代价选树或链</h2>
+<p>P23.13 的 DFlash 一次并行写出整块草稿；EAGLE-4
+走另一条路：<strong>自回归小草稿器 +
+按实测代价决定这一轮起草多少、验证多少</strong>。对照如下（机制列以官方说明为准；加速倍数均为厂商／作者报告，本书未复现
+27B）：</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th></th>
+<th>MTP 自带草稿</th>
+<th>EAGLE-3</th>
+<th>DFlash</th>
+<th>EAGLE-4</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>草稿怎么产生</td>
+<td>目标模型自带的多 token 头，常做成固定链</td>
+<td>单层自回归草稿器，读目标多层隐藏状态</td>
+<td>块扩散：一次并行出一整块（论文块长 16）</td>
+<td>沿用 EAGLE-3.1 单层归一化草稿器；读目标 <strong>3
+个分别归一化的隐藏状态 + token embedding</strong>，输出再喂回下一步</td>
+</tr>
+<tr>
+<td>树还是链</td>
+<td>多为固定链</td>
+<td>动态树（EAGLE-2 风格）</td>
+<td>块（非自回归树）</td>
+<td><strong>低并发动态树、高并发动态链</strong>；每轮由代价模型改形状</td>
+</tr>
+<tr>
+<td>随 batch 怎么调</td>
+<td>固定长度，大 batch 时验证窗浪费</td>
+<td>主要按接受概率长树，不显式吃硬件代价</td>
+<td>固定块长，大 batch 时可能起草过多</td>
+<td>一次性测硬件上的起草／验证代价；每步比较期望收益与边际代价</td>
+</tr>
+<tr>
+<td>词表打分</td>
+<td>完整 LM head</td>
+<td>EAGLE-3 用截断草稿词表</td>
+<td>视实现</td>
+<td><strong>低秩候选头</strong>：先用 rank-128
+投影给全部词表打分，再只对前 128 个候选用完整 LM head（Qwen3.8-27B
+草稿词表 248320）</td>
+</tr>
+<tr>
+<td>长上下文</td>
+<td>视目标</td>
+<td>全上下文注意力成本随长度涨</td>
+<td>视实现</td>
+<td>草稿注意力滑窗 <strong>4096</strong>；草稿 KV
+<strong>只追加不淘汰</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>来源：EAGLE-4 论文 PDF（<a
+href="https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf">eagle-hq/EAGLE-4@<code>3b96ef6</code></a>，Preprint，无
+arXiv 号）、<a href="https://lightseek.org/blog/eagle-4.html">LightSeek
+/ TokenSpeed 文</a>（2026-10-20）、<a
+href="https://blog.fal.ai/eagle-4-technical-deepdive/">fal
+技术解读</a>（2026-10-20）；仓库许可证为
+<strong>源码可见</strong>（<code>LicenseRef-Eagle-4-Source-Available</code>），不是
+OSI 开源。代码包 <code>eagle-harness</code> 以插件形式接到 SGLang / vLLM
+/ TokenSpeed；本书<strong>不复制</strong>其源码。</p>
+<h3 id="直觉小-batch-时验证几乎免费大-batch-时不再免费">直觉：小 batch
+时验证几乎免费，大 batch 时不再免费</h3>
+<p>解码在小 batch
+时往往是<strong>内存带宽受限</strong>：目标模型每次只算很少的
+token，算力闲着，多验证几个草稿位置几乎不增加墙钟时间。batch
+变大后，矩阵乘已经吃满算力，再塞进一棵很宽的验证树，就要付真实的算力账——这就是“投机解码收益随
+batch 增大而消失”的工程原因。fal
+文把同一权衡说成：更大的树给验收更多备选，但也更贵；EAGLE-4 的 harness
+用 GPU 上测得的延迟表来管这个权衡。</p>
+<h3 id="公式期望收益-边际代价">公式：期望收益 ÷ 边际代价</h3>
+<p>论文 §3.1 把每一步都收成一次比较：</p>
+<p><code>ΔA / ΔC ≥ τ</code></p>
+<ul>
+<li><code>ΔA</code>：再多起草一层（或再多验证一个节点）时期望多接受的
+token 数。链上若每步接受率近似为 p，第 k 个草稿位置的边际收益是
+<code>p^k</code>（再加每轮必有的修正／bonus，见 P23.13 的
+<code>E[τ]</code>）。树上则用根到节点的草稿概率乘积当接受可能性（EAGLE-2
+风格）。</li>
+<li><code>ΔC</code>：在当前硬件、当前
+batch、当前上下文长度下，<strong>一次性测得</strong>的起草或验证耗时增量，查表得到。</li>
+<li><code>τ</code>：阈值；论文写明起草阈值随深度升高，因为深枝估计更不可靠。</li>
+</ul>
+<p>Algorithm 1（论文）每轮做三件事：① 每起草一层后看要不要再深一层；②
+按分数从高到低加验证节点，直到下一个节点不值它的验证代价；③
+读当前负载，轻载允许多分支、重载收成短链。同一套草稿权重，不改训练，只改这一轮的树／链形状。</p>
+<p>采样（温度 &gt; 0）时，若按本轮已抽出的 token
+决定何时停，会偏置目标分布；论文与 LightSeek
+文都写明：采样轮的深度要<strong>提前固定</strong>为上一轮代价准则本会停下的深度，再用树拒绝采样保持目标分布。贪心时输出与目标一致。本书仍只演示贪心。</p>
+<h3 id="cpu-玩具选-k再断言贪心验收不变">CPU 玩具：选
+k，再断言贪心验收不变</h3>
+<p><a
+href="code/24d_eagle4_cost.py"><code>../code/24d_eagle4_cost.py</code></a>
+把上面的比较收成<strong>链</strong>上的教学版（不是完整动态树，也不读真实
+GPU 表）：</p>
+<ol type="1">
+<li>给定接受率 p、单步起草代价 <code>c_d</code>、验证代价
+<code>c0 + c1·n</code>，用 <code>ΔA/ΔC ≥ τ</code> 选出草稿长度
+k；换一组模拟 batch（改大 <code>c1</code>）会看到选出的 k 变短，直到为
+0。</li>
+<li>用选出的 k 走本章未改动的
+<code>greedy_decode</code>，草稿即便乱写也会被纠正，输出与逐 token
+贪心逐 token 相同。</li>
+<li>低秩候选头：在词表 5000、<code>d=64</code> 上用 W 的截断 SVD 得到
+<code>A、B</code> 先打分、取 top-128，再只对候选行做完整
+<code>W h</code>；打印 top-1
+与全词表打分一致的比例，以及乘法次数对比。<strong>这是教学简化</strong>：论文把低秩头训练成检索器，报告
+rank-128 时候选里含全头 top-1 的比例为 98.2%（作者报告，未复现）。</li>
+</ol>
+<p>厂商报告的速度（不是本书测量）：LightSeek / TokenSpeed 文称
+Qwen3.8-27B BF16、4×B300 TP4、单请求 temperature=1 时 750
+tok/s，相对不投机 2.85×、相对模型自带 MTP 1.28×；agentic coding
+采样负载约 3.0×。论文 Fig.1 / Hugging Face 卡在 temperature=0 的
+SPEED-Bench 定性子集上报告 EAGLE-4 863.8 tok/s、3.59×（相对
+Vanilla）。两组设定不同，不要混成一个数。fal
+文说明已发布模型尚未包含多层草稿、MoE 草稿和 Latent ReLU。</p>
+<p>边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗
+4096 与词表 248320
+来自官方仓库文档／工具注释（<code>docs/known-limits.md</code>、<code>tools/bench_kernels.py</code>，提交
+<code>3b96ef6</code>）。与 DFlash
+对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。</p>
 <h2 id="资料版本与复现边界">资料版本与复现边界</h2>
 <p>核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。</p>
 <ul>
@@ -14561,6 +14695,31 @@ losses，arXiv:2602.23881</a>：K3 引用的原文，见 P23.14。</li>
 href="https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html">Nemotron
 3.5 Super 官方训练文档</a>（核验 2026-10-26）：共享 MTP 头与 Table 8
 引用值，厂商报告。</li>
+<li><a
+href="https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf">EAGLE-4：One
+Flexible Drafter for All Batch Sizes and Hardware</a>（Preprint PDF，无
+arXiv 号；仓库提交 <code>3b96ef6</code>，核验 2026-10-28）：§3.1
+代价模型与 Algorithm 1，§3.2 低秩候选头，§3.3 滑窗与只追加草稿
+KV；许可为源码可见。</li>
+<li><a href="https://arxiv.org/abs/2401.15077">EAGLE</a>、<a
+href="https://arxiv.org/abs/2406.16858">EAGLE-2</a>、<a
+href="https://arxiv.org/abs/2503.01840">EAGLE-3</a>：家族原文；EAGLE-4
+论文与 <code>CITATION.cff</code> 亦列出。</li>
+<li><a href="https://lightseek.org/blog/eagle-4.html">LightSeek /
+TokenSpeed：EAGLE-4 training and serving</a>（2026-10-20，核验
+2026-10-28）：750 tok/s 等厂商报告、Harness 树／链、Efficient LM
+Head、滑窗 4096。</li>
+<li><a
+href="https://blog.fal.ai/eagle-4-technical-deepdive/">fal：EAGLE-4
+Technical Deepdive</a>（2026-10-20，核验 2026-10-28）：batch 权衡、与
+DFlash/DSpark 对照；已发布模型不含多层／MoE／Latent ReLU。</li>
+<li>代码与权重：<a
+href="https://github.com/eagle-hq/EAGLE-4">eagle-hq/EAGLE-4</a>（<code>3b96ef6</code>）、<a
+href="https://pypi.org/project/eagle-harness/">PyPI
+eagle-harness</a>、<a
+href="https://huggingface.co/EAGLE-Corp/Qwen3.8-27B-EAGLE4">EAGLE-Corp/Qwen3.8-27B-EAGLE4</a>；本书实验见
+<a
+href="code/24d_eagle4_cost.py"><code>../code/24d_eagle4_cost.py</code></a>。</li>
 </ul>
 <hr />
 <h1 id="p24-quantization">训练与应用（P24）：量化与推理框架实战</h1>
