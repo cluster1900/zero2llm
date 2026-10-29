@@ -14658,8 +14658,140 @@ Vanilla）。两组设定不同，不要混成一个数。fal
 来自官方仓库文档／工具注释（<code>docs/known-limits.md</code>、<code>tools/bench_kernels.py</code>，提交
 <code>3b96ef6</code>）。与 DFlash
 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。</p>
+<h2 id="p23.16-flashmap">P23.16 延伸：FlashMap——用 flow map
+一次写出有块内依赖的草稿</h2>
+<p>P23.13 的 DFlash
+一次前向写出整块草稿，但<strong>块内各位置彼此独立</strong>；EAGLE
+系（含 P23.15 的 EAGLE-4）是<strong>自回归小草稿器</strong>，一步一个
+token。FlashMap 走第三条路：用 <strong>flow map
+语言模型</strong>从高斯噪声一步跳到整块
+token，在<strong>单次前向</strong>里保留块内依赖，再交给目标模型一次并行验证。</p>
+<p>先用一句话分清三个名词（本书不训练真实 flow）：</p>
+<ul>
+<li><strong>流（flow）</strong>：把“噪声”连续地搬到“数据”的一条 ODE；在
+token 上，数据是块内各位置的 one-hot。数值积分往往要几十上百步（论文称
+NFE，network function evaluations）。</li>
+<li><strong>Flow map</strong>：直接学习“从时间 s 跳到时间
+t”的算子，用<strong>一次</strong>网络评估代替多步积分；还可把几次短跳拼成
+2-step 等。</li>
+<li><strong>块内依赖</strong>：草稿 <code>"new york"</code>
+合理，<code>"new diego"</code>
+不合理。独立逐位置预测（DFlash）会按边缘分布出交叉组合；联合建模才能少出这种一眼假的块——这正是论文
+§6.2 shuffle 测试要量的东西。</li>
+</ul>
+<h3 id="对照eagle-dflash-flashmap">对照：EAGLE / DFlash / FlashMap</h3>
+<p>机制列以论文与官方仓库为准；加速倍数均为<strong>论文自报</strong>，本书未复现
+Qwen3-8B。</p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th></th>
+<th>EAGLE（自回归草稿）</th>
+<th>DFlash（块扩散草稿）</th>
+<th>FlashMap（flow map 草稿）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>草稿怎么产生</td>
+<td>轻量自回归草稿器，一步一个 token；读目标多层隐藏状态</td>
+<td>轻量块扩散：一次前向并行出整块（论文块长
+K=16）；位置彼此<strong>独立</strong></td>
+<td>条件 DiT 上的 flow map：从噪声一次（或少数次）跳到整块；块内
+self-attn <strong>保留依赖</strong></td>
+</tr>
+<tr>
+<td>目标信息怎么用</td>
+<td>融合目标若干层 hidden</td>
+<td>目标 hidden 注入草稿 K/V</td>
+<td>交叉注意力读目标若干层 hidden（论文取层
+1/9/17/25/33）；<strong>冻结</strong>目标 embedding 与 LM head</td>
+</tr>
+<tr>
+<td>每轮草稿代价</td>
+<td>与草稿长度成正比（逐步）</td>
+<td>约 1 次草稿前向</td>
+<td>默认 <strong>1 NFE</strong>；可选 <code>num_steps=2</code></td>
+</tr>
+<tr>
+<td>验收</td>
+<td>目标一次并行验证；贪心时输出 = 目标贪心</td>
+<td>同左</td>
+<td>同左（无损）</td>
+</tr>
+<tr>
+<td>论文自报（Qwen3-8B）</td>
+<td>EAGLE-3 作对照基线（同数据重训）</td>
+<td>同条件重训的块扩散基线</td>
+<td>1-step 在 GSM8K、T=0 上最高约 <strong>6.14×</strong>
+无损加速；九个基准上平均比同条件 DFlash 快约
+<strong>7.4%</strong>；附录有 Qwen3-4B</td>
+</tr>
+</tbody>
+</table></div>
+<p>来源：<a
+href="https://arxiv.org/abs/2610.24365">FlashMap，arXiv:2610.24365v1</a>（2026-10-17；Figure
+1(c)、§5、Table 1/2）；代码 <a
+href="https://github.com/al-jshen/flashmap/tree/cd5b45bdf19b1d81ee00bf4c2f212c7c0ed93ac6">al-jshen/flashmap@<code>cd5b45b</code></a>（MIT）；权重
+<a
+href="https://huggingface.co/j-shen/FlashMap-Qwen3-8B">j-shen/FlashMap-Qwen3-8B</a>
+/ <a
+href="https://huggingface.co/j-shen/FlashMap-Qwen3-4B">4B</a>（Apache-2.0）；项目页
+<a href="https://jshen.net/flashmap/">jshen.net/flashmap</a>。官方
+README 另接 SGLang（<code>DSPARK</code> 算法位）与 vLLM speculative
+config。</p>
+<h3
+id="训练两阶段只记结构不抄公式当实现">训练两阶段（只记结构，不抄公式当实现）</h3>
+<ol type="1">
+<li><strong>先训 flow</strong>：在 one-hot token 块上做连续流（Flow Map
+Language Models，<a
+href="https://arxiv.org/abs/2602.16813">arXiv:2602.16813</a>）；骨干是 6
+层条件 DiT（宽 2048、16 头），槽位损失权重
+<code>w_k = e^{-(k-1)/κ}</code>（论文 κ=7，K=16）。</li>
+<li><strong>再蒸馏成 flow map</strong>：把多步流蒸馏成两时间
+denoiser，使一次（或少数次）跳跃逼近积分；论文用 semigroup 蒸馏。1 NFE
+时联合结构只部分保留；<strong>2-step</strong> 能收回教师流大部分 shuffle
+Δ（§6.2）。</li>
+</ol>
+<h3 id="shuffle-测试分清边缘准和块内一致">Shuffle
+测试：分清“边缘准”和“块内一致”</h3>
+<p>论文 Table
+2（Qwen3-8B，T=0，<strong>论文自报</strong>）：同一套边缘分布下，比较“各槽共享噪声”与“各槽独立噪声”的接受长度，Δ
+= γ_shared − γ_shuffled。DFlash 无噪声联合、Δ=0；多步流 Δ 最大；FlashMap
+1-step Δ 很小，2-step
+接近多步教师。教学含义：<strong>只把每个位置的边缘分布拟合好，不等于草稿块本身讲得通</strong>。</p>
+<h3 id="cpu-玩具联合采样-vs-独立采样">CPU 玩具：联合采样 vs
+独立采样</h3>
+<p><a
+href="code/24e_flashmap_joint.py"><code>../code/24e_flashmap_joint.py</code></a>
+用论文 Fig.1(b) 的两模式直觉（<code>"new york"</code> /
+<code>"san diego"</code>）做最小离散玩具——<strong>不是</strong>
+DiT，也不加载官方权重：</p>
+<ol type="1">
+<li>联合草稿：先抽一个模式，再写出两个 token → 块内永远一致。</li>
+<li>独立草稿：两槽各自按边缘抽 → 会出现 <code>"new diego"</code>
+这类交叉组合，前缀接受长度更短。</li>
+<li>Shuffle 对照：独立按槽抽模式（边缘不变、联合被拆掉）→ Δ&gt;0，对应
+Table 2 的教学点。</li>
+<li>再用本章未改的 <code>greedy_decode</code>
+验收一个“整块联合”接口的草稿，断言输出与普通贪心逐 token
+相同（无损）。</li>
+</ol>
+<p>真实 FlashMap 需要 GPU 与目标模型权重；官方最小调用见仓库
+README（<code>draft.spec_generate(target, …, num_steps=1)</code>）。本书不下载
+Qwen3、不声称本机加速。</p>
+<p>路标（不必展开）：ReaDy（<a
+href="https://arxiv.org/abs/2610.20503">arXiv:2610.20503</a>）在混合线性注意力里用循环状态给
+DSpark 类草稿补上下文；与 FlashMap 正交。</p>
 <h2 id="资料版本与复现边界">资料版本与复现边界</h2>
-<p>核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。</p>
+<p>核验日期：2026-10-19；P23.16 资料核验
+2026-10-29。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。</p>
 <ul>
 <li><a
 href="https://arxiv.org/html/2501.12948v1">DeepSeek-R1，arXiv:2501.12948v1</a>：§2.2–2.4，Zero／冷启动／RL／数据筛选／SFT／蒸馏的区别。</li>
@@ -14720,6 +14852,23 @@ eagle-harness</a>、<a
 href="https://huggingface.co/EAGLE-Corp/Qwen3.8-27B-EAGLE4">EAGLE-Corp/Qwen3.8-27B-EAGLE4</a>；本书实验见
 <a
 href="code/24d_eagle4_cost.py"><code>../code/24d_eagle4_cost.py</code></a>。</li>
+<li><a
+href="https://arxiv.org/abs/2610.24365">FlashMap，arXiv:2610.24365v1</a>（2026-10-17，核验
+2026-10-29）：§3 flow / flow map 草稿与蒸馏，§5–6 与 Figure 1(c)/Table
+1/2 数字，§6.2 shuffle 测试；见 P23.16。</li>
+<li><a href="https://arxiv.org/abs/2602.16813">Flow Map Language
+Models，arXiv:2602.16813</a>：FlashMap 所蒸馏的 continuous flow
+骨架。</li>
+<li>代码与权重：<a
+href="https://github.com/al-jshen/flashmap">al-jshen/flashmap</a>（提交
+<code>cd5b45bdf19b1d81ee00bf4c2f212c7c0ed93ac6</code>，MIT）、<a
+href="https://huggingface.co/j-shen/FlashMap-Qwen3-8B">j-shen/FlashMap-Qwen3-8B</a>、<a
+href="https://huggingface.co/j-shen/FlashMap-Qwen3-4B">j-shen/FlashMap-Qwen3-4B</a>（Apache-2.0）；项目页
+<a href="https://jshen.net/flashmap/">jshen.net/flashmap</a>；本书实验见
+<a
+href="code/24e_flashmap_joint.py"><code>../code/24e_flashmap_joint.py</code></a>。</li>
+<li>路标：<a
+href="https://arxiv.org/abs/2610.20503">ReaDy，arXiv:2610.20503</a>（混合线性注意力循环状态服务草稿；不必展开）。</li>
 </ul>
 <hr />
 <h1 id="p24-quantization">训练与应用（P24）：量化与推理框架实战</h1>
