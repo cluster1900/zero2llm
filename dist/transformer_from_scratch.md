@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-10-28
+% 2026-10-29
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -7652,9 +7652,55 @@ Algorithm 1（论文）每轮做三件事：① 每起草一层后看要不要�
 
 边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗 4096 与词表 248320 来自官方仓库文档／工具注释（`docs/known-limits.md`、`tools/bench_kernels.py`，提交 `3b96ef6`）。与 DFlash 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。
 
+## P23.16 延伸：FlashMap——用 flow map 一次写出有块内依赖的草稿 {#p23.16-flashmap}
+
+P23.13 的 DFlash 一次前向写出整块草稿，但**块内各位置彼此独立**；EAGLE 系（含 P23.15 的 EAGLE-4）是**自回归小草稿器**，一步一个 token。FlashMap 走第三条路：用 **flow map 语言模型**从高斯噪声一步跳到整块 token，在**单次前向**里保留块内依赖，再交给目标模型一次并行验证。
+
+先用一句话分清三个名词（本书不训练真实 flow）：
+
+- **流（flow）**：把“噪声”连续地搬到“数据”的一条 ODE；在 token 上，数据是块内各位置的 one-hot。数值积分往往要几十上百步（论文称 NFE，network function evaluations）。
+- **Flow map**：直接学习“从时间 s 跳到时间 t”的算子，用**一次**网络评估代替多步积分；还可把几次短跳拼成 2-step 等。
+- **块内依赖**：草稿 `"new york"` 合理，`"new diego"` 不合理。独立逐位置预测（DFlash）会按边缘分布出交叉组合；联合建模才能少出这种一眼假的块——这正是论文 §6.2 shuffle 测试要量的东西。
+
+### 对照：EAGLE / DFlash / FlashMap
+
+机制列以论文与官方仓库为准；加速倍数均为**论文自报**，本书未复现 Qwen3-8B。
+
+| | EAGLE（自回归草稿） | DFlash（块扩散草稿） | FlashMap（flow map 草稿） |
+|---|---|---|---|
+| 草稿怎么产生 | 轻量自回归草稿器，一步一个 token；读目标多层隐藏状态 | 轻量块扩散：一次前向并行出整块（论文块长 K=16）；位置彼此**独立** | 条件 DiT 上的 flow map：从噪声一次（或少数次）跳到整块；块内 self-attn **保留依赖** |
+| 目标信息怎么用 | 融合目标若干层 hidden | 目标 hidden 注入草稿 K/V | 交叉注意力读目标若干层 hidden（论文取层 1/9/17/25/33）；**冻结**目标 embedding 与 LM head |
+| 每轮草稿代价 | 与草稿长度成正比（逐步） | 约 1 次草稿前向 | 默认 **1 NFE**；可选 `num_steps=2` |
+| 验收 | 目标一次并行验证；贪心时输出 = 目标贪心 | 同左 | 同左（无损） |
+| 论文自报（Qwen3-8B） | EAGLE-3 作对照基线（同数据重训） | 同条件重训的块扩散基线 | 1-step 在 GSM8K、T=0 上最高约 **6.14×** 无损加速；九个基准上平均比同条件 DFlash 快约 **7.4%**；附录有 Qwen3-4B |
+
+来源：[FlashMap，arXiv:2610.24365v1](https://arxiv.org/abs/2610.24365)（2026-10-17；Figure 1(c)、§5、Table 1/2）；代码 [al-jshen/flashmap@`cd5b45b`](https://github.com/al-jshen/flashmap/tree/cd5b45bdf19b1d81ee00bf4c2f212c7c0ed93ac6)（MIT）；权重 [j-shen/FlashMap-Qwen3-8B](https://huggingface.co/j-shen/FlashMap-Qwen3-8B) / [4B](https://huggingface.co/j-shen/FlashMap-Qwen3-4B)（Apache-2.0）；项目页 [jshen.net/flashmap](https://jshen.net/flashmap/)。官方 README 另接 SGLang（`DSPARK` 算法位）与 vLLM speculative config。
+
+### 训练两阶段（只记结构，不抄公式当实现）
+
+1. **先训 flow**：在 one-hot token 块上做连续流（Flow Map Language Models，[arXiv:2602.16813](https://arxiv.org/abs/2602.16813)）；骨干是 6 层条件 DiT（宽 2048、16 头），槽位损失权重 `w_k = e^{-(k-1)/κ}`（论文 κ=7，K=16）。
+2. **再蒸馏成 flow map**：把多步流蒸馏成两时间 denoiser，使一次（或少数次）跳跃逼近积分；论文用 semigroup 蒸馏。1 NFE 时联合结构只部分保留；**2-step** 能收回教师流大部分 shuffle Δ（§6.2）。
+
+### Shuffle 测试：分清“边缘准”和“块内一致”
+
+论文 Table 2（Qwen3-8B，T=0，**论文自报**）：同一套边缘分布下，比较“各槽共享噪声”与“各槽独立噪声”的接受长度，Δ = γ_shared − γ_shuffled。DFlash 无噪声联合、Δ=0；多步流 Δ 最大；FlashMap 1-step Δ 很小，2-step 接近多步教师。教学含义：**只把每个位置的边缘分布拟合好，不等于草稿块本身讲得通**。
+
+### CPU 玩具：联合采样 vs 独立采样
+
+[`../code/24e_flashmap_joint.py`](../code/24e_flashmap_joint.py) 用论文 Fig.1(b) 的两模式直觉（`"new york"` / `"san diego"`）做最小离散玩具——**不是** DiT，也不加载官方权重：
+
+1. 联合草稿：先抽一个模式，再写出两个 token → 块内永远一致。
+2. 独立草稿：两槽各自按边缘抽 → 会出现 `"new diego"` 这类交叉组合，前缀接受长度更短。
+3. Shuffle 对照：独立按槽抽模式（边缘不变、联合被拆掉）→ Δ>0，对应 Table 2 的教学点。
+4. 再用本章未改的 `greedy_decode` 验收一个“整块联合”接口的草稿，断言输出与普通贪心逐 token 相同（无损）。
+
+真实 FlashMap 需要 GPU 与目标模型权重；官方最小调用见仓库 README（`draft.spec_generate(target, …, num_steps=1)`）。本书不下载 Qwen3、不声称本机加速。
+
+路标（不必展开）：ReaDy（[arXiv:2610.20503](https://arxiv.org/abs/2610.20503)）在混合线性注意力里用循环状态给 DSpark 类草稿补上下文；与 FlashMap 正交。
+
 ## 资料版本与复现边界
 
-核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
+核验日期：2026-10-19；P23.16 资料核验 2026-10-29。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
 
 - [DeepSeek-R1，arXiv:2501.12948v1](https://arxiv.org/html/2501.12948v1)：§2.2–2.4，Zero／冷启动／RL／数据筛选／SFT／蒸馏的区别。
 - [DeepSeek-V3 Technical Report，arXiv:2412.19437v2](https://arxiv.org/html/2412.19437v2)：§2.2，串行 MTP 模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。
@@ -7671,6 +7717,10 @@ Algorithm 1（论文）每轮做三件事：① 每起草一层后看要不要�
 - [LightSeek / TokenSpeed：EAGLE-4 training and serving](https://lightseek.org/blog/eagle-4.html)（2026-10-20，核验 2026-10-28）：750 tok/s 等厂商报告、Harness 树／链、Efficient LM Head、滑窗 4096。
 - [fal：EAGLE-4 Technical Deepdive](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20，核验 2026-10-28）：batch 权衡、与 DFlash/DSpark 对照；已发布模型不含多层／MoE／Latent ReLU。
 - 代码与权重：[eagle-hq/EAGLE-4](https://github.com/eagle-hq/EAGLE-4)（`3b96ef6`）、[PyPI eagle-harness](https://pypi.org/project/eagle-harness/)、[EAGLE-Corp/Qwen3.8-27B-EAGLE4](https://huggingface.co/EAGLE-Corp/Qwen3.8-27B-EAGLE4)；本书实验见 [`../code/24d_eagle4_cost.py`](../code/24d_eagle4_cost.py)。
+- [FlashMap，arXiv:2610.24365v1](https://arxiv.org/abs/2610.24365)（2026-10-17，核验 2026-10-29）：§3 flow / flow map 草稿与蒸馏，§5–6 与 Figure 1(c)/Table 1/2 数字，§6.2 shuffle 测试；见 P23.16。
+- [Flow Map Language Models，arXiv:2602.16813](https://arxiv.org/abs/2602.16813)：FlashMap 所蒸馏的 continuous flow 骨架。
+- 代码与权重：[al-jshen/flashmap](https://github.com/al-jshen/flashmap)（提交 `cd5b45bdf19b1d81ee00bf4c2f212c7c0ed93ac6`，MIT）、[j-shen/FlashMap-Qwen3-8B](https://huggingface.co/j-shen/FlashMap-Qwen3-8B)、[j-shen/FlashMap-Qwen3-4B](https://huggingface.co/j-shen/FlashMap-Qwen3-4B)（Apache-2.0）；项目页 [jshen.net/flashmap](https://jshen.net/flashmap/)；本书实验见 [`../code/24e_flashmap_joint.py`](../code/24e_flashmap_joint.py)。
+- 路标：[ReaDy，arXiv:2610.20503](https://arxiv.org/abs/2610.20503)（混合线性注意力循环状态服务草稿；不必展开）。
 
 
 ---
