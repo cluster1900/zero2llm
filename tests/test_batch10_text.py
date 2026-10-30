@@ -53,7 +53,6 @@ _P25_PINNED_README = (
 _P25_PINNED_TOKENIZER = (
     f"https://huggingface.co/Qwen/Qwen3-0.6B/blob/{_P25_PINNED_REV}/tokenizer_config.json"
 )
-_P25_TOKENIZER_MD_LINK = f"；[固定模板]({_P25_PINNED_TOKENIZER})"
 
 # review 给出的必须失败句中、main 本身就能抓住的代表（第 4–6 轮回归 + 各豁免类一例）；全部由 main 的正则拦截
 _P25_MUST_FAIL = (
@@ -103,6 +102,20 @@ def _drop_sentences_matching(text, pattern):
     if tail and not pattern.search(tail):
         kept.append(tail)
     return "".join(kept)
+
+
+def _drop_exercise_sentences(text):
+    return _drop_sentences_matching(text, _P25_EXERCISE)
+
+
+_P25_TOKENIZER_LINK_RE = re.compile(
+    r"\[[^\]]*\]\(" + re.escape(_P25_PINNED_TOKENIZER) + r"\)"
+)
+
+
+def _drop_tokenizer_link(text):
+    # 按 URL 删：先删 markdown 链接（任意链接文字），再删残留的裸 URL
+    return _P25_TOKENIZER_LINK_RE.sub("", text).replace(_P25_PINNED_TOKENIZER, "")
 
 
 def _contrast_paragraphs(text):
@@ -207,9 +220,9 @@ class FinalBatchTextTests(unittest.TestCase):
         # C  已删：依赖 extra 规则抓「官方口径是个 bug。」；现为文档化漏报
         # D  去掉含「官方」的句子                                        D  D（额外）
         # E  对照段后另起一段「官方的最后闭合解析其实错了。」            E  评审原 E
-        # F  去掉练习句                                                  F  F（额外）
+        # F  删掉匹配 _P25_EXERCISE 的句子                               F  F（额外）
         # G  删掉对照段里含 chat template 的整句                         G  新增（旧 G 现为 H）
-        # H  删掉 tokenizer_config 固定链接                              H  旧 G
+        # H  按 URL 正则删掉 tokenizer_config 链接，不依赖链接文字/分隔符  H  旧 G
         # X1 对照段 chat template → 模板                                 X1 旧 E
         # X2 固定 revision → main                                        X2 旧 H
         mutations = (
@@ -233,7 +246,7 @@ class FinalBatchTextTests(unittest.TestCase):
             ),
             (
                 "F_drop_exercise_sentences",
-                _drop_sentences_matching(section, re.compile(r"练习|教学")),
+                _drop_exercise_sentences(section),
             ),
             (
                 "G_drop_chat_template_sentence",
@@ -244,8 +257,8 @@ class FinalBatchTextTests(unittest.TestCase):
                 ),
             ),
             (
-                "H_drop_tokenizer_config_link",
-                section.replace(_P25_TOKENIZER_MD_LINK, "", 1),
+                "H_drop_tokenizer_link",
+                _drop_tokenizer_link(section),
             ),
             (
                 "X1_no_chat_template_in_contrast",
@@ -259,6 +272,53 @@ class FinalBatchTextTests(unittest.TestCase):
         for name, mutated in mutations:
             with self.subTest(mutation=name):
                 self.assertNotEqual(mutated, section)
+                with self.assertRaises(AssertionError):
+                    assert_contract(mutated)
+
+        # r7: F/H were no-ops on legitimate rewordings (PR FAIL, main PASS).
+        def _insert_before_trailing_period(text, extra):
+            if text.endswith("。"):
+                return text[:-1] + extra + "。"
+            return text + extra
+
+        for name, new_contrast in (
+            ("本章_wording", re.sub(r"本?(?:教学)?练习|教学", "本章", contrast)),
+            ("本书_wording", re.sub(r"本?(?:教学)?练习|教学", "本书", contrast)),
+            (
+                "mixed_教学_本章",
+                "注意教学约定和官方做法的区别。官方模型卡采用最后一个闭合位置切分；"
+                "chat template 则 reasoning 取首个 `</think>` 前、content 取最后一个后。"
+                "本章为了在一条序列里记账，约定使用首闭合。"
+                + f"[固定模型卡]({_P25_PINNED_README})；[固定模板]({_P25_PINNED_TOKENIZER})。",
+            ),
+        ):
+            with self.subTest(variant=name):
+                # 不断言 variant != section：正文若已采用该措辞，变体即为原文
+                variant_section = section.replace(contrast, new_contrast, 1)
+                assert_contract(variant_section)
+                mutated = _drop_exercise_sentences(variant_section)
+                self.assertNotEqual(mutated, variant_section)
+                with self.assertRaises(AssertionError):
+                    assert_contract(mutated)
+
+        # 在整节上删链接（链接不一定在对照段里），再把新形式的链接放回对照段末
+        section_wo = _drop_tokenizer_link(section)
+        contrast_wo = _comparison_paragraph(section_wo)
+        self.assertIsNotNone(contrast_wo)
+        # 去掉链接后留下的分隔符（如「；。」），使变体与 review 的改写一致
+        base = re.sub(r"[；，、\s]+。$", "。", contrast_wo)
+        for name, extra in (
+            ("link_label", f"；[固定 tokenizer 配置]({_P25_PINNED_TOKENIZER})"),
+            ("link_sep", f"，[固定模板]({_P25_PINNED_TOKENIZER})"),
+            ("link_and", f" 与 [固定模板]({_P25_PINNED_TOKENIZER})"),
+        ):
+            with self.subTest(variant=name):
+                new_contrast = _insert_before_trailing_period(base, extra)
+                variant_section = section_wo.replace(contrast_wo, new_contrast, 1)
+                assert_contract(variant_section)
+                mutated = _drop_tokenizer_link(variant_section)
+                self.assertNotEqual(mutated, variant_section)
+                self.assertNotIn(_P25_PINNED_TOKENIZER, mutated)
                 with self.assertRaises(AssertionError):
                     assert_contract(mutated)
 
