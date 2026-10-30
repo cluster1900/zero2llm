@@ -14,36 +14,29 @@ _P25_OFFICIAL = re.compile(r"官方.{0,12}(模型卡|模板|template|解析|做�
 _P25_EXERCISE = re.compile(r"(练习|教学|本章|本书).{0,16}(选择|约定|选|口径)")
 _P25_FIRST_CLOSE = re.compile(r"(首|第一个).{0,12}(闭合|</think>)")
 _P25_LAST_CLOSE = re.compile(r"(最后|末|last).{0,12}(闭合|</think>)")
-# 主语必须是官方做法本身；后面可叠模型卡/模板/口径等，谓词要直接贴着。
-_P25_SUBJ = r"官方(?:的)?(?:(?:模型卡|chat template|模板|template|解析|做法|口径|写法|实现|规则|设计|约定|方案|示例)(?:的)?)*"
-_P25_LINK = r"(?:本身|其实|确实|实际上|显然|明显|根本|完全|就|也|都|并|是|算|属于|一个|一种|个|\s)*"
-_P25_NEG_INFIX = r"(?:并非|不是|不算|不代表|没有|没|无|不存在)"
-# 错误谓词含 paraphrase（缺陷 / 不妥 / 失误 / 谬误 / bug …）；bug 不区分大小写。
-# 「不错」「交错」「错开」「错落」不当作错误谓词。
+# 错误谓词按最长优先；裸「错」在匹配后再排除「不错/交错/错开/错落」。
 _P25_WRONG_PRED = re.compile(
-    r"存在缺陷|有缺陷|缺陷|不正确|不准确|不妥|有问题|不可靠|有误|不对|搞错了?|出错|失误|谬误|错误|错了|错的|(?<![不交])错(?![开落])|bug",
+    r"存在缺陷|有缺陷|缺陷|不正确|不准确|不妥|有问题|不可靠|有误|不对|搞错了?|出错|失误|谬误|错误|错了|错的|错|bug",
     re.I,
 )
-# 分句内：官方主语 + 可选连接 + 可选中缀否定 + 连接 + 错误谓词。
-# 谓词必须成组，否则交替项会脱离主语单独匹配。
-_P25_OFFICIAL_WRONG_CLAUSE = re.compile(
-    _P25_SUBJ
-    + _P25_LINK
-    + r"(?P<neg>"
-    + _P25_NEG_INFIX
-    + r")?"
-    + _P25_LINK
-    + r"(?:"
-    + _P25_WRONG_PRED.pattern
-    + r")",
-    re.I,
-)
-# 「官方」之前的前缀否定才豁免；「无」必须紧贴「官方」，故「毫无疑问官方…」不豁免。
+# 紧贴谓词的中缀否定。「无疑」以「疑」收尾，不会误中「无$」。
+_P25_INFIX_NEG = re.compile(r"(?:并非|不是|不算|并没有|也没有|没有|没|不存在|无)$")
+# 双重否定贴在谓词前：不是/并非 + 没有/没/不，不得豁免。
+_P25_DOUBLE_NEG = re.compile(r"(?:不是|并非)(?:没有|没|不)$")
+# 「没错才怪 / 错了才怪 / 错的才怪」：谓词后紧跟才怪，仍算在说官方错。
+_P25_CAI_GUAI = re.compile(r"^(?:的|了)?才怪")
+# 「官方」正前方的前缀否定才豁免。
 _P25_PREFIX_NEG = re.compile(
-    r"(?:并非|不是|不算|不代表|没有|没|无须|无需|无|不存在|不能说|不能认为|并不意味着|不意味着)(?:说|认为|是)?\s*$"
+    r"(?:不能说|不能认为|无须认为|无需认为|不代表|并不意味着|不意味着|不是说|并非说)$"
 )
-# NFKC 后全角逗号/分号等会变 ASCII，分句仍同时接受两种字形。
-_P25_CLAUSE_SEP = re.compile(r"[，,；;：:、！!？?\n]")
+# 出错且描述读者自己的实现/计数时：谓词前的情态。
+_P25_CHUCUO_MODAL = re.compile(r"(?:容易|会|可能|就会|也会|将会|易)$")
+# 上述出错规则：该「官方」正前方须是按/若把等实现或条件标记。
+_P25_IMPL_MARKER = re.compile(r"(?:按|按照|依照|照|若把|如果把|若按|如果按|把)$")
+# 只按句末标点切分；半角 '.' 仅在英文句末（字母/数字/右括号后接空格+大写）。
+_P25_SENT_END = re.compile(r"[。！？!?]|(?<=[A-Za-z0-9)])\.(?=\s+[A-Z])")
+_P25_BARE_CUO_LEFT = frozenset({"不错", "交错"})
+_P25_BARE_CUO_RIGHT = frozenset({"错开", "错落"})
 
 _P25_PINNED_REV = "c1899de289a04d12100db370d81485cdf75e47ca"
 _P25_PINNED_README = (
@@ -69,6 +62,22 @@ _P25_WRONG_PARAPHRASES = (
     "官方模板是一种失误。",
     "官方口径属于谬误。",
     "毫无疑问官方做法是错的。",
+    "官方的最后闭合解析其实错了。",
+    "官方模型卡的说明有误。",
+    "官方给出的做法是错的。",
+    "官方的最后闭合口径错了。",
+    "官方模型卡采用最后闭合是错误的。",
+    "官方的做法实在是错的。",
+    "官方做法不是小事，它是错的。",
+    "官方口径；错误。",
+    "官方做法，其实是错的。",
+    "官方做法. 它是错的.",
+    "官方做法无疑是错误的。",
+    "官方做法无疑有误。",
+    "官方做法不是没有错。",
+    "官方做法没错才怪。",
+    "官方做法不是不对，而是完全错误。",
+    "官方解析交错误。",
 )
 _P25_ALLOWED_NEGATIONS = (
     "官方模型卡的做法并非错误。",
@@ -82,6 +91,14 @@ _P25_ALLOWED_NEGATIONS = (
     "无须认为官方有问题。",
     "按官方口径实现时，手写解析容易出错。",
     "这不代表官方做法有误。",
+    "官方做法也没有错。",
+    "官方口径并没有错。",
+    "不能认为官方模板有误。",
+    "官方口径与本练习不同，但并非错误。",
+    "官方做法没有问题。",
+    "若把官方口径套到本练习，计数会出错。",
+    "官方模型卡的示例不存在错误。",
+    "官方解析并非不可靠。",
 )
 
 
@@ -90,12 +107,19 @@ def _md_paragraphs(text):
 
 
 def _iter_sentences(text):
-    """整节每个段落、每个以。！!？?切出的句子，以及段末没有句末标点的残句。"""
+    """整节每个段落、每个以句末标点切出的句子，以及段末没有句末标点的残句。
+
+    只按 。！？!? 以及英文句末半角 '.' 切分，不按逗号/分号/冒号。
+    半角点须满足「字母/数字/右括号后接空格+大写」，因此 Qwen3-0.6B、URL、
+    「官方做法. 它是错的.」都不会被切开。空行分段也分隔句子。
+    """
     text = unicodedata.normalize("NFKC", text)
     for para in _md_paragraphs(text):
         last = 0
-        for m in re.finditer(r"[^。！!?？]*[。！!?？]", para):
-            yield m.group(0)
+        for m in _P25_SENT_END.finditer(para):
+            sent = para[last:m.end()].strip()
+            if sent:
+                yield sent
             last = m.end()
         tail = para[last:].strip()
         if tail:
@@ -116,29 +140,62 @@ def _drop_sentences_matching(text, pattern):
 
 
 # 已知局限：
-# - 跨句绕过，如「官方做法如下。它是错的。」主语与谓词不在同一句。
-# - 不写「官方」的绕过，如「模型卡的做法是错的。」
-# - 主语形式超出 SUBJ，如「官方给出的做法是错的」。
-# 主线同款正则也抓不住前两条。
+# - 跨句：「官方做法如下。它是错的。」主语与谓词跨句号不被关联；
+# - 不写「官方」：「模型卡的做法是错的。」；
+# - 英文 wrong/incorrect 不在谓词表（仅 bug）；
+# - 「并非正确」「不是对的」这类否定正面词表达错误，不被识别；
+# - 分句局限：只按句末标点切分，半角 '.' 仅在英文句末（字母/数字后接空格+大写）才切；谓词必须出现在「官方」之后，「错的是官方做法」不被识别；
+# - 中缀否定豁免局限：只看紧贴谓词的那个否定词（并非/不是/不算/没有/没/不存在/无），
+#   不做句法分析。「官方做法没有被证明是错的」中否定不贴邻，会被判为错误（误报方向）；
+#   反过来「官方做法不是错的，是一个 bug」之类，前半豁免、后半 bug 仍会抓到，
+#   但若错误判断只以紧贴否定的形式出现（如反问「官方做法难道没错？」）会被豁免（漏报方向）。
+# - 「出错」不同主语规则很窄：只覆盖「按/若把…官方…，…容易/会出错」句式，且要求中间有逗号。
+# - main 的正则同样抓不住前两条。
 def _unnegated_official_wrong_sentences(text):
-    """各分句上：主语是官方做法本身、错误谓词未被中缀或前缀否定。"""
+    """各句上：谓词前最近的「官方」未被前缀/中缀否定，且不是「按官方…，…出错」。"""
     text = unicodedata.normalize("NFKC", text)
     hits = []
     for sent in _iter_sentences(text):
         if "官方" not in sent:
             continue
         flagged = False
-        for clause in _P25_CLAUSE_SEP.split(sent):
-            for m in _P25_OFFICIAL_WRONG_CLAUSE.finditer(clause):
-                if m.group("neg"):
+        for m in _P25_WRONG_PRED.finditer(sent):
+            pred = m.group(0)
+            i = m.start()
+            # 裸「错」：整词「不错/交错/错开/错落」不当错误谓词；更长谓词从不跳过。
+            if pred == "错":
+                if (
+                    sent[i - 1 : i + 1] in _P25_BARE_CUO_LEFT
+                    or sent[i : i + 2] in _P25_BARE_CUO_RIGHT
+                ):
                     continue
-                # 匹配从「官方」起；其前的前缀否定才豁免。
-                if _P25_PREFIX_NEG.search(clause[: m.start()]):
+            pos = sent.rfind("官方", 0, i)
+            if pos < 0:
+                continue
+            before = sent[:i]
+            # 中缀否定紧贴谓词则豁免；双重否定、「才怪」不豁免。
+            # 「无疑」以「疑」收尾，不会误中「无$」。
+            # 「并非不可靠」：谓词是「不可靠」，before 以「并非」结尾，按中缀豁免，不是双重否定。
+            if _P25_INFIX_NEG.search(before):
+                if not _P25_DOUBLE_NEG.search(before) and not _P25_CAI_GUAI.match(
+                    sent[m.end() :]
+                ):
                     continue
-                flagged = True
-                break
-            if flagged:
-                break
+            # 「官方」正前方的前缀否定才豁免。
+            if _P25_PREFIX_NEG.search(sent[:pos]):
+                continue
+            # 出错的不同主语：按/若把…官方…，…容易/会出错 → 出错说的是读者实现/计数，不是官方做法。
+            # 例：「按官方口径实现时，手写解析容易出错」「若把官方口径套到本练习，计数会出错」。
+            if (
+                pred == "出错"
+                and _P25_CHUCUO_MODAL.search(before)
+                and _P25_IMPL_MARKER.search(sent[:pos])
+            ):
+                between = sent[pos + len("官方") : i]
+                if "，" in between or "," in between:
+                    continue
+            flagged = True
+            break
         if flagged:
             hits.append(sent)
     return hits
@@ -216,7 +273,7 @@ class FinalBatchTextTests(unittest.TestCase):
         # B  同句无关否定：对照段追加「这不是小问题：官方…错误的。」    B  B
         # C  bug 改写：首个正文段追加「官方口径是个 bug。」              C  C
         # D  去掉含「官方」的句子                                        D  D（额外）
-        # E  对照段后另起一段「官方模型卡的做法错了。」                  E  新增（旧 E 现为 X1）
+        # E  对照段后另起一段「官方的最后闭合解析其实错了。」            E  评审原 E
         # F  去掉练习句                                                  F  F（额外）
         # G  删掉对照段里含 chat template 的整句                         G  新增（旧 G 现为 H）
         # H  删掉 tokenizer_config 固定链接                              H  旧 G
@@ -243,7 +300,7 @@ class FinalBatchTextTests(unittest.TestCase):
             ),
             (
                 "E_standalone_wrong_paragraph",
-                section.replace(contrast, contrast + "\n\n官方模型卡的做法错了。\n\n", 1),
+                section.replace(contrast, contrast + "\n\n官方的最后闭合解析其实错了。\n\n", 1),
             ),
             (
                 "F_drop_exercise_sentences",
