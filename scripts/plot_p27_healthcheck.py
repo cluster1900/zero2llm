@@ -50,6 +50,7 @@ def _report(path: Path) -> dict:
             raise ValueError("each negative control needs a name")
         if not isinstance(row.get("caught"), bool) or not row["caught"]:
             raise ValueError(f"negative control {row.get('name')} was not caught")
+        _finite(row.get("before_error"), f"negative {row.get('name')}.before_error")
         _finite(row.get("max_logit_error", row.get("after_error")),
                 f"negative {row.get('name')}.max_logit_error")
     timing = report.get("timing", {}).get("milliseconds")
@@ -78,6 +79,58 @@ def _stats(value: object, label: str) -> tuple[float, float, float]:
                 _finite(value.get("max"), f"{label}.max"))
     number = _finite(value, label)
     return number, number, number
+
+
+def _nice_linear_axis(data_max: float, min_ticks: int = 5, max_ticks: int = 6) -> tuple[float, list[float]]:
+    """Nice axis maximum ≥ data max and 5–6 evenly spaced ticks from 0 to that max."""
+    data_max = max(float(data_max), 1e-12)
+    candidates: list[tuple[float, int, list[float]]] = []
+    for count in range(min_ticks, max_ticks + 1):
+        intervals = count - 1
+        raw = data_max / intervals
+        exponent = math.floor(math.log10(raw))
+        for magnitude in (exponent, exponent + 1):
+            unit = 10 ** magnitude
+            for nice in (1.0, 1.5, 2.0, 2.5, 5.0, 10.0):
+                step = nice * unit
+                axis_max = step * intervals
+                if axis_max + 1e-12 >= data_max:
+                    ticks = [round(step * index, 12) for index in range(count)]
+                    candidates.append((axis_max, -count, ticks))
+    if not candidates:
+        axis_max = max(data_max, 1.0)
+        return axis_max, [axis_max * index / 5 for index in range(6)]
+    candidates.sort()
+    axis_max, _, ticks = candidates[0]
+    return axis_max, ticks
+
+
+def _format_tick(value: float) -> str:
+    if abs(value) < 1e-15:
+        return "0"
+    return f"{value:.12g}"
+
+
+def _draw_linear_y_ticks(svg: list[str], left: int, top: int, right: int, bottom: int,
+                         axis_max: float, ticks: Iterable[float]) -> None:
+    span = bottom - top
+    for value in ticks:
+        number = float(value)
+        y = bottom if axis_max == 0 else bottom - number / axis_max * span
+        svg.append(f'<line x1="{left}" y1="{y:.1f}" x2="{right}" y2="{y:.1f}" stroke="#eee"/>')
+        svg.append(f'<line x1="{left-5}" y1="{y:.1f}" x2="{left}" y2="{y:.1f}" stroke="#222"/>')
+        svg.append(
+            f'<text x="{left-8}" y="{y + 4:.1f}" text-anchor="end" font-size="11" '
+            f'data-role="y-tick" data-tick-value="{number:.12g}">{_format_tick(number)}</text>'
+        )
+
+
+def _timing_label_position(whisker_x: float, bar_top: float, series_index: int, text: str,
+                           font_size: float = 10) -> tuple[float, float]:
+    """Place a median label beside the bar, clear of the 6px whisker caps."""
+    half = len(text) * font_size * 0.3
+    side = -1.0 if series_index == 0 else 1.0
+    return whisker_x + side * (6 + 10 + half), bar_top
 
 
 def _svg_start(title: str, width: int = 960, height: int = 460) -> list[str]:
@@ -161,16 +214,21 @@ def _render_error_chart(report: dict, output: Path) -> None:
 def _render_negative_chart(report: dict, output: Path) -> None:
     rows = report["negatives"]
     left, top, right, bottom = 90, 70, 900, 355
-    maximum = max(_finite(row.get("max_logit_error", row.get("after_error")),
-                          f"negative {row['name']}") for row in rows)
-    maximum = max(maximum, 1.0)
+    data_max = max(
+        max(_finite(row.get("max_logit_error", row.get("after_error")),
+                    f"negative {row['name']}"),
+            _finite(row.get("before_error"), f"negative {row['name']}.before_error"))
+        for row in rows
+    )
+    maximum, ticks = _nice_linear_axis(data_max)
     svg = _svg_start("P27 negative controls: before and after")
     _axis(svg, left, top, right, bottom, "P27 negative controls: alarm error", "max absolute logit error")
+    _draw_linear_y_ticks(svg, left, top, right, bottom, maximum, ticks)
     group_width = (right - left) / len(rows)
     bar_width = min(34.0, group_width / 3.2)
     for index, row in enumerate(rows):
         name = str(row["name"])
-        before = _finite(row.get("before_error", 0.0), f"negative {name}.before_error")
+        before = _finite(row.get("before_error"), f"negative {name}.before_error")
         after = _finite(row.get("after_error", row.get("max_logit_error")),
                         f"negative {name}.after_error")
         center = left + group_width * (index + 0.5)
@@ -182,8 +240,12 @@ def _render_negative_chart(report: dict, output: Path) -> None:
             svg.append(f'<rect x="{x:.1f}" y="{bottom-height:.1f}" width="{bar_width:.1f}" '
                        f'height="{height:.1f}" fill="{color}" data-control="{_esc(name)}" '
                        f'data-phase="{label}" data-value="{value:.12g}"/>')
-            svg.append(f'<text x="{x+bar_width/2:.1f}" y="{bottom-height-6:.1f}" text-anchor="middle" '
-                       f'font-size="10">{value:.4g}</text>')
+            if value == 0:
+                svg.append(f'<text x="{x+bar_width/2:.1f}" y="{bottom-8}" text-anchor="middle" '
+                           f'font-size="10">0</text>')
+            else:
+                svg.append(f'<text x="{x+bar_width/2:.1f}" y="{bottom-height-6:.1f}" text-anchor="middle" '
+                           f'font-size="10">{value:.4g}</text>')
     svg.extend([
         f'<rect x="{left}" y="390" width="14" height="14" fill="#90a4ae"/>'
         f'<text x="{left+20}" y="402" font-size="12">before</text>',
@@ -198,11 +260,12 @@ def _render_timing_chart(report: dict, output: Path) -> None:
     timing = report["timing"]["milliseconds"]
     keys = ("full_first_ms", "cache_first_ms", "full_later_ms", "cache_later_ms")
     stats = {key: _stats(timing[key], f"timing.{key}") for key in keys}
-    maximum = max(value[2] for value in stats.values())
-    maximum = max(maximum, 1.0)
+    data_max = max(value[2] for value in stats.values())
+    maximum, ticks = _nice_linear_axis(data_max)
     left, top, right, bottom = 90, 70, 900, 355
     svg = _svg_start("P27 CPU timing: full/cache first/later")
     _axis(svg, left, top, right, bottom, "P27 CPU timing (milliseconds)", "median ms; whisker=min..max")
+    _draw_linear_y_ticks(svg, left, top, right, bottom, maximum, ticks)
     categories = ("first token", "later token")
     group_width = (right-left) / 2
     bar_width = min(42.0, group_width / 4.8)
@@ -223,11 +286,17 @@ def _render_timing_chart(report: dict, output: Path) -> None:
             whisker_x = x + bar_width / 2
             y_min = bottom - minimum / maximum * (bottom-top)
             y_max = bottom - maximum_value / maximum * (bottom-top)
+            label_text = f"{median:.4g}"
+            label_x, label_y = _timing_label_position(whisker_x, y, series_index, label_text)
             svg.extend([
-                f'<line x1="{whisker_x:.1f}" y1="{y_min:.1f}" x2="{whisker_x:.1f}" y2="{y_max:.1f}" stroke="#222"/>',
-                f'<line x1="{whisker_x-6:.1f}" y1="{y_min:.1f}" x2="{whisker_x+6:.1f}" y2="{y_min:.1f}" stroke="#222"/>',
-                f'<line x1="{whisker_x-6:.1f}" y1="{y_max:.1f}" x2="{whisker_x+6:.1f}" y2="{y_max:.1f}" stroke="#222"/>',
-                f'<text x="{whisker_x:.1f}" y="{y-6:.1f}" text-anchor="middle" font-size="10">{median:.4g}</text>',
+                f'<line x1="{whisker_x:.1f}" y1="{y_min:.1f}" x2="{whisker_x:.1f}" y2="{y_max:.1f}" '
+                f'stroke="#222" data-role="whisker"/>',
+                f'<line x1="{whisker_x-6:.1f}" y1="{y_min:.1f}" x2="{whisker_x+6:.1f}" y2="{y_min:.1f}" '
+                f'stroke="#222" data-role="whisker-cap"/>',
+                f'<line x1="{whisker_x-6:.1f}" y1="{y_max:.1f}" x2="{whisker_x+6:.1f}" y2="{y_max:.1f}" '
+                f'stroke="#222" data-role="whisker-cap"/>',
+                f'<text x="{label_x:.1f}" y="{label_y:.1f}" text-anchor="middle" font-size="10" '
+                f'data-role="median-label">{label_text}</text>',
             ])
     svg.extend([
         f'<rect x="{left}" y="390" width="14" height="14" fill="#1565c0"/>'
@@ -271,6 +340,7 @@ def render(report: dict, out_dir: Path) -> list[Path]:
     for row in negatives:
         if not isinstance(row, dict) or not row.get("name") or row.get("caught") is not True:
             raise ValueError("negative controls must be caught")
+        _finite(row.get("before_error"), f"negative {row.get('name')}.before_error")
         _finite(row.get("max_logit_error", row.get("after_error")), "negative error")
     for key in ("full_first_ms", "cache_first_ms", "full_later_ms", "cache_later_ms"):
         if key not in timing:

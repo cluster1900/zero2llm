@@ -17558,9 +17558,16 @@ README</a>。阅读源码，不导入官方模型、不运行未知权重路径�
 </ul>
 <hr />
 <h1 id="p27-healthcheck">综合实验（P27）：给自己的 miniGPT 做体检</h1>
-<p>换了轮胎的自行车，能在院子里骑一圈，不代表刹车、转向、载重都没有问题。同样，模型能输出一句话，也不代表位置没有错、未来没有泄漏、第二个请求没有混进第一个请求的缓存。</p>
 <p>前面我们逐件学习了 KV cache、RoPE、RMSNorm、SwiGLU、GQA、MoE 和可选
-MTP。本章不再发明一种新架构，而是把已有零件放到同一张检查单上：<strong>哪个东西应该保持相同，哪个允许改变，出现差异后应该先查哪里？</strong></p>
+MTP。本章把已有零件放到同一张检查单上：<strong>哪个东西应该保持相同，哪个允许改变，出现差异后应该先查哪里？</strong></p>
+<blockquote>
+<p>本章边界：就像自行车能在院子里骑一圈，程序能输出一句话也只说明这一条路径跑通；软件体检是工程排查，不是医学诊断。“通过”只表示列出的输入、性质和运行环境里没发现问题；反例能推翻断言，几个成功例子证明不了全部情况。这里是
+CPU 上的随机权重小模型、合成
+token、没有训练：loss、计数和计时用来查错，不说明模型质量、专家分工或速度收益。没覆盖：padding
+/ 跨文档 / ragged
+batch、服务端多租户缓存（租户隔离、前缀缓存授权、并发取消、回收）、GPU
+性能；S2–S6 是教学实现，不是 DeepSeek / Qwen 等生产实现。</p>
+</blockquote>
 <p>配套 <a
 href="code/28_minigpt_healthcheck.py">code/28_minigpt_healthcheck.py</a>，测试为
 <code>tests/test_minigpt_healthcheck.py</code>。它直接导入前面章节的模型和缓存函数，不复制第七份
@@ -17574,9 +17581,6 @@ Block</a>、<a href="#p14-grouped-kv">GQA</a>、<a
 href="#p18-moe">MoE</a>。MTP 部分可结合 <a href="#p23-mtp">P23</a>
 选读。如果忘了某个名词，先看 <a
 href="#p28-reference">附录</a>，不用把所有框架重新安装一遍。</p>
-<blockquote>
-<p>体检类比的边界：软件检查不是医学诊断。“通过”只表示列出的输入、性质和运行环境没有发现问题，不是证明所有输入都正确。反例可以推翻一个断言；几个成功例子不能证明无限多个情况。</p>
-</blockquote>
 <figure>
 <a href="assets/rendered/p27-healthcheck.svg"
 title="点击查看原尺寸图"><img src="assets/rendered/p27-healthcheck.svg"
@@ -17586,36 +17590,15 @@ alt="miniGPT 的 S0–S6 主线经过配置对账、数值不变量和错误反�
 主线经过配置对账、数值不变量和错误反例三道检查；通过后仍需说明 CPU
 教学边界</figcaption>
 </figure>
-<p>本批三张结果图由 <code>scripts/plot_p27_healthcheck.py</code>
-读取仓库内金标报告
+<p>本章三张结果图（分别在 P27.5、P27.8、P27.10）由
+<code>scripts/plot_p27_healthcheck.py</code> 读取仓库内金标报告
 <code>docs/gold/p27_healthcheck_mtp.json</code>（<code>OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json</code>
 在 CPU float32、种子 270/271 下写出）生成，不使用手填基准值。复现：</p>
 <div class="sourceCode" id="cb177"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb177-1"><a href="#cb177-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> docs/gold/p27_healthcheck_mtp.json</span>
 <span id="cb177-2"><a href="#cb177-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json <span class="at">--out-dir</span> assets/diagrams/p27</span></code></pre></div>
-<figure>
-<a href="assets/rendered/cache_causal.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/cache_causal.svg" class="book-diagram" width="720"
-alt="S0–S6 缓存等价误差与因果干预误差（对数柱；0 单独标注）" /></a>
-<figcaption>S0–S6 缓存等价误差与因果干预误差（对数柱；0
-单独标注）</figcaption>
-</figure>
-<figure>
-<a href="assets/rendered/negative_controls.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/negative_controls.svg" class="book-diagram"
-width="720" alt="三个负例控制：报警前后最大 logit 误差" /></a>
-<figcaption>三个负例控制：报警前后最大 logit 误差</figcaption>
-</figure>
-<figure>
-<a href="assets/rendered/cpu_timing.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/cpu_timing.svg" class="book-diagram" width="720"
-alt="CPU 计时：full/cache × first/later 的 median，误差线为 min–max" /></a>
-<figcaption>CPU 计时：full/cache × first/later 的 median，误差线为
-min–max</figcaption>
-</figure>
 <h2 id="p27.1-先分清三种相同">P27.1 先分清三种“相同”</h2>
-<p>做实验最容易犯的错误，不是写错一个公式，而是比较了不应该相同的东西。</p>
+<p>做实验最容易犯的错误，是比较了不该相同的东西。</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -17664,9 +17647,8 @@ min–max</figcaption>
 </table></div>
 <p><strong>数值等价</strong>是在相同数学任务上比较两种计算路径；<strong>消融实验</strong>是只改变一个明确因素，观察变化；<strong>模型质量评测</strong>则需要有意义的数据、任务与独立检查器。三者不能互相代替。</p>
 <p>本章输出的 loss 是随机模型在两行合成 token 上的交叉熵或含 MoE
-辅助项的训练目标。它能帮助发现 NaN、错形状和断开的梯度，不能用来宣布 S4
-比 S3 更聪明。甚至 S5 的总 loss 和 S4 也不完全是同一种量：S5
-默认还加了负载辅助项。</p>
+辅助项的训练目标。它能帮助发现 NaN、错形状和断开的梯度。另外，S5 的总
+loss 和 S4 也不完全是同一种量：S5 默认还加了负载辅助项。</p>
 <h2 id="p27.2-s0s6升级路线不是权重转换说明书">P27.2
 S0–S6：升级路线不是权重转换说明书</h2>
 <p>阶段表示“这一章增加了什么”，不表示所有阶段都能直接读同一个
@@ -17731,8 +17713,8 @@ checkpoint。</p>
 </tr>
 </tbody>
 </table></div>
-<p>S1 不是“另一份初始化恰好相同的
-S0”：脚本把<strong>同一个模型对象</strong>分别交给普通前向和缓存前向。这样排除了“看起来比较缓存，实际比较两组权重”的错误。</p>
+<p>S1
+的对照不靠两份相同初始化：脚本把<strong>同一个模型对象</strong>分别交给普通前向和缓存前向。这样排除了“看起来比较缓存，实际比较两组权重”的错误。</p>
 <p>S2–S5
 是分别建立的教学阶段，不宣称已经转换、继承或训练好上一阶段的权重。S3
 默认还涉及 bias 策略，所以不能把 S2 与默认 S3 的所有差异都归因于
@@ -17741,8 +17723,8 @@ RMSNorm；真正的单变量控制组在 P27.7 单独建立。</p>
 所有已有状态，保留新建的两个旁路
 head。这样，删掉复制步骤时主干权重确实不同，不会被相同种子的巧合掩盖。因此没有训练更新之前，S5
 与 S6 的<strong>普通主 head 输出</strong>相同；S6 的辅助目标不同。MTP
-并不自动修改普通生成算法，也不是生产 DeepSeek 的顺序 MTP 或 DSpark
-实现。<a href="https://arxiv.org/abs/2412.19437v2">DeepSeek-V3 报告
+并不自动修改普通生成算法。<a
+href="https://arxiv.org/abs/2412.19437v2">DeepSeek-V3 报告
 v2，MTP</a></p>
 <h2 id="p27.3-一条命令从输入到报告">P27.3 一条命令，从输入到报告</h2>
 <h3 id="运行入口与失败含义">运行入口与失败含义</h3>
@@ -17762,8 +17744,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb180-1"><a href
 记录实际运行的四种分块及各自误差、字节数，汇总误差取其中最大值。默认路径不下载模型、不访问外部服务、不使用
 GPU。脚本把 CPU 线程设为 1，主线随机种子为 270，使用 float32；S6
 独立初始化使用 271，随后复制 S5
-主干。版本、设备、线程、种子、形状和容差写进报告，不只打印一个绿色
-PASS。</p>
+主干。版本、设备、线程、种子、形状和容差写进报告。</p>
 <p>缺少 PyTorch 时，CLI 给出安装提示并以状态码 2 退出，明确写
 <code>NOT RUN, not passed</code>；作为模块导入时仍抛出真实依赖错误。测试可以因没有受支持
 Torch
@@ -17797,7 +17778,7 @@ padding、跨文档 packing 或聊天模板。</p>
 <p>代码先写出 9 个 token 的流，再取 <code>stream[:, :-1]</code> 和
 <code>stream[:, 1:]</code>。最后一个标签来自第九个
 token，<strong>不是把窗口开头卷回来</strong>。这能验证 next-token
-的位置关系，但不能证明真实训练集的去重、许可与切分已经做好。</p>
+的位置关系。</p>
 <p>统一小配置为 B=2、T=8、D=16、Hq=4、每头 d=4、层数 L=2、上下文上限
 16。GQA 使用 Hkv=2；MoE 每层 4 个路由专家、top-k=2、专家宽度 7，另有 1
 个宽度 5 的共享专家。</p>
@@ -18060,7 +18041,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb182-1"><a 
 <li>第 117 行：两次完整前向，只比较前 <code>cut</code> 个位置的
 logits；<code>check_close</code> 同时拒绝形状不符与非有限值。</li>
 </ul>
-<p>这里检查的是<strong>干预</strong>，不是“注意力图看起来是三角形”：如果程序画出一个正确的
+<p>这里检查的是<strong>干预</strong>，而非注意力图的形状：如果程序画出一个正确的
 mask，却没有真的把它用进计算，干预测试仍会失败。</p>
 <p>为什么遍历所有切点？测试只让最后一层的位置 5 偷看位置 6。切点 3
 看不见这次泄漏，切点 6 才会暴露它；CLI
@@ -18070,8 +18051,13 @@ mask，却没有真的把它用进计算，干预测试仍会失败。</p>
 绝对容差、相对容差 0，因为不同未来路由可能改变专家 GEMM
 的行分组和末位累加。这个容差不是允许跨 token 交流：正常路由只依赖当前
 token 的隐藏状态，不应把未来 token 的内容带回过去。</p>
-<p>因果性通过也不能说明 padding mask、跨文档隔离、左右 padding 或 ragged
-batch 都正确。这些没有在本次输入里出现，必须另外设计样本。</p>
+<figure>
+<a href="assets/rendered/cache_causal.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/cache_causal.svg" class="book-diagram" width="720"
+alt="S0–S6 缓存等价误差与因果干预误差（对数柱；0 单独标注）" /></a>
+<figcaption>S0–S6 缓存等价误差与因果干预误差（对数柱；0
+单独标注）</figcaption>
+</figure>
 <h2 id="p27.6-checkpoint箱子装得下不代表零件匹配">P27.6
 Checkpoint：箱子装得下，不代表零件匹配</h2>
 <p><code>state_dict</code>
@@ -18389,7 +18375,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb184-1"><a 
 </ul>
 <h3 id="负例二每个块都从位置-0-开始">负例二：每个块都从位置 0 开始</h3>
 <p>第一块 <code>[1,2,3]</code> 使用位置 0、1、2。第二块的第一个 token
-应使用位置 3，而不是又回到位置 0。</p>
+应接着使用位置 3。</p>
 <p>S1 负例把 <code>arange(offset, offset+T)</code> 改成
 <code>arange(T)</code>，只破坏绝对位置，不同时破坏
 mask。第一块仍然正常，因此只测 prefill 看不出问题；第二块对照会失败。S2
@@ -18407,11 +18393,11 @@ id="负例三第二个用户接上了第一个用户的历史">负例三：第�
 <p>正确答案是 B 单独的完整前向；污染答案是“A 前缀+B”中 B
 那些位置的输出。两者不同。缓存对象无法凭空猜到调用者的请求意图，服务层必须为每个独立请求明确传入
 <code>None</code> 或自己的独立状态。</p>
-<p>本次负例没有伪造签名，也没有禁用缓存防护。它展示防护的边界：校验对象与权重，不等于自动识别请求历史。真实系统还要考虑租户隔离、前缀缓存授权、并发取消和缓存回收，本章没有实现这些服务功能。</p>
+<p>本次负例没有伪造签名，也没有禁用缓存防护。它展示防护的边界：校验对象与权重，不等于自动识别请求历史。</p>
 <h3 id="本机实际结果怎么读">本机实际结果怎么读</h3>
-<p>前两个负例的判定循环在 <code>negative_controls</code> 第 329–338
+<p>前两个负例的判定循环在 <code>negative_controls</code> 第 332–342
 行：</p>
-<!-- code-excerpt: code/28_minigpt_healthcheck.py L329-L338 -->
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L332-L342 -->
 <div class="sourceCode" id="cb185"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb185-1"><a href="#cb185-1" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, forward <span class="kw">in</span> variants.items():</span>
 <span id="cb185-2"><a href="#cb185-2" aria-hidden="true" tabindex="-1"></a>        first, cache <span class="op">=</span> forward(base, tokens[:, :<span class="dv">3</span>], <span class="va">None</span>)</span>
@@ -18422,19 +18408,25 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb185-1"><a 
 <span id="cb185-7"><a href="#cb185-7" aria-hidden="true" tabindex="-1"></a>        delta <span class="op">=</span> <span class="bu">float</span>((actual <span class="op">-</span> expected).<span class="bu">abs</span>().<span class="bu">max</span>())</span>
 <span id="cb185-8"><a href="#cb185-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> torch.allclose(actual, expected, atol<span class="op">=</span>ATOL, rtol<span class="op">=</span>RTOL):</span>
 <span id="cb185-9"><a href="#cb185-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="ss">f&#39;</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss"> survived the equivalence oracle&#39;</span>)</span>
-<span id="cb185-10"><a href="#cb185-10" aria-hidden="true" tabindex="-1"></a>        rows.append({<span class="st">&#39;name&#39;</span>: name, <span class="st">&#39;caught&#39;</span>: <span class="va">True</span>, <span class="st">&#39;max_logit_error&#39;</span>: delta})</span></code></pre></div>
+<span id="cb185-10"><a href="#cb185-10" aria-hidden="true" tabindex="-1"></a>        rows.append({<span class="st">&#39;name&#39;</span>: name, <span class="st">&#39;caught&#39;</span>: <span class="va">True</span>, <span class="st">&#39;max_logit_error&#39;</span>: delta,</span>
+<span id="cb185-11"><a href="#cb185-11" aria-hidden="true" tabindex="-1"></a>                     <span class="st">&#39;before_error&#39;</span>: before_split})</span></code></pre></div>
 <ul>
-<li>第 330–332 行：变异版本先喂 3 个 token、再带着自己的缓存喂剩下 5
+<li>第 333–335 行：变异版本先喂 3 个 token、再带着自己的缓存喂剩下 5
 个，拼成完整 logits。</li>
-<li>第 333–334 行：输出必须有限；崩溃或 NaN
+<li>第 336–337 行：输出必须有限；崩溃或 NaN
 不算“抓住”，而是直接失败。</li>
-<li>第 335 行：记录与完整前向的最大绝对差，即下表的数。</li>
-<li>第 336–337
+<li>第 338 行：记录与完整前向的最大绝对差，即下表的数。</li>
+<li>第 339–340
 行：若变异结果仍落在容差内，说明检查器没能区分好坏，直接报错。</li>
-<li>第 338 行：只有通过上面两道检查，才写入
+<li>第 341–342 行：只有通过上面两道检查，才写入
 <code>caught: True</code>。</li>
+<li><code>before_split</code> 在循环前第 328–330 行算出：用正确的
+<code>s1.cached_forward</code>（<code>good</code>）在同一 3+5
+分段上前向，再与完整前向 <code>expected</code>
+取最大绝对差；它就是图中的灰色 “before” 柱。</li>
 </ul>
-<p>2026-10-20，Python 3.12.14、PyTorch
+<p>2026-10-30 重新运行（下列负例数字与 P27.10
+计时均于该日实测，非复制此前运行），Python 3.13.5、PyTorch
 2.14.1+cpu、单线程、seed=270，按上述固定输入运行：</p>
 <div class="table-wrapper"><table>
 <thead>
@@ -18462,6 +18454,15 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb185-1"><a 
 </tr>
 </tbody>
 </table></div>
+<figure>
+<a href="assets/rendered/negative_controls.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/negative_controls.svg" class="book-diagram"
+width="720" alt="三个负例控制：报警前后最大 logit 误差" /></a>
+<figcaption>三个负例控制：报警前后最大 logit 误差</figcaption>
+</figure>
+<p>灰色 “before” 柱是正确实现在同一输入上的误差（本金标运行为
+0），红色柱是注入缺陷后的误差。</p>
 <p>这些数是本次 CPU
 浮点实测，不保证跨平台最后几位相同；“显著超出容差且仍为有限输出”才是测试契约。测试还反向验证：如果变异器根本没改源码，负例检查必须失败；如果缺依赖而抛异常，也必须继续报错，不能算成功捕获数学错误。
 数值反例必须产生有限的错误输出；dtype、owner、反序列化与梯度守卫则检查具体拒绝原因，并独立观察删掉守卫后被放过的坏状态。这两类证据不混算。</p>
@@ -18477,9 +18478,8 @@ MTP：不能只看一行 loss</h2>
 16。共享专家总是运行，不记在这 32 次路由分配里。</p>
 <p>本次 S5 两层的请求负载为 <code>[7,8,8,9]</code> 与
 <code>[4,9,9,10]</code>。每层都加起来为
-32，但并不完全均衡。这个数字说明路由确实在工作，不表示专家已经学会了分工，更不表示单机
-MoE 更快。<a href="https://arxiv.org/abs/2401.06066v1">DeepSeekMoE
-v1</a></p>
+32，但并不完全均衡。这个数字说明路由确实在工作。<a
+href="https://arxiv.org/abs/2401.06066v1">DeepSeekMoE v1</a></p>
 <p>独立手算例子使用三行路由概率
 <code>[.4,.3,.2,.1]</code>、<code>[.1,.2,.3,.4]</code>、<code>[.4,.4,.1,.1]</code>。top-2
 的选择应为
@@ -18514,12 +18514,11 @@ greedy，另一边用 S6 的 drafter 与缓存验证。二者生成的整个 tok
 次、处理 12 个输入 token；drafter 调用 3 次、全前缀累计处理 15 个
 token。这些是实际计数，不是耗时收益。减少目标调用的同时可能处理了更多被拒绝
 token，还增加草稿成本。</p>
-<p>本章只检验<strong>贪心</strong>规则保持，不实现随机投机采样的接受率校正，也没有证明语言答案正确。即使目标模型生成完全错误的句子，忠实保持它的
-greedy 结果仍可能通过算法检查。</p>
+<p>本章只检验<strong>贪心</strong>规则保持，不实现随机投机采样的接受率校正。</p>
 <h2 id="p27.10-成本与性能记账可以外推不行">P27.10
 成本与性能：记账可以，外推不行</h2>
 <h3 id="固定参数与缓存报告">固定参数与缓存报告</h3>
-<p>本次小模型的稳定整数结果如下。它们是所选配置的参数计数，不是某个模型系列的宣传参数。</p>
+<p>本次小模型的稳定整数结果如下。它们是所选配置的参数计数。</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -18588,12 +18587,18 @@ min／median／max，单位毫秒。</li>
 <li>不含 tokenizer、采样、网络、排队或 UI；不是服务端真实
 TTFT／TPOT。</li>
 </ul>
-<p>一次实测的普通／缓存 prompt 中位数约为 0.326／0.456 ms，后续每 token
-前向中位数约为 0.357／0.509
-ms。<strong>这里缓存更慢</strong>，并不推翻它减少重复计算的原理：短序列、小矩阵下，Python
-检查、拼接缓存和函数开销可能占主导。这个样本不构成一般性能结论，报告里的范围比一个百分比更诚实。</p>
-<p>CPU 模拟无法推出 GPU
-kernel、显存峰值、多请求吞吐或长上下文收益。若选做 GPU
+<figure>
+<a href="assets/rendered/cpu_timing.svg" title="点击查看原尺寸图"><img
+src="assets/rendered/cpu_timing.svg" class="book-diagram" width="720"
+alt="CPU 计时：full/cache × first/later 的 median，误差线为 min–max" /></a>
+<figcaption>CPU 计时：full/cache × first/later 的 median，误差线为
+min–max</figcaption>
+</figure>
+<p>图中普通／缓存 prompt 中位数为 0.237／0.289 ms，后续每 token
+前向中位数为 0.222／0.328 ms，误差线为 min–max（2026-10-30 本机单次 CPU
+重新运行）。<strong>这里缓存更慢</strong>，并不推翻它减少重复计算的原理：短序列、小矩阵下，Python
+检查、拼接缓存和函数开销可能占主导。</p>
+<p>若选做 GPU
 基准，另建记录，至少写清设备型号、驱动／框架版本、dtype、模型与
 tokenizer
 revision、B/T、输出长度、并发、实际后端、预热、同步位置、重复次数与波动。不要用本章的“无
@@ -18760,7 +18765,7 @@ oracle，哪一种才是本章想看到的负例证据？</li>
 </ol>
 <h2 id="p27-summary">本章小结</h2>
 <p>miniGPT
-的升级不是把开关越来越多地塞进第一份源码，而是让每个变化都有明确的<strong>输入、状态、参照、反例与边界</strong>。</p>
+的升级，是让每个变化都有明确的<strong>输入、状态、参照、反例与边界</strong>。</p>
 <p>同权重才谈缓存等价；改架构就做受控比较；相同形状不等于相同语义；负例必须真的算错而被抓住；性能数字必须连同测量条件；最后把所有尚未证明的东西写进模型卡。做到这些，才有资格把“能跑”推进为“知道为什么这次结果可信”。</p>
 <h3 id="固定来源与核验范围">固定来源与核验范围</h3>
 <p>本章来源核验日为
@@ -18768,7 +18773,7 @@ oracle，哪一种才是本章想看到的负例证据？</li>
 文档说明机制；本章 CPU 数字来自本仓库实际执行，不借用论文性能数字。</p>
 <ul>
 <li><a href="https://arxiv.org/abs/1706.03762v7">Attention Is All You
-Need v7</a>：因果 attention、基础模块；不是本章数值误差的外部证明。</li>
+Need v7</a>：因果 attention、基础模块。</li>
 <li><a href="https://arxiv.org/abs/2104.09864v1">RoFormer
 v1</a>：旋转位置的原始定义。</li>
 <li><a href="https://arxiv.org/abs/1910.07467v1">RMSNorm v1</a>、<a
@@ -18778,7 +18783,7 @@ v1</a>：归一化和门控 FFN。</li>
 与训练转换语境。</li>
 <li><a href="https://arxiv.org/abs/2401.06066v1">DeepSeekMoE v1</a>、<a
 href="https://arxiv.org/abs/2412.19437v2">DeepSeek-V3 v2</a>：专家与 MTP
-的来源；本书仍是简化教学实现。</li>
+的来源。</li>
 <li><a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.load.html">PyTorch
 2.14：torch.load</a>：加载选项与信任边界。</li>

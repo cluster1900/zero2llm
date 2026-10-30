@@ -13,7 +13,7 @@ python scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json --out-
 python -m unittest discover -s tests -v
 ```
 
-两个 JSON 都是对象，顶层字段包含 `environment`、`stages`、`components`、`compatibility`、`negatives`、`timing` 和 `scope`。默认报告有 S0–S5；加 `--mtp` 后增加 S6。每个有缓存的阶段同时包含 `chunk_checks`、`cache_error`、`kv_bytes`；P27 教学配置的 MHA 对照为 4096 bytes，GQA 对照为 2048 bytes。三种负例的 `caught` 必须都是 `true`，并且 `max_logit_error` 是有限正数。
+两个 JSON 都是对象，顶层字段包含 `environment`、`stages`、`components`、`compatibility`、`negatives`、`timing` 和 `scope`。默认报告有 S0–S5；加 `--mtp` 后增加 S6。每个有缓存的阶段同时包含 `chunk_checks`、`cache_error`、`kv_bytes`；P27 教学配置的 MHA 对照为 4096 bytes，GQA 对照为 2048 bytes。三种负例的 `caught` 必须都是 `true`，并且 `max_logit_error` 是有限正数。每条负例还有 `before_error`，即同一 split 输入上正确实现的误差（`negative_controls` 把它记为 `before_split`；本金标三次均为 0.0），与 `caught`、`max_logit_error` 并列。
 
 ## 金标数值（本仓库已提交）
 
@@ -31,11 +31,11 @@ python -m unittest discover -s tests -v
 
 负例（同金标）：
 
-| name | caught | max_logit_error |
-| --- | --- | ---: |
-| wrong_mask | true | 0.4909290671348572 |
-| wrong_position | true | 1.4532501697540283 |
-| cache_pollution | true | 1.488387942314148 |
+| name | caught | max_logit_error | before_error |
+| --- | --- | ---: | ---: |
+| wrong_mask | true | 0.4909290671348572 | 0.0 |
+| wrong_position | true | 1.4532501697540283 | 0.0 |
+| cache_pollution | true | 1.488387942314148 | 0.0 |
 
 MTP 稳定计数（同金标 `mtp` 对象）：`proposed=7`，`accepted=3`，`label_counts=[14, 12, 10]`，`greedy_equal=true`。其中 7/3 是 draft 提议与 verifier 接受次数；`label_counts` 是各深度标签桶计数，不要把两者混写成 `[7, 3]`。
 
