@@ -15,6 +15,9 @@ _P25_OFFICIAL = re.compile(r"官方.{0,12}(模型卡|模板|template|解析|做�
 _P25_EXERCISE = re.compile(r"(练习|教学|本章|本书).{0,16}(选择|约定|选|口径)")
 _P25_FIRST_CLOSE = re.compile(r"(首|第一个).{0,12}(闭合|</think>)")
 _P25_LAST_CLOSE = re.compile(r"(最后|末|last).{0,12}(闭合|</think>)")
+_P25_OFFICIAL_LAST = re.compile(r"官方(模型卡|模板|chat\s+template|解析)[^。；，\n]{0,12}(最后|末|last)[^。；，\n]{0,8}(闭合|</think>)", re.IGNORECASE)
+# 统一大小写（Chat Template / CHAT TEMPLATE 等）
+_P25_CHAT_TEMPLATE = re.compile(r"chat\s+template", re.IGNORECASE)
 
 # 已知局限（与 main 完全相同，本 PR 不再尝试修补）
 # - 误报（main 会拒绝的正当表述）：带否定的 「官方做法并非错误」「官方做法不算错」
@@ -166,7 +169,7 @@ def _is_comparison_paragraph(p):
         and _P25_EXERCISE.search(p)
         and _P25_FIRST_CLOSE.search(p)
         and _P25_LAST_CLOSE.search(p)
-        and "chat template" in p
+        and _P25_CHAT_TEMPLATE.search(p)
         and "模型卡" in p
     )
 
@@ -249,7 +252,7 @@ def _p25_mutations(section):
             "G_drop_chat_template_sentence",
             _map_comparison_paragraphs(
                 section,
-                lambda p: _drop_sentences_matching(p, re.compile(r"chat template")),
+                lambda p: _drop_sentences_matching(p, _P25_CHAT_TEMPLATE),
             ),
         ),
         (
@@ -260,7 +263,7 @@ def _p25_mutations(section):
             "X1_no_chat_template_in_contrast",
             _map_comparison_paragraphs(
                 section,
-                lambda p: p.replace("chat template", "模板"),
+                lambda p: _P25_CHAT_TEMPLATE.sub("模板", p),
             ),
         ),
         (
@@ -289,12 +292,13 @@ class FinalBatchTextTests(unittest.TestCase):
         self.assertIsNotNone(match)
         section = match.group(0)
 
-        # mirrors main，逐字保留
+        # 源自 main，按 bot-hub #119 d 项把措辞字面断言改为语义锚点、chat template 不区分大小写，错误断言的两条正则仍与 main 逐字相同。
         def main_contract(text):
-            self.assertIn("首闭合", text)
-            self.assertIn("最后一个闭合", text)
+            self.assertRegex(text, _P25_FIRST_CLOSE)
+            self.assertRegex(text, _P25_LAST_CLOSE)
+            self.assertRegex(text, _P25_OFFICIAL_LAST)
             self.assertIn("模型卡", text)
-            self.assertIn("chat template", text)
+            self.assertRegex(text, _P25_CHAT_TEMPLATE)
             self.assertIn(
                 "https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md",
                 text,
@@ -310,11 +314,39 @@ class FinalBatchTextTests(unittest.TestCase):
                 self.assertNotRegex(text, pattern)
 
         main_contract(section)
-        removed_comparison = section.replace("模型卡", "", 1).replace("chat template", "", 1)
-        with self.assertRaises(AssertionError):
-            main_contract(removed_comparison)
-        official_error = section.replace("官方模型卡采用最后一个闭合位置", "官方模型卡采用错误位置", 1)
-        with self.assertRaises(AssertionError):
+        main_contract(_P25_CHAT_TEMPLATE.sub("Chat Template", section))
+        main_contract(section.replace("首闭合", "第一个闭合"))
+        main_contract(section.replace("最后一个闭合", "最后的闭合"))
+        with self.assertRaisesRegex(AssertionError, "didn't match"):
+            main_contract(_P25_OFFICIAL_LAST.sub("官方模型卡采用首个闭合", section))
+
+        removed_card = section.replace("模型卡", "")
+        self.assertNotEqual(removed_card, section)
+        with self.assertRaisesRegex(AssertionError, "not found|does not match"):
+            main_contract(removed_card)
+        removed_ct = _P25_CHAT_TEMPLATE.sub("", section)
+        self.assertNotEqual(removed_ct, section)
+        with self.assertRaisesRegex(AssertionError, "not found|does not match"):
+            main_contract(removed_ct)
+
+        contrast0 = _comparison_paragraph(section)
+        self.assertIsNotNone(contrast0)
+        dup_section = section.replace(contrast0, contrast0 + "\n\n" + contrast0, 1)
+        dup_removed_card = dup_section.replace("模型卡", "")
+        self.assertNotEqual(dup_removed_card, dup_section)
+        with self.assertRaisesRegex(AssertionError, "not found|does not match"):
+            main_contract(dup_removed_card)
+        dup_removed_ct = _P25_CHAT_TEMPLATE.sub("", dup_section)
+        self.assertNotEqual(dup_removed_ct, dup_section)
+        with self.assertRaisesRegex(AssertionError, "not found|does not match"):
+            main_contract(dup_removed_ct)
+
+        self.assertIn("官方", contrast0)
+        official_error = section.replace(
+            contrast0, contrast0.replace("官方", "官方解析有误，官方", 1), 1
+        )
+        self.assertNotEqual(official_error, section)
+        with self.assertRaisesRegex(AssertionError, "Regex matched"):
             main_contract(official_error)
 
         def assert_contract(text):
@@ -323,7 +355,7 @@ class FinalBatchTextTests(unittest.TestCase):
             self.assertTrue(paras, "P25.9 缺少同一段内的官方/练习对照")
             hit = _comparison_paragraph(text)
             self.assertIsNotNone(hit, "没有一段同时含官方/练习对照、首闭合、最后闭合、chat template 与模型卡")
-            self.assertIn("chat template", hit)
+            self.assertRegex(hit, _P25_CHAT_TEMPLATE)
             self.assertIn("模型卡", hit)
             self.assertIn(_P25_PINNED_README, text)
             self.assertIn(_P25_PINNED_TOKENIZER, text)
@@ -377,6 +409,10 @@ class FinalBatchTextTests(unittest.TestCase):
                 + "多个闭合时口径不同。"
                 + f"[固定模型卡]({_P25_PINNED_README})；[固定模板]({_P25_PINNED_TOKENIZER})。",
             ),
+            (
+                "chat_template_titlecase",
+                _P25_CHAT_TEMPLATE.sub("Chat Template", contrast),
+            ),
         ):
             with self.subTest(variant=name):
                 # 不断言 variant != section：正文若已采用该措辞，变体即为原文
@@ -396,14 +432,34 @@ class FinalBatchTextTests(unittest.TestCase):
                     )
                 )
 
-        # r11 N05：对照段正文写「模板」，chat template 只出现在 tokenizer 链接文字里；
-        # 正文没有这两处原措辞时不改写（变体即原文），避免绑定章节措辞
+        # r11 N05：对照段正文写「模板」，chat template 只出现在 tokenizer 链接文字里。
+        # 找不到原措辞则失败，避免变体静默退化为真实正文、H 的 ct_in_link_label 底稿失效。
         if "同 revision 的 chat template" in contrast and "[固定模板]" in contrast:
-            n05_contrast = contrast.replace(
-                "同 revision 的 chat template", "同 revision 的模板", 1
+            n05_contrast = re.sub(
+                r"(\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\]))|" + _P25_CHAT_TEMPLATE.pattern,
+                lambda m: m.group(1) or "模板",
+                contrast,
+                flags=re.IGNORECASE,
             ).replace("[固定模板]", "[固定 chat template]", 1)
         else:
-            n05_contrast = contrast
+            self.fail(
+                "N05 ct_in_link_label 构造失败：对照段里找不到原措辞，"
+                f"「同 revision 的 chat template」存在="
+                f"{'同 revision 的 chat template' in contrast}，"
+                f"「[固定模板]」存在={'[固定模板]' in contrast}。"
+                "变体将退化为真实正文，H 的 ct_in_link_label 底稿失效。"
+                "请按新措辞更新 N05 构造。"
+            )
+        self.assertNotEqual(
+            n05_contrast,
+            contrast,
+            "N05 ct_in_link_label 改写后对照段与原文相同，变体会退化为真实正文、H 的 ct_in_link_label 底稿失效",
+        )
+        _strip_links = lambda t: re.sub(r"\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])", "", t)
+        self.assertIsNone(
+            _P25_CHAT_TEMPLATE.search(_strip_links(n05_contrast)),
+            "N05 ct_in_link_label：正文（去掉链接后）仍含 chat template，N05 应把正文里的 chat template 全部改写或移到链接文字里",
+        )
         n05_section = section.replace(contrast, n05_contrast, 1)
         with self.subTest(variant="ct_in_link_label"):
             assert_contract(n05_section)
@@ -417,7 +473,7 @@ class FinalBatchTextTests(unittest.TestCase):
             # 只为构造变体：链接文字若带对照段锚点（如「固定 chat template」），保留为纯文字
             section_wo = re.sub(
                 r"\[([^\]]*)\]\(" + re.escape(_P25_PINNED_TOKENIZER) + r"\)",
-                lambda m: m.group(1) if ("chat template" in m.group(1) or "模型卡" in m.group(1)) else "",
+                lambda m: m.group(1) if (_P25_CHAT_TEMPLATE.search(m.group(1)) or "模型卡" in m.group(1)) else "",
                 h_doc,
             ).replace(_P25_PINNED_TOKENIZER, "")
             contrast_wo = _comparison_paragraph(section_wo)
@@ -425,6 +481,12 @@ class FinalBatchTextTests(unittest.TestCase):
             # 去掉链接后留下的分隔符（如「；。」），使变体与 review 的改写一致
             base = re.sub(r"[；，、\s]+。$", "。", contrast_wo)
             h_bases.append((h_label, section_wo, contrast_wo, base))
+        self.assertEqual(len(h_bases), 2)
+        self.assertNotEqual(
+            h_bases[0][3],
+            h_bases[1][3],
+            "real 与 ct_in_link_label 两个底稿构造出的 H base 相同，说明 H 构造没有用到 h_doc 或 n05 没有改写",
+        )
         h_extras = (
             ("link_label", f"；[固定 tokenizer 配置]({_P25_PINNED_TOKENIZER})"),
             ("link_sep", f"，[固定模板]({_P25_PINNED_TOKENIZER})"),
