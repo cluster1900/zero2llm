@@ -452,6 +452,12 @@ class FinalBatchTextTests(unittest.TestCase):
             contrast,
             "N05 ct_in_link_label 改写后对照段与原文相同，变体会退化为真实正文、H 的 ct_in_link_label 底稿失效",
         )
+        _strip_links = lambda t: re.sub(r"\[[^\]]*\]\([^)]*\)", "", t)
+        self.assertLess(
+            len(_P25_CHAT_TEMPLATE.findall(_strip_links(n05_contrast))),
+            len(_P25_CHAT_TEMPLATE.findall(_strip_links(contrast))),
+            "N05 ct_in_link_label：正文（去掉链接后）的 chat template 没有减少，N05 应把正文里的 chat template 移到链接文字里",
+        )
         n05_section = section.replace(contrast, n05_contrast, 1)
         with self.subTest(variant="ct_in_link_label"):
             assert_contract(n05_section)
