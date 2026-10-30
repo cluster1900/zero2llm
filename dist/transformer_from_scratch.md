@@ -9390,7 +9390,6 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 - 第 341–342 行：只有通过上面两道检查，才写入 `caught: True`。
 - `before_split` 在循环前第 328–330 行算出：用正确的 `s1.cached_forward`（`good`）在同一 3+5 分段上前向，再与完整前向 `expected` 取最大绝对差；它就是图中的灰色 “before” 柱。
 
-
 2026-10-30 重新运行（下列负例数字与 P27.10 计时均于该日实测，非复制此前运行），Python 3.13.5、PyTorch 2.14.1+cpu、单线程、seed=270，按上述固定输入运行：
 
 | 负例 | 最大绝对 logit 差异，约 | 判定 |
