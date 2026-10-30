@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import re
 import subprocess
 import sys
 import tempfile
@@ -181,15 +182,42 @@ class P27GoldArtifactsTests(unittest.TestCase):
                 self.assertIn("28_minigpt_healthcheck.py", committed)
                 self.assertIn("<rect ", committed)
 
+    def _p27_sections(self, body: str) -> dict[str, str]:
+        sections = {}
+        for part in re.split(r"(?=^## P27\.)", body, flags=re.M):
+            match = re.match(r"^## P27\.(\d+)", part)
+            if match:
+                sections[f"P27.{match.group(1)}"] = part
+        return sections
+
     def test_chapter_references_committed_svgs(self):
         body = CHAPTER.read_text(encoding="utf-8")
-        for rel in (
+        rels = (
             "assets/diagrams/p27/cache_causal.svg",
             "assets/diagrams/p27/negative_controls.svg",
             "assets/diagrams/p27/cpu_timing.svg",
-            "docs/gold/p27_healthcheck_mtp.json",
-        ):
-            self.assertIn(rel, body)
+        )
+        for rel in rels:
+            self.assertEqual(body.count(rel), 1, rel)
+        self.assertIn("docs/gold/p27_healthcheck_mtp.json", body)
+        sections = self._p27_sections(body)
+        self.assertIn(rels[0], sections["P27.5"])
+        self.assertIn(rels[1], sections["P27.8"])
+        self.assertIn(rels[2], sections["P27.10"])
+
+    def test_chapter_p27_10_timing_medians_match_gold(self):
+        body = CHAPTER.read_text(encoding="utf-8")
+        p27_10 = self._p27_sections(body)["P27.10"]
+        paragraph = next(part for part in re.split(r"\n\s*\n", p27_10) if "中位数" in part)
+        quoted = [float(n) for n in re.findall(r"\d+\.\d{3}", paragraph)]
+        ms = json.loads(GOLD_MTP.read_text(encoding="utf-8"))["timing"]["milliseconds"]
+        expected = [
+            round(ms["full_first_ms"]["median"], 3),
+            round(ms["cache_first_ms"]["median"], 3),
+            round(ms["full_later_ms"]["median"], 3),
+            round(ms["cache_later_ms"]["median"], 3),
+        ]
+        self.assertEqual(quoted, expected)
 
     def test_non_mtp_gold_has_s0_s5_only(self):
         report = json.loads(GOLD.read_text(encoding="utf-8"))

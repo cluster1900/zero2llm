@@ -12,18 +12,12 @@
 
 ![miniGPT 的 S0–S6 主线经过配置对账、数值不变量和错误反例三道检查；通过后仍需说明 CPU 教学边界](assets/diagrams/p27-healthcheck.svg)
 
-本批三张结果图由 `scripts/plot_p27_healthcheck.py` 读取仓库内金标报告 `docs/gold/p27_healthcheck_mtp.json`（`OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json` 在 CPU float32、种子 270/271 下写出）生成，不使用手填基准值。复现：
+本章三张结果图（分别在 P27.5、P27.8、P27.10）由 `scripts/plot_p27_healthcheck.py` 读取仓库内金标报告 `docs/gold/p27_healthcheck_mtp.json`（`OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json` 在 CPU float32、种子 270/271 下写出）生成，不使用手填基准值。复现：
 
 ```bash
 OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json > docs/gold/p27_healthcheck_mtp.json
 python scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json --out-dir assets/diagrams/p27
 ```
-
-![S0–S6 缓存等价误差与因果干预误差（对数柱；0 单独标注）](assets/diagrams/p27/cache_causal.svg)
-
-![三个负例控制：报警前后最大 logit 误差](assets/diagrams/p27/negative_controls.svg)
-
-![CPU 计时：full/cache × first/later 的 median，误差线为 min–max](assets/diagrams/p27/cpu_timing.svg)
 
 
 ## P27.1 先分清三种“相同”
@@ -240,6 +234,8 @@ def causal_error(model, tokens, cut=3):
 
 因果性通过也不能说明 padding mask、跨文档隔离、左右 padding 或 ragged batch 都正确。这些没有在本次输入里出现，必须另外设计样本。
 
+![S0–S6 缓存等价误差与因果干预误差（对数柱；0 单独标注）](assets/diagrams/p27/cache_causal.svg)
+
 ## P27.6 Checkpoint：箱子装得下，不代表零件匹配
 
 `state_dict` 是命名张量集合，能告诉我们“这一块矩阵有多大”。它不一定告诉我们 RoPE base、token ID 的含义、推理模板或一个数值参数的语义。
@@ -431,6 +427,10 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 | wrong_position | 1.453250 | 同权重缓存等价检查抓住 |
 | cache_pollution | 1.488388 | 新请求完整前向对照抓住 |
 
+![三个负例控制：报警前后最大 logit 误差](assets/diagrams/p27/negative_controls.svg)
+
+灰色 “before” 柱是正确实现在同一输入上的误差（本金标运行为 0），红色柱是注入缺陷后的误差。
+
 这些数是本次 CPU 浮点实测，不保证跨平台最后几位相同；“显著超出容差且仍为有限输出”才是测试契约。测试还反向验证：如果变异器根本没改源码，负例检查必须失败；如果缺依赖而抛异常，也必须继续报错，不能算成功捕获数学错误。 数值反例必须产生有限的错误输出；dtype、owner、反序列化与梯度守卫则检查具体拒绝原因，并独立观察删掉守卫后被放过的坏状态。这两类证据不混算。
 
 此外，测试对真实模型取消因果 mask，对旋转符号、RMS 统计、门控、GQA 映射、checkpoint 元数据检查、消融权重与 MTP 标签做实际行为变异。作用是验证这些 oracle 真能区分好坏，不是增加几个永远为真的断言。
@@ -491,7 +491,9 @@ S5 比 S4 参数少，是因为这里故意选择了很窄的专家，并非“M
 - 分别记录 prompt forward 与后续每 token forward 的 min／median／max，单位毫秒。
 - 不含 tokenizer、采样、网络、排队或 UI；不是服务端真实 TTFT／TPOT。
 
-一次实测的普通／缓存 prompt 中位数约为 0.326／0.456 ms，后续每 token 前向中位数约为 0.357／0.509 ms。**这里缓存更慢**，并不推翻它减少重复计算的原理：短序列、小矩阵下，Python 检查、拼接缓存和函数开销可能占主导。这个样本不构成一般性能结论，报告里的范围比一个百分比更诚实。
+![CPU 计时：full/cache × first/later 的 median，误差线为 min–max](assets/diagrams/p27/cpu_timing.svg)
+
+图中普通／缓存 prompt 中位数为 0.236／0.313 ms，后续每 token 前向中位数为 0.223／0.334 ms，误差线为 min–max。**这里缓存更慢**，并不推翻它减少重复计算的原理：短序列、小矩阵下，Python 检查、拼接缓存和函数开销可能占主导。这个样本不构成一般性能结论，报告里的范围比一个百分比更诚实。
 
 CPU 模拟无法推出 GPU kernel、显存峰值、多请求吞吐或长上下文收益。若选做 GPU 基准，另建记录，至少写清设备型号、驱动／框架版本、dtype、模型与 tokenizer revision、B/T、输出长度、并发、实际后端、预热、同步位置、重复次数与波动。不要用本章的“无 GPU”结果填那张表的已测栏。
 
