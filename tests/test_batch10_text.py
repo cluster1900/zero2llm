@@ -159,12 +159,41 @@ def _contrast_paragraphs(text):
     ]
 
 
+def _is_comparison_paragraph(p):
+    return bool(
+        _P25_OFFICIAL.search(p)
+        and _P25_EXERCISE.search(p)
+        and _P25_FIRST_CLOSE.search(p)
+        and _P25_LAST_CLOSE.search(p)
+        and "chat template" in p
+        and "模型卡" in p
+    )
+
+
+def _comparison_paragraphs(text):
+    return [p for p in _md_paragraphs(text) if _is_comparison_paragraph(p)]
+
+
 def _comparison_paragraph(text):
-    """对照官方解析与练习选择、并同时点名首闭合与最后闭合的那段。"""
-    for para in _contrast_paragraphs(text):
-        if _P25_FIRST_CLOSE.search(para) and _P25_LAST_CLOSE.search(para):
-            return para
-    return None
+    """满足官方/练习对照、首闭合、最后闭合、chat template 与模型卡全部同段条件的第一段。"""
+    paras = _comparison_paragraphs(text)
+    return paras[0] if paras else None
+
+
+def _map_comparison_paragraphs(section, fn):
+    """对每个满足对照段条件的段落按位置单独应用 fn，重复段落各处理一次。"""
+    parts = re.split(r"(\n\s*\n)", section)
+    out = []
+    for i, c in enumerate(parts):
+        if i % 2 == 1:
+            out.append(c)
+            continue
+        core = c.strip()
+        if core and _is_comparison_paragraph(core):
+            out.append(c.replace(core, fn(core), 1))
+        else:
+            out.append(c)
+    return "".join(out)
 
 
 def _first_body_paragraph(text):
@@ -185,9 +214,9 @@ def _append_to_paragraph(section, paragraph, extra):
 # D  去掉含「官方」的句子                                        D  D（额外）
 # E  对照段后另起一段「官方的最后闭合解析其实错了。」            E  评审原 E
 # F  删掉与任一 _P25_EXERCISE 匹配区间重叠的句子（匹配可跨 。）   F  F（额外）
-# G  删掉对照段里含 chat template 的整句                         G  新增（旧 G 现为 H）
+# G  删掉每个满足条件的对照段里含 chat template 的整句             G  新增（旧 G 现为 H）
 # H  按 URL 正则删掉 tokenizer_config 链接，不依赖链接文字/分隔符  H  旧 G
-# X1 对照段 chat template → 模板                                 X1 旧 E
+# X1 每个满足条件的对照段 chat template → 模板                     X1 旧 E
 # X2 固定 revision → main                                        X2 旧 H
 def _p25_mutations(section):
     contrast = _comparison_paragraph(section)
@@ -217,10 +246,9 @@ def _p25_mutations(section):
         ),
         (
             "G_drop_chat_template_sentence",
-            section.replace(
-                contrast,
-                _drop_sentences_matching(contrast, re.compile(r"chat template")),
-                1,
+            _map_comparison_paragraphs(
+                section,
+                lambda p: _drop_sentences_matching(p, re.compile(r"chat template")),
             ),
         ),
         (
@@ -229,7 +257,10 @@ def _p25_mutations(section):
         ),
         (
             "X1_no_chat_template_in_contrast",
-            section.replace(contrast, contrast.replace("chat template", "模板"), 1),
+            _map_comparison_paragraphs(
+                section,
+                lambda p: p.replace("chat template", "模板"),
+            ),
         ),
         (
             "X2_unpinned_revision",
@@ -290,7 +321,7 @@ class FinalBatchTextTests(unittest.TestCase):
             paras = _contrast_paragraphs(text)
             self.assertTrue(paras, "P25.9 缺少同一段内的官方/练习对照")
             hit = _comparison_paragraph(text)
-            self.assertIsNotNone(hit, "对照段未同时提到首闭合与最后闭合")
+            self.assertIsNotNone(hit, "没有一段同时含官方/练习对照、首闭合、最后闭合、chat template 与模型卡")
             self.assertIn("chat template", hit)
             self.assertIn("模型卡", hit)
             self.assertIn(_P25_PINNED_README, text)
@@ -385,6 +416,49 @@ class FinalBatchTextTests(unittest.TestCase):
                     _P25_PINNED_TOKENIZER,
                     dict(_p25_mutations(variant_section))["H_drop_tokenizer_link"],
                 )
+
+        # 整节变换：前置小结/回顾、首段点名、重复对照段；不断言 variant != section
+        for name, variant_section in (
+            (
+                "summary_before",
+                section.replace(
+                    contrast,
+                    "小结：本章选择首闭合，官方模板与模型卡取最后一个闭合。\n\n" + contrast,
+                    1,
+                ),
+            ),
+            (
+                "recap_before_no_card",
+                section.replace(
+                    contrast,
+                    "回顾：本章选择首闭合，与官方模板取最后一个闭合不同。\n\n" + contrast,
+                    1,
+                ),
+            ),
+            (
+                "first_para_mentions_all",
+                section.replace(
+                    first_body,
+                    first_body + "本章约定首闭合，官方做法取最后一个闭合。",
+                    1,
+                ),
+            ),
+            (
+                "dup_comparison",
+                section.replace(contrast, contrast + "\n\n" + contrast, 1),
+            ),
+        ):
+            with self.subTest(variant=name):
+                assert_contract(variant_section)
+                if name == "dup_comparison":
+                    self.assertEqual(
+                        len(_comparison_paragraphs(variant_section)),
+                        len(_comparison_paragraphs(section)) + 1,
+                    )
+                else:
+                    # 选中的仍是原对照段（若首段本身就是对照段，则是追加后的它）
+                    self.assertIn(contrast, _comparison_paragraph(variant_section))
+                check_mutations(variant_section, name)
 
         for phrase in _P25_MUST_FAIL:
             with self.subTest(must_fail=phrase):
