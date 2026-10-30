@@ -104,8 +104,42 @@ def _drop_sentences_matching(text, pattern):
     return "".join(kept)
 
 
+def _drop_sentences_overlapping(text, pattern):
+    """在全文上找 pattern 的匹配区间，删掉与任一区间重叠的句子（按 。/\n 切分，含结尾符）。
+
+    匹配可以跨 。（如 _P25_EXERCISE 的 .{0,16}），逐句判断会漏删；重复直到不再匹配（至多 20 轮）。
+    """
+    for _ in range(20):
+        matches = []
+        for m in pattern.finditer(text):
+            ms, me = m.start(), m.end()
+            if me == ms:
+                me = ms + 1
+            matches.append((ms, me))
+        if not matches:
+            return text
+        pieces = []
+        start = 0
+        for i, ch in enumerate(text):
+            if ch in "。\n":
+                pieces.append((start, i + 1))
+                start = i + 1
+        if start < len(text):
+            pieces.append((start, len(text)))
+        kept = []
+        for ps, pe in pieces:
+            if any(ps < me and ms < pe for ms, me in matches):
+                continue
+            kept.append(text[ps:pe])
+        new_text = "".join(kept)
+        if new_text == text:
+            return text
+        text = new_text
+    return text
+
+
 def _drop_exercise_sentences(text):
-    return _drop_sentences_matching(text, _P25_EXERCISE)
+    return _drop_sentences_overlapping(text, _P25_EXERCISE)
 
 
 _P25_TOKENIZER_LINK_RE = re.compile(
@@ -142,6 +176,66 @@ def _first_body_paragraph(text):
 
 def _append_to_paragraph(section, paragraph, extra):
     return section.replace(paragraph, paragraph + extra, 1)
+
+
+# 评审字母 / 定义 / 本测试用例 / 此前 (fed6bdf) 名称：
+# A  把「官方模型卡的做法是错误的。」插入另一段（接到最后一段）  A  A
+# B  同句无关否定：对照段追加「这不是小问题：官方…错误的。」    B  B
+# C  已删：依赖 extra 规则抓「官方口径是个 bug。」；现为文档化漏报
+# D  去掉含「官方」的句子                                        D  D（额外）
+# E  对照段后另起一段「官方的最后闭合解析其实错了。」            E  评审原 E
+# F  删掉与任一 _P25_EXERCISE 匹配区间重叠的句子（匹配可跨 。）   F  F（额外）
+# G  删掉对照段里含 chat template 的整句                         G  新增（旧 G 现为 H）
+# H  按 URL 正则删掉 tokenizer_config 链接，不依赖链接文字/分隔符  H  旧 G
+# X1 对照段 chat template → 模板                                 X1 旧 E
+# X2 固定 revision → main                                        X2 旧 H
+def _p25_mutations(section):
+    contrast = _comparison_paragraph(section)
+    last_para = _md_paragraphs(section)[-1]
+    return (
+        (
+            "A_wrong_claim_outside_contrast_paragraph",
+            _append_to_paragraph(section, last_para, "官方模型卡的做法是错误的。"),
+        ),
+        (
+            "B_unrelated_negation_same_sentence",
+            _append_to_paragraph(
+                section, contrast, "这不是小问题：官方模型卡的做法是错误的。"
+            ),
+        ),
+        (
+            "D_drop_official_sentences",
+            _drop_sentences_matching(section, re.compile(r"官方")),
+        ),
+        (
+            "E_standalone_wrong_paragraph",
+            section.replace(contrast, contrast + "\n\n官方的最后闭合解析其实错了。\n\n", 1),
+        ),
+        (
+            "F_drop_exercise_sentences",
+            _drop_exercise_sentences(section),
+        ),
+        (
+            "G_drop_chat_template_sentence",
+            section.replace(
+                contrast,
+                _drop_sentences_matching(contrast, re.compile(r"chat template")),
+                1,
+            ),
+        ),
+        (
+            "H_drop_tokenizer_link",
+            _drop_tokenizer_link(section),
+        ),
+        (
+            "X1_no_chat_template_in_contrast",
+            section.replace(contrast, contrast.replace("chat template", "模板"), 1),
+        ),
+        (
+            "X2_unpinned_revision",
+            section.replace(_P25_PINNED_REV, "main"),
+        ),
+    )
 
 
 class FinalBatchTextTests(unittest.TestCase):
@@ -214,73 +308,26 @@ class FinalBatchTextTests(unittest.TestCase):
         # 最后一段应是 generation-config 段，而不是对照段。
         self.assertNotEqual(last_para, contrast)
 
-        # 评审字母 / 定义 / 本测试用例 / 此前 (fed6bdf) 名称：
-        # A  把「官方模型卡的做法是错误的。」插入另一段（接到最后一段）  A  A
-        # B  同句无关否定：对照段追加「这不是小问题：官方…错误的。」    B  B
-        # C  已删：依赖 extra 规则抓「官方口径是个 bug。」；现为文档化漏报
-        # D  去掉含「官方」的句子                                        D  D（额外）
-        # E  对照段后另起一段「官方的最后闭合解析其实错了。」            E  评审原 E
-        # F  删掉匹配 _P25_EXERCISE 的句子                               F  F（额外）
-        # G  删掉对照段里含 chat template 的整句                         G  新增（旧 G 现为 H）
-        # H  按 URL 正则删掉 tokenizer_config 链接，不依赖链接文字/分隔符  H  旧 G
-        # X1 对照段 chat template → 模板                                 X1 旧 E
-        # X2 固定 revision → main                                        X2 旧 H
-        mutations = (
-            (
-                "A_wrong_claim_outside_contrast_paragraph",
-                _append_to_paragraph(section, last_para, "官方模型卡的做法是错误的。"),
-            ),
-            (
-                "B_unrelated_negation_same_sentence",
-                _append_to_paragraph(
-                    section, contrast, "这不是小问题：官方模型卡的做法是错误的。"
-                ),
-            ),
-            (
-                "D_drop_official_sentences",
-                _drop_sentences_matching(section, re.compile(r"官方")),
-            ),
-            (
-                "E_standalone_wrong_paragraph",
-                section.replace(contrast, contrast + "\n\n官方的最后闭合解析其实错了。\n\n", 1),
-            ),
-            (
-                "F_drop_exercise_sentences",
-                _drop_exercise_sentences(section),
-            ),
-            (
-                "G_drop_chat_template_sentence",
-                section.replace(
-                    contrast,
-                    _drop_sentences_matching(contrast, re.compile(r"chat template")),
-                    1,
-                ),
-            ),
-            (
-                "H_drop_tokenizer_link",
-                _drop_tokenizer_link(section),
-            ),
-            (
-                "X1_no_chat_template_in_contrast",
-                section.replace(contrast, contrast.replace("chat template", "模板"), 1),
-            ),
-            (
-                "X2_unpinned_revision",
-                section.replace(_P25_PINNED_REV, "main"),
-            ),
-        )
-        for name, mutated in mutations:
-            with self.subTest(mutation=name):
-                self.assertNotEqual(mutated, section)
-                with self.assertRaises(AssertionError):
-                    assert_contract(mutated)
+        def check_mutations(doc, label):
+            for name, mutated in _p25_mutations(doc):
+                with self.subTest(doc=label, mutation=name):
+                    self.assertNotEqual(mutated, doc)
+                    with self.assertRaises(AssertionError):
+                        assert_contract(mutated)
 
-        # r7: F/H were no-ops on legitimate rewordings (PR FAIL, main PASS).
+        check_mutations(section, "real")
+
+        # variants go through the same mutation table as the real section
+        # (r8 review: helper-only checks missed table reverts).
         def _insert_before_trailing_period(text, extra):
             if text.endswith("。"):
                 return text[:-1] + extra + "。"
             return text + extra
 
+        B = (
+            "上述固定 revision 的官方模型卡采用最后一个闭合位置（反向查找 151668）；"
+            "同 revision 的 chat template 对 reasoning 取第一个 `</think>` 之前，对 content 取最后一个之后。"
+        )
         for name, new_contrast in (
             ("本章_wording", re.sub(r"本?(?:教学)?练习|教学", "本章", contrast)),
             ("本书_wording", re.sub(r"本?(?:教学)?练习|教学", "本书", contrast)),
@@ -291,15 +338,31 @@ class FinalBatchTextTests(unittest.TestCase):
                 "本章为了在一条序列里记账，约定使用首闭合。"
                 + f"[固定模型卡]({_P25_PINNED_README})；[固定模板]({_P25_PINNED_TOKENIZER})。",
             ),
+            (
+                "cross_period",
+                "下面是教学实现。这里选择首闭合记账："
+                + B
+                + "多个闭合时口径不同。"
+                + f"[固定模型卡]({_P25_PINNED_README})；[固定模板]({_P25_PINNED_TOKENIZER})。",
+            ),
         ):
             with self.subTest(variant=name):
                 # 不断言 variant != section：正文若已采用该措辞，变体即为原文
                 variant_section = section.replace(contrast, new_contrast, 1)
                 assert_contract(variant_section)
-                mutated = _drop_exercise_sentences(variant_section)
-                self.assertNotEqual(mutated, variant_section)
-                with self.assertRaises(AssertionError):
-                    assert_contract(mutated)
+                if name == "cross_period":
+                    # 逐句匹配在这段上删不掉任何句子（锚点跨 。），只看这段本身，
+                    # 不看整节，免得正文别处的句子影响这一断言
+                    self.assertEqual(
+                        _drop_sentences_matching(new_contrast, _P25_EXERCISE),
+                        new_contrast,
+                    )
+                check_mutations(variant_section, name)
+                self.assertFalse(
+                    _P25_EXERCISE.search(
+                        dict(_p25_mutations(variant_section))["F_drop_exercise_sentences"]
+                    )
+                )
 
         # 在整节上删链接（链接不一定在对照段里），再把新形式的链接放回对照段末
         section_wo = _drop_tokenizer_link(section)
@@ -311,16 +374,17 @@ class FinalBatchTextTests(unittest.TestCase):
             ("link_label", f"；[固定 tokenizer 配置]({_P25_PINNED_TOKENIZER})"),
             ("link_sep", f"，[固定模板]({_P25_PINNED_TOKENIZER})"),
             ("link_and", f" 与 [固定模板]({_P25_PINNED_TOKENIZER})"),
+            ("bare_url", f"；<{_P25_PINNED_TOKENIZER}>"),
         ):
             with self.subTest(variant=name):
                 new_contrast = _insert_before_trailing_period(base, extra)
                 variant_section = section_wo.replace(contrast_wo, new_contrast, 1)
                 assert_contract(variant_section)
-                mutated = _drop_tokenizer_link(variant_section)
-                self.assertNotEqual(mutated, variant_section)
-                self.assertNotIn(_P25_PINNED_TOKENIZER, mutated)
-                with self.assertRaises(AssertionError):
-                    assert_contract(mutated)
+                check_mutations(variant_section, name)
+                self.assertNotIn(
+                    _P25_PINNED_TOKENIZER,
+                    dict(_p25_mutations(variant_section))["H_drop_tokenizer_link"],
+                )
 
         for phrase in _P25_MUST_FAIL:
             with self.subTest(must_fail=phrase):
