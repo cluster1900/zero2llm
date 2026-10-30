@@ -19,24 +19,28 @@ _P25_OFFICIAL_LAST = re.compile(r"官方(模型卡|模板|chat\s+template|解析
 # 统一大小写（Chat Template / CHAT TEMPLATE 等）
 _P25_CHAT_TEMPLATE = re.compile(r"chat\s+template", re.IGNORECASE)
 
-# 已知局限（与 main 完全相同，本 PR 不再尝试修补）
+# 已知局限（bot-hub #122 只放宽间隔、新增「…不对」分支；下列否定误报与 main 相同，本 PR 保持不变）
 # - 误报（main 会拒绝的正当表述）：带否定的 「官方做法并非错误」「官方做法不算错」
 #   「这不代表官方做法有误」「官方做法也没有错」「官方口径与本练习不同，但并非错误」
 #   「官方做法未必错」「官方解析从未被证明有误」；引述/假设/反问「“官方做法有误”是一种误解」
 #   「如果你认为官方做法错了，…」「谁说官方做法错了？」；换主语「官方是对的，我们的改写错了」；
 #   跨逗号的「官方做法，其实，没有错」；「官方做法不错」；以及中性叙述「官方文档列出了常见的错误用法」。
-# - 漏报（main 不会抓的错误断言）：bug/缺陷/不成立/不准确/不妥/不对/失误/谬误/会出错/是错的
+# - 漏报（main 不会抓的错误断言）：bug/缺陷/不成立/不准确/不妥/失误/谬误/会出错/是错的
 #   （不含「错了/错误/有误/不正确」时，且不含「做法」），如「官方口径是个 bug」「官方模板有缺陷」
 #   「官方公式不成立」「官方解析会出错」「官方的写法是错的」；全角 ＢＵＧ；「官方」与谓词隔开超过
-#   18 字或被 。/换行 隔开（「官方做法\n是错的」、跨句「官方做法如下。它是错的。」）；谓词前置
+#   30 字或被 。/换行 隔开（「官方做法\n是错的」、跨句「官方做法如下。它是错的。」）；谓词前置
 #   「错的是官方做法」；不写「官方」；英文 wrong/incorrect。
 # - 第 1–6 轮曾用否定词表/豁免/补充规则去修这些，review 证明每次都引入新的漏报或误报，
 #   第 7 轮起删除，按 #13 第 3 项允许的方式「靠人工审核把关」。
 
-# mirrors main: origin/main tests/test_batch10_text.py assert_contract 的两条 assertNotRegex，逐字复制，勿改。
+# bot-hub #122：在 main（c3943da）两条正则基础上有意放宽——间隔上限 18→30（P25.9 对照段里「官方」到谓词
+# 的合法长句可达 20+ 字，30 仍不跨 。/换行），新增第三条「…不对」：排除 不对称/不对应/不对齐 等复合词；
+# 「官方」与「不对」之间出现 没/无/本练习/我们/这里/对的 时不算（避免「官方解析没有哪里不对」「官方是对的，本练习不对」）。
+# 只增不减：main 能命中的文本这里一定命中。main_contract 与下方常量断言须与此处逐字一致。
 _P25_MAIN_PATTERNS = (
-    r"官方[^。\n]{0,18}(错误|不正确|有误|错了)",
-    r"官方[^。\n]{0,18}做法[^。\n]{0,8}(错|错误)",
+    r"官方[^。\n]{0,30}(错误|不正确|有误|错了)",
+    r"官方[^。\n]{0,30}做法[^。\n]{0,8}(错|错误)",
+    r"官方(?:(?!没|无|本练习|我们|这里|对的)[^。\n]){0,30}不对(?![称应齐照等比劲外口])",
 )
 
 
@@ -308,8 +312,9 @@ class FinalBatchTextTests(unittest.TestCase):
                 text,
             )
             for pattern in (
-                r"官方[^。\n]{0,18}(错误|不正确|有误|错了)",
-                r"官方[^。\n]{0,18}做法[^。\n]{0,8}(错|错误)",
+                r"官方[^。\n]{0,30}(错误|不正确|有误|错了)",
+                r"官方[^。\n]{0,30}做法[^。\n]{0,8}(错|错误)",
+                r"官方(?:(?!没|无|本练习|我们|这里|对的)[^。\n]){0,30}不对(?![称应齐照等比劲外口])",
             ):
                 self.assertNotRegex(text, pattern)
 
@@ -576,12 +581,13 @@ class FinalBatchTextTests(unittest.TestCase):
                     assert_contract(mutated)
                 self.assertTrue(_p25_wrong_claim_segments(phrase))
 
-    def test_p25_wrong_claim_check_is_exactly_main(self):
+    def test_p25_wrong_claim_check_is_pinned(self):
         self.assertEqual(
             _P25_MAIN_PATTERNS,
             (
-                r"官方[^。\n]{0,18}(错误|不正确|有误|错了)",
-                r"官方[^。\n]{0,18}做法[^。\n]{0,8}(错|错误)",
+                r"官方[^。\n]{0,30}(错误|不正确|有误|错了)",
+                r"官方[^。\n]{0,30}做法[^。\n]{0,8}(错|错误)",
+                r"官方(?:(?!没|无|本练习|我们|这里|对的)[^。\n]){0,30}不对(?![称应齐照等比劲外口])",
             ),
         )
         sample = "官方做法错了？官方解析有误！它很好。第二行\n官方模型卡不正确"
@@ -630,6 +636,62 @@ class FinalBatchTextTests(unittest.TestCase):
             "_unnegated_official_wrong_sentences",
         ):
             self.assertFalse(hasattr(sys.modules[__name__], name))
+
+    def test_p25_wrong_claim_widened_at_document_level(self):
+        """bot-hub #122：间隔 18→30、新增第三条「…不对」。在真实 P25.9 文档的对照段里注入后验证。"""
+        body = (ROOT / "chapters" / "08o_qwen3_case.md").read_text(encoding="utf-8")
+        section = re.search(
+            r"(?ms)^## P25\.9 .*?\{#p25\.9-thinking-budget\}.*?(?=^## P25\.10 )", body
+        ).group(0)
+        contrast = _comparison_paragraph(section)
+        self.assertIsNotNone(contrast)
+        self.assertFalse(_p25_wrong_claim_segments(section))
+
+        def inject(sentence):
+            doc = section.replace(contrast, contrast + sentence, 1)
+            self.assertNotEqual(doc, section)
+            return doc
+
+        def gap(s):
+            m = re.search(r"官方(.*?)(错误|不对|错了)", s)
+            return len(m.group(1))
+
+        must_catch = (
+            "官方做法也确实不对。",
+            "官方的 chat template 写法，坦白说，也确实不对。",
+            "官方做法不是不对，而是根本不对。",
+            "官方模型卡给出的解析方式在多闭合输入上与本练习的预期相比是错误的。",
+            "官方模板在多闭合输入上取最后一个闭合后的文本作答案，这样错了。",
+            "官方在多闭合输入上直接截取最后一个闭合之后那段文本的做法是错的。",
+        )
+        # 后两句「官方」到谓词超过 main 的 18 字上限、不超过 30 字
+        self.assertTrue(18 < gap(must_catch[3]) <= 30, gap(must_catch[3]))
+        self.assertTrue(18 < gap(must_catch[4]) <= 30, gap(must_catch[4]))
+        # 第二条正则（…做法…错）：「官方」到「做法」超过 18 字
+        self.assertTrue(18 < len(re.search(r"官方(.*?)做法", must_catch[5]).group(1)) <= 30)
+        for s in must_catch:
+            with self.subTest(must_catch=s):
+                self.assertTrue(_p25_wrong_claim_segments(inject(s)))
+
+        legit = (
+            "官方模型卡采用最后一个闭合之后的文本作为答案，与本练习的首闭合口径不同，这并没有错。",
+            "官方解析在单闭合输入上与本练习给出完全相同的结果，两者都没有问题。",
+            "官方模板与本练习的格式不对称。",
+            "官方解析与本练习的输出不对应。",
+            "官方实现和这里的张量形状不对齐。",
+            "官方口径与本练习的切分方式不对等，但各自自洽。",
+            "官方模型卡采用最后一个闭合，本练习采用首闭合。",
+            "官方解析没有哪里不对。",
+            "官方解析是对的，是本练习的计数口径不对。",
+            "官方做法无一处不对称。",
+            # 以下不含 没/无/本练习/我们/这里/对的，专门覆盖「不对」后的复合词排除
+            "官方模板里的左右标签数量不对称。",
+            "官方解析的输出顺序与输入顺序不对应。",
+            "官方实现的两段缓冲区边界不对齐。",
+        )
+        for s in legit:
+            with self.subTest(legit=s):
+                self.assertFalse(_p25_wrong_claim_segments(inject(s)))
 
     def test_neutral_completion_not_review_or_production_claim(self):
         for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):
