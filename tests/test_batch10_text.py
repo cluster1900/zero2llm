@@ -15,6 +15,7 @@ _P25_OFFICIAL = re.compile(r"官方.{0,12}(模型卡|模板|template|解析|做�
 _P25_EXERCISE = re.compile(r"(练习|教学|本章|本书).{0,16}(选择|约定|选|口径)")
 _P25_FIRST_CLOSE = re.compile(r"(首|第一个).{0,12}(闭合|</think>)")
 _P25_LAST_CLOSE = re.compile(r"(最后|末|last).{0,12}(闭合|</think>)")
+_P25_OFFICIAL_LAST = re.compile(r"官方(模型卡|模板|chat\s+template|解析)[^。；，\n]{0,12}(最后|末|last)[^。；，\n]{0,8}(闭合|</think>)", re.IGNORECASE)
 # 统一大小写（Chat Template / CHAT TEMPLATE 等）
 _P25_CHAT_TEMPLATE = re.compile(r"chat\s+template", re.IGNORECASE)
 
@@ -295,6 +296,7 @@ class FinalBatchTextTests(unittest.TestCase):
         def main_contract(text):
             self.assertRegex(text, _P25_FIRST_CLOSE)
             self.assertRegex(text, _P25_LAST_CLOSE)
+            self.assertRegex(text, _P25_OFFICIAL_LAST)
             self.assertIn("模型卡", text)
             self.assertRegex(text, _P25_CHAT_TEMPLATE)
             self.assertIn(
@@ -314,6 +316,9 @@ class FinalBatchTextTests(unittest.TestCase):
         main_contract(section)
         main_contract(_P25_CHAT_TEMPLATE.sub("Chat Template", section))
         main_contract(section.replace("首闭合", "第一个闭合"))
+        main_contract(section.replace("最后一个闭合", "最后的闭合"))
+        with self.assertRaisesRegex(AssertionError, "didn't match"):
+            main_contract(_P25_OFFICIAL_LAST.sub("官方模型卡采用首个闭合", section))
 
         removed_card = section.replace("模型卡", "")
         self.assertNotEqual(removed_card, section)
