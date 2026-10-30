@@ -1,5 +1,6 @@
 """Regression checks for the reader-facing P25–P28 integration."""
 from pathlib import Path
+import itertools
 import json
 import math
 import re
@@ -395,33 +396,6 @@ class FinalBatchTextTests(unittest.TestCase):
                     )
                 )
 
-        # 在整节上删链接（链接不一定在对照段里），再把新形式的链接放回对照段末
-        # 只为构造变体：链接文字若带对照段锚点（如「固定 chat template」），保留为纯文字
-        section_wo = re.sub(
-            r"\[([^\]]*)\]\(" + re.escape(_P25_PINNED_TOKENIZER) + r"\)",
-            lambda m: m.group(1) if ("chat template" in m.group(1) or "模型卡" in m.group(1)) else "",
-            section,
-        ).replace(_P25_PINNED_TOKENIZER, "")
-        contrast_wo = _comparison_paragraph(section_wo)
-        self.assertIsNotNone(contrast_wo)
-        # 去掉链接后留下的分隔符（如「；。」），使变体与 review 的改写一致
-        base = re.sub(r"[；，、\s]+。$", "。", contrast_wo)
-        for name, extra in (
-            ("link_label", f"；[固定 tokenizer 配置]({_P25_PINNED_TOKENIZER})"),
-            ("link_sep", f"，[固定模板]({_P25_PINNED_TOKENIZER})"),
-            ("link_and", f" 与 [固定模板]({_P25_PINNED_TOKENIZER})"),
-            ("bare_url", f"；<{_P25_PINNED_TOKENIZER}>"),
-        ):
-            with self.subTest(variant=name):
-                new_contrast = _insert_before_trailing_period(base, extra)
-                variant_section = section_wo.replace(contrast_wo, new_contrast, 1)
-                assert_contract(variant_section)
-                check_mutations(variant_section, name)
-                self.assertNotIn(
-                    _P25_PINNED_TOKENIZER,
-                    dict(_p25_mutations(variant_section))["H_drop_tokenizer_link"],
-                )
-
         # r11 N05：对照段正文写「模板」，chat template 只出现在 tokenizer 链接文字里；
         # 正文没有这两处原措辞时不改写（变体即原文），避免绑定章节措辞
         if "同 revision 的 chat template" in contrast and "[固定模板]" in contrast:
@@ -430,11 +404,45 @@ class FinalBatchTextTests(unittest.TestCase):
             ).replace("[固定模板]", "[固定 chat template]", 1)
         else:
             n05_contrast = contrast
+        n05_section = section.replace(contrast, n05_contrast, 1)
         with self.subTest(variant="ct_in_link_label"):
-            variant_section = section.replace(contrast, n05_contrast, 1)
-            assert_contract(variant_section)
-            self.assertIn(n05_contrast, _comparison_paragraph(variant_section))
-            check_mutations(variant_section, "ct_in_link_label")
+            assert_contract(n05_section)
+            self.assertIn(n05_contrast, _comparison_paragraph(n05_section))
+            check_mutations(n05_section, "ct_in_link_label")
+
+        # 在整节上删链接（链接不一定在对照段里），再把新形式的链接放回对照段末。
+        # 真实正文和 ct_in_link_label 都走这一构造（后者的 chat template 只在链接文字里）
+        h_bases = []
+        for h_label, h_doc in (("real", section), ("ct_in_link_label", n05_section)):
+            # 只为构造变体：链接文字若带对照段锚点（如「固定 chat template」），保留为纯文字
+            section_wo = re.sub(
+                r"\[([^\]]*)\]\(" + re.escape(_P25_PINNED_TOKENIZER) + r"\)",
+                lambda m: m.group(1) if ("chat template" in m.group(1) or "模型卡" in m.group(1)) else "",
+                h_doc,
+            ).replace(_P25_PINNED_TOKENIZER, "")
+            contrast_wo = _comparison_paragraph(section_wo)
+            self.assertIsNotNone(contrast_wo, h_label)
+            # 去掉链接后留下的分隔符（如「；。」），使变体与 review 的改写一致
+            base = re.sub(r"[；，、\s]+。$", "。", contrast_wo)
+            h_bases.append((h_label, section_wo, contrast_wo, base))
+        h_extras = (
+            ("link_label", f"；[固定 tokenizer 配置]({_P25_PINNED_TOKENIZER})"),
+            ("link_sep", f"，[固定模板]({_P25_PINNED_TOKENIZER})"),
+            ("link_and", f" 与 [固定模板]({_P25_PINNED_TOKENIZER})"),
+            ("bare_url", f"；<{_P25_PINNED_TOKENIZER}>"),
+        )
+        for (h_label, section_wo, contrast_wo, base), (name, extra) in itertools.product(
+            h_bases, h_extras
+        ):
+            with self.subTest(variant=name, h_doc=h_label):
+                new_contrast = _insert_before_trailing_period(base, extra)
+                variant_section = section_wo.replace(contrast_wo, new_contrast, 1)
+                assert_contract(variant_section)
+                check_mutations(variant_section, name)
+                self.assertNotIn(
+                    _P25_PINNED_TOKENIZER,
+                    dict(_p25_mutations(variant_section))["H_drop_tokenizer_link"],
+                )
 
         # 整节变换：前置小结/回顾、首段点名、重复对照段；不断言 variant != section
         for name, variant_section in (
