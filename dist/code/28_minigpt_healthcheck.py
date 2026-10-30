@@ -325,6 +325,9 @@ def negative_controls(base, tokens):
                                          'pos = torch.arange(T, device=idx.device)'),
     }
     expected = base(tokens)[0]
+    first_ok, cache_ok = good(base, tokens[:, :3], None)
+    rest_ok, _ = good(base, tokens[:, 3:], cache_ok)
+    before_split = float((torch.cat((first_ok, rest_ok), 1) - expected).abs().max())
     rows = []
     for name, forward in variants.items():
         first, cache = forward(base, tokens[:, :3], None)
@@ -335,20 +338,22 @@ def negative_controls(base, tokens):
         delta = float((actual - expected).abs().max())
         if torch.allclose(actual, expected, atol=ATOL, rtol=RTOL):
             raise AssertionError(f'{name} survived the equivalence oracle')
-        rows.append({'name': name, 'caught': True, 'max_logit_error': delta})
+        rows.append({'name': name, 'caught': True, 'max_logit_error': delta,
+                     'before_error': before_split})
     # Same model/shape/weight signature, WRONG request history: owner checks cannot
     # know which prompt the caller intended. No forgery or signature bypass here.
     _, stale = good(base, tokens[:, :3], None)
     other = (tokens[:, :4] + 7) % base.config.vocab_size
     fresh, _ = good(base, other, None)
-    check_close(fresh, base(other)[0])
+    before_fresh = check_close(fresh, base(other)[0])
     polluted, _ = good(base, other, stale)
     if not torch.isfinite(polluted).all():
         raise AssertionError('cache pollution must produce finite logits')
     if torch.allclose(polluted, fresh, atol=ATOL, rtol=RTOL):
         raise AssertionError('cache pollution survived fresh-request oracle')
     rows.append({'name': 'cache_pollution', 'caught': True,
-                 'max_logit_error': float((polluted - fresh).abs().max())})
+                 'max_logit_error': float((polluted - fresh).abs().max()),
+                 'before_error': before_fresh})
     return rows
 
 
