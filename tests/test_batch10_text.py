@@ -444,6 +444,26 @@ class FinalBatchTextTests(unittest.TestCase):
                 ),
             ),
             (
+                "decoy_no_card",
+                section.replace(contrast, "回顾：本章选择首闭合，官方 chat template 取最后一个闭合。\n\n" + contrast, 1),
+            ),
+            (
+                "decoy_no_official",
+                section.replace(contrast, "回顾：本章选择首闭合，模型卡与 chat template 取最后一个闭合。\n\n" + contrast, 1),
+            ),
+            (
+                "decoy_no_exercise",
+                section.replace(contrast, "回顾：官方模型卡与 chat template 取最后一个闭合，而不是首闭合。\n\n" + contrast, 1),
+            ),
+            (
+                "decoy_no_first",
+                section.replace(contrast, "回顾：本章选择的口径与官方模型卡、chat template 取最后一个闭合不同。\n\n" + contrast, 1),
+            ),
+            (
+                "decoy_no_last",
+                section.replace(contrast, "回顾：本章选择首闭合，与官方模型卡、chat template 的口径不同。\n\n" + contrast, 1),
+            ),
+            (
                 "dup_comparison",
                 section.replace(contrast, contrast + "\n\n" + contrast, 1),
             ),
