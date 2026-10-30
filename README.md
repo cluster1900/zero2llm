@@ -29,7 +29,7 @@
 - **P21–P23 正文与 CPU 实验已实现**：对话 SFT / assistant-only loss / LoRA，DPO / GRPO 手算与策略更新，以及 S6 教学 MTP、可验证预算和草稿验证。教学模型、框架配置与真实生产训练严格区分。见[第八批验证](docs/batch8-validation.md)。
 - **P24–P26 正文与 CPU 实验已实现**：量化与推理框架路线、固定 revision 的 Qwen3 配置案例，以及 DeepSeek V3/R1/V4.1 的组件与证据地图。官方报告、教学实验和未运行硬件路线分别标明，见[第九批验证](docs/batch9-validation.md)。实现与验证范围见记录，审核和发布状态以对应 PR / Release 为准。
 - **P27–P28 正文与综合 CPU 体检已实现**：S0–S6 的同配置验证、checkpoint 边界、负例与单变量报告；附录汇总术语/数学/证据更新流程。原 P00–P28 大纲的内容已覆盖，不等于所有生产技术或 GPU 性能都已复现。见[第十批验证](docs/batch10-validation.md)，审核/发布状态仍以 PR 和 Release 为准。
-- **已实现的教学主线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP。原大纲 29 个单元的内容已实现；旧文件名和锚点保留，审核和发布以 PR / Release 为准。#28/#29 前沿更新属于后续范围，不属于本轮原大纲交付。
+- **已实现的教学主线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP。原大纲 29 个单元的内容已实现；旧文件名和锚点保留，审核和发布以 PR / Release 为准。#28/#29 等前沿补充也已实现，见各章延伸小节。
 
 为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，P15–P17 以 08e/08f/08g 插入，P18–P20 以 08h/08i/08j 插入，P21–P23 以 08k/08l/08m 插入，P24/P25 以 08n/08o 插入；P26 改写旧第 9 章案例并保留旧文件名与锚点，P27 插为 09a，P28 保留附录旧链接，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)、[第五批记录](docs/batch5-validation.md)、[第六批记录](docs/batch6-validation.md)、[第七批记录](docs/batch7-validation.md)、[第八批记录](docs/batch8-validation.md)、[第九批记录](docs/batch9-validation.md)与[第十批记录](docs/batch10-validation.md)。
 

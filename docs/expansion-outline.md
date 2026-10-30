@@ -1,15 +1,15 @@
 # 从基础 Transformer 到现代大模型：扩展大纲（已审核）
 
-状态：**大纲已审核；P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)），P03–P05 正文与 CPU 示例已实现（[第二批验证](batch2-validation.md)），P06–P08 正文与 CPU 示例已实现（[第三批验证](batch3-validation.md)），P27–P28 正文与综合 CPU 体检已实现，详见[第十批验证](batch10-validation.md)**。原大纲日期 2026-10-18，基于 `72c39df`。
+状态：**大纲已审核；P00–P28 正文、CPU 示例与前沿补充均已实现**。P00–P02 见 [PR #2](https://github.com/cluster1900/zero2llm/pull/2)，P03–P05 见[第二批验证](batch2-validation.md)，P06–P08 见[第三批验证](batch3-validation.md)，P27–P28 正文与综合 CPU 体检见[第十批验证](batch10-validation.md)，其余批次见下列各行。原大纲日期 2026-10-18，基于 `72c39df`。
 P09–P11 正文、S0/S1 代码与 CPU 实验已实现，见[第四批验证](batch4-validation.md)。P09/P11 用 07a/08a 文件插入；旧章节编号与链接保留。
-P12–P14 正文与 S2/S3/S4 CPU 示例已实现，见[第五批验证](batch5-validation.md)；YaRN 机制导读与独立 MLA 小矩阵不等于完整生产实现。新增 08b/08c/08d，继续保留旧链接。
-P15–P17 正文与独立 CPU 机制实验已实现，见[第六批验证](batch6-validation.md)；不把教学模拟、官方激活参数口径或路径计数当成 GPU 性能或真实 CED 权重复现。新增 08e/08f/08g，S4 主线不变。
-P18–P20 正文与 CPU 实验已实现，见[第七批验证](batch7-validation.md)。S5 为教学 MoE；框架/多卡的实际验证边界见记录，不将安装说明视为运行结果。新增 08h/08i/08j。
-P21–P23 正文与 CPU 实验已实现，见[第八批验证](batch8-validation.md)。S6 为可选教学 MTP；SFT/LoRA/偏好优化与草稿验证均限定实际测试范围。新增 08k/08l/08m。
-P24–P26 正文与 CPU 实验已实现，实际 CPU 验证与未运行范围见[第九批验证](batch9-validation.md)。新增 08n/08o，P26 改写旧 09 并保留旧链接；固定官方配置、教学实验与未运行框架路线分别标明。
+P12–P14 正文与 S2/S3/S4 CPU 示例已实现，见[第五批验证](batch5-validation.md)；YaRN 机制导读与独立 MLA 小矩阵不等于完整生产实现。以 08b/08c/08d 插入，旧链接保留。
+P15–P17 正文与独立 CPU 机制实验已实现，见[第六批验证](batch6-validation.md)；不把教学模拟、官方激活参数口径或路径计数当成 GPU 性能或真实 CED 权重复现。以 08e/08f/08g 插入，S4 主线不变。
+P18–P20 正文与 CPU 实验已实现，见[第七批验证](batch7-validation.md)。S5 为教学 MoE；框架/多卡的实际验证边界见记录，不将安装说明视为运行结果。以 08h/08i/08j 插入。
+P21–P23 正文与 CPU 实验已实现，见[第八批验证](batch8-validation.md)。S6 为可选教学 MTP；SFT/LoRA/偏好优化与草稿验证均限定实际测试范围。以 08k/08l/08m 插入。
+P24–P26 正文与 CPU 实验已实现，实际 CPU 验证与未运行范围见[第九批验证](batch9-validation.md)。以 08n/08o 插入，P26 改写旧 09 并保留旧链接；固定官方配置、教学实验与未运行框架路线分别标明。
 P27–P28 新增 09a 综合体检并改写 10 附录，保留旧链接；原大纲内容覆盖完成，审核与发布仍以各 PR 为准。
 任务：[bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14)；对照[原目录快照](https://github.com/cluster1900/bot-hub/blob/main/materials/14/current-toc.md)。
-Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1#issuecomment-6246985285)通过大纲。按每批 2–3 章撰写并逐批审核；本文保留设计方案，实际进度以 [README](../README.md) 为准。
+Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1#issuecomment-6246985285)通过大纲。已按每批 2–3 章撰写并逐批审核；本文作为设计记录与索引保留，当前内容以 [README](../README.md) 为准。
 
 ## 设计原则与阅读路线
 
@@ -17,8 +17,8 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 先跑通小模型，再每次只换一个部件；不把框架安装命令当成算法解释，也不把三首诗的记忆当成通用语言能力。
 - CPU 必修主线止于教学级实现；GPU 性能、多卡训练、大模型权重为选修，必须写明显存、版本、耗时和跳过条件。不宣称普通电脑可完整复现 DeepSeek。
 - 基础篇 P00–P10；架构与推理篇 P11–P18；训练与应用篇 P19–P24；案例与更新篇 P25–P28。
-- P 编号是**规划 ID**，不重命名现有章节，也不生成不存在的链接。当前可读正文仍见 [README](../README.md)。
-- 每章以下“实验”描述设计计划；P00–P28 的实际结果与未运行边界见各批次记录；“已实现”不等于复现每一种生产功能。新增代码路径、文件名等到对应批次落地再登记。
+- P 编号是大纲单元 ID，不重命名现有章节，也不生成不存在的链接。当前可读正文仍见 [README](../README.md)。
+- 每章下面的“实验”是原大纲的设计描述；实际结果与未运行边界见各批次记录；“已实现”不等于复现每一种生产功能。
 
 ## 逐章大纲
 
@@ -86,7 +86,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P05–P06；梯度的直觉。
 - 旧章关系：保留 `06_residual_layernorm_ffn.md` 基础主体，RMSNorm / SwiGLU 系统讲解移 P13。
 - 来源：S01、S06、S07。
-- 前沿补充（bot-hub #28，已实现，v1.14.0）：扩展阅读框“AttnRes：沿深度做注意力的残差”——每层用可学习 pseudo-query 对 embedding 与此前各 block 输出做 softmax 加权，而非等权累加；与 P26 的残差/混合连接内容交叉引用。CPU 玩具：N 个 block 的权重和为 1，权重均等时与普通残差对照。来源：S29（AttnRes 原论文在写正文时从 S29 参考文献找到原文再引）。正文见 P07 6.9（chapters/06_residual_layernorm_ffn.md）；代码 `code/14b_attnres_situ.py`。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：扩展阅读框“AttnRes：沿深度做注意力的残差”——每层用可学习 pseudo-query 对 embedding 与此前各 block 输出做 softmax 加权，而非等权累加；与 P26 的残差/混合连接内容交叉引用。CPU 玩具：N 个 block 的权重和为 1，权重均等时与普通残差对照。来源：S29（正文已引 AttnRes 原论文 arXiv:2603.15031，见 P07 6.9）。正文见 P07 6.9（chapters/06_residual_layernorm_ffn.md）；代码 `code/14b_attnres_situ.py`。
 
 ### P08 编码器、解码器与生成循环
 - 目标：明确三类 Transformer 架构和 token 生成过程，避免把 CED 与传统翻译模型混为一谈。
@@ -139,7 +139,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P07、P10–P12。
 - 旧章关系：新增，扩写旧第 6 / 9 章相关摘要。
 - 来源：S06、S07。
-- 前沿补充（bot-hub #28，已实现，v1.14.0）：SiTU-GLU 与 SwiGLU 对照（对门控两个因子做有界 softcap，抑制低精度溢出）；公式与动机写正文时按 S29 对应章节逐条核对。正文见 P13.13（chapters/08c_modern_block.md）；代码 `code/14b_attnres_situ.py`。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：SiTU-GLU 与 SwiGLU 对照（对门控两个因子做有界 softcap，抑制低精度溢出）；公式与参数已按 S29 §2.3.2 Eq.12 与 Table 1 核对（β₁=4、β₂=25，核验 2026-10-26），见 P13.13。正文见 P13.13（chapters/08c_modern_block.md）；代码 `code/14b_attnres_situ.py`。
 
 ### P14 MHA、MQA、GQA 与 MLA
 - 目标：区分共享 KV 头与潜变量压缩，不把所有压缩都叫 GQA。
@@ -181,7 +181,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P13–P14；P15 性能指标。
 - 旧章关系：新增，扩写旧第 9 章 MoE。
 - 来源：S09、S19。
-- 前沿补充（bot-hub #28，已实现，v1.14.0）：Stable LatentMoE（路由专家在压缩 latent 宽度上计算，每 token 激活 896 个路由专家中的 16 个，S29 摘要）与 Quantile Balancing；CPU 实验复现 S29 中 m=8、n=4、k=1 的小例子（写正文时核对图号与定义）。正文见 P18.13（chapters/08h_moe.md）；代码 `code/19b_latent_moe_qb.py`。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：Stable LatentMoE（路由专家在压缩 latent 宽度上计算，每 token 激活 896 个路由专家中的 16 个，S29 摘要）与 Quantile Balancing；CPU 实验复现 S29 中 m=8、n=4、k=1 的小例子（图号与定义已核对：S29 Figure 5、§2.3 Eq.11 与 Table 1，见 P18.13）。正文见 P18.13（chapters/08h_moe.md）；代码 `code/19b_latent_moe_qb.py`。
 
 ### P19 预训练：从三首诗到数据流水线
 - 目标：理解数据质量、计算预算和评估决定什么。
@@ -214,7 +214,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P21；对数概率和期望的补充小节。
 - 旧章关系：新增。
 - 来源：S17、S23、S24。
-- 前沿补充（bot-hub #29，已实现，v1.14.0）：“on-policy 蒸馏与多教师合并（MOPD）”小节，讲清与 off-policy SFT 蒸馏的区别；案例为 Kimi K3（按领域与推理强度训练多个 RL 专家再合并，S29 §4.1）与 Nemotron 3.5 Super（S30/S32）。CPU 实验：小词表 teacher/student 分布上手算逐 token 奖励 `clip(sg(log π_teacher/π_θ), −R_max, R_max)` 并验证 clip。公式与数字在写正文时逐条对照原文，原始 on-policy 蒸馏论文从参考文献找到后引原文。正文见 P22.11（chapters/08l_preference_optimization.md）；代码 `code/23b_mopd_reward.py`。
+- 前沿补充（bot-hub #29，已实现，v1.14.0）：“on-policy 蒸馏与多教师合并（MOPD）”小节，讲清与 off-policy SFT 蒸馏的区别；案例为 Kimi K3（按领域与推理强度训练多个 RL 专家再合并，S29 §4.1）与 Nemotron 3.5 Super（S30/S32）。CPU 实验：小词表 teacher/student 分布上手算逐 token 奖励 `clip(sg(log π_teacher/π_θ), −R_max, R_max)` 并验证 clip。逐 token 奖励按 S29 §4.1 Eq.15 写入正文；on-policy 蒸馏引 K3 §4.1.3 所引的 Thinking Machines Lab 公开讲解；S30 的 MOPD 描述按官方文档写入（核验 2026-10-26）。原始 on-policy 蒸馏学术论文未单独引用，K3 引用的 MiMo-V2-Flash、DeepSeek-V4 多教师细节未逐条核对（正文已注明）。正文见 P22.11（chapters/08l_preference_optimization.md）；代码 `code/23b_mopd_reward.py`。
 - 前沿补充（bot-hub #91，已实现，v1.14.0，v1.14.1 勘误）：P22.12“学生等于老师，梯度却不为 0”（Softmax Cancellation，S34 §3 Eq. 8–9、§7）；`code/23c_softmax_cancellation.py` 复现项目页 fp32 例子并验证学生等于老师时修正版梯度精确为 0。与 #29 MOPD 小节（P22.11）交叉引用，不重复其内容。正文见 P22.12（chapters/08l_preference_optimization.md）；代码 `code/23c_softmax_cancellation.py`。
 
 ### P23 推理模型、MTP 与投机解码
@@ -235,7 +235,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P15、P20–P23。
 - 旧章关系：新增；不保证任一框架支持任一最新模型。
 - 来源：S15、S16、S26、S27、S22。
-- 前沿补充（bot-hub #29，已实现，v1.14.0）：MXFP4 / NVFP4 块缩放格式；PTQ vs QAT vs QAD；“训练与 rollout 用同一量化”的意义（K3 MXFP4 QAT，S29）；Nemotron 3.5 Super NVFP4 checkpoint（S30/S32）；与 V4.1-Flash 的 FP4 KV（S12）对照“权重 / 激活 / KV”三种量化对象。CPU 实验：FP4 E2M1 + 每 16 通道一个 scale 的量化误差，对比 per-tensor scale。格式规范写正文时引 OCP MX 规范原文。正文见 P24.15（chapters/08n_quantized_serving.md）；代码 `code/25c_fp4_block.py`。
+- 前沿补充（bot-hub #29，已实现，v1.14.0）：MXFP4 / NVFP4 块缩放格式；PTQ vs QAT vs QAD；“训练与 rollout 用同一量化”的意义（K3 MXFP4 QAT，S29）；Nemotron 3.5 Super NVFP4 checkpoint（S30/S32）；与 V4.1-Flash 的 FP4 KV（S12）对照“权重 / 激活 / KV”三种量化对象。CPU 实验：FP4 E2M1 + 每 16 通道一个 scale 的量化误差，对比 per-tensor scale。正文已引 OCP MX v1.0 规范原文 §5.2，见 P24.15。正文见 P24.15（chapters/08n_quantized_serving.md）；代码 `code/25c_fp4_block.py`。
 
 ### P25 Qwen3 案例：读配置而不是背参数表
 - 目标：把一个明确版本的开源模型映射到全书机制。
@@ -260,7 +260,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 代码 / 实验：一条 CPU smoke 命令覆盖基线、KV cache、RoPE、GQA、MoE；单变量报告；GPU 基准单独记录；坏 mask、错位置、缓存污染的负例测试。
 - 前置：P10–P18、P23；训练扩展选读 P19–P22。
 - 旧章关系：新增；保留 `code/07_baby_gpt.py` 作为历史基准，不把所有开关塞进初学者第一份源码。
-- 来源：上述组件原始论文与官方实现；实测报告由后续 PR 提供。
+- 来源：上述组件原始论文与官方实现；实测结果见[第十批验证记录](batch10-validation.md)。
 
 ### P28 附录：术语、数学与前沿跟踪
 - 目标：提供可维护、可纠错的学习参考，而非追逐未核实消息。
@@ -284,7 +284,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 | S5 | P18 | 教学 MoE | 路由 / 计数 / 梯度；空专家；负载记录 |
 | S6 | P23 / P27 | 可选 MTP / draft-verify 教学支线 | loss 对齐；贪心验证；不假称生产 DSpark |
 
-后续拟以独立阶段脚本或清晰模块组织；共享数据、配置和测试，避免每章复制一份无法同步的大脚本。所有阶段先在 CPU、小张量和固定种子下验证；容差须随 dtype 记录。不同阶段改变模型结构时须重新训练或明确权重转换，不能要求新旧模型语义等价。只有同配置、同权重的缓存 / 非缓存和数学等价实现做数值对齐。
+各阶段以独立阶段脚本或清晰模块组织；共享数据、配置和测试，避免每章复制一份无法同步的大脚本。所有阶段先在 CPU、小张量和固定种子下验证；容差须随 dtype 记录。不同阶段改变模型结构时须重新训练或明确权重转换，不能要求新旧模型语义等价。只有同配置、同权重的缓存 / 非缓存和数学等价实现做数值对齐。
 
 MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入每个主线阶段。性能结果记录设备、软件版本、序列长度、batch、warm-up、同步方法、重复次数和误差范围；CPU 模拟只证明机制，不证明 GPU 加速。
 
@@ -296,11 +296,11 @@ MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入
 - 官方模型卡说明 40 层分成 20+20 层；decoder 的 global KV 从 encoder 最终 hidden states 投影。局部 SWA 另有状态，不能写成 decoder 不需要处理任何 prompt。[S13]
 - 报告的 SWA Bounded Replay 是近似重建而非完整等价重算。CED、CSA2 跨层缓存共享和量化各自解决不同问题，不把所有显存收益归给 CED。[S12 §2.2、§2.3、§3.2.2]
 - 官方 inference README 说明它是可读参考实现，generation 为普通自回归采样；其小模型 self-test 使用未初始化权重，仅检查形状 / kernel plumbing，不能当成数值正确性或模型质量验证。[S13]
-- 本次未运行官方大模型、未复现速度 / 质量指标。正文撰写时固定模型 revision 与配置；缺乏证据的 checkpoint 支持、端到端收益或兼容性一律标“待核实”，不能由博客或模型名推断。
+- 本次未运行官方大模型、未复现速度 / 质量指标。正文引用官方配置处已固定 revision 与配置（P25 Qwen3 案例、P26 DeepSeek 配置清单）；缺乏证据的 checkpoint 支持、端到端收益或兼容性一律标“待核实”，不能由博客或模型名推断。
 
 ## 旧章节处置与发布一致性
 
-| 现有文件 | 规划落点 | 处理方式 |
+| 现有文件 | 大纲落点 | 处理方式 |
 | --- | --- | --- |
 | `00_preface.md` | P00 | 改写路线图，保留导读 |
 | `01_word_embedding.md` | P01 | 保留并审校 |
@@ -314,14 +314,14 @@ MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入
 | `09_modern_llms.md` | P11–P26 | 分主题扩写；不保留“摘要替代整章”的结构 |
 | `10_appendix.md` | P28 | 保留词典公式，新增更新流程 |
 
-原 #11 审校结果保留，后续对相关章节逐项复用与重测；原大纲 PR 不混入审校补丁；实现批次只复用相关修正并重测，同步正文、代码与 `dist/`。
-大纲放在 `docs/` 而非 `chapters/`，不会被当前 build.py 误编译成正式章节。README 保留可读的旧目录，新增独立的“规划中”入口；正文、源码、README、目录、HTML/EPUB 和实验记录在每批实现 PR 中一起更新。未存在的文件只写计划名称，不创建虚假链接。
+原 #11 审校结果保留，并已在相关章节逐项复用与重测；原大纲 PR 不混入审校补丁；实现批次只复用相关修正并重测，同步正文、代码与 `dist/`。
+大纲放在 `docs/` 而非 `chapters/`，不会被 build.py 编译成正式章节；它是原设计与前沿补充的索引，当前可读目录以 README 为准；正文、源码、README、目录、HTML/EPUB 与实验记录已在各批实现 PR 中同步更新。
 
 ## 分批实施与审核停点
 
 1. 大纲 PR（zero2llm PR #1，已审核）：审核主题覆盖、难度、CED 事实和章节顺序；P00–P28 正文已按下列批次实现。
-2. 审核后每批 2–3 章，建议依序：P00–P02、P03–P05、P06–P08、P09–P10、P11–P13、P14–P16、P17–P18、P19–P20、P21–P23、P24–P26、P27–P28。
-3. 每批单独分支和 PR；交付正文、图解、源码、测试和 README 进度更新。现有章号在迁移方案审核前不变；真正重编号时修复全部内部链接并保留旧入口或明确迁移表。
+2. 审核后每批 2–3 章，实际批次为：P00–P02、P03–P05、P06–P08、P09–P11、P12–P14、P15–P17、P18–P20、P21–P23、P24–P26、P27–P28（第一至第十批）。
+3. 每批单独分支和 PR，已交付正文、图解、源码、测试和 README 进度更新。现有章号未重编号，新单元以插入文件方式加入并保留旧入口。
 4. CPU 核心实验须可运行；GPU / 多卡实验要么实际验证，要么标明未测及硬件条件。跑书籍构建、资源 / 链接校验；图解改变时补布局检查；失败不得写成“通过”。
 5. 对尚无实测支持的性能宣传、模型私有架构、未经核验的新版本不作事实陈述。不直接 push main、不合并、不触发发布替换。
 
@@ -334,7 +334,7 @@ MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入
 
 ## 官方 / 原始资料索引
 
-核验日 2026-10-18。下列为章节写作的依据和入口，不是已跑通的软件版本清单；动态文档在实现时锁定版本。核心新事实优先版本化论文与官方模型仓库，不采用第三方 issue、未合并 PR 或营销摘要作为架构证据。
+核验日 2026-10-18。下列为章节写作的依据和入口，不是已跑通的软件版本清单；动态文档的版本以各章引用处的核验日期为准。核心新事实优先版本化论文与官方模型仓库，不采用第三方 issue、未合并 PR 或营销摘要作为架构证据。
 
 - S01：[Attention Is All You Need](https://arxiv.org/abs/1706.03762)，基础 attention、位置编码、encoder-decoder。
 - S02：[HF Tokenizers](https://huggingface.co/docs/tokenizers/index)，分词流水线与官方实现入口。
@@ -365,7 +365,7 @@ MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入
 - S27：[TensorRT-LLM 官方文档](https://nvidia.github.io/TensorRT-LLM/)。
 - S28：[Qwen3 官方介绍](https://qwenlm.github.io/blog/qwen3/)，模型族、思考模式和官方模型入口。
 - S29：[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（提交 2026-07-27，核验 2026-10-25：摘要确认 2.8T 总参 / 104B 激活、1M 上下文、KDA、Attention Residuals、Stable LatentMoE 16/896）。
-- S30：[Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（核验可访问 2026-10-25；MOPD、NVFP4 数字写正文时逐条核对）。
+- S30：[Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（核验可访问 2026-10-25；MOPD 与 NVFP4 数字已在 P22.11、P24.15 按官方文档写入并标核验日期 2026-10-26，均为厂商报告）。
 - S31：[Nemotron 3.5 Lightning 官方预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)（核验 2026-10-25：52 层 = 23 Mamba-2 + 6 注意力 + 23 MoE，128 路由专家 top-6 + 1 共享）。
 - S32：[Nemotron 3.5 Super & Lightning 技术报告（PDF）](https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3.5-Super-and-Lightning-Technical-Report.pdf)（核验可访问 2026-10-25）。
 - S33：[Muse Spark Open 的 Transformers 官方模型文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)（核验 2026-10-25：816B 总参 / 42B 激活，sliding_window=2048，128 注意力头 / 16 KV 头，`layer_rope_theta` 的 NoPE 约定）；[Meta 官方博客](https://research.meta.ai/blog/muse-spark-open)。
