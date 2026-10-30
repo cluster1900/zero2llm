@@ -8,6 +8,32 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 GOLD_MTP = ROOT / "docs" / "gold" / "p27_healthcheck_mtp.json"
 
+# P25.9 语义锚点：对照关系，而不是冻住某次措辞。
+_P25_OFFICIAL = re.compile(r"官方.{0,12}(模型卡|模板|template|解析|做法|口径)")
+_P25_EXERCISE = re.compile(r"(练习|教学|本章|本书).{0,16}(选择|约定|选|口径)")
+_P25_FIRST_CLOSE = re.compile(r"(首|第一个).{0,12}(闭合|</think>)")
+_P25_LAST_CLOSE = re.compile(r"(最后|末|last).{0,12}(闭合|</think>)")
+_P25_PINNED_HF = re.compile(r"huggingface\.co/Qwen/Qwen3[^)\s]*/blob/[0-9a-f]{40}/")
+_P25_OFFICIAL_WRONG = re.compile(r"官方[^。]*(错|不正确|有误|不对|不可靠|有问题)")
+_P25_NEGATION = re.compile(r"并非|不是|不代表")
+
+
+def _md_paragraphs(text):
+    return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+
+def _drop_sentences_matching(text, pattern):
+    """按。去掉匹配句，避免 replace(精确子串) 静默空操作。"""
+    kept, last = [], 0
+    for m in re.finditer(r"[^。]*。", text):
+        if not pattern.search(m.group(0)):
+            kept.append(m.group(0))
+        last = m.end()
+    tail = text[last:]
+    if tail and not pattern.search(tail):
+        kept.append(tail)
+    return "".join(kept)
+
 
 class FinalBatchTextTests(unittest.TestCase):
     def test_reading_order_and_readme_links(self):
@@ -28,32 +54,46 @@ class FinalBatchTextTests(unittest.TestCase):
         self.assertIsNotNone(match)
         section = match.group(0)
 
+        def contrast_paragraphs(text):
+            return [
+                p for p in _md_paragraphs(text)
+                if _P25_OFFICIAL.search(p) and _P25_EXERCISE.search(p)
+            ]
+
         def assert_contract(text):
-            self.assertIn("首闭合", text)
-            self.assertIn("最后一个闭合", text)
-            self.assertIn("模型卡", text)
-            self.assertIn("chat template", text)
-            self.assertIn(
-                "https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md",
-                text,
+            paras = contrast_paragraphs(text)
+            self.assertTrue(paras, "P25.9 缺少同一段内的官方/练习对照")
+            hit = next(
+                (p for p in paras if _P25_FIRST_CLOSE.search(p) and _P25_LAST_CLOSE.search(p)),
+                None,
             )
-            self.assertIn(
-                "https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json",
-                text,
-            )
-            for pattern in (
-                r"官方[^。\n]{0,18}(错误|不正确|有误|错了)",
-                r"官方[^。\n]{0,18}做法[^。\n]{0,8}(错|错误)",
-            ):
-                self.assertNotRegex(text, pattern)
+            self.assertIsNotNone(hit, "对照段未同时提到首闭合与最后闭合")
+            self.assertRegex(text, _P25_PINNED_HF)
+            for sent in hit.split("。"):
+                wrong = _P25_OFFICIAL_WRONG.search(sent)
+                if wrong:
+                    self.assertRegex(sent[: wrong.start(1)], _P25_NEGATION)
 
         assert_contract(section)
-        removed_comparison = section.replace("模型卡", "", 1).replace("chat template", "", 1)
+
+        no_official = _drop_sentences_matching(section, re.compile(r"官方"))
+        self.assertNotEqual(no_official, section)
         with self.assertRaises(AssertionError):
-            assert_contract(removed_comparison)
-        official_error = section.replace("官方模型卡采用最后一个闭合位置", "官方模型卡采用错误位置", 1)
+            assert_contract(no_official)
+
+        no_exercise = _drop_sentences_matching(section, re.compile(r"练习|教学"))
+        self.assertNotEqual(no_exercise, section)
         with self.assertRaises(AssertionError):
-            assert_contract(official_error)
+            assert_contract(no_exercise)
+
+        contrast = next(
+            p for p in contrast_paragraphs(section)
+            if _P25_FIRST_CLOSE.search(p) and _P25_LAST_CLOSE.search(p)
+        )
+        smeared = section.replace(contrast, contrast + "官方模型卡的做法是错误的。", 1)
+        self.assertNotEqual(smeared, section)
+        with self.assertRaises(AssertionError):
+            assert_contract(smeared)
 
     def test_neutral_completion_not_review_or_production_claim(self):
         for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):
