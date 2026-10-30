@@ -225,8 +225,8 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 旧章关系：新增。
 - 来源：S09、S25、S12（仅用于比较 V4.1 的 DSpark 与 V3 的 MTP，不混写训练方案）。
 - 前沿补充（bot-hub #29，已实现，v1.14.0）：推理强度预算控制（K3：超出 τ·b0 的轨迹奖励置为 −1，S29 §4.1.2）；MTP → 草稿模型与 LK loss `−log Σ_x min(p,q)`；接受率 Σmin(p,q)。PR #23（已合并，v1.13.0）已实现 Σmin(p,q) 的 Monte Carlo 对照（DSpark 的置信目标），本项只补预算控制与 LK loss。正文见 P23.14（chapters/08m_reasoning_mtp.md）；代码 `code/24c_budget_lk.py`。
-- 前沿补充（bot-hub #46）：P23.15“为什么 batch 一大投机就不划算，以及 EAGLE-4 怎么按代价选树或链”；对照表增加 EAGLE-4 列（草稿产生、隐藏状态、树／链、随 batch 调整、低秩候选头、滑窗 4096）；`code/24d_eagle4_cost.py` 用 ΔA/ΔC≥τ 选链长 k，并做低秩候选头乘法对比；贪心验收与基线一致。论文为仓库内 Preprint PDF（无 arXiv），许可源码可见；厂商速度数字标报告、不复现 27B。
-- 前沿补充（bot-hub #106）：P23.16“FlashMap——用 flow map 一次写出有块内依赖的草稿”；对照表 EAGLE / DFlash / FlashMap；`code/24e_flashmap_joint.py` 用两模式联合 vs 独立草稿演示接受长度与 shuffle Δ，贪心验收与基线一致。论文 arXiv:2610.24365v1，代码 al-jshen/flashmap@cd5b45b；数字标论文自报、不复现 Qwen3。
+- 前沿补充（bot-hub #46，已实现）：P23.15“为什么 batch 一大投机就不划算，以及 EAGLE-4 怎么按代价选树或链”；对照表增加 EAGLE-4 列（草稿产生、隐藏状态、树／链、随 batch 调整、低秩候选头、滑窗 4096）；`code/24d_eagle4_cost.py` 用 ΔA/ΔC≥τ 选链长 k，并做低秩候选头乘法对比；贪心验收与基线一致。论文为仓库内 Preprint PDF（无 arXiv），许可源码可见；厂商速度数字标报告、不复现 27B。
+- 前沿补充（bot-hub #106，已实现）：P23.16“FlashMap——用 flow map 一次写出有块内依赖的草稿”；对照表 EAGLE / DFlash / FlashMap；`code/24e_flashmap_joint.py` 用两模式联合 vs 独立草稿演示接受长度与 shuffle Δ，贪心验收与基线一致。论文 arXiv:2610.24365v1，代码 al-jshen/flashmap@cd5b45b；数字标论文自报、不复现 Qwen3。
 
 ### P24 量化与推理框架实战
 - 目标：能依据硬件、模型格式和延迟需求选择工具，并理解量化精度损失。
@@ -243,7 +243,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 代码 / 实验：固定模型 revision，读 config 并生成组件对照表；可选小型号推理；用已有章节测试检查形状与缓存，不下载大型权重作为必修。
 - 前置：P02、P12–P14、P18、P21–P24。
 - 旧章关系：新增，替换旧第 9 章笼统架构对照表的一部分。
-- 来源：S28；具体 checkpoint 在撰写时锁定，不能将 Qwen3 全系列当成同一架构。
+- 来源：S28；具体 checkpoint 已锁定为 Qwen/Qwen3-0.6B revision c1899de（见 P25），不能将 Qwen3 全系列当成同一架构。
 - 前沿补充（bot-hub #28，已实现，v1.14.0）：在 P25/P26 之后加“读配置”对照表：Kimi K3（S29）/ Nemotron 3.5（S30–S32）/ Muse Spark Open（S33），只列官方配置字段与报告中能逐条找到的数字。正文见 P25.14（chapters/08o_qwen3_case.md）。
 
 ### P26 DeepSeek 案例：V3、R1 与 V4.1-Flash

@@ -12,11 +12,11 @@
 
 ---
 
-## 🚧 前沿大模型扩展进度
+## 前沿大模型扩展（已完成）
 
-[扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元推进。
+[扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元完成（第一至第十批）。
 
-2026-10-25 的前沿补充规划（[bot-hub #28](https://github.com/cluster1900/bot-hub/issues/28)：混合线性注意力、AttnRes、新 MoE 细节；[bot-hub #29](https://github.com/cluster1900/bot-hub/issues/29)：MOPD、推理预算、草稿模型、MXFP4/NVFP4）已写入大纲对应单元的“前沿补充”条目和资料索引 S29–S33；正文与实验已实现，随 v1.14.0（2026-10-26）发布。
+2026-10-25 的前沿补充（[bot-hub #28](https://github.com/cluster1900/bot-hub/issues/28)：混合线性注意力、AttnRes、新 MoE 细节；[bot-hub #29](https://github.com/cluster1900/bot-hub/issues/29)：MOPD、推理预算、草稿模型、MXFP4/NVFP4）已写入大纲对应单元的“前沿补充”条目和资料索引 S29–S33；正文与实验已实现，随 v1.14.0（2026-10-26）发布。
 
 - **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
 - **当前可读**：29 个章节文件（含前言、插入的第 1A 章与附录），28 个编号示例脚本及共享 attention_core.py 辅助模块；HTML / EPUB 随源码同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
