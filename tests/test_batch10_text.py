@@ -435,8 +435,11 @@ class FinalBatchTextTests(unittest.TestCase):
         # r11 N05：对照段正文写「模板」，chat template 只出现在 tokenizer 链接文字里。
         # 找不到原措辞则失败，避免变体静默退化为真实正文、H 的 ct_in_link_label 底稿失效。
         if "同 revision 的 chat template" in contrast and "[固定模板]" in contrast:
-            n05_contrast = contrast.replace(
-                "同 revision 的 chat template", "同 revision 的模板", 1
+            n05_contrast = re.sub(
+                r"(\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\]))|" + _P25_CHAT_TEMPLATE.pattern,
+                lambda m: m.group(1) or "模板",
+                contrast,
+                flags=re.IGNORECASE,
             ).replace("[固定模板]", "[固定 chat template]", 1)
         else:
             self.fail(
@@ -452,11 +455,10 @@ class FinalBatchTextTests(unittest.TestCase):
             contrast,
             "N05 ct_in_link_label 改写后对照段与原文相同，变体会退化为真实正文、H 的 ct_in_link_label 底稿失效",
         )
-        _strip_links = lambda t: re.sub(r"\[[^\]]*\]\([^)]*\)", "", t)
-        self.assertLess(
-            len(_P25_CHAT_TEMPLATE.findall(_strip_links(n05_contrast))),
-            len(_P25_CHAT_TEMPLATE.findall(_strip_links(contrast))),
-            "N05 ct_in_link_label：正文（去掉链接后）的 chat template 没有减少，N05 应把正文里的 chat template 移到链接文字里",
+        _strip_links = lambda t: re.sub(r"\[[^\]]*\](?:\([^)]*\)|\[[^\]]*\])", "", t)
+        self.assertIsNone(
+            _P25_CHAT_TEMPLATE.search(_strip_links(n05_contrast)),
+            "N05 ct_in_link_label：正文（去掉链接后）仍含 chat template，N05 应把正文里的 chat template 全部改写或移到链接文字里",
         )
         n05_section = section.replace(contrast, n05_contrast, 1)
         with self.subTest(variant="ct_in_link_label"):
