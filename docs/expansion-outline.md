@@ -61,7 +61,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P03；矩阵乘法和概率归一化。
 - 旧章关系：改写 `03_qkv_self_attention.md`，引入旧第 7 章的掩码细节但不提前堆叠模型。
 - 来源：S01。
-- 前沿补充（bot-hub #91，待审）：3.3a 框“减了最大值，梯度仍可能塌掉”（Softmax Collapse，S34 §1–§2，Eq. 2–7）；`code/03b_softmax_collapse.py` 实测 bf16/fp32/fp64 精度悬崖 5.55/16.64/36.74，对照论文 5.5/16.6/36.7，并比较标准版与修正版梯度。
+- 前沿补充（bot-hub #91，已实现，v1.14.0，v1.14.1 勘误）：3.3a 框“减了最大值，梯度仍可能塌掉”（Softmax Collapse，S34 §1–§2，Eq. 2–7）；`code/03b_softmax_collapse.py` 实测 bf16/fp32/fp64 精度悬崖 5.55/16.64/36.74，对照论文 5.5/16.6/36.7，并比较标准版与修正版梯度。正文见 P04 3.3a（chapters/03_qkv_self_attention.md）；代码 `code/03b_softmax_collapse.py`。
 
 ### P05 多头注意力与张量账本
 - 目标：读懂 B、T、H、D 维度，形成后续 GQA / KV 内存分析基础。
@@ -86,7 +86,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P05–P06；梯度的直觉。
 - 旧章关系：保留 `06_residual_layernorm_ffn.md` 基础主体，RMSNorm / SwiGLU 系统讲解移 P13。
 - 来源：S01、S06、S07。
-- 前沿补充（bot-hub #28，待审）：扩展阅读框“AttnRes：沿深度做注意力的残差”——每层用可学习 pseudo-query 对 embedding 与此前各 block 输出做 softmax 加权，而非等权累加；与 P26 的残差/混合连接内容交叉引用。CPU 玩具：N 个 block 的权重和为 1，权重均等时与普通残差对照。来源：S29（AttnRes 原论文在写正文时从 S29 参考文献找到原文再引）。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：扩展阅读框“AttnRes：沿深度做注意力的残差”——每层用可学习 pseudo-query 对 embedding 与此前各 block 输出做 softmax 加权，而非等权累加；与 P26 的残差/混合连接内容交叉引用。CPU 玩具：N 个 block 的权重和为 1，权重均等时与普通残差对照。来源：S29（AttnRes 原论文在写正文时从 S29 参考文献找到原文再引）。正文见 P07 6.9（chapters/06_residual_layernorm_ffn.md）；代码 `code/14b_attnres_situ.py`。
 
 ### P08 编码器、解码器与生成循环
 - 目标：明确三类 Transformer 架构和 token 生成过程，避免把 CED 与传统翻译模型混为一谈。
@@ -103,7 +103,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P02、P07–P08；导数只需直觉。
 - 旧章关系：新增，从 `08_baby_transformer.md` 拆出训练基础；不将三首诗随机窗口当成独立泛化集。
 - 来源：S14、S18。
-- 前沿补充（bot-hub #91，待审）：P09.3 加一条交叉引用到 P04 的 3.3a 框，说明大间隔下目标梯度为 0 及论文在 grokking 实验中对 Slingshot 尖峰的归因（S34 §4，§8 称标准大规模训练中少见；未复现）。
+- 前沿补充（bot-hub #91，已实现，v1.14.0，v1.14.1 勘误）：P09.3 加一条交叉引用到 P04 的 3.3a 框，说明大间隔下目标梯度为 0 及论文在 grokking 实验中对 Slingshot 尖峰的归因（S34 §4，§8 称标准大规模训练中少见；未复现）。正文见 P09.3（chapters/07a_training_loop.md）。
 
 ### P10 实战：Baby-GPT 基线
 - 目标：把前面已讲过的组件拼成可运行模型，保留一个后续可比较的基线。
@@ -120,7 +120,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P10。
 - 旧章关系：新增，扩展旧 `09_modern_llms.md` 的 KV Cache 简介。
 - 来源：S08、S14、S15。
-- 前沿补充（bot-hub #98，待审）：P11.10“不改文本，直接改 KV”（cache engineering，S35 §3.3 Eq. 4–5、§3.4、Fig. 5）；`code/12b_cache_engineering.py` 在 P12 RoPE 小模型上实现 `drop`（mask）与 `repos`（K 乘 $R(q)R(p)^{-1}$，V 不动），对照重 prefill：1 层完全一致，2 层起保留 token 的 K/V 带着被删内容，logits 不同。
+- 前沿补充（bot-hub #98，已实现，v1.15.0）：P11.10“不改文本，直接改 KV”（cache engineering，S35 §3.3 Eq. 4–5、§3.4、Fig. 5）；`code/12b_cache_engineering.py` 在 P12 RoPE 小模型上实现 `drop`（mask）与 `repos`（K 乘 $R(q)R(p)^{-1}$，V 不动），对照重 prefill：1 层完全一致，2 层起保留 token 的 K/V 带着被删内容，logits 不同。正文见 P11.10（chapters/08a_kv_cache.md）；代码 `code/12b_cache_engineering.py`。
 
 ### P12 RoPE 与 YaRN：旋转位置和长上下文
 - 目标：把位置编码落实到 Q/K 与缓存偏移，理解扩展上下文并非修改一个长度常数。
@@ -129,8 +129,8 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P06、P11。
 - 旧章关系：新增，扩写旧第 9 章 RoPE，衔接旧第 5 章。
 - 来源：S03、S04。
-- 前沿补充（bot-hub #28，待审）：NoPE 层对照——Muse Spark Open 用 `layer_rope_theta` 让部分层关闭 RoPE（S33：θ=0 即 NoPE，默认从最后一层倒数每第 4 层）；与线性递推“靠衰减隐式编码位置”（P16）对照。
-- 前沿补充（bot-hub #98，待审）：P12.3 加一句交叉引用到 P11.10，说明 RoPE 的相对位置性质是 `repos` 只需旋转 key 的原因（S35 §3.3 Eq. 5）。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：NoPE 层对照——Muse Spark Open 用 `layer_rope_theta` 让部分层关闭 RoPE（S33：θ=0 即 NoPE，默认从最后一层倒数每第 4 层）；与线性递推“靠衰减隐式编码位置”（P16）对照。正文见 P12.13（chapters/08b_rope_yarn.md）。
+- 前沿补充（bot-hub #98，已实现，v1.15.0）：P12.3 加一句交叉引用到 P11.10，说明 RoPE 的相对位置性质是 `repos` 只需旋转 key 的原因（S35 §3.3 Eq. 5）。正文见 P12.3（chapters/08b_rope_yarn.md）。
 
 ### P13 RMSNorm 与 SwiGLU：现代 Block
 - 目标：理解现代归一化和门控 FFN 的变化及公平对比方法。
@@ -139,7 +139,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P07、P10–P12。
 - 旧章关系：新增，扩写旧第 6 / 9 章相关摘要。
 - 来源：S06、S07。
-- 前沿补充（bot-hub #28，待审）：SiTU-GLU 与 SwiGLU 对照（对门控两个因子做有界 softcap，抑制低精度溢出）；公式与动机写正文时按 S29 对应章节逐条核对。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：SiTU-GLU 与 SwiGLU 对照（对门控两个因子做有界 softcap，抑制低精度溢出）；公式与动机写正文时按 S29 对应章节逐条核对。正文见 P13.13（chapters/08c_modern_block.md）；代码 `code/14b_attnres_situ.py`。
 
 ### P14 MHA、MQA、GQA 与 MLA
 - 目标：区分共享 KV 头与潜变量压缩，不把所有压缩都叫 GQA。
@@ -164,7 +164,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P11–P15。
 - 旧章关系：新增；不在主线默认替换 attention，以免把多个改动混在一起。
 - 来源：S11、S12。
-- 前沿补充（bot-hub #28，待审）：“生产级混合架构”小节——Kimi Delta Attention（KDA，带通道级遗忘门的 delta-rule 递推）与 MLA 混合（S29）；Mamba-2 / 注意力 / MoE 混合（Nemotron 3.5 Lightning：52 层 = 23 Mamba-2 + 6 注意力 + 23 MoE，MoE 为 128 路由专家 top-6 + 1 共享，S31）；局部（sliding_window 默认 2048）/ 全局交替与 GQA 128Q/16KV（Muse Spark Open，S33）；以及为什么仍保留少量全局注意力层。CPU 实验：delta-rule 逐步递推与 chunkwise 并行形式一致（unittest 断言误差），带下界 decay 时 `1/Γ` 不溢出的数值演示。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：“生产级混合架构”小节——Kimi Delta Attention（KDA，带通道级遗忘门的 delta-rule 递推）与 MLA 混合（S29）；Mamba-2 / 注意力 / MoE 混合（Nemotron 3.5 Lightning：52 层 = 23 Mamba-2 + 6 注意力 + 23 MoE，MoE 为 128 路由专家 top-6 + 1 共享，S31）；局部（sliding_window 默认 2048）/ 全局交替与 GQA 128Q/16KV（Muse Spark Open，S33）；以及为什么仍保留少量全局注意力层。CPU 实验：delta-rule 逐步递推与 chunkwise 并行形式一致（unittest 断言误差），带下界 decay 时 `1/Γ` 不溢出的数值演示。正文见 P16.14（chapters/08f_sparse_linear_attention.md）；代码 `code/17c_kda_hybrid.py`。
 
 ### P17 CED：DeepSeek-V4.1-Flash 的因果编码器—解码器
 - 目标：回答 CED 在架构哪里、为什么用于输入密集长上下文，而不是只说“encode/decode 分离”。
@@ -181,7 +181,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P13–P14；P15 性能指标。
 - 旧章关系：新增，扩写旧第 9 章 MoE。
 - 来源：S09、S19。
-- 前沿补充（bot-hub #28，待审）：Stable LatentMoE（路由专家在压缩 latent 宽度上计算，每 token 激活 896 个路由专家中的 16 个，S29 摘要）与 Quantile Balancing；CPU 实验复现 S29 中 m=8、n=4、k=1 的小例子（写正文时核对图号与定义）。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：Stable LatentMoE（路由专家在压缩 latent 宽度上计算，每 token 激活 896 个路由专家中的 16 个，S29 摘要）与 Quantile Balancing；CPU 实验复现 S29 中 m=8、n=4、k=1 的小例子（写正文时核对图号与定义）。正文见 P18.13（chapters/08h_moe.md）；代码 `code/19b_latent_moe_qb.py`。
 
 ### P19 预训练：从三首诗到数据流水线
 - 目标：理解数据质量、计算预算和评估决定什么。
@@ -214,8 +214,8 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P21；对数概率和期望的补充小节。
 - 旧章关系：新增。
 - 来源：S17、S23、S24。
-- 前沿补充（bot-hub #29，待审）：“on-policy 蒸馏与多教师合并（MOPD）”小节，讲清与 off-policy SFT 蒸馏的区别；案例为 Kimi K3（按领域与推理强度训练多个 RL 专家再合并，S29 §4.1）与 Nemotron 3.5 Super（S30/S32）。CPU 实验：小词表 teacher/student 分布上手算逐 token 奖励 `clip(sg(log π_teacher/π_θ), −R_max, R_max)` 并验证 clip。公式与数字在写正文时逐条对照原文，原始 on-policy 蒸馏论文从参考文献找到后引原文。
-- 前沿补充（bot-hub #91，待审）：P22.12“学生等于老师，梯度却不为 0”（Softmax Cancellation，S34 §3 Eq. 8–9、§7）；`code/23c_softmax_cancellation.py` 复现项目页 fp32 例子并验证学生等于老师时修正版梯度精确为 0。与 #29 MOPD 小节（P22.11）交叉引用，不重复其内容。
+- 前沿补充（bot-hub #29，已实现，v1.14.0）：“on-policy 蒸馏与多教师合并（MOPD）”小节，讲清与 off-policy SFT 蒸馏的区别；案例为 Kimi K3（按领域与推理强度训练多个 RL 专家再合并，S29 §4.1）与 Nemotron 3.5 Super（S30/S32）。CPU 实验：小词表 teacher/student 分布上手算逐 token 奖励 `clip(sg(log π_teacher/π_θ), −R_max, R_max)` 并验证 clip。公式与数字在写正文时逐条对照原文，原始 on-policy 蒸馏论文从参考文献找到后引原文。正文见 P22.11（chapters/08l_preference_optimization.md）；代码 `code/23b_mopd_reward.py`。
+- 前沿补充（bot-hub #91，已实现，v1.14.0，v1.14.1 勘误）：P22.12“学生等于老师，梯度却不为 0”（Softmax Cancellation，S34 §3 Eq. 8–9、§7）；`code/23c_softmax_cancellation.py` 复现项目页 fp32 例子并验证学生等于老师时修正版梯度精确为 0。与 #29 MOPD 小节（P22.11）交叉引用，不重复其内容。正文见 P22.12（chapters/08l_preference_optimization.md）；代码 `code/23c_softmax_cancellation.py`。
 
 ### P23 推理模型、MTP 与投机解码
 - 目标：区分训练目标、多步预测、草稿验证及测试时计算，不把“多说话”当成更会推理。
@@ -224,7 +224,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P18、P22、P11。
 - 旧章关系：新增。
 - 来源：S09、S25、S12（仅用于比较 V4.1 的 DSpark 与 V3 的 MTP，不混写训练方案）。
-- 前沿补充（bot-hub #29，待审）：推理强度预算控制（K3：超出 τ·b0 的轨迹奖励置为 −1，S29 §4.1.2）；MTP → 草稿模型与 LK loss `−log Σ_x min(p,q)`；接受率 Σmin(p,q)。PR #23（待审）已实现 Σmin(p,q) 的 Monte Carlo 对照（DSpark 的置信目标），本项只补预算控制与 LK loss。
+- 前沿补充（bot-hub #29，已实现，v1.14.0）：推理强度预算控制（K3：超出 τ·b0 的轨迹奖励置为 −1，S29 §4.1.2）；MTP → 草稿模型与 LK loss `−log Σ_x min(p,q)`；接受率 Σmin(p,q)。PR #23（已合并，v1.13.0）已实现 Σmin(p,q) 的 Monte Carlo 对照（DSpark 的置信目标），本项只补预算控制与 LK loss。正文见 P23.14（chapters/08m_reasoning_mtp.md）；代码 `code/24c_budget_lk.py`。
 - 前沿补充（bot-hub #46）：P23.15“为什么 batch 一大投机就不划算，以及 EAGLE-4 怎么按代价选树或链”；对照表增加 EAGLE-4 列（草稿产生、隐藏状态、树／链、随 batch 调整、低秩候选头、滑窗 4096）；`code/24d_eagle4_cost.py` 用 ΔA/ΔC≥τ 选链长 k，并做低秩候选头乘法对比；贪心验收与基线一致。论文为仓库内 Preprint PDF（无 arXiv），许可源码可见；厂商速度数字标报告、不复现 27B。
 - 前沿补充（bot-hub #106）：P23.16“FlashMap——用 flow map 一次写出有块内依赖的草稿”；对照表 EAGLE / DFlash / FlashMap；`code/24e_flashmap_joint.py` 用两模式联合 vs 独立草稿演示接受长度与 shuffle Δ，贪心验收与基线一致。论文 arXiv:2610.24365v1，代码 al-jshen/flashmap@cd5b45b；数字标论文自报、不复现 Qwen3。
 
@@ -235,7 +235,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P15、P20–P23。
 - 旧章关系：新增；不保证任一框架支持任一最新模型。
 - 来源：S15、S16、S26、S27、S22。
-- 前沿补充（bot-hub #29，待审）：MXFP4 / NVFP4 块缩放格式；PTQ vs QAT vs QAD；“训练与 rollout 用同一量化”的意义（K3 MXFP4 QAT，S29）；Nemotron 3.5 Super NVFP4 checkpoint（S30/S32）；与 V4.1-Flash 的 FP4 KV（S12）对照“权重 / 激活 / KV”三种量化对象。CPU 实验：FP4 E2M1 + 每 16 通道一个 scale 的量化误差，对比 per-tensor scale。格式规范写正文时引 OCP MX 规范原文。
+- 前沿补充（bot-hub #29，已实现，v1.14.0）：MXFP4 / NVFP4 块缩放格式；PTQ vs QAT vs QAD；“训练与 rollout 用同一量化”的意义（K3 MXFP4 QAT，S29）；Nemotron 3.5 Super NVFP4 checkpoint（S30/S32）；与 V4.1-Flash 的 FP4 KV（S12）对照“权重 / 激活 / KV”三种量化对象。CPU 实验：FP4 E2M1 + 每 16 通道一个 scale 的量化误差，对比 per-tensor scale。格式规范写正文时引 OCP MX 规范原文。正文见 P24.15（chapters/08n_quantized_serving.md）；代码 `code/25c_fp4_block.py`。
 
 ### P25 Qwen3 案例：读配置而不是背参数表
 - 目标：把一个明确版本的开源模型映射到全书机制。
@@ -244,7 +244,7 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P02、P12–P14、P18、P21–P24。
 - 旧章关系：新增，替换旧第 9 章笼统架构对照表的一部分。
 - 来源：S28；具体 checkpoint 在撰写时锁定，不能将 Qwen3 全系列当成同一架构。
-- 前沿补充（bot-hub #28，待审）：在 P25/P26 之后加“读配置”对照表：Kimi K3（S29）/ Nemotron 3.5（S30–S32）/ Muse Spark Open（S33），只列官方配置字段与报告中能逐条找到的数字。
+- 前沿补充（bot-hub #28，已实现，v1.14.0）：在 P25/P26 之后加“读配置”对照表：Kimi K3（S29）/ Nemotron 3.5（S30–S32）/ Muse Spark Open（S33），只列官方配置字段与报告中能逐条找到的数字。正文见 P25.14（chapters/08o_qwen3_case.md）。
 
 ### P26 DeepSeek 案例：V3、R1 与 V4.1-Flash
 - 目标：把架构、训练方法与服务优化分开，建立可追溯的跨版本地图。
@@ -269,8 +269,8 @@ Normal Work 已在 [PR #1 审核](https://github.com/cluster1900/zero2llm/pull/1
 - 前置：P00；按需查询，其余章节非强制前置。
 - 旧章关系：改写 `10_appendix.md`，保留词典、公式卡与书单，新增持续更新流程。
 - 来源：本文件来源索引与仓库构建工具。
-- 前沿补充（bot-hub #91，待审）：附录 E.4 前沿跟踪记录，登记 S34 的核验状态（已核实 / 本书复现 / 未复现）。
-- 前沿补充（bot-hub #98，待审）：E.4 登记 S35（cache engineering）各主张的状态。
+- 前沿补充（bot-hub #91，已实现，v1.14.0，v1.14.1 勘误）：附录 E.4 前沿跟踪记录，登记 S34 的核验状态（已核实 / 本书复现 / 未复现）。正文见 附录 E.4（chapters/10_appendix.md）。
+- 前沿补充（bot-hub #98，已实现，v1.15.0）：E.4 登记 S35（cache engineering）各主张的状态。正文见 附录 E.4（chapters/10_appendix.md）。
 
 ## miniGPT 代码主线与验收边界
 
@@ -319,18 +319,18 @@ MLA、分页、线性注意力和 CED 先做独立可读实验，不强行加入
 
 ## 分批实施与审核停点
 
-1. 本 PR：审核主题覆盖、难度、CED 事实和章节顺序；**不写正文，等待 Normal Work 审核**。
+1. 大纲 PR（zero2llm PR #1，已审核）：审核主题覆盖、难度、CED 事实和章节顺序；P00–P28 正文已按下列批次实现。
 2. 审核后每批 2–3 章，建议依序：P00–P02、P03–P05、P06–P08、P09–P10、P11–P13、P14–P16、P17–P18、P19–P20、P21–P23、P24–P26、P27–P28。
 3. 每批单独分支和 PR；交付正文、图解、源码、测试和 README 进度更新。现有章号在迁移方案审核前不变；真正重编号时修复全部内部链接并保留旧入口或明确迁移表。
 4. CPU 核心实验须可运行；GPU / 多卡实验要么实际验证，要么标明未测及硬件条件。跑书籍构建、资源 / 链接校验；图解改变时补布局检查；失败不得写成“通过”。
 5. 对尚无实测支持的性能宣传、模型私有架构、未经核验的新版本不作事实陈述。不直接 push main、不合并、不触发发布替换。
 
-### 请 Normal Work 审核
+### 大纲审核要点（历史记录，已审核）
 
 - 29 个规划单元（P00–P28）是否适合本书体量；基础 11 单元和进阶选修的边界是否清楚？
 - CED 放在 KV、变体、SWA 之后，并在 DeepSeek 案例回扣，是否认可？
 - miniGPT 单一主线加独立机制实验是否认可；是否需要调整框架实战的选修比例？
-- 认可后按上述 2–3 章批次推进；若调整，先更新本大纲与 README，再开始正文。
+- 已认可并按上述 2–3 章批次推进，P00–P28 已实现。
 
 ## 官方 / 原始资料索引
 
