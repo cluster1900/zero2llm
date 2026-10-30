@@ -399,9 +399,9 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 
 ### 本机实际结果怎么读
 
-前两个负例的判定循环在 `negative_controls` 第 329–338 行：
+前两个负例的判定循环在 `negative_controls` 第 332–342 行：
 
-<!-- code-excerpt: code/28_minigpt_healthcheck.py L329-L338 -->
+<!-- code-excerpt: code/28_minigpt_healthcheck.py L332-L342 -->
 ```python
     for name, forward in variants.items():
         first, cache = forward(base, tokens[:, :3], None)
@@ -412,14 +412,15 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
         delta = float((actual - expected).abs().max())
         if torch.allclose(actual, expected, atol=ATOL, rtol=RTOL):
             raise AssertionError(f'{name} survived the equivalence oracle')
-        rows.append({'name': name, 'caught': True, 'max_logit_error': delta})
+        rows.append({'name': name, 'caught': True, 'max_logit_error': delta,
+                     'before_error': before_split})
 ```
 
-- 第 330–332 行：变异版本先喂 3 个 token、再带着自己的缓存喂剩下 5 个，拼成完整 logits。
-- 第 333–334 行：输出必须有限；崩溃或 NaN 不算“抓住”，而是直接失败。
-- 第 335 行：记录与完整前向的最大绝对差，即下表的数。
-- 第 336–337 行：若变异结果仍落在容差内，说明检查器没能区分好坏，直接报错。
-- 第 338 行：只有通过上面两道检查，才写入 `caught: True`。
+- 第 333–335 行：变异版本先喂 3 个 token、再带着自己的缓存喂剩下 5 个，拼成完整 logits。
+- 第 336–337 行：输出必须有限；崩溃或 NaN 不算“抓住”，而是直接失败。
+- 第 338 行：记录与完整前向的最大绝对差，即下表的数。
+- 第 339–340 行：若变异结果仍落在容差内，说明检查器没能区分好坏，直接报错。
+- 第 341–342 行：只有通过上面两道检查，才写入 `caught: True`。
 
 
 2026-10-20，Python 3.12.14、PyTorch 2.14.1+cpu、单线程、seed=270，按上述固定输入运行：

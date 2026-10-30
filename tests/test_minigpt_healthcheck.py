@@ -146,6 +146,10 @@ runpy.run_path(sys.argv[1], run_name='__main__')
             self.assertEqual([x['name'] for x in report['negatives']],
                              ['wrong_mask', 'wrong_position', 'cache_pollution'])
             self.assertTrue(all(x['caught'] and x['max_logit_error'] > .1 for x in report['negatives']))
+            for row in report['negatives']:
+                self.assertTrue(math.isfinite(row['before_error']))
+                self.assertLess(row['before_error'], row['max_logit_error'])
+                self.assertLessEqual(row['before_error'], m.ATOL)
             if options:
                 self.assertEqual(report['mtp']['label_counts'], [14, 12, 10])
                 self.assertTrue(report['mtp']['greedy_equal'])
@@ -375,6 +379,10 @@ class HealthcheckTests(unittest.TestCase):
         self.assertEqual(len(result), 3)
         self.assertTrue(all(row['caught'] and math.isfinite(row['max_logit_error']) and
                             row['max_logit_error'] > .1 for row in result))
+        for row in result:
+            self.assertTrue(math.isfinite(row['before_error']))
+            self.assertLess(row['before_error'], row['max_logit_error'])
+            self.assertLessEqual(row['before_error'], m.ATOL)
 
     def test_mutant_bad_causal_mask_is_detected(self):
         model = self.by['S0'].model

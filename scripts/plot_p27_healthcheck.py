@@ -50,6 +50,7 @@ def _report(path: Path) -> dict:
             raise ValueError("each negative control needs a name")
         if not isinstance(row.get("caught"), bool) or not row["caught"]:
             raise ValueError(f"negative control {row.get('name')} was not caught")
+        _finite(row.get("before_error"), f"negative {row.get('name')}.before_error")
         _finite(row.get("max_logit_error", row.get("after_error")),
                 f"negative {row.get('name')}.max_logit_error")
     timing = report.get("timing", {}).get("milliseconds")
@@ -170,7 +171,7 @@ def _render_negative_chart(report: dict, output: Path) -> None:
     bar_width = min(34.0, group_width / 3.2)
     for index, row in enumerate(rows):
         name = str(row["name"])
-        before = _finite(row.get("before_error", 0.0), f"negative {name}.before_error")
+        before = _finite(row.get("before_error"), f"negative {name}.before_error")
         after = _finite(row.get("after_error", row.get("max_logit_error")),
                         f"negative {name}.after_error")
         center = left + group_width * (index + 0.5)
@@ -182,8 +183,12 @@ def _render_negative_chart(report: dict, output: Path) -> None:
             svg.append(f'<rect x="{x:.1f}" y="{bottom-height:.1f}" width="{bar_width:.1f}" '
                        f'height="{height:.1f}" fill="{color}" data-control="{_esc(name)}" '
                        f'data-phase="{label}" data-value="{value:.12g}"/>')
-            svg.append(f'<text x="{x+bar_width/2:.1f}" y="{bottom-height-6:.1f}" text-anchor="middle" '
-                       f'font-size="10">{value:.4g}</text>')
+            if value == 0:
+                svg.append(f'<text x="{x+bar_width/2:.1f}" y="{bottom-8}" text-anchor="middle" '
+                           f'font-size="10">0</text>')
+            else:
+                svg.append(f'<text x="{x+bar_width/2:.1f}" y="{bottom-height-6:.1f}" text-anchor="middle" '
+                           f'font-size="10">{value:.4g}</text>')
     svg.extend([
         f'<rect x="{left}" y="390" width="14" height="14" fill="#90a4ae"/>'
         f'<text x="{left+20}" y="402" font-size="12">before</text>',
@@ -271,6 +276,7 @@ def render(report: dict, out_dir: Path) -> list[Path]:
     for row in negatives:
         if not isinstance(row, dict) or not row.get("name") or row.get("caught") is not True:
             raise ValueError("negative controls must be caught")
+        _finite(row.get("before_error"), f"negative {row.get('name')}.before_error")
         _finite(row.get("max_logit_error", row.get("after_error")), "negative error")
     for key in ("full_first_ms", "cache_first_ms", "full_later_ms", "cache_later_ms"):
         if key not in timing:

@@ -39,9 +39,9 @@ class P27ChartRendererTests(unittest.TestCase):
                 {"stage": "S6", "causal_error": 0.01, "cache_error": 0.004},
             ],
             "negatives": [
-                {"name": "wrong_mask", "caught": True, "max_logit_error": 0.3},
-                {"name": "wrong_position", "caught": True, "max_logit_error": 0.2},
-                {"name": "cache_pollution", "caught": True, "max_logit_error": 0.4},
+                {"name": "wrong_mask", "caught": True, "max_logit_error": 0.3, "before_error": 1e-7},
+                {"name": "wrong_position", "caught": True, "max_logit_error": 0.2, "before_error": 0.0},
+                {"name": "cache_pollution", "caught": True, "max_logit_error": 0.4, "before_error": 2e-7},
             ],
             "timing": {
                 "milliseconds": {
@@ -70,7 +70,16 @@ class P27ChartRendererTests(unittest.TestCase):
             negative = (out / "negative_controls.svg").read_text(encoding="utf-8")
             self.assertEqual(negative.count('data-phase="before"'), 3)
             self.assertEqual(negative.count('data-phase="after"'), 3)
-            self.assertIn('data-value="0.3"', negative)
+            for row in self._fixture()["negatives"]:
+                name = row["name"]
+                self.assertIn(
+                    f'data-control="{name}" data-phase="before" data-value="{row["before_error"]:.12g}"',
+                    negative,
+                )
+                self.assertIn(
+                    f'data-control="{name}" data-phase="after" data-value="{row["max_logit_error"]:.12g}"',
+                    negative,
+                )
             timing = (out / "cpu_timing.svg").read_text(encoding="utf-8")
             self.assertEqual(timing.count("data-median="), 4)
             self.assertIn('data-min="9"', timing)
@@ -84,6 +93,17 @@ class P27ChartRendererTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 renderer.render(broken, out)
             self.assertFalse(out.exists())
+
+    def test_missing_before_error_fails_before_writing_files(self):
+        renderer = load_renderer()
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "plots"
+            broken = self._fixture()
+            del broken["negatives"][0]["before_error"]
+            with self.assertRaises(ValueError):
+                renderer.render(broken, out)
+            self.assertFalse(out.exists())
+            self.assertFalse(any(Path(td).rglob("*.svg")))
 
     def test_uncaught_negative_fails(self):
         renderer = load_renderer()
@@ -133,6 +153,10 @@ class P27GoldArtifactsTests(unittest.TestCase):
         for row in negatives:
             self.assertIs(row["caught"], True)
             self.assertGreater(float(row["max_logit_error"]), 0.0)
+            before = float(row["before_error"])
+            self.assertTrue(math.isfinite(before))
+            self.assertLess(before, float(row["max_logit_error"]))
+            self.assertLessEqual(before, 3e-6)
         mtp = report["mtp"]
         # Stable teaching counts on this fixture: draft proposes 7, verifier accepts 3.
         self.assertEqual(mtp["proposed"], 7)
