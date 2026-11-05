@@ -10398,7 +10398,8 @@ loss 低，不等于别的领域好。</li>
 </tr>
 <tr>
 <td>规范化</td>
-<td>先做 Unicode NFC，再删除所有空白字符</td>
+<td>先做 Unicode
+NFC（只统一等价字符的编码写法，不删空白），再删除所有空白字符</td>
 <td><code>" 春\n风 "</code> 变为 <code>"春风"</code></td>
 </tr>
 <tr>
@@ -11174,8 +11175,8 @@ alt="训练框架地图与 ZeRO 状态切分：数据和 tokenizer 进入模型�
 <figcaption>训练框架地图与 ZeRO 状态切分：数据和 tokenizer
 进入模型，Trainer 控制更新；分片只改变持久状态的分布</figcaption>
 </figure>
-<p>这里还有一条重要边界：本书之前的 miniGPT
-是用来逐层解释机制的代码主线；本章换用 GPT2LMHeadModel，是学习成熟 API
+<p>这里还有一条重要边界：本书前面从 Baby-GPT 到 S5
+的代码是用来逐层解释机制的主线；本章换用 GPT2LMHeadModel，是学习成熟 API
 的独立实验。两者没有自动共享权重。即使都叫 Transformer，也不能把旧
 checkpoint 直接塞进新模型，然后宣称转换成功。</p>
 <h2 id="p20.2-configmodeltokenizer三样东西不能混成一样">P20.2
@@ -11255,7 +11256,8 @@ loss，也不调用框架的交叉熵函数，而是自己写：</p>
 <p>固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计<strong>未 shift
 的 labels 中非 -100 的数量</strong>，作为 num_items_in_batch
 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token
-loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。</p>
+loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。这个计数就是
+loss 的分母，所以打印出的 loss 读数也同样变成正确值的 9/11。</p>
 <p>这不是说所有版本、所有模型都有同一个问题，而是本章用的组合需要明确约定。这里把首位本就不会被预测的标签也设为
 -100，让框架计数和实际目标对齐。对应实现可核对 <a
 href="https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py">4.51.3
@@ -12056,7 +12058,8 @@ EOS。</p>
 <p>如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer
 继续，也不能悄悄说“loss=0，训练很好”。<code>masked_causal_loss</code>
 在这种情况下抛出清晰异常。</p>
-<p>我们的 encoder 通常会更早拒绝没有完整监督轮的样本；loss
+<p>我们的数据函数 <code>encode_chat</code>
+通常会更早拒绝没有完整监督轮的样本；loss
 层仍保留这道检查，防止别的数据入口绕过前置约束。</p>
 <h2 id="p21.5-全量更新与-lora改整张表还是加一条窄支路">P21.5 全量更新与
 LoRA：改整张表，还是加一条窄支路</h2>

@@ -170,7 +170,7 @@ PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加 0�
 
 如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常。
 
-我们的 encoder 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
+我们的数据函数 `encode_chat` 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
 
 ## P21.5 全量更新与 LoRA：改整张表，还是加一条窄支路
 

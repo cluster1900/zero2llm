@@ -5473,7 +5473,7 @@ P09 让我们看清了一次学习：取文本、错开一格、预测、评分�
 | 阶段 | 本实验做什么 | 数量与例子 |
 | --- | --- | --- |
 | 原始记录 | 10 条生成字符串，加一条重复变体、一条空白 | 12 条 |
-| 规范化 | 先做 Unicode NFC，再删除所有空白字符 | `" 春\n风 "` 变为 `"春风"` |
+| 规范化 | 先做 Unicode NFC（只统一等价字符的编码写法，不删空白），再删除所有空白字符 | `" 春\n风 "` 变为 `"春风"` |
 | 空文档过滤 | 规范化后为空就移除 | 移除 `blank` |
 | 全局精确去重 | 比较规范化后的整篇文本，保留输入顺序中的第一份 | `duplicate` 与 `d00` 相同，移除前者 |
 | 文档级划分 | 固定 seed=19 打乱唯一文档，再按 6/2/2 分配 | 训练 6、验证 2、测试 2 |
@@ -5798,7 +5798,7 @@ N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验�
 
 ![训练框架地图与 ZeRO 状态切分：数据和 tokenizer 进入模型，Trainer 控制更新；分片只改变持久状态的分布](assets/diagrams/p20-frameworks.svg)
 
-这里还有一条重要边界：本书之前的 miniGPT 是用来逐层解释机制的代码主线；本章换用 GPT2LMHeadModel，是学习成熟 API 的独立实验。两者没有自动共享权重。即使都叫 Transformer，也不能把旧 checkpoint 直接塞进新模型，然后宣称转换成功。
+这里还有一条重要边界：本书前面从 Baby-GPT 到 S5 的代码是用来逐层解释机制的主线；本章换用 GPT2LMHeadModel，是学习成熟 API 的独立实验。两者没有自动共享权重。即使都叫 Transformer，也不能把旧 checkpoint 直接塞进新模型，然后宣称转换成功。
 
 ## P20.2 config、model、tokenizer：三样东西不能混成一样
 
@@ -5872,7 +5872,7 @@ $$
 
 ### 一个真实发现的版本细节
 
-固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计**未 shift 的 labels 中非 -100 的数量**，作为 num_items_in_batch 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。
+固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计**未 shift 的 labels 中非 -100 的数量**，作为 num_items_in_batch 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。这个计数就是 loss 的分母，所以打印出的 loss 读数也同样变成正确值的 9/11。
 
 这不是说所有版本、所有模型都有同一个问题，而是本章用的组合需要明确约定。这里把首位本就不会被预测的标签也设为 -100，让框架计数和实际目标对齐。对应实现可核对 [4.51.3 Trainer 的 get_batch_samples 与 compute_loss 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)。
 
@@ -6321,7 +6321,7 @@ PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加 0�
 
 如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常。
 
-我们的 encoder 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
+我们的数据函数 `encode_chat` 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
 
 ## P21.5 全量更新与 LoRA：改整张表，还是加一条窄支路
 
