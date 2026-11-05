@@ -268,7 +268,7 @@ OMP_NUM_THREADS=1 python code/15_grouped_kv.py
 python -m unittest discover -s tests -p test_grouped_kv.py -v
 ```
 
-本批在 Python 3.12.14、PyTorch 2.14.1+cpu、单 CPU 线程、seed=42 下运行。模型表格使用 float32，独立 MLA 矩阵使用 float64；不训练、不下载权重。关键输出：
+在附录 H 所列环境下（单 CPU 线程、seed=42）运行。模型表格使用 float32，独立 MLA 矩阵使用 float64；不训练、不下载权重。关键输出：
 
 ```text
 Hq=4 Hkv=2 mapping: (0, 0, 1, 1)
@@ -317,8 +317,8 @@ Rank example: 3 -> 2, Frobenius error=1.0
 ## 资料与实现边界
 
 - [GQA 原论文 v3](https://arxiv.org/html/2305.13245v3)：核验 MHA/MQA/GQA 边界及分组均值初始化、继续预训练的区别。
-- [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日 2026-10-19。
+- [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日见附录 H。
 - [DeepSeek-V3 技术报告 v2，§2.1.1](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1)：核验 MLA 的联合内容压缩、解耦位置项与缩放维度。
-- [DeepSeek-V3 官方推理源码](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py)：核验内容/位置缓存分离的实现入口；动态链接核验日 2026-10-19。
+- [DeepSeek-V3 官方推理源码](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py)：核验内容/位置缓存分离的实现入口；动态链接核验日见附录 H。
 
 本章实现 GQA 的完整 tiny-model 前向和紧凑缓存；MLA 仅实现独立矩阵教学实验，未实现完整训练模型、checkpoint 转换流程、分布式部署或生产性能复现。

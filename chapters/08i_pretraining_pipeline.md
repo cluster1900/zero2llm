@@ -256,7 +256,7 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。
 
-2026-10-19 在 Python 3.12.14、torch 2.14.1+cpu、单线程、float32、seed=7 下的本书实测：
+在附录 H 所列环境下（单线程、float32、seed=7）的本书实测：
 
 | 记录 | 结果 | 能说明什么 |
 | --- | --- | --- |
@@ -316,4 +316,4 @@ N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验�
 - [PyTorch 保存与加载教程](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html)：本章核验时为 2.14 教程，动态入口；模型与优化器状态的区别。
 - [Transformers v4.51.3：Data Collator](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)：固定版本的标签与 padding 契约。本章没有安装或调用 Transformers。
 
-来源核验日：2026-10-19。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。
+来源核验日见附录 H。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。

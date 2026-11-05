@@ -219,7 +219,7 @@ RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：
 
 实验协议写死在 `length_experiment()`，便于复现和审计：
 
-- CPU、float32、单线程；验证环境 PyTorch 2.14.1+cpu，依赖见仓库 requirements。
+- CPU、float32、单线程；验证环境见附录 H，依赖见仓库 requirements。
 - 两层模型，d_model=32，H=4，词表大小 10；普通 RoPE、全头旋转、base=10000。
 - 从一开始允许 `max_seq_len=64`，**实际训练样本始终只有 8 个位置**。
 - AdamW，学习率 0.003，weight_decay=0；batch=32，更新 400 次，共 12800 个训练样本。
@@ -290,7 +290,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_rope.py' -v
 
 ## P12.12 来源与下一步
 
-来源核验日期：2026-10-19。
+来源核验日期见附录 H。
 
 - [RoFormer / RoPE 论文，arXiv:2104.09864](https://arxiv.org/abs/2104.09864)：Q/K 旋转与相对位置点积的原始来源；本章二维数值是独立手算与脚本生成。
 - [Position Interpolation 论文（Chen 等），arXiv:2306.15595](https://arxiv.org/abs/2306.15595)：位置插值 PI 的原始来源。

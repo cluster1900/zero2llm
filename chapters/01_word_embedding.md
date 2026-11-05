@@ -142,4 +142,4 @@ $$[9,8,7]-[1,8,5]+[1,-8,5]=[9,-8,7]$$
 
 参考答案：不会，只要映射一致，仍能查到原来那行；点积 50、距离 5；不能，数学上没有定义，本书抛出 `ValueError`；不能这样保证。现实系统通常由 tokenizer 把未知整词拆成已知子词或字节等单位，然后查它们的向量。**这就是下一章要补上的环节：文本怎样变成那些 ID？**
 
-本章核验日期：2026-10-18。查表接口可参阅 [PyTorch 2.14 的 Embedding 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)；本章必修代码不依赖 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 [Linguistic Regularities in Continuous Space Word Representations（NAACL 2013）](https://aclanthology.org/N13-1090/)；Mikolov 等人同年稍后的 [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) 主要讲负采样与短语向量，也可一并阅读。
+本章来源核验日期见附录 H。查表接口可参阅 [PyTorch 2.14 的 Embedding 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)；本章必修代码不依赖 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 [Linguistic Regularities in Continuous Space Word Representations（NAACL 2013）](https://aclanthology.org/N13-1090/)；Mikolov 等人同年稍后的 [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) 主要讲负采样与短语向量，也可一并阅读。

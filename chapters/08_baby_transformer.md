@@ -13,7 +13,7 @@ OMP_NUM_THREADS=1 python3 code/07_baby_gpt.py
 python3 -m unittest discover -s tests -p 'test_baby_gpt.py' -v
 ```
 
-需要 `requirements.txt` 中的 CPU PyTorch；本文数值来自 Python 3.12、PyTorch 2.14.1+cpu、种子 42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同 seed 承诺跨平台逐位相同。
+需要 `requirements.txt` 中的 CPU PyTorch；本文数值来自 Python 3.12、附录 H 所列 PyTorch、种子 42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同 seed 承诺跨平台逐位相同。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
@@ -240,7 +240,7 @@ restored.eval()
 
 ## 原始来源与实现版本
 
-核验日：2026-10-19。S0 是本仓库教学实现，不是某个商业模型的精确复刻。
+来源核验日见附录 H。S0 是本仓库教学实现，不是某个商业模型的精确复刻。
 
 1. [PyTorch 2.14 GELU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.GELU.html)：激活定义。模型结构以 [code/07_baby_gpt.py](../code/07_baby_gpt.py) 为准。
 2. [PyTorch 2.14 torch.save](https://docs.pytorch.org/docs/2.14/generated/torch.save.html)、[torch.load](https://docs.pytorch.org/docs/2.14/generated/torch.load.html)：序列化、设备映射与 weights_only 边界。

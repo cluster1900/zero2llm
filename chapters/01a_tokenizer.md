@@ -4,7 +4,7 @@
 
 **Tokenizer（分词器）的工作是把文本变成 token ID 序列，并提供对应的解码方式。** Token 不一定是词，也不一定是字。它可能是子词、一个标点、带空格的片段，甚至一个字符的部分字节。训练语言模型之前，我们需要先知道预测的单位是什么。
 
-本章属于扩展计划 P02，暂以“1A”插在词嵌入与旧第 2 章之间，保留旧章节链接。本章的两个实验都使用 CPU 和小型合成语料，不下载任何语言模型。
+本章接在词嵌入之后。本章的两个实验都使用 CPU 和小型合成语料，不下载任何语言模型。
 
 ## 1A.1 三种切法：整词、字符与字节
 
@@ -31,9 +31,9 @@ print(list(text.encode("utf-8")))
 > [!NOTE]
 > **“覆盖文本”不等于“理解文本”。** 字节词表能表示没见过的文字，并不意味着模型学会了这门语言。Tokenizer 解决的是编码问题，语言能力仍取决于数据、模型和训练。
 
-### 对照旧第 8 章：保留 Baby-GPT 的字符基线
+### 对照 Baby-GPT：保留字符级分词基线
 
-旧第 8 章和配套的 `code/07_baby_gpt.py` 刻意采用更简单的字符级分词器：
+Baby-GPT 一章和配套的 `code/07_baby_gpt.py` 刻意采用更简单的字符级分词器：
 
 ```python
 unique_chars = sorted(set(text_corpus))
@@ -160,7 +160,7 @@ python3 -m unittest discover -s tests -v
 
 ## 1A.6 对照真实库：Hugging Face Tokenizers
 
-可选实验 [code/09_hf_tokenizer.py](../code/09_hf_tokenizer.py) 固定使用 `tokenizers==0.21.4`。核验和运行日期为 2026-10-18，官方接口来源锁定到 [v0.21.4 代码与文档目录](https://github.com/huggingface/tokenizers/tree/v0.21.4)。这不是要求你使用最新版本，而是把本章实验条件固定下来。
+可选实验 [code/09_hf_tokenizer.py](../code/09_hf_tokenizer.py) 固定使用 `tokenizers==0.21.4`。核验和运行日期见附录 H，官方接口来源锁定到 [v0.21.4 代码与文档目录](https://github.com/huggingface/tokenizers/tree/v0.21.4)。这不是要求你使用最新版本，而是把本章实验条件固定下来。
 
 ```bash
 python3 -m venv .venv

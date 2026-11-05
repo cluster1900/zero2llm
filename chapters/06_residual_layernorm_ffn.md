@@ -378,7 +378,7 @@ python3 code/06_transformer_block.py
 python3 -m unittest discover -s tests -p 'test_blocks.py' -v
 ```
 
-本章核验环境是 CPU、PyTorch 2.14.1+cpu。无需 GPU、模型权重、联网训练或付费 API。
+本章核验环境是 CPU，补丁版本见附录 H。无需 GPU、模型权重、联网训练或付费 API。
 
 脚本会打印本章全部七张数值表，以及以下关键行。手算部分固定输入、使用 float64；随机 Block 冒烟部分固定种子 42。
 
@@ -435,7 +435,7 @@ Pre-LN zero-sublayer identity max error=0.000000
 
 ### 来源与核验范围
 
-以下为论文原文与官方 API 文档；访问核验日期为 **2026-10-19**。本章表格是配套脚本的教学计算，不是原论文 benchmark 的复现。
+以下为论文原文与官方 API 文档；访问核验日期见附录 H。本章表格是配套脚本的教学计算，不是原论文 benchmark 的复现。
 
 - He 等，2015：[Deep Residual Learning for Image Recognition](https://arxiv.org/pdf/1512.03385)，§3.1–3.2：残差函数与恒等捷径。
 - Ba 等，2016：[Layer Normalization](https://arxiv.org/pdf/1607.06450)，§3、§3.1：单样本统计、每维增益与偏置。

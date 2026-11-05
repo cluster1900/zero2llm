@@ -36,7 +36,7 @@
 
 ## 0.3 两条实验路线：没有 GPU 也能开始
 
-**必修：CPU 与小数据。** 本批次的向量和字节级 BPE 实验只用 Python 标准库，不下载模型、不访问外部 API。后面的基础 PyTorch 实验也以小模型为主。
+**必修：CPU 与小数据。** 本书的向量和字节级 BPE 实验只用 Python 标准库，不下载模型、不访问外部 API。后面的基础 PyTorch 实验也以小模型为主。
 
 从仓库根目录运行：
 
@@ -47,7 +47,7 @@ python3 code/08_byte_bpe.py
 python3 -m unittest discover -s tests -v
 ```
 
-第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、600 多条测试都会执行，其中大多与上面两个例子无关。CI 在 Python 3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；P27（09a）报告的实测数字来自 Python 3.13.5、PyTorch 2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
+第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、600 多条测试都会执行，其中大多与上面两个例子无关。CI 运行这条命令的环境与 P27（09a）报告实测数字的环境都列在附录 H。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
 
 > [!TIP]
 > **选修：Hugging Face 对照实验。** 只想理解算法，可以跳过。想比较真实分词库时，新建虚拟环境，再安装 `requirements-tokenizer.txt` 中固定的 `tokenizers==0.21.4`，运行 `code/09_hf_tokenizer.py`。它仍只用 CPU 和本地合成语料，不下载语言模型。安装依赖需要网络，安装完成后的实验不需要网络。
@@ -77,7 +77,7 @@ python3 -m venv .venv
 | 结果 | 实际输出、测试通过或失败、错误信息 |
 | 结论边界 | 证明了什么，以及没有证明什么 |
 
-本批 BPE 的合并规则由语料、合并次数和并列时的排序决定，不含随机步骤。后面的神经网络会有初始化与采样随机性；固定种子能减少变化，却不保证所有硬件、版本都逐位相同。测试数值结果时还要说明容差。
+本书 BPE 的合并规则由语料、合并次数和并列时的排序决定，不含随机步骤。后面的神经网络会有初始化与采样随机性；固定种子能减少变化，却不保证所有硬件、版本都逐位相同。测试数值结果时还要说明容差。
 
 性能要另外记：同一模型、相同输入输出长度、相同 batch 和设备，才适合比较；首 token 延迟和后续 token 速度也不能混成一个数字。本书后续会专章展开，此时先记住：**结果正确，不代表速度快；速度快，也不代表结果正确。**
 
@@ -137,7 +137,7 @@ python3 -m venv .venv
 
 参考答案：共有 24 个数，但 token 数通常是前两轴相乘得到的 6；训练集表现不能代替未见数据评估；至少记录设备、依赖版本、输入规模和测量方法。带着这些边界意识，下一步从一个最简单的问题开始：**编号不是意义，向量又能帮我们做什么？**
 
-资料说明：Transformer 基础来源为 [Attention Is All You Need](https://arxiv.org/abs/1706.03762v7)。软件接口以本批固定版本和实际实验为准，核验日期为 2026-10-18。
+资料说明：Transformer 基础来源为 [Attention Is All You Need](https://arxiv.org/abs/1706.03762v7)。软件接口以本书固定版本和实际实验为准，来源核验日期见附录 H。
 
 
 ---
@@ -286,7 +286,7 @@ $$[9,8,7]-[1,8,5]+[1,-8,5]=[9,-8,7]$$
 
 参考答案：不会，只要映射一致，仍能查到原来那行；点积 50、距离 5；不能，数学上没有定义，本书抛出 `ValueError`；不能这样保证。现实系统通常由 tokenizer 把未知整词拆成已知子词或字节等单位，然后查它们的向量。**这就是下一章要补上的环节：文本怎样变成那些 ID？**
 
-本章核验日期：2026-10-18。查表接口可参阅 [PyTorch 2.14 的 Embedding 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)；本章必修代码不依赖 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 [Linguistic Regularities in Continuous Space Word Representations（NAACL 2013）](https://aclanthology.org/N13-1090/)；Mikolov 等人同年稍后的 [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) 主要讲负采样与短语向量，也可一并阅读。
+本章来源核验日期见附录 H。查表接口可参阅 [PyTorch 2.14 的 Embedding 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)；本章必修代码不依赖 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 [Linguistic Regularities in Continuous Space Word Representations（NAACL 2013）](https://aclanthology.org/N13-1090/)；Mikolov 等人同年稍后的 [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) 主要讲负采样与短语向量，也可一并阅读。
 
 
 ---
@@ -297,7 +297,7 @@ $$[9,8,7]-[1,8,5]+[1,-8,5]=[9,-8,7]$$
 
 **Tokenizer（分词器）的工作是把文本变成 token ID 序列，并提供对应的解码方式。** Token 不一定是词，也不一定是字。它可能是子词、一个标点、带空格的片段，甚至一个字符的部分字节。训练语言模型之前，我们需要先知道预测的单位是什么。
 
-本章属于扩展计划 P02，暂以“1A”插在词嵌入与旧第 2 章之间，保留旧章节链接。本章的两个实验都使用 CPU 和小型合成语料，不下载任何语言模型。
+本章接在词嵌入之后。本章的两个实验都使用 CPU 和小型合成语料，不下载任何语言模型。
 
 ## 1A.1 三种切法：整词、字符与字节
 
@@ -324,9 +324,9 @@ print(list(text.encode("utf-8")))
 > [!NOTE]
 > **“覆盖文本”不等于“理解文本”。** 字节词表能表示没见过的文字，并不意味着模型学会了这门语言。Tokenizer 解决的是编码问题，语言能力仍取决于数据、模型和训练。
 
-### 对照旧第 8 章：保留 Baby-GPT 的字符基线
+### 对照 Baby-GPT：保留字符级分词基线
 
-旧第 8 章和配套的 `code/07_baby_gpt.py` 刻意采用更简单的字符级分词器：
+Baby-GPT 一章和配套的 `code/07_baby_gpt.py` 刻意采用更简单的字符级分词器：
 
 ```python
 unique_chars = sorted(set(text_corpus))
@@ -453,7 +453,7 @@ python3 -m unittest discover -s tests -v
 
 ## 1A.6 对照真实库：Hugging Face Tokenizers
 
-可选实验 [code/09_hf_tokenizer.py](../code/09_hf_tokenizer.py) 固定使用 `tokenizers==0.21.4`。核验和运行日期为 2026-10-18，官方接口来源锁定到 [v0.21.4 代码与文档目录](https://github.com/huggingface/tokenizers/tree/v0.21.4)。这不是要求你使用最新版本，而是把本章实验条件固定下来。
+可选实验 [code/09_hf_tokenizer.py](../code/09_hf_tokenizer.py) 固定使用 `tokenizers==0.21.4`。核验和运行日期见附录 H，官方接口来源锁定到 [v0.21.4 代码与文档目录](https://github.com/huggingface/tokenizers/tree/v0.21.4)。这不是要求你使用最新版本，而是把本章实验条件固定下来。
 
 ```bash
 python3 -m venv .venv
@@ -1015,7 +1015,7 @@ python3 -m unittest discover -s tests -v
 
 - [Attention Is All You Need，v7，§3.2 与 §3.1](https://arxiv.org/html/1706.03762v7)：缩放点积、多头与解码因果约束。上面的数值小例子与边界策略为本书构造。
 - [PyTorch 2.14：scaled_dot_product_attention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.functional.scaled_dot_product_attention.html)：官方接口及布尔 mask 约定。
-- [PyTorch 2.14：MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：对照不同接口的 mask 语义。动态文档核验日期：2026-10-19。
+- [PyTorch 2.14：MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：对照不同接口的 mask 语义。动态文档核验日期见附录 H。
 
 
 ---
@@ -1026,7 +1026,7 @@ python3 -m unittest discover -s tests -v
 
 上一章我们用 $Q$ 和 $K$ 打分，做 Softmax，再用权重汇总 $V$。本章把这套计算分成几个并行的“头”，重点追踪形状怎样变化、参数和计算成本怎样计数。
 
-配套代码是 [code/04_multi_head_attention.py](../code/04_multi_head_attention.py)。本章只讨论**标准、等宽的多头自注意力**：Q、K、V 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV 头等变体见已实现的 [P14](#p14-grouped-kv)（大纲 S05：[GQA 原始论文](https://arxiv.org/abs/2305.13245)）。
+配套代码是 [code/04_multi_head_attention.py](../code/04_multi_head_attention.py)。本章只讨论**标准、等宽的多头自注意力**：Q、K、V 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV 头等变体见已实现的 [P14](#p14-grouped-kv)（[GQA 原始论文](https://arxiv.org/abs/2305.13245)）。
 
 ---
 
@@ -1403,7 +1403,7 @@ print("非空行归一化，全屏蔽行权重与输出为零")
 
 多头本身不添加“我在第几个位置”的信息。没有位置编码、也没有依赖位置的掩码时，重排输入 token，输出只会跟着重排。因果掩码限制可见方向，但与为表示加入位置信息不同。下一章继续讨论**位置编码（Positional Encoding）**。
 
-文档核验日：2026-10-19，来源见相关段落。文档版本不等于本书的完整兼容性测试范围；本章实验验证教学计算，不提供未测的速度或显存提升比例。
+文档核验日见附录 H，来源见相关段落。文档版本不等于本书的完整兼容性测试范围；本章实验验证教学计算，不提供未测的速度或显存提升比例。
 
 
 ---
@@ -1711,7 +1711,7 @@ python -m unittest discover -s tests -p 'test_positions.py' -v
 
 ## 来源与版本
 
-核验日期：2026-10-19。下列是原作者的一手论文；本章数值表和微型实验是教学计算，不是论文的翻译质量复现。
+来源核验日期见附录 H。下列是原作者的一手论文；本章数值表和微型实验是教学计算，不是论文的翻译质量复现。
 
 1. Vaswani et al., [Attention Is All You Need，arXiv:1706.03762v7](https://arxiv.org/html/1706.03762v7)，版本日期 2023-08-02，初稿 2017-06-12。§3.4：输入嵌入缩放；§3.5：正弦公式、相加、相对偏移动机与长度外推动机；§6.2 表 3(E)：可学习位置对照。
 2. Shaw, Uszkoreit & Vaswani, [Self-Attention with Relative Position Representations，arXiv:1803.02155v2](https://arxiv.org/html/1803.02155v2)，版本日期 2018-04-12。§3.1：相对关系进入键和值；§3.2：按相对距离查表与截断。仅作类型比较，不在本章实现该模型。
@@ -2100,7 +2100,7 @@ python3 code/06_transformer_block.py
 python3 -m unittest discover -s tests -p 'test_blocks.py' -v
 ```
 
-本章核验环境是 CPU、PyTorch 2.14.1+cpu。无需 GPU、模型权重、联网训练或付费 API。
+本章核验环境是 CPU，补丁版本见附录 H。无需 GPU、模型权重、联网训练或付费 API。
 
 脚本会打印本章全部七张数值表，以及以下关键行。手算部分固定输入、使用 float64；随机 Block 冒烟部分固定种子 42。
 
@@ -2157,7 +2157,7 @@ Pre-LN zero-sublayer identity max error=0.000000
 
 ### 来源与核验范围
 
-以下为论文原文与官方 API 文档；访问核验日期为 **2026-10-19**。本章表格是配套脚本的教学计算，不是原论文 benchmark 的复现。
+以下为论文原文与官方 API 文档；访问核验日期见附录 H。本章表格是配套脚本的教学计算，不是原论文 benchmark 的复现。
 
 - He 等，2015：[Deep Residual Learning for Image Recognition](https://arxiv.org/pdf/1512.03385)，§3.1–3.2：残差函数与恒等捷径。
 - Ba 等，2016：[Layer Normalization](https://arxiv.org/pdf/1607.06450)，§3、§3.1：单样本统计、每维增益与偏置。
@@ -2418,7 +2418,7 @@ python3 -m unittest discover -s tests -v
 - [Attention Is All You Need，v7，§3.1、§3.2.3、§3.4](https://arxiv.org/html/1706.03762v7)：双塔结构、因果约束、目标右移和输出层。
 - [BERT 原始论文，§3](https://arxiv.org/abs/1810.04805)：双向编码器预训练；“双向”不是任何任务都可看未来答案。
 - [Transformers 4.57.1 生成参数文档](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation)：temperature、EOS 及长度参数的接口语义；本章不用这个库执行实验。
-- [Transformers 4.57.1 缓存说明](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：理解历史 K/V 复用的概念路标。文档核验日期：2026-10-19。
+- [Transformers 4.57.1 缓存说明](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：理解历史 K/V 复用的概念路标。文档核验日期见附录 H。
 
 
 ---
@@ -2574,7 +2574,7 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 
 教学配置是 CPU 单线程、`d_model=16`、4 头、1 层、最大位置 32、B=4、T=8、AdamW 学习率 0.003、40 次更新。每次从两首训练诗随机取 4 个窗口；共消费 40×4×8=1280 个预测位置，**包含重复，不等于 1280 个独立样本**。每次运行重新初始化模型与优化器，同时固定 Python 抽样 RNG 和 PyTorch 种子，并开启确定性算法。
 
-下面是 2026-10-19、PyTorch 2.14.1+cpu 的复核记录，显示到六位小数。seed 11 保留后值采用独立审核环境的 4.397413730…，四舍五入为 4.397414；本地复跑为 4.397413254…，相差一个 float32 ULP。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU 数值差异，而不容许学习率改变造成的偏移。训练/保留 loss 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：
+下面是附录 H 所列环境下的复核记录，显示到六位小数。seed 11 保留后值采用独立审核环境的 4.397413730…，四舍五入为 4.397414；本地复跑为 4.397413254…，相差一个 float32 ULP。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU 数值差异，而不容许学习率改变造成的偏移。训练/保留 loss 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：
 
 | 运行 | 首 batch loss | 训练文档 loss 前→后 | 保留文档 loss 前→后 |
 | --- | --- | --- | --- |
@@ -2595,7 +2595,7 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 
 两组不是各占一半：整体均值应是 `(4 × 见过组 loss + 19 × 未见组 loss) / 23`。共有目标的 loss 实际下降；整体上升主要来自那 19 个从未作为训练答案的目标。在训练 softmax 分类时，这些类别没有正目标奖励，但仍出现在分母里，其分数可能被相对压低。**这次留出 loss 上升主要反映标签分布不匹配，本实验不能证明过拟合。看到留出 loss 上升，先检查留出标签是否见过。** 只有 4 个共有标点变好，也不能据此推断词汇或语言泛化变好。
 
-过拟合指模型过度适应训练材料、在可比的新样本上表现变差；训练 loss 下降而验证 loss 上升只是需要诊断的现象，不是自动成立的结论。若要演示它，需要另设词汇覆盖可比、来源独立的留出材料，固定评估口径并跟踪训练过程，例如检查验证 loss 是否先下降后上升。本批只讨论过拟合概念，**没有演示或证实过拟合**，也不将不匹配的两组数据包装成过拟合实验。
+过拟合指模型过度适应训练材料、在可比的新样本上表现变差；训练 loss 下降而验证 loss 上升只是需要诊断的现象，不是自动成立的结论。若要演示它，需要另设词汇覆盖可比、来源独立的留出材料，固定评估口径并跟踪训练过程，例如检查验证 loss 是否先下降后上升。本章只讨论过拟合概念，**没有演示或证实过拟合**，也不将不匹配的两组数据包装成过拟合实验。
 
 同种子同环境重复是复现实验的检查，不是跨硬件/版本逐位相同的承诺；换种子也不是新增独立测试语料。
 
@@ -2617,17 +2617,17 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 3. 梯度 `[-0.25,0.25]`，更新后 `[1.123612289,-0.025]`；两题取 mean 时每题梯度除以 2。对应 `test_gradient_finite_difference_and_update` 与 `test_reduction_and_autograd_match_handcalc`。
 4. 梯度累加成两倍；下一批前调用 `optimizer.zero_grad(set_to_none=True)`。对应 `test_gradient_accumulation_and_clear`；`test_train_step_rejects_zero_grad_omission_numerically` 另跑不清零的错误循环，确认其参数偏离正确参考，避免仅靠搜一行源码“证明正确”。
 5. 两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。对应 `test_eval_no_grad_and_restore_mode`：用真实 `evaluate` 前向的 pre-hook 确认 `training=False` 与 `is_grad_enabled=False`，另检查权重不变、模式恢复，并用 Dropout 对照。`test_evaluate_unequal_documents_token_weighted` 使用 1 个与 4 个目标的不等长文档，核对 token 加权 3.4，而不是文档均值 2.5。
-6. 重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23 个留出目标未在训练标签中出现，4 个共有标点的 loss 反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本批未演示过拟合。下一章 S0 更只是同语料记忆。对应 `test_split_and_leakage_mutation`：将训练文档混入保留集合会报错；`test_fixed_seed_repeat_and_heldout_report` 检查重复运行；`test_40_step_snapshots_and_label_strata` 固定种子 7/11 的 40 步结果、实际学习率、19/23 计数、共有组下降方向及两组重组合，不断言“训练必能改善整体保留 loss”。
+6. 重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23 个留出目标未在训练标签中出现，4 个共有标点的 loss 反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本章未演示过拟合。下一章 S0 更只是同语料记忆。对应 `test_split_and_leakage_mutation`：将训练文档混入保留集合会报错；`test_fixed_seed_repeat_and_heldout_report` 检查重复运行；`test_40_step_snapshots_and_label_strata` 固定种子 7/11 的 40 步结果、实际学习率、19/23 计数、共有组下降方向及两组重组合，不断言“训练必能改善整体保留 loss”。
 
 ## P09.8 来源与边界
 
-核验日期：2026-10-19。API 依据锁定为 PyTorch 2.14 文档，运行数值使用 2.14.1+cpu：
+来源核验日期见附录 H。API 依据锁定为 PyTorch 2.14 文档，运行数值使用附录 H 所列补丁版本：
 
 - [CrossEntropyLoss](https://docs.pytorch.org/docs/2.14/generated/torch.nn.CrossEntropyLoss.html)：logits 输入、类别标签与 reduction。
 - [Optimizer.zero_grad](https://docs.pytorch.org/docs/2.14/generated/torch.optim.Optimizer.zero_grad.html)：梯度清理与 `set_to_none`。
 - [Autograd mechanics](https://docs.pytorch.org/docs/2.14/notes/autograd.html)：梯度记录、no-grad 与 eval 的区别。
-- 大纲 S14 的 [Transformers 文档入口](https://huggingface.co/docs/transformers/index) 是进一步学习训练框架的导航；本实验不调用 Transformers，也不把动态文档版本冒充已验证依赖。
-- 大纲 S18 [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556) 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出 scaling law，也不据此承诺增加步数就能提升泛化。
+- [Transformers 文档入口](https://huggingface.co/docs/transformers/index) 是进一步学习训练框架的导航；本实验不调用 Transformers，也不把动态文档版本冒充已验证依赖。
+- [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556) 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出 scaling law，也不据此承诺增加步数就能提升泛化。
 
 
 ---
@@ -2647,7 +2647,7 @@ OMP_NUM_THREADS=1 python3 code/07_baby_gpt.py
 python3 -m unittest discover -s tests -p 'test_baby_gpt.py' -v
 ```
 
-需要 `requirements.txt` 中的 CPU PyTorch；本文数值来自 Python 3.12、PyTorch 2.14.1+cpu、种子 42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同 seed 承诺跨平台逐位相同。
+需要 `requirements.txt` 中的 CPU PyTorch；本文数值来自 Python 3.12、附录 H 所列 PyTorch、种子 42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同 seed 承诺跨平台逐位相同。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
@@ -2874,7 +2874,7 @@ restored.eval()
 
 ## 原始来源与实现版本
 
-核验日：2026-10-19。S0 是本仓库教学实现，不是某个商业模型的精确复刻。
+来源核验日见附录 H。S0 是本仓库教学实现，不是某个商业模型的精确复刻。
 
 1. [PyTorch 2.14 GELU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.GELU.html)：激活定义。模型结构以 [code/07_baby_gpt.py](../code/07_baby_gpt.py) 为准。
 2. [PyTorch 2.14 torch.save](https://docs.pytorch.org/docs/2.14/generated/torch.save.html)、[torch.load](https://docs.pytorch.org/docs/2.14/generated/torch.load.html)：序列化、设备映射与 weights_only 边界。
@@ -3041,7 +3041,7 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 - 先预热 2 轮，再计 7 轮；交替 S0/S1 测量顺序，输出各指标 min/median/max。
 - CPU 单线程用 `perf_counter`；没有异步 GPU 工作，因此本实验不涉及 CUDA 同步。将方法搬到 GPU 时需要另外处理同步。
 
-本机测量值和版本见本批验证记录；每次运行都会重新打印，不将抖动的毫秒数写成单元测试常数。小矩阵下 Python 验证、`cat` 和分配可能抵消省下的计算，缓存不保证在这个微型 CPU 例子里更快。正确的优化报告应同时列出两条路径和计时范围，而不是只挑最漂亮的一次。
+本机测量值每次运行都会重新打印，不将抖动的毫秒数写成单元测试常数。小矩阵下 Python 验证、`cat` 和分配可能抵消省下的计算，缓存不保证在这个微型 CPU 例子里更快。正确的优化报告应同时列出两条路径和计时范围，而不是只挑最漂亮的一次。
 
 ## P11.9 先预测，再看答案
 
@@ -3071,12 +3071,12 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 
 ## 原始来源与版本
 
-核验日期：2026-10-19。本章 S1 是教学实现，既不是 HF Cache API 的完整实现，也不是 vLLM 服务实现。
+来源核验日期见附录 H。本章 S1 是教学实现，既不是 HF Cache API 的完整实现，也不是 vLLM 服务实现。
 
 1. [Transformers 4.57.1 Caching](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：逐层 K/V、增量计算、cache position 与组合注意力 mask；只在推理使用缓存的边界。
 2. Kwon 等，[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，§2–3：KV cache 与服务内存管理动机。分页和连续批处理留给后续，不将本地 `cat` 称为 PagedAttention。
 3. [code/07_baby_gpt.py](../code/07_baby_gpt.py) 与 [code/12_kv_cache.py](../code/12_kv_cache.py)：本章形状、容量策略、计时范围及可运行数值的直接依据。
-4. 大纲 S15 的 [vLLM Paged Attention 设计文档](https://docs.vllm.ai/en/latest/design/paged_attention/)（动态文档，访问核验日 2026-10-19）仅作后续服务实现导航。本章不依赖 vLLM、没有运行其内核，也未实现分页缓存；本地 S1 的行为以配套脚本为准。
+4. [vLLM Paged Attention 设计文档](https://docs.vllm.ai/en/latest/design/paged_attention/)（动态文档，访问核验日见附录 H）仅作后续服务实现导航。本章不依赖 vLLM、没有运行其内核，也未实现分页缓存；本地 S1 的行为以配套脚本为准。
 
 下一单元 [P12](#p12-rope) 将绝对位置表换成 Q/K 旋转，并继续用同参数全量/增量 logits 对照检查缓存。
 
@@ -3304,7 +3304,7 @@ RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：
 
 实验协议写死在 `length_experiment()`，便于复现和审计：
 
-- CPU、float32、单线程；验证环境 PyTorch 2.14.1+cpu，依赖见仓库 requirements。
+- CPU、float32、单线程；验证环境见附录 H，依赖见仓库 requirements。
 - 两层模型，d_model=32，H=4，词表大小 10；普通 RoPE、全头旋转、base=10000。
 - 从一开始允许 `max_seq_len=64`，**实际训练样本始终只有 8 个位置**。
 - AdamW，学习率 0.003，weight_decay=0；batch=32，更新 400 次，共 12800 个训练样本。
@@ -3375,7 +3375,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_rope.py' -v
 
 ## P12.12 来源与下一步
 
-来源核验日期：2026-10-19。
+来源核验日期见附录 H。
 
 - [RoFormer / RoPE 论文，arXiv:2104.09864](https://arxiv.org/abs/2104.09864)：Q/K 旋转与相对位置点积的原始来源；本章二维数值是独立手算与脚本生成。
 - [Position Interpolation 论文（Chen 等），arXiv:2306.15595](https://arxiv.org/abs/2306.15595)：位置插值 PI 的原始来源。
@@ -3591,7 +3591,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_modern_block.py'
 
 没有 PyTorch 时，CLI 会简短提示安装方式并以退出码 2 结束。不需要下载模型或数据。
 
-固定实验条件：CPU、PyTorch 2.14.1+cpu、float32、单线程、seed=42，B=2、T=12、8 次更新。数据用单独的 generator，seed=43，先生成长度 T+1 的 ID，再取相邻输入/目标。三行模型使用同一份 batch、同一输入顺序和步数，每次都创建全新的 AdamW，lr=0.001、betas=(0.9,0.999)、eps=1e-8、weight_decay=0，无 dropout。
+固定实验条件：CPU、附录 H 所列 PyTorch、float32、单线程、seed=42，B=2、T=12、8 次更新。数据用单独的 generator，seed=43，先生成长度 T+1 的 ID，再取相邻输入/目标。三行模型使用同一份 batch、同一输入顺序和步数，每次都创建全新的 AdamW，lr=0.001、betas=(0.9,0.999)、eps=1e-8、weight_decay=0，无 dropout。
 
 ### 表 P13-4：这一次实跑的训练闭环结果
 
@@ -3661,7 +3661,7 @@ P13.4 的 SwiGLU 两个因子都没有上界，两个大坐标相乘就是离群
 4. [PyTorch 2.14 RMSNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.RMSNorm.html)：公式与 epsilon 计算类型；本代码始终显式指定 ε。
 5. [PyTorch 2.14 SiLU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.SiLU.html)：SiLU 的逐元素定义。
 
-来源核对日期：2026-10-19。实际实验由固定依赖环境运行；其它设备或库版本的最后几位可能不同，应先核对配置与测试，而不是把表中的舍入值当作所有环境的逐位承诺。
+来源核对日期见附录 H。实际实验由固定依赖环境运行；其它设备或库版本的最后几位可能不同，应先核对配置与测试，而不是把表中的舍入值当作所有环境的逐位承诺。
 
 
 ---
@@ -3936,7 +3936,7 @@ OMP_NUM_THREADS=1 python code/15_grouped_kv.py
 python -m unittest discover -s tests -p test_grouped_kv.py -v
 ```
 
-本批在 Python 3.12.14、PyTorch 2.14.1+cpu、单 CPU 线程、seed=42 下运行。模型表格使用 float32，独立 MLA 矩阵使用 float64；不训练、不下载权重。关键输出：
+在附录 H 所列环境下（单 CPU 线程、seed=42）运行。模型表格使用 float32，独立 MLA 矩阵使用 float64；不训练、不下载权重。关键输出：
 
 ```text
 Hq=4 Hkv=2 mapping: (0, 0, 1, 1)
@@ -3985,9 +3985,9 @@ Rank example: 3 -> 2, Frobenius error=1.0
 ## 资料与实现边界
 
 - [GQA 原论文 v3](https://arxiv.org/html/2305.13245v3)：核验 MHA/MQA/GQA 边界及分组均值初始化、继续预训练的区别。
-- [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日 2026-10-19。
+- [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日见附录 H。
 - [DeepSeek-V3 技术报告 v2，§2.1.1](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1)：核验 MLA 的联合内容压缩、解耦位置项与缩放维度。
-- [DeepSeek-V3 官方推理源码](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py)：核验内容/位置缓存分离的实现入口；动态链接核验日 2026-10-19。
+- [DeepSeek-V3 官方推理源码](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py)：核验内容/位置缓存分离的实现入口；动态链接核验日见附录 H。
 
 本章实现 GQA 的完整 tiny-model 前向和紧凑缓存；MLA 仅实现独立矩阵教学实验，未实现完整训练模型、checkpoint 转换流程、分布式部署或生产性能复现。
 
@@ -4361,7 +4361,7 @@ python -m unittest discover -s tests -p test_attention_systems.py -v
 
 核心只需要 Python 标准库。
 
-本批在 Python 3.12.14 上运行，随机部分 seed=15。环境中的 PyTorch 是 2.14.1+cpu，没有可用 CUDA。关键输出为：
+在附录 H 所列环境下（随机部分 seed=15）运行。环境中的 PyTorch 见附录 H，没有可用 CUDA。关键输出为：
 
 ```text
 Online hand example: output=6.000000000000, expected=6; blocks=[2,1]
@@ -4377,7 +4377,7 @@ GPU SDPA: not requested, not run. This CPU script is not a performance benchmark
 
 ## P15.16 GPU 选修：先确认后端，不先晒跑分
 
-**本批 GPU kernel 未运行，未测 GPU 显存、时延或吞吐。** CPU SDPA 检查通过不代表执行了 CUDA FlashAttention。
+**本章 GPU kernel 未运行，未测 GPU 显存、时延或吞吐。** CPU SDPA 检查通过不代表执行了 CUDA FlashAttention。
 
 如果你已经有兼容的 GPU、驱动与官方 CUDA 版 PyTorch，可以单独尝试：
 
@@ -4385,7 +4385,7 @@ GPU SDPA: not requested, not run. This CPU script is not a performance benchmark
 python code/16_attention_systems.py --gpu-sdpa
 ```
 
-不要为这一章把现有 CPU 环境强行替换掉；GPU 环境的安装要按官方硬件/驱动要求单独配置。脚本会打印实际 PyTorch、CUDA、设备、dtype 和形状，并在缺少依赖或 CUDA 时明确 `SKIP`。本批实际运行这个开关得到：
+不要为这一章把现有 CPU 环境强行替换掉；GPU 环境的安装要按官方硬件/驱动要求单独配置。脚本会打印实际 PyTorch、CUDA、设备、dtype 和形状，并在缺少依赖或 CUDA 时明确 `SKIP`。本章实际运行这个开关得到：
 
 ```text
 SKIP GPU SDPA: torch=2.14.1+cpu, CUDA unavailable; GPU kernel not run.
@@ -4403,7 +4403,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 这里 Q/K 等长，才使用简单的 `is_causal=True`；带缓存偏移的矩形 mask 不应不加分析地照抄。函数的 dropout 参数明确设为 0，不依赖外部模型的 eval 状态。脚本记录 profiler 中实际出现的 attention/flash 事件，再与本章 CPU 数值参考比较；“调用了 SDPA”本身不能证明走了期望后端。[PyTorch 固定源码 v2.5.1：SDPA 后端选择接口](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)
 
-此固定源码链接用于接口背景，不是安装建议。本批另检查了实际 torch 2.14.1 的 `sdpa_kernel` 和 `SDPBackend.FLASH_ATTENTION` 可导入，但无 GPU，因此没有验证其 GPU 支持条件。后端不支持或运行失败时会报告 skip/失败原因，不会悄悄退回数学后端然后宣称 GPU Flash 成功。
+此固定源码链接用于接口背景，不是安装建议。本章另检查了附录 H 所列 torch 的 `sdpa_kernel` 和 `SDPBackend.FLASH_ATTENTION` 可导入，但无 GPU，因此没有验证其 GPU 支持条件。后端不支持或运行失败时会报告 skip/失败原因，不会悄悄退回数学后端然后宣称 GPU Flash 成功。
 
 要做真正的性能对比，还需要另外安排可复现基准：
 
@@ -4414,7 +4414,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 5. 显存分别记录模型基线、KV payload、峰值 allocated/reserved 和工作区；重置峰值统计的时机要相同。
 6. 改一个因素再比，并核验 profiler 实际后端；保存硬件、软件版本和命令。微型 attention smoke 不能替代端到端服务基准。
 
-这是选修实验的记录清单，**不是本批已经跑出的服务性能报告**。
+这是选修实验的记录清单，**不是本章已经跑出的服务性能报告**。
 
 ## P15.17 自测题与参考答案
 
@@ -4446,12 +4446,12 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 ## 资料与实现边界
 
-核验日：2026-10-19。以下只用论文或官方资料：
+核验日见附录 H。以下只用论文或官方资料：
 
 - [FlashAttention 原论文（arXiv 2205.14135v2）](https://arxiv.org/pdf/2205.14135v2)：IO-aware tiling、在线归一化与精确注意力的边界；本章未实现其 GPU 前反向 kernel。
 - [PagedAttention 原论文 v1](https://arxiv.org/html/2309.06180v1)：块表、非连续 KV、共享和写时复制、请求调度；本章只模拟单线程所有权和逻辑读取。
 - [vLLM 0.6.4 APC 介绍](https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/apc.html)与[实现说明](https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/details.html)：固定文档快照，不是当前版本推荐；本章没有安装、运行或测速 vLLM。
-- [PyTorch v2.5.1 官方后端选择源码](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)：固定接口背景；实际 CPU 测试环境为 torch 2.14.1+cpu，GPU 选修未运行。
+- [PyTorch v2.5.1 官方后端选择源码](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)：固定接口背景；实际 CPU 测试环境见附录 H，GPU 选修未运行。
 
 本章不改 S4、不训练模型、不实现 CUDA 或生产调度器，不把人造时间线写成实验吞吐，不承诺任何 GPU 加速比。
 
@@ -4690,7 +4690,7 @@ OMP_NUM_THREADS=1 python code/17_sparse_linear_attention.py
 python -m unittest discover -s tests -p test_sparse_linear_attention.py -v
 ```
 
-本批实际使用 Python 3.12.14、PyTorch 2.14.1+cpu、单线程、seed=16、float64。随机 B=2、T=7、r=3、d_v=2 对照得到最大误差 `3.33e-16`，S/z 形状分别为 `[2,3,2]`、`[2,3]`；检索结果见上表。不同平台的末位浮点误差可不同，不是质量分数。
+实际在附录 H 所列环境下（单线程、seed=16、float64）运行。随机 B=2、T=7、r=3、d_v=2 对照得到最大误差 `3.33e-16`，S/z 形状分别为 `[2,3,2]`、`[2,3]`；检索结果见上表。不同平台的末位浮点误差可不同，不是质量分数。
 
 教学接口主动收窄范围：
 
@@ -4746,7 +4746,7 @@ P16.4 的固定窗口是事先定好看哪里。[MiniMax Sparse Attention，arXi
 - [Transformers are RNNs，ICML 2020 定稿，PMLR 119:5156–5165](https://proceedings.mlr.press/v119/katharopoulos20a.html)：正特征核、因果归一化和递推的原始依据，不把其他新架构混入该公式。
 - [FLA 官方实现入口](https://github.com/fla-org/flash-linear-attention)：动态仓库链接，仅作选读；不是本章固定算法或性能证据。
 
-上述原始来源与官方入口核验于 2026-10-19。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
+上述原始来源与官方入口的核验日期见附录 H。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
 
 
 ---
@@ -4777,7 +4777,7 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 ## P17.2 哪些是已经核验的官方事实
 
-本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。2026-10-19 核验了技术报告 v1，以及官方 Hugging Face 仓库的固定 revision：
+本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。本章核验了技术报告 v1（核验日期见附录 H），以及官方 Hugging Face 仓库的固定 revision：
 
 ```text
 314113f8a7dadb388215396ba5fbee2c610a04d6
@@ -5025,7 +5025,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture
 
 若使用仓库的虚拟环境，把 python 换成 `.venv/bin/python`。没有 PyTorch 时，CLI 给出安装提示并以非零状态退出。
 
-本章在 CPU / torch 2.14.1 / float64 下验证，核心输出为：
+本章在 CPU / 附录 H 所列 torch / float64 下验证，核心输出为：
 
 ```text
 手算 encoder: [2.0, 3.5, 5.5]
@@ -5336,7 +5336,7 @@ OMP_NUM_THREADS=1 python code/19_moe.py
 OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_moe.py' -v
 ```
 
-2026-10-19，CPU、PyTorch 2.14.1+cpu、seed=180 的实际输出包括：
+附录 H 所列环境下（CPU、seed=180）的实际输出包括：
 
 ```text
 capacity=None; selected=[[0, 1], [3, 2], [0, 1]]
@@ -5377,10 +5377,10 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 
 ## P18.11 和官方资料对照：学机制，不冒充复现
 
-本章于 2026-10-19 核验以下固定论文版本，并沿用大纲来源编号：
+本章核验以下固定论文版本（核验日期见附录 H）：
 
-- **S19：** [DeepSeekMoE，arXiv 2401.06066v1，§3.1–3.3](https://arxiv.org/html/2401.06066v1#S3)。它讨论细粒度专家、共享专家隔离与负载均衡。共享专家始终执行，细分专家时要同时调整激活数量，不能只比较专家数。该版本公式（9）–（11）的 Softmax gating 不应被自动改写为本章的 selected renormalization。
-- **S09：** [DeepSeek-V3 官方仓库](https://github.com/deepseek-ai/DeepSeek-V3) 所链接的 [技术报告 arXiv 2412.19437v2，§2.1.2](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2)。V3 使用 Sigmoid affinity、所选 affinity 归一化、只影响选择的均衡偏置，并保留很小的序列级辅助项；报告明确说明训练和推理不丢弃 token。因此 “auxiliary-loss-free” 不能解释成全模型绝对没有任何辅助损失，也不能把本章容量丢弃示例说成 V3 的做法。
+- [DeepSeekMoE，arXiv 2401.06066v1，§3.1–3.3](https://arxiv.org/html/2401.06066v1#S3)。它讨论细粒度专家、共享专家隔离与负载均衡。共享专家始终执行，细分专家时要同时调整激活数量，不能只比较专家数。该版本公式（9）–（11）的 Softmax gating 不应被自动改写为本章的 selected renormalization。
+- [DeepSeek-V3 官方仓库](https://github.com/deepseek-ai/DeepSeek-V3) 所链接的 [技术报告 arXiv 2412.19437v2，§2.1.2](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2)。V3 使用 Sigmoid affinity、所选 affinity 归一化、只影响选择的均衡偏置，并保留很小的序列级辅助项；报告明确说明训练和推理不丢弃 token。因此 “auxiliary-loss-free” 不能解释成全模型绝对没有任何辅助损失，也不能把本章容量丢弃示例说成 V3 的做法。
 
 本书 S5 使用 Softmax affinity、单进程逐专家 dispatch、可分开观察的 batch 辅助项或偏置模式。没有复现 V3 的 Sigmoid 路由、节点限制、分布式均衡、FP8、通信 kernel、训练数据或官方权重。引用生产系统的设计动机，不意味着继承其性能和质量结论。
 
@@ -5677,7 +5677,7 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。
 
-2026-10-19 在 Python 3.12.14、torch 2.14.1+cpu、单线程、float32、seed=7 下的本书实测：
+在附录 H 所列环境下（单线程、float32、seed=7）的本书实测：
 
 | 记录 | 结果 | 能说明什么 |
 | --- | --- | --- |
@@ -5737,7 +5737,7 @@ N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验�
 - [PyTorch 保存与加载教程](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html)：本章核验时为 2.14 教程，动态入口；模型与优化器状态的区别。
 - [Transformers v4.51.3：Data Collator](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)：固定版本的标签与 padding 契约。本章没有安装或调用 Transformers。
 
-来源核验日：2026-10-19。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。
+来源核验日见附录 H。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。
 
 
 ---
@@ -5876,7 +5876,7 @@ $$
 
 独立对照参数使用 atol=2e-6、rtol=2e-5；不是把所有训练轨迹都要求逐位相同。本地保存后以**同一个 eager attention 后端**恢复的 logits 则要求零误差。在开发时，恢复入口曾自动选择 SDPA，造成约 6e-8 的微小差异；解决方法是固定同一个后端，而不是不问原因就放宽容差。
 
-2026-10-19，在本章下述固定组合、Linux CPU 环境得到的一次结果为：
+在本章下述固定组合、Linux CPU 环境下得到的一次结果（日期见附录 H）：
 
 | 检查项 | 实际结果 |
 | --- | --- |
@@ -5919,8 +5919,6 @@ python3.12 -m venv /tmp/zero2llm-frameworks
 官方 CPU wheel 的平台列表见 [PyTorch 官方索引](https://download.pytorch.org/whl/cpu/torch/)。若平台没有匹配 wheel，不要从不明镜像拼装包；可以先完成标准库部分，再选择官方支持的环境。
 
 本章锁定 torch 2.14.1（本次 wheel 带 +cpu）、transformers 4.51.3、accelerate 1.6.0、tokenizers 0.21.4、huggingface-hub 0.30.2、safetensors 0.5.3。它是**已验证的教学组合，不是最新版推荐，也不代表任意跨版本组合都兼容**。requirements-frameworks.txt 锁定附加框架包，PyTorch 单独从官方 CPU 源安装，避免意外引入 CUDA 大包。正式归档环境还应保存完整 pip freeze、Python 版本和平台信息，因为只锁直接依赖不等于锁了全部传递依赖。
-
-本次验证为节省重复安装空间，使用独立 /tmp/zero2llm-p20-venv，并只读复用原环境的 Torch / Tokenizers 路径；新增包写入独立环境，核对原环境版本未变。上面的干净环境命令是读者的安装路线，不要求复刻这个路径优化。
 
 缺少可选包或版本不符时，--hf 输出 SKIP 并返回退出码 2；它不会临时联网补下载。满足版本但出现真正的运行错误时，程序正常报错，而不是吞掉异常并说“兼容性跳过”。
 
@@ -6118,7 +6116,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 
 ## 资料与版本边界
 
-核验日期：2026-10-19。以下优先固定官方版本或原始论文；资料中的大规模结果不算作本书复现。
+核验日期见附录 H。以下优先固定官方版本或原始论文；资料中的大规模结果不算作本书复现。
 
 - [Transformers 4.51.3 Trainer](https://huggingface.co/docs/transformers/v4.51.3/en/trainer)、[GPT-2 API](https://huggingface.co/docs/transformers/v4.51.3/en/model_doc/gpt2)、[对应 Trainer 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)：对象职责、标签计数与保存逻辑。本章实际运行此版本。
 - [Transformers 4.51.3 PyPI 元数据](https://pypi.org/pypi/transformers/4.51.3/json)、[Accelerate 1.6.0 PyPI 元数据](https://pypi.org/pypi/accelerate/1.6.0/json)：附加依赖选择；实际锁定项见 requirements-frameworks.txt。
@@ -6413,7 +6411,7 @@ _updates(model, batch, steps=24, lr=0.5)
 
 ### 本次实测
 
-2026-10-19，Python 3.12 / PyTorch 2.14.1+cpu 的一次结果如下。数值为教学夹具记录，不是吞吐 benchmark；其他平台可能有末位浮点差异。
+在 Python 3.12 与附录 H 所列 PyTorch 下的一次结果如下。数值为教学夹具记录，不是吞吐 benchmark；其他平台可能有末位浮点差异。
 
 | 检查项 | 结果 |
 | --- | --- |
@@ -6555,7 +6553,7 @@ B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽
 
 SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 A/B 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
 
-来源按 **2026-10-19** 核验，固定版本而非追随 latest：
+来源按附录 H 所列日期核验，固定版本而非追随 latest：
 
 - [Transformers 4.51.3 chat templates](https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating)：模板、生成前缀、特殊 token 重复的注意事项。
 - [TRL 0.18.2 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py)：框架职责参照，未在本章运行。
@@ -6859,7 +6857,7 @@ python -m unittest discover -s tests -p test_preference_optimization.py -v
 
 GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我猜是 0”虽然字符更多，也不是多个策略动作。不要把这两层混写成“已经训练了一个生成式小 LLM”。
 
-2026-10-19，在 CPU、PyTorch 2.14.1+cpu、seed=22、单线程下实测：
+在附录 H 所列环境下（CPU、seed=22、单线程）实测：
 
 | 指标 | SFT 起点 | DPO 后 | GRPO 后 |
 | --- | --- | --- | --- |
@@ -6880,7 +6878,7 @@ GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我�
 
 ## P22.8 接到 TRL：固定版本配置阅读，明确未运行
 
-本节核对的是 **TRL 0.16.1** 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，核验日期为 2026-10-19。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。
+本节核对的是 **TRL 0.16.1** 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，核验日期见附录 H。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。
 
 **为什么相邻章节引用的 TRL 版本不一样？** [P20](#p20-frameworks) 用 [0.17.0 官方总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 建立框架与训练入口的地图；[P21](#p21-sft) 用 [0.18.2 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py) 说明 SFT 训练器的职责。本章则选择 **0.16.1 作为固定的历史 GRPO 实现切片**，逐项核对奖励标准化、KL 估计和 loss 归约，再与手写教学变体对照。选择这个较早标签是为了固定具体的比较对象，不是推荐退回旧环境。
 
@@ -7266,7 +7264,7 @@ OMP_NUM_THREADS=1 python code/24_reasoning_mtp.py
 OMP_NUM_THREADS=1 python -m unittest discover -s tests -p test_reasoning_mtp.py -v
 ```
 
-已验证环境为 CPU、PyTorch `2.14.1+cpu`、单线程、种子 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装 `requirements.txt` 的提示并以状态 2 退出。
+已验证环境为 CPU、附录 H 所列 PyTorch、单线程、种子 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装 `requirements.txt` 的提示并以状态 2 退出。
 
 固定 demo 使用词表 11、隐藏宽度 16、1 层教学 MoE、2 个额外 head、长度为 2 的 prompt，生成 10 个 token。模型只随机初始化并做一次反向检查，没有训练质量结论。本次输出包括：
 
@@ -7291,7 +7289,7 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 
 本章只解释这个区别，没有实现蒸馏流水线、教师服务、数据筛选系统或新扩展项目。S6 的辅助梯度进入主干，不能将其命名为 R1 蒸馏复现。
 
-截至 2026-10-19，本章只依据官方版本化报告作如下跨版本提醒：**DeepSeek-V4.1-Flash 的 DSpark 不能直接贴上 V3 MTP 的标签。** 官方报告 §2.4.3 描述了半自回归草稿和基于置信度安排验证的方案；它在预训练后专门训练，起初冻结 backbone，后训练中其目标也不向 backbone 反传。不要从“都是投机解码”推断两者采用同一训练目标或参数共享设计。[DeepSeek-V4.1-Flash v1](https://arxiv.org/html/2609.19969v1)
+本章只依据官方版本化报告作如下跨版本提醒（核对截止日期见附录 H）：**DeepSeek-V4.1-Flash 的 DSpark 不能直接贴上 V3 MTP 的标签。** 官方报告 §2.4.3 描述了半自回归草稿和基于置信度安排验证的方案；它在预训练后专门训练，起初冻结 backbone，后训练中其目标也不向 backbone 反传。不要从“都是投机解码”推断两者采用同一训练目标或参数共享设计。[DeepSeek-V4.1-Flash v1](https://arxiv.org/html/2609.19969v1)
 
 我们没有运行 DSpark、R1 或 V3 官方权重，没有复现其质量或速度。读到新版本时应重新核对明确对象与版本，而不是沿用旧名词填满组件表。
 
@@ -7332,7 +7330,7 @@ batch 小时解码受内存带宽限制，多验证几个草稿位置几乎不�
 
 ## 资料版本与复现边界
 
-核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
+核验日期见附录 H。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
 
 - [DeepSeek-R1，arXiv:2501.12948v1](https://arxiv.org/html/2501.12948v1)：§2.2–2.4，Zero／冷启动／RL／数据筛选／SFT／蒸馏的区别。
 - [DeepSeek-V3 Technical Report，arXiv:2412.19437v2](https://arxiv.org/html/2412.19437v2)：§2.2，串行 MTP 模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。
@@ -7572,7 +7570,7 @@ GGUF 可以把模型元数据、tokenizer 信息、张量名、形状、类型�
 
 ## P24.8 四类工具，按工作负载选，不按热度选
 
-下表是**固定历史版本**的定位与检查路线，核验日为 **2026-10-19**，不是“这些旧版本是当前生产推荐”，也不保证后续模型被它们支持。
+下表是**固定历史版本**的定位与检查路线，核验日见附录 H，不是“这些旧版本是当前生产推荐”，也不保证后续模型被它们支持。
 
 | 工具与锁定版本 | 本章关注的用途 | 需要逐项核对的兼容性 | 本书实际验证 |
 | --- | --- | --- | --- |
@@ -7806,7 +7804,7 @@ FP4 块格式让每一小块元素共享一个 scale，块越小，异常值影�
 
 ## P25.1 先把研究对象钉住
 
-核对日期为 **2026-10-19**。本章研究的是 2025 年首发路线的两个混合 thinking / non-thinking 文本 checkpoint，**不是**名字中带 `Instruct-2507`、`Thinking-2507` 的后续版本，也不是 Qwen3-Next、视觉模型或整个 Qwen3 家族。
+核对日期见附录 H。本章研究的是 2025 年首发路线的两个混合 thinking / non-thinking 文本 checkpoint，**不是**名字中带 `Instruct-2507`、`Thinking-2507` 的后续版本，也不是 Qwen3-Next、视觉模型或整个 Qwen3 家族。
 
 | 对象 | 官方仓库 | 本章锁定的完整 revision |
 | --- | --- | --- |
@@ -8072,7 +8070,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p test_qwen3_case.py -v
 
 默认输出为每项组件附上带完整 revision 的 source URL，并打印本章精确参数和缓存数字。程序无网络请求。
 
-`--torch` 使用 CPU、PyTorch `2.14.1+cpu`、Jinja2 `3.1.6`、种子 250、单线程、float64。缺少 PyTorch 或 Jinja2 时给出安装 `requirements.txt` 的提示并以状态 2 退出；不是“只打印配置就算可选实验通过”。本章没有额外安装 Transformers，也不修改仓库的依赖锁定。
+`--torch` 使用 CPU、附录 H 所列 PyTorch、Jinja2 `3.1.6`、种子 250、单线程、float64。缺少 PyTorch 或 Jinja2 时给出安装 `requirements.txt` 的提示并以状态 2 退出；不是“只打印配置就算可选实验通过”。本章没有额外安装 Transformers，也不修改仓库的依赖锁定。
 
 微型配置为 D=8、Hq=4、Hkv=2、d=4、2 层、词表 17，仍然保留 `Hq*d != D` 的关键结构。dense 的 FFN 宽度 12；MoE 是 4 个宽度 6 的专家、每 token 选 2 个，没有共享专家。它们只随机初始化，没有训练。
 
@@ -8152,7 +8150,7 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 3. **本书做了什么？** 提取字段、运行小矩阵、验证坐标，还是跑了真实权重？只有实际运行的部分才能叫本书实验结果。
 4. **哪里仍未知？** 缺字段不等于功能不存在，参考实现也不等于线上部署实现。
 
-本章核查日期为 **2026-10-19**。以下是官方模型 API 当日返回、随后实际读取配置的固定提交，不是 `main` 别名；后来发布的新模型不自动继承本章结论。
+本章核查日期见附录 H。以下是官方模型 API 当日返回、随后实际读取配置的固定提交，不是 `main` 别名；后来发布的新模型不自动继承本章结论。
 
 | 本章代号 | 官方仓库 | 固定 revision |
 | --- | --- | --- |
@@ -8935,7 +8933,7 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 - 第 341–342 行：只有通过上面两道检查，才写入 `caught: True`。
 - `before_split` 在循环前第 328–330 行算出：用正确的 `s1.cached_forward`（`good`）在同一 3+5 分段上前向，再与完整前向 `expected` 取最大绝对差；它就是图中的灰色 “before” 柱。
 
-2026-10-30 重新运行（下列负例数字与 P27.10 计时均于该日实测，非复制此前运行），Python 3.13.5、PyTorch 2.14.1+cpu、单线程、seed=270，按上述固定输入运行：
+在附录 H 所列日期与环境下重新运行（下列负例数字与 P27.10 计时均于该日实测，非复制此前运行），单线程、seed=270，按上述固定输入运行：
 
 | 负例 | 最大绝对 logit 差异，约 | 判定 |
 | --- | --- | --- |
@@ -9007,7 +9005,7 @@ S5 比 S4 参数少，是因为这里故意选择了很窄的专家，并非“M
 
 ![CPU 计时：full/cache × first/later 的 median，误差线为 min–max](assets/diagrams/p27/cpu_timing.svg)
 
-图中普通／缓存 prompt 中位数为 0.237／0.289 ms，后续每 token 前向中位数为 0.222／0.328 ms，误差线为 min–max（2026-10-30 本机单次 CPU 重新运行）。**这里缓存更慢**，并不推翻它减少重复计算的原理：短序列、小矩阵下，Python 检查、拼接缓存和函数开销可能占主导。
+图中普通／缓存 prompt 中位数为 0.237／0.289 ms，后续每 token 前向中位数为 0.222／0.328 ms，误差线为 min–max（本机单次 CPU 重新运行，日期见附录 H）。**这里缓存更慢**，并不推翻它减少重复计算的原理：短序列、小矩阵下，Python 检查、拼接缓存和函数开销可能占主导。
 
 若选做 GPU 基准，另建记录，至少写清设备型号、驱动／框架版本、dtype、模型与 tokenizer revision、B/T、输出长度、并发、实际后端、预热、同步位置、重复次数与波动。不要用本章的“无 GPU”结果填那张表的已测栏。
 
@@ -9078,7 +9076,7 @@ miniGPT 的升级，是让每个变化都有明确的**输入、状态、参照�
 
 ### 固定来源与核验范围
 
-本章来源核验日为 **2026-10-20**。下面只用原始论文的固定版本和官方版本化 API 文档说明机制；本章 CPU 数字来自本仓库实际执行，不借用论文性能数字。
+本章来源核验日见附录 H。下面只用原始论文的固定版本和官方版本化 API 文档说明机制；本章 CPU 数字来自本仓库实际执行，不借用论文性能数字。
 
 - [Attention Is All You Need v7](https://arxiv.org/abs/1706.03762v7)：因果 attention、基础模块。
 - [RoFormer v1](https://arxiv.org/abs/2104.09864v1)：旋转位置的原始定义。
@@ -9095,7 +9093,7 @@ miniGPT 的升级，是让每个变化都有明确的**输入、状态、参照�
 []{#附录-数学公式速查卡与深度学习黑话翻译词典}
 []{#附录数学公式速查卡与深度学习黑话翻译词典}
 
-> 这不是要背完的最后一章，而是读书时随手翻的工具箱。先修只有前言：遇到公式查附录 A，遇到术语查附录 B，不知道下一步读什么查附录 C，准备运行实验查附录 D，看到新模型新闻查附录 E，自测查附录 F，来源查附录 G。公式手算、自测与固定配置证据由仓库测试核对；本页不宣布任何未运行硬件的性能。
+> 这不是要背完的最后一章，而是读书时随手翻的工具箱。先修只有前言：遇到公式查附录 A，遇到术语查附录 B，不知道下一步读什么查附录 C，准备运行实验查附录 D，看到新模型新闻查附录 E，自测查附录 F，来源查附录 G，版本与日期查附录 H。公式手算、自测与固定配置证据由仓库测试核对；本页不宣布任何未运行硬件的性能。
 
 ## 附录 A：大模型核心数学公式速查卡 {#附录-a大模型核心数学公式速查卡}
 
@@ -9201,7 +9199,7 @@ Q 的第 0、1 头共享 KV 第 0 头；Q 第 2、3 头共享 KV 第 1 头。对
 
 ## 附录 D：运行与硬件：先做小实验，再决定是否扩展 {#p28.d-运行与硬件先做小实验再决定是否扩展}
 
-本书的必需路线是小规模 CPU 教学，不要求购买 GPU。安装命令以仓库 README 与固定 requirements 为准；按平台选安装包时查 [PyTorch 官方安装页][install]。这个动态页面核对日期为 **2026-10-20**，不是永远不变的安装承诺。
+本书的必需路线是小规模 CPU 教学，不要求购买 GPU。安装命令以仓库 README 与固定 requirements 为准；按平台选安装包时查 [PyTorch 官方安装页][install]。这个动态页面的核对日期见附录 H，不是永远不变的安装承诺。
 
 ### D.1 KV cache 载荷速查
 
@@ -9298,9 +9296,9 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 来源校验把长度和摘要同时锁定。对固定配置字节串计算 SHA-256，并记录 `(bytes, sha256, revision)`。本地 `code/data/qwen3/dense/config.json` 是 726 bytes，摘要为 `660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd`。把最后一个字节从 125 改为 124（异或 1），长度仍为 726 bytes，但摘要变为 `e338758cad0bc78e2ac6b2e298c0e621b78a6d2e80bac7df11df3a828bf8b73e`；同长度、不同内容必须同时查 hash。
 
 - [Attention Is All You Need，arXiv:1706.03762v7][attention]，§3.2 attention 定义；历史书单保留，非新性能复现。
-- [PyTorch 2.14 reproducibility][repro]，固定文档版本；[官方安装选择器][install]为动态页，核对日期2026-10-20。
+- [PyTorch 2.14 reproducibility][repro]，固定文档版本；[官方安装选择器][install]为动态页，核对日期见附录 H。
 - [Qwen3-0.6B 固定官方 config][qwen-config]，revision/hash 如 E.2；相关官方实现版本见 P25。
-- [3Blue1Brown 原作者 attention 页面][visual]与 [nanoGPT 原作者仓库][nanogpt]：阅读入口，核对日期2026-10-20，不当作本书实验版本。
+- [3Blue1Brown 原作者 attention 页面][visual]与 [nanoGPT 原作者仓库][nanogpt]：阅读入口，核对日期见附录 H，不当作本书实验版本。
 
 [attention]: https://arxiv.org/abs/1706.03762v7
 [repro]: https://docs.pytorch.org/docs/2.14/notes/randomness.html
@@ -9308,6 +9306,78 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 [qwen-config]: https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/config.json
 [visual]: https://www.3blue1brown.com/lessons/attention/
 [nanogpt]: https://github.com/karpathy/nanoGPT
+
+## 附录 H：版本与来源 {#p28.h-版本与来源}
+
+下表保留从正文移出的日期与版本。种子、线程数、dtype 和数值结果仍在原章。正在讲授的库版本锁定留在原处，不计入本表。
+
+| 章 | 内容 | 版本 / 日期 |
+| --- | --- | --- |
+| 00 | 来源核验日期 | 2026-10-18 |
+| 00 | CI 环境 | Python 3.12、PyTorch 2.14.1（CPU 版） |
+| 01 | 来源核验日期 | 2026-10-18 |
+| 01a | 核验和运行日期 | 2026-10-18 |
+| 03 | 动态文档核验日期 | 2026-10-19 |
+| 04 | 文档核验日 | 2026-10-19 |
+| 05 | 来源核验日期 | 2026-10-19 |
+| 06 | 核验环境 PyTorch | 2.14.1+cpu |
+| 06 | 访问核验日期 | 2026-10-19 |
+| 07 | 文档核验日期 | 2026-10-19 |
+| 07a | 复核记录日期 | 2026-10-19 |
+| 07a | 复核记录 PyTorch | 2.14.1+cpu |
+| 07a | 来源核验日期 | 2026-10-19 |
+| 07a | 运行数值 PyTorch | 2.14.1+cpu |
+| 08 | 运行环境 PyTorch | 2.14.1+cpu |
+| 08 | 来源核验日 | 2026-10-19 |
+| 08a | 来源核验日期 | 2026-10-19 |
+| 08a | 访问核验日 | 2026-10-19 |
+| 08b | 验证环境 PyTorch | 2.14.1+cpu |
+| 08b | 来源核验日期 | 2026-10-19 |
+| 08c | 实验条件 PyTorch | 2.14.1+cpu |
+| 08c | 来源核对日期 | 2026-10-19 |
+| 08d | Python | 3.12.14 |
+| 08d | PyTorch | 2.14.1+cpu |
+| 08d | 动态链接核验日 | 2026-10-19 |
+| 08d | 固定版本核验日 | 2026-10-19 |
+| 08e | Python | 3.12.14 |
+| 08e | PyTorch | 2.14.1+cpu |
+| 08e | 导入检查 torch | 2.14.1 |
+| 08e | CPU 测试环境 torch | 2.14.1+cpu |
+| 08e | 来源核验日 | 2026-10-19 |
+| 08f | Python | 3.12.14 |
+| 08f | PyTorch | 2.14.1+cpu |
+| 08f | 来源与官方入口核验日期 | 2026-10-19 |
+| 08g | 验证 torch | 2.14.1 |
+| 08g | 技术报告与固定 revision 核验日期 | 2026-10-19 |
+| 08h | 实测日期 | 2026-10-19 |
+| 08h | 实测 PyTorch | 2.14.1+cpu |
+| 08h | 固定论文版本核验日期 | 2026-10-19 |
+| 08i | 实测日期 | 2026-10-19 |
+| 08i | Python | 3.12.14 |
+| 08i | torch | 2.14.1+cpu |
+| 08i | 来源核验日 | 2026-10-19 |
+| 08j | 实测日期 | 2026-10-19 |
+| 08j | 来源核验日期 | 2026-10-19 |
+| 08k | 实测日期 | 2026-10-19 |
+| 08k | 实测 PyTorch | 2.14.1+cpu |
+| 08k | 来源核验日期 | 2026-10-19 |
+| 08l | 实测日期 | 2026-10-19 |
+| 08l | 实测 PyTorch | 2.14.1+cpu |
+| 08l | TRL 源码核验日期 | 2026-10-19 |
+| 08m | 已验证环境 PyTorch | 2.14.1+cpu |
+| 08m | 跨版本核对截止 | 2026-10-19 |
+| 08m | 来源核验日期 | 2026-10-19 |
+| 08n | 固定历史版本核验日 | 2026-10-19 |
+| 08o | --torch 环境 PyTorch | 2.14.1+cpu |
+| 08o | 来源核对日期 | 2026-10-19 |
+| 09 | 核查日期 | 2026-10-19 |
+| 09a | 重新运行日期 | 2026-10-30 |
+| 09a | 重新运行 Python | 3.13.5 |
+| 09a | 重新运行 PyTorch | 2.14.1+cpu |
+| 09a | 来源核验日 | 2026-10-20 |
+| 10 | 安装页核对日期 | 2026-10-20 |
+| 10 | 安装选择器核对日期 | 2026-10-20 |
+| 10 | 阅读入口核对日期 | 2026-10-20 |
 
 
 ---

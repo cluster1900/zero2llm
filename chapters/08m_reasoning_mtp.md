@@ -281,7 +281,7 @@ OMP_NUM_THREADS=1 python code/24_reasoning_mtp.py
 OMP_NUM_THREADS=1 python -m unittest discover -s tests -p test_reasoning_mtp.py -v
 ```
 
-已验证环境为 CPU、PyTorch `2.14.1+cpu`、单线程、种子 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装 `requirements.txt` 的提示并以状态 2 退出。
+已验证环境为 CPU、附录 H 所列 PyTorch、单线程、种子 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装 `requirements.txt` 的提示并以状态 2 退出。
 
 固定 demo 使用词表 11、隐藏宽度 16、1 层教学 MoE、2 个额外 head、长度为 2 的 prompt，生成 10 个 token。模型只随机初始化并做一次反向检查，没有训练质量结论。本次输出包括：
 
@@ -306,7 +306,7 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 
 本章只解释这个区别，没有实现蒸馏流水线、教师服务、数据筛选系统或新扩展项目。S6 的辅助梯度进入主干，不能将其命名为 R1 蒸馏复现。
 
-截至 2026-10-19，本章只依据官方版本化报告作如下跨版本提醒：**DeepSeek-V4.1-Flash 的 DSpark 不能直接贴上 V3 MTP 的标签。** 官方报告 §2.4.3 描述了半自回归草稿和基于置信度安排验证的方案；它在预训练后专门训练，起初冻结 backbone，后训练中其目标也不向 backbone 反传。不要从“都是投机解码”推断两者采用同一训练目标或参数共享设计。[DeepSeek-V4.1-Flash v1](https://arxiv.org/html/2609.19969v1)
+本章只依据官方版本化报告作如下跨版本提醒（核对截止日期见附录 H）：**DeepSeek-V4.1-Flash 的 DSpark 不能直接贴上 V3 MTP 的标签。** 官方报告 §2.4.3 描述了半自回归草稿和基于置信度安排验证的方案；它在预训练后专门训练，起初冻结 backbone，后训练中其目标也不向 backbone 反传。不要从“都是投机解码”推断两者采用同一训练目标或参数共享设计。[DeepSeek-V4.1-Flash v1](https://arxiv.org/html/2609.19969v1)
 
 我们没有运行 DSpark、R1 或 V3 官方权重，没有复现其质量或速度。读到新版本时应重新核对明确对象与版本，而不是沿用旧名词填满组件表。
 
@@ -347,7 +347,7 @@ batch 小时解码受内存带宽限制，多验证几个草稿位置几乎不�
 
 ## 资料版本与复现边界
 
-核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
+核验日期见附录 H。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
 
 - [DeepSeek-R1，arXiv:2501.12948v1](https://arxiv.org/html/2501.12948v1)：§2.2–2.4，Zero／冷启动／RL／数据筛选／SFT／蒸馏的区别。
 - [DeepSeek-V3 Technical Report，arXiv:2412.19437v2](https://arxiv.org/html/2412.19437v2)：§2.2，串行 MTP 模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。

@@ -62,7 +62,8 @@ class Batch5TextTests(unittest.TestCase):
         for chapter, _, _ in LESSONS:
             text = (ROOT / 'chapters' / chapter).read_text()
             self.assertIn('https://', text)
-            self.assertIn('2026-10-19', text)
+            self.assertIn('附录 H', text)
+            self.assertRegex((ROOT / "chapters/10_appendix.md").read_text().split("## 附录 H：", 1)[1], r"\| " + re.escape(chapter.split("_")[0]) + r" \| [^|]+ \| 2026-10-19 \|")
         # This batch's planned teaching variants are not production kernels.
         self.assertIn('YaRN', (ROOT/'chapters/08b_rope_yarn.md').read_text())
         self.assertIn('MLA', (ROOT/'chapters/08d_grouped_kv_mla.md').read_text())

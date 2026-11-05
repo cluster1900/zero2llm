@@ -365,7 +365,7 @@ python -m unittest discover -s tests -p test_attention_systems.py -v
 
 核心只需要 Python 标准库。
 
-本批在 Python 3.12.14 上运行，随机部分 seed=15。环境中的 PyTorch 是 2.14.1+cpu，没有可用 CUDA。关键输出为：
+在附录 H 所列环境下（随机部分 seed=15）运行。环境中的 PyTorch 见附录 H，没有可用 CUDA。关键输出为：
 
 ```text
 Online hand example: output=6.000000000000, expected=6; blocks=[2,1]
@@ -381,7 +381,7 @@ GPU SDPA: not requested, not run. This CPU script is not a performance benchmark
 
 ## P15.16 GPU 选修：先确认后端，不先晒跑分
 
-**本批 GPU kernel 未运行，未测 GPU 显存、时延或吞吐。** CPU SDPA 检查通过不代表执行了 CUDA FlashAttention。
+**本章 GPU kernel 未运行，未测 GPU 显存、时延或吞吐。** CPU SDPA 检查通过不代表执行了 CUDA FlashAttention。
 
 如果你已经有兼容的 GPU、驱动与官方 CUDA 版 PyTorch，可以单独尝试：
 
@@ -389,7 +389,7 @@ GPU SDPA: not requested, not run. This CPU script is not a performance benchmark
 python code/16_attention_systems.py --gpu-sdpa
 ```
 
-不要为这一章把现有 CPU 环境强行替换掉；GPU 环境的安装要按官方硬件/驱动要求单独配置。脚本会打印实际 PyTorch、CUDA、设备、dtype 和形状，并在缺少依赖或 CUDA 时明确 `SKIP`。本批实际运行这个开关得到：
+不要为这一章把现有 CPU 环境强行替换掉；GPU 环境的安装要按官方硬件/驱动要求单独配置。脚本会打印实际 PyTorch、CUDA、设备、dtype 和形状，并在缺少依赖或 CUDA 时明确 `SKIP`。本章实际运行这个开关得到：
 
 ```text
 SKIP GPU SDPA: torch=2.14.1+cpu, CUDA unavailable; GPU kernel not run.
@@ -407,7 +407,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 这里 Q/K 等长，才使用简单的 `is_causal=True`；带缓存偏移的矩形 mask 不应不加分析地照抄。函数的 dropout 参数明确设为 0，不依赖外部模型的 eval 状态。脚本记录 profiler 中实际出现的 attention/flash 事件，再与本章 CPU 数值参考比较；“调用了 SDPA”本身不能证明走了期望后端。[PyTorch 固定源码 v2.5.1：SDPA 后端选择接口](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)
 
-此固定源码链接用于接口背景，不是安装建议。本批另检查了实际 torch 2.14.1 的 `sdpa_kernel` 和 `SDPBackend.FLASH_ATTENTION` 可导入，但无 GPU，因此没有验证其 GPU 支持条件。后端不支持或运行失败时会报告 skip/失败原因，不会悄悄退回数学后端然后宣称 GPU Flash 成功。
+此固定源码链接用于接口背景，不是安装建议。本章另检查了附录 H 所列 torch 的 `sdpa_kernel` 和 `SDPBackend.FLASH_ATTENTION` 可导入，但无 GPU，因此没有验证其 GPU 支持条件。后端不支持或运行失败时会报告 skip/失败原因，不会悄悄退回数学后端然后宣称 GPU Flash 成功。
 
 要做真正的性能对比，还需要另外安排可复现基准：
 
@@ -418,7 +418,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 5. 显存分别记录模型基线、KV payload、峰值 allocated/reserved 和工作区；重置峰值统计的时机要相同。
 6. 改一个因素再比，并核验 profiler 实际后端；保存硬件、软件版本和命令。微型 attention smoke 不能替代端到端服务基准。
 
-这是选修实验的记录清单，**不是本批已经跑出的服务性能报告**。
+这是选修实验的记录清单，**不是本章已经跑出的服务性能报告**。
 
 ## P15.17 自测题与参考答案
 
@@ -450,11 +450,11 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 ## 资料与实现边界
 
-核验日：2026-10-19。以下只用论文或官方资料：
+核验日见附录 H。以下只用论文或官方资料：
 
 - [FlashAttention 原论文（arXiv 2205.14135v2）](https://arxiv.org/pdf/2205.14135v2)：IO-aware tiling、在线归一化与精确注意力的边界；本章未实现其 GPU 前反向 kernel。
 - [PagedAttention 原论文 v1](https://arxiv.org/html/2309.06180v1)：块表、非连续 KV、共享和写时复制、请求调度；本章只模拟单线程所有权和逻辑读取。
 - [vLLM 0.6.4 APC 介绍](https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/apc.html)与[实现说明](https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/details.html)：固定文档快照，不是当前版本推荐；本章没有安装、运行或测速 vLLM。
-- [PyTorch v2.5.1 官方后端选择源码](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)：固定接口背景；实际 CPU 测试环境为 torch 2.14.1+cpu，GPU 选修未运行。
+- [PyTorch v2.5.1 官方后端选择源码](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)：固定接口背景；实际 CPU 测试环境见附录 H，GPU 选修未运行。
 
 本章不改 S4、不训练模型、不实现 CUDA 或生产调度器，不把人造时间线写成实验吞吐，不承诺任何 GPU 加速比。
