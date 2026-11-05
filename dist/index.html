@@ -7899,27 +7899,9 @@ Rank example: 3 -&gt; 2, Frobenius error=1.0</code></pre>
 logits 拼回完整序列，与同一模型的 full forward 比较；误差阈值是
 <code>atol=3e-6, rtol=1e-5</code>。不同 Hkv 的行不是相互比
 logits，也不是质量或吞吐排行榜。</p>
-<p>测试覆盖四类问题：</p>
-<ul>
-<li><strong>算对了什么</strong>：独立逐头参考、手算映射、MHA/MQA
-边界、部分 RoPE、同权重全量/单 token/多种分块对齐、有限梯度。</li>
-<li><strong>真的存少了吗</strong>：K/V 投影宽度、缓存头数、tensor
-字节与底层存储字节，而不是只检查打印的公式。</li>
-<li><strong>哪些输入会被拒绝</strong>：非法头数、空序列、错误
-dtype、越界
-token、跨模型缓存、长度溢出、坏缓存形状、权重/位置设置改变。</li>
-<li><strong>错误实现能被抓住吗</strong>：GQA 检查错误的重复映射、RoPE
-offset、矩形 mask 和扩展后缓存。MLA 再故意把两条路径的缩放一起改成
-√r、一起删除位置打分项，或让位置 key
-不旋转；每个变体虽然仍能通过内部两路径对齐，却必须被独立参考判为
-assertion failure，且运行错误数为
-0。这样不会把坏导入或异常崩溃误报为“抓住数值错误”。源码文件不会被这些
-mutation 测试改写。</li>
-</ul>
-<p>本章共 23 项测试。没有安装兼容的 torch 2.14.x
-时，数值类按共享测试门控明确跳过；缺依赖的 CLI
-给出安装提示。<strong>skip 不是通过，不能靠只有 CLI 检查成功来宣称 GQA
-数值实现已验证。</strong></p>
+<p>运行本章测试文件，末尾应显示
+<code>OK</code>；测试分类、计数与错误版本清单见
+<code>docs/testing.md</code>。</p>
 <h2 id="p14.12-自测题与参考答案">P14.12 自测题与参考答案</h2>
 <ol type="1">
 <li>Hq=8、Hkv=2 时，query 头 5 使用哪一个 KV 头？还能输出 8
@@ -8567,10 +8549,7 @@ TPOT=0。</p>
 <div class="sourceCode" id="cb108"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb108-1"><a href="#cb108-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/16_attention_systems.py</span>
 <span id="cb108-2"><a href="#cb108-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_attention_systems.py <span class="at">-v</span></span></code></pre></div>
-<p>核心只需要 Python 标准库。已经安装本仓库依赖时，测试会额外用 CPU SDPA
-做一个独立交叉检查；兼容性按仓库共享规则要求稳定版 torch
-2.14.x。不满足条件只跳过这一项，<strong>不会跳过在线
-Softmax、分页和时间线的必修测试</strong>。</p>
+<p>核心只需要 Python 标准库。</p>
 <p>本批在 Python 3.12.14 上运行，随机部分 seed=15。环境中的 PyTorch 是
 2.14.1+cpu，没有可用 CUDA。关键输出为：</p>
 <pre class="text"><code>Online hand example: output=6.000000000000, expected=6; blocks=[2,1]
@@ -8580,20 +8559,9 @@ Before COW: A=(0, 1), B=(0, 1), refs={0: 2, 1: 2}
 After COW: A=(0, 1), B=(0, 2), refs={0: 2, 1: 1, 2: 1}
 Output throughput: 23.809524 tokens/s (invented timeline, not measured)
 GPU SDPA: not requested, not run. This CPU script is not a performance benchmark.</code></pre>
-<p>本章当前 26 项测试：在兼容 torch 环境中 26 项通过；无 torch 环境中 25
-项通过、1 项明确 skip。无 torch 的正常 CLI 仍能完整运行，显式请求 GPU
-选修时会解释跳过原因。<strong>被跳过的 GPU 或 SDPA
-检查不算数值通过。</strong></p>
-<p>除了正例，测试还在内存中构造 12
-个错误版本：忘记重缩放、两条路径一起丢缩放分母、忽略
-mask、丢最后一块、不做 COW、COW
-后不减引用计数、共享时不加计数、按物理块号排序、TPOT 除以
-n、丢掉旧块最大值、TTFT/E2E
-不减到达时间。每个契约先在正确实现上通过，再要求错误版本被断言拒绝。对于丢旧最大值的版本，合法有限输入（分数1000再到0）会触发
-OverflowError；测试明确将这种稳定性违约转成断言失败，不能把它隐瞒成“没有数值异常”。坏导入、语法错误或其他无关异常仍会让变异测试失败。源文件不会被这些
-mutation 改写。</p>
-<p>分页测试还有 240 步固定种子的随机
-create/append/fork/prefix/release，对照一个独立的普通序列模型，并逐步检查引用计数和空闲池。它检验的是这个单线程模拟器，不是生产系统并发安全。</p>
+<p>运行本章测试文件，末尾应显示
+<code>OK</code>；测试分类、计数与错误版本清单见
+<code>docs/testing.md</code>。</p>
 <h2 id="p15.16-gpu-选修先确认后端不先晒跑分">P15.16 GPU
 选修：先确认后端，不先晒跑分</h2>
 <p><strong>本批 GPU kernel 未运行，未测 GPU 显存、时延或吞吐。</strong>
@@ -9235,21 +9203,14 @@ CPU 开销，不是生产优化。</li>
 <li>每次递推从零状态开始，不支持跨请求复用、chunk 状态输入、位置编码或
 padding。先把这些语义补齐并测试，才可以谈替换真实层。</li>
 </ul>
-<h2 id="p16.11-为什么要有独立参考和故意写错的版本">P16.11
-为什么要有独立参考和故意写错的版本</h2>
+<h2 id="p16.11-为什么要有独立参考">P16.11 为什么要有独立参考</h2>
 <p>“并行=递推”还不够：两者可能一起漏掉分母。本章的测试逐 batch、逐
 query、逐历史位置用 Python 标量和 <code>math.exp</code>
 重新算权重，不调用主实现的
 φ、mask、矩阵乘法或状态递推。两个路径分别对齐它，而不是只互相对齐。</p>
-<p>21 项测试包含：手算 mask、矩形
-offset、W=1/W≥T、层间感受野、全局位置不泄漏未来、手算
-S/z、float32/64、T=1/512、非法长度/类型、全遮罩行、下溢/溢出、有限梯度与梯度对齐、改写未来不影响过去、输入不被改写、请求间不残留状态、检索闭式公式及固定状态存储。</p>
-<p>另在内存中生成五种错误版本：窗口边界多放进一位；全局位置越过因果限制；线性矩阵漏掉三角
-mask；两条路径一起漏掉归一化；递推把当前 value
-错换成前一位。每个都必须被相应断言抓住，而不是靠导入失败或异常崩溃假装“检出了错误”。这些测试不改写源码。</p>
-<p>无兼容 torch 2.14.x 时，1 项缺依赖 CLI/导入契约测试仍可运行，其余 20
-项按共享门控明确跳过。<strong>skip
-不是通过</strong>；安装依赖后才能声称数值行为已经验证。</p>
+<p>运行本章测试文件，末尾应显示
+<code>OK</code>；测试分类、计数与错误版本清单见
+<code>docs/testing.md</code>。</p>
 <h2 id="p16.12-自测题与参考答案">P16.12 自测题与参考答案</h2>
 <ol type="1">
 <li>W=3、query=5 时，位置 2 是否可见？W=1 是否只看前一位？</li>
@@ -11049,8 +11010,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb131-1"><a href
 <span id="cb131-9"><a href="#cb131-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb131-10"><a href="#cb131-10" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_pretraining_pipeline.py <span class="at">-v</span></span></code></pre></div>
 <p>没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练
-CLI 返回清晰提示和退出码 2。测试的 tensor 部分明确跳过，<strong>skip
-不算训练验证通过</strong>。</p>
+CLI 返回清晰提示和退出码 2。</p>
 <p>2026-10-19 在 Python 3.12.14、torch
 2.14.1+cpu、单线程、float32、seed=7 下的本书实测：</p>
 <div class="table-wrapper"><table>
@@ -11102,11 +11062,6 @@ CLI 返回清晰提示和退出码 2。测试的 tensor 部分明确跳过，<st
 <td>默认未评分</td>
 <td>不用测试分数指导本演示</td>
 </tr>
-<tr>
-<td>回归测试</td>
-<td>16 项通过；无 torch 环境为 7 通过、9 跳过</td>
-<td>标准库与 tensor 边界分别验证</td>
-</tr>
 </tbody>
 </table></div>
 <p>模型复用 P13 / S3 的 RMSNorm 与
@@ -11114,54 +11069,9 @@ SwiGLU，但为了让文档边界可逐格检查，另写了单头显式 attenti
 与文档内学习式位置 embedding。<strong>它不是把 S3 的 cache
 模型无缝升级成另一条主线</strong>，也没有实现 RoPE、KV cache 或高效变长
 attention kernel。此处关注数据契约，后续接入框架时再验证接口对应。</p>
-<h3 id="让坏版本真正跑一下">让坏版本真正跑一下</h3>
-<p><code>tests/test_pretraining_pipeline.py</code>
-不只检查函数是否返回某个标志。每组先验证正确路径，再让有缺陷的计算产生可观察的差异：</p>
-<div class="table-wrapper"><table>
-<colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
-</colgroup>
-<thead>
-<tr>
-<th>真实错误变体</th>
-<th>如何检测</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>将文档 mask 换成普通 causal 下三角</td>
-<td>改 A 的内容后 B 的 logits 变化；独立标量 attention oracle 不符</td>
-</tr>
-<tr>
-<td>整箱直接移位标签</td>
-<td>A 的 EOS 开始预测 B 的 BOS；目标数与 loss 改变</td>
-</tr>
-<tr>
-<td>令 labels 等于当前输入</td>
-<td>不会预测未来的“抄写器”获得假低 loss</td>
-</tr>
-<tr>
-<td>平均不等长块的均值</td>
-<td>2 与 5 个目标的独立标量总和不符</td>
-</tr>
-<tr>
-<td>忽略全 PAD，但仍调用 AdamW step</td>
-<td>已建立的优化器状态推动参数继续变化</td>
-</tr>
-<tr>
-<td>恢复权重，却遗漏 optimizer</td>
-<td>后续 loss 轨迹与最终参数不同</td>
-</tr>
-<tr>
-<td>忽略 dropout RNG、shuffle RNG 或 cursor 中任一项</td>
-<td>各自单独导致后续 loss 与最终参数不同</td>
-</tr>
-</tbody>
-</table></div>
-<p>最后一组在第 5 步暂停：已经发生过一次 epoch 洗牌，且 cursor
-位于中间。如果在第一次洗牌之前测试“漏掉 shuffle RNG”，新建训练器的 RNG
-可能恰好等于保存状态，错误版本和正确版本会暂时等价。<strong>反例必须真的触发它声称检测的错误，不能只让测试名字看起来严格。</strong></p>
+<p>运行本章测试文件，末尾应显示
+<code>OK</code>；测试分类、计数与错误版本清单见
+<code>docs/testing.md</code>。</p>
 <h2 id="p19.10-scaling-laws有条件的拟合不是参数越多就会觉醒">P19.10
 Scaling laws：有条件的拟合，不是“参数越多就会觉醒”</h2>
 <p>当数据和训练流程可信，才有意义问“同样算力该放在更多参数还是更多 token
@@ -13804,8 +13714,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb157-1"><a href
 <span id="cb157-2"><a href="#cb157-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_reasoning_mtp.py <span class="at">-v</span></span></code></pre></div>
 <p>已验证环境为 CPU、PyTorch <code>2.14.1+cpu</code>、单线程、种子
 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装
-<code>requirements.txt</code> 的提示并以状态 2
-退出；测试按仓库的兼容版本闸门友好跳过，<strong>跳过不是通过</strong>。</p>
+<code>requirements.txt</code> 的提示并以状态 2 退出。</p>
 <p>固定 demo 使用词表 11、隐藏宽度 16、1 层教学 MoE、2 个额外
 head、长度为 2 的 prompt，生成 10 个
 token。模型只随机初始化并做一次反向检查，没有训练质量结论。本次输出包括：</p>
@@ -13827,9 +13736,6 @@ prefill，不是用“输出长度÷草稿长度”推算。<code>target_tokens<
 <p>定义本章的草稿接受比例为
 <code>accepted / proposed</code>：分母包括因前面出错而被整体丢弃的后续提案。这是清楚可复算的保留比例，不是所有论文相同名称的统计口径。还应看每轮提交多少
 token、草稿耗时、目标 chunk 成本以及缓存搬运；只报一个高接受率不够。</p>
-<p>独立测试另有一个“完美草稿”的标量目标：生成 10 个 token，target 调用从
-10 次变成 4 次，处理位置都为 11，且有两个
-bonus。它证明计数与流程按规则工作，不证明神经模型能够免费拿到完美草稿。</p>
 <h2 id="p23.11-蒸馏与跨版本比较到这里划边界">P23.11
 蒸馏与跨版本比较：到这里划边界</h2>
 <p><strong>蒸馏</strong>可以把大模型生成的优质示例用于训练小模型；也有使用教师概率的其他方案。必须说明具体知识如何传递，不能只凭“小模型效果像大模型”推断训练方法。数据蒸馏、冻结主干的草稿模块训练、MTP
@@ -13890,14 +13796,9 @@ head。检查
 <code>test_cli_pins_documented_outputs_and_actual_cost_counters</code>
 固定正文演示的输出与成本计数。</li>
 </ol>
-<p>测试不只让两个共享代码的函数互相证明。它使用 Python 标量标签
-oracle、显式 log-sum-exp、解析 logits 梯度与权重有限差分、独立
-token-history 目标、真实 S5 完整前缀 logits／逐层 K/V 对照，以及不调用
-<code>mtp_logits</code> 的逐 head 标量投影
-oracle；还实际执行十二种错误变体，确认错位标签、错误分母、错误接受、缓存偏一、漏停
-EOS、越过预算、跳过主 head、漏掉 correction 等会被拦住。最后一种由
-<code>test_deleted_correction_mutant_fails_fast_without_timeout</code>
-验证精确的 <code>RuntimeError</code>，不是把测试超时算作成功。</p>
+<p>运行本章测试文件，末尾应显示
+<code>OK</code>；测试分类、计数与错误版本清单见
+<code>docs/testing.md</code>。</p>
 <p>读完本章，应能清楚说出：<strong>推理能力要靠任务评估，MTP
 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。</strong>
 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。</p>
@@ -16569,10 +16470,9 @@ GPU。脚本把 CPU 线程设为 1，主线随机种子为 270，使用 float32�
 独立初始化使用 271，随后复制 S5
 主干。版本、设备、线程、种子、形状和容差写进报告。</p>
 <p>缺少 PyTorch 时，CLI 给出安装提示并以状态码 2 退出，明确写
-<code>NOT RUN, not passed</code>；作为模块导入时仍抛出真实依赖错误。测试可以因没有受支持
-Torch
-而跳过数值路径，但<strong>跳过不等于通过</strong>。其他导入错误、错误实现崩溃或输出
-NaN 不能被包装成“负例成功”。</p>
+<code>NOT RUN, not passed</code>；作为模块导入时仍抛出真实依赖错误。运行本章测试文件，末尾应显示
+<code>OK</code>；测试分类、计数与错误版本清单见
+<code>docs/testing.md</code>。</p>
 <h3 id="固定输入先别谈中文质量">固定输入，先别谈中文质量</h3>
 <p>本次使用词表大小 V=17 的合成整数
 ID，不使用三首诗的字符词表，也没有把整数大小当成语义。每行是一条独立合成文档，不做
@@ -16632,7 +16532,7 @@ logits。</li>
 smoke</strong>，不是训练完成。参数没有更新，checkpoint 也不包含
 optimizer 或 RNG
 状态。想验证中断后能否继续同一条训练轨迹，需要回到训练流水线章节，保存更完整的恢复状态。</p>
-<p>正常实现从不触发某道防线，不代表防线已经被测试。这里另外包装真实计算，逐一制造下列坏行为；正常体检必须拒绝，删掉对应检查的源码变异则会放过它，其他检查保持原样。</p>
+<p>正常实现从不触发某道防线，不代表防线已经被测试。这里另外包装真实计算，逐一制造下列坏行为；正常体检必须拒绝。</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 50%" />
@@ -16786,9 +16686,7 @@ token。</p>
 bit 相等；也不能随意把容差放宽到“看起来差不多”。</p>
 <p>为什么跑四种分块？单 token decode 擅长暴露位置偏移错误，多 token
 chunk 擅长暴露矩形 mask 错误，整段前向则给出没有历史缓存的边界。如果只测
-<code>T=1</code> 或只测一次完整 prefill，某些错误永远不触发。
-测试另外只破坏第一块或中间块的输出，保留正确 K/V
-和最后一块，确认完整比较会报警；把检查器改成只看最后一块的真实源码变异则会漏过，因此该错误不能再被正常输出样本掩盖。</p>
+<code>T=1</code> 或只测一次完整 prefill，某些错误永远不触发。</p>
 <p>对照对象也必须锁住：若把完整前向换成“缓存路径一次喂完”，两边可能共享同一个错误。测试让缓存路径的每块
 logits 都加
 0.25，四种分块都应被真正的完整前向抓住；缓存路径与自己比较却会漏掉。另一个测试只把第一块乘
@@ -17031,7 +16929,7 @@ base 或词表顺序不同就在这里被拒，根本不会走到张量加载。
 <code>load_state_dict(state, strict=True)</code> 并返回
 <code>eval()</code> 模式的模型。</p>
 <p>保存端拒绝本实验不支持的 bf16 与含 NaN 的状态，加载端拒绝 envelope
-多出的键。相应测试先检查正常路径，再观察坏数据确实被拒绝；移除对应守卫的源码变异会让坏文件被写出或被接受。</p>
+多出的键。</p>
 <p>逐张量核对也不能被“本次输出相同”替代：S0 的 mask 是 16×16，本次 T=8
 只用左上角。测试改变 <code>[15,15]</code>，本次 logits 仍完全相同，但
 checkpoint
@@ -17288,13 +17186,7 @@ width="720" alt="三个负例控制：报警前后最大 logit 误差" /></a>
 </figure>
 <p>灰色 “before” 柱是正确实现在同一输入上的误差（本金标运行为
 0），红色柱是注入缺陷后的误差。</p>
-<p>这些数是本次 CPU
-浮点实测，不保证跨平台最后几位相同；“显著超出容差且仍为有限输出”才是测试契约。测试还反向验证：如果变异器根本没改源码，负例检查必须失败；如果缺依赖而抛异常，也必须继续报错，不能算成功捕获数学错误。
-数值反例必须产生有限的错误输出；dtype、owner、反序列化与梯度守卫则检查具体拒绝原因，并独立观察删掉守卫后被放过的坏状态。这两类证据不混算。</p>
-<p>此外，测试对真实模型取消因果 mask，对旋转符号、RMS 统计、门控、GQA
-映射、checkpoint 元数据检查、消融权重与 MTP
-标签做实际行为变异。作用是验证这些 oracle
-真能区分好坏，不是增加几个永远为真的断言。</p>
+<p>这些数是本次 CPU 浮点实测，不保证跨平台最后几位相同。</p>
 <h2 id="p27.9-moe-与选修-mtp不能只看一行-loss">P27.9 MoE 与选修
 MTP：不能只看一行 loss</h2>
 <h3 id="moe-的负载账本">MoE 的负载账本</h3>
@@ -17328,9 +17220,7 @@ token 0。</p>
 <code>logsumexp(logits)-正确类别logit</code> 手工汇总有效位置损失，与
 MTP 的各 head CE 比较。合成目标为主 CE，加 0.2 倍额外 head 平均
 CE，再加已经缩放过的 MoE 辅助项。之后检查旁路 head
-收到有限非零梯度。测试通过真实 backward hook 分别制造全零／NaN
-梯度，或仅 detach 主 head、旁路 head 的权重，验证有限 loss
-不会掩盖断开的学习路径；同时保留其他正常路径，避免把无关崩溃当成守卫有效。</p>
+收到有限非零梯度。</p>
 <p>最后拿前两个 token 作 prompt，生成 7 个新
 token：一边用最简单的<strong>完整前缀重新计算</strong>循环做
 greedy，另一边用 S6 的 drafter 与缓存验证。二者生成的整个 token

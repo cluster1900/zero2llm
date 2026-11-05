@@ -367,7 +367,7 @@ python code/16_attention_systems.py
 python -m unittest discover -s tests -p test_attention_systems.py -v
 ```
 
-核心只需要 Python 标准库。已经安装本仓库依赖时，测试会额外用 CPU SDPA 做一个独立交叉检查；兼容性按仓库共享规则要求稳定版 torch 2.14.x。不满足条件只跳过这一项，**不会跳过在线 Softmax、分页和时间线的必修测试**。
+核心只需要 Python 标准库。
 
 本批在 Python 3.12.14 上运行，随机部分 seed=15。环境中的 PyTorch 是 2.14.1+cpu，没有可用 CUDA。关键输出为：
 
@@ -381,11 +381,7 @@ Output throughput: 23.809524 tokens/s (invented timeline, not measured)
 GPU SDPA: not requested, not run. This CPU script is not a performance benchmark.
 ```
 
-本章当前 26 项测试：在兼容 torch 环境中 26 项通过；无 torch 环境中 25 项通过、1 项明确 skip。无 torch 的正常 CLI 仍能完整运行，显式请求 GPU 选修时会解释跳过原因。**被跳过的 GPU 或 SDPA 检查不算数值通过。**
-
-除了正例，测试还在内存中构造 12 个错误版本：忘记重缩放、两条路径一起丢缩放分母、忽略 mask、丢最后一块、不做 COW、COW 后不减引用计数、共享时不加计数、按物理块号排序、TPOT 除以 n、丢掉旧块最大值、TTFT/E2E 不减到达时间。每个契约先在正确实现上通过，再要求错误版本被断言拒绝。对于丢旧最大值的版本，合法有限输入（分数1000再到0）会触发 OverflowError；测试明确将这种稳定性违约转成断言失败，不能把它隐瞒成“没有数值异常”。坏导入、语法错误或其他无关异常仍会让变异测试失败。源文件不会被这些 mutation 改写。
-
-分页测试还有 240 步固定种子的随机 create/append/fork/prefix/release，对照一个独立的普通序列模型，并逐步检查引用计数和空闲池。它检验的是这个单线程模拟器，不是生产系统并发安全。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 ## P15.16 GPU 选修：先确认后端，不先晒跑分
 

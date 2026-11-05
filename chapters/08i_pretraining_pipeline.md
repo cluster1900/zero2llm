@@ -256,7 +256,7 @@ python code/20_pretraining_pipeline.py --steps 12 --interrupt 5
 python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 ```
 
-没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。测试的 tensor 部分明确跳过，**skip 不算训练验证通过**。
+没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。
 
 2026-10-19 在 Python 3.12.14、torch 2.14.1+cpu、单线程、float32、seed=7 下的本书实测：
 
@@ -269,25 +269,10 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 | 恢复一致性 | 第 3 步及第 5 步中断后，完整状态与连续运行逐项相等 | 包含参数、优化器、RNG、游标和 loss 轨迹 |
 | 验证均值 | 3.702012198 → 3.486805235，均为 7 个目标 | 仅这份玩具划分上的变化 |
 | 最终测试集 | 默认未评分 | 不用测试分数指导本演示 |
-| 回归测试 | 16 项通过；无 torch 环境为 7 通过、9 跳过 | 标准库与 tensor 边界分别验证 |
 
 模型复用 P13 / S3 的 RMSNorm 与 SwiGLU，但为了让文档边界可逐格检查，另写了单头显式 attention 与文档内学习式位置 embedding。**它不是把 S3 的 cache 模型无缝升级成另一条主线**，也没有实现 RoPE、KV cache 或高效变长 attention kernel。此处关注数据契约，后续接入框架时再验证接口对应。
 
-### 让坏版本真正跑一下
-
-`tests/test_pretraining_pipeline.py` 不只检查函数是否返回某个标志。每组先验证正确路径，再让有缺陷的计算产生可观察的差异：
-
-| 真实错误变体 | 如何检测 |
-| --- | --- |
-| 将文档 mask 换成普通 causal 下三角 | 改 A 的内容后 B 的 logits 变化；独立标量 attention oracle 不符 |
-| 整箱直接移位标签 | A 的 EOS 开始预测 B 的 BOS；目标数与 loss 改变 |
-| 令 labels 等于当前输入 | 不会预测未来的“抄写器”获得假低 loss |
-| 平均不等长块的均值 | 2 与 5 个目标的独立标量总和不符 |
-| 忽略全 PAD，但仍调用 AdamW step | 已建立的优化器状态推动参数继续变化 |
-| 恢复权重，却遗漏 optimizer | 后续 loss 轨迹与最终参数不同 |
-| 忽略 dropout RNG、shuffle RNG 或 cursor 中任一项 | 各自单独导致后续 loss 与最终参数不同 |
-
-最后一组在第 5 步暂停：已经发生过一次 epoch 洗牌，且 cursor 位于中间。如果在第一次洗牌之前测试“漏掉 shuffle RNG”，新建训练器的 RNG 可能恰好等于保存状态，错误版本和正确版本会暂时等价。**反例必须真的触发它声称检测的错误，不能只让测试名字看起来严格。**
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 ## P19.10 Scaling laws：有条件的拟合，不是“参数越多就会觉醒”
 
