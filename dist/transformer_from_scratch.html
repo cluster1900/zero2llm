@@ -15172,7 +15172,7 @@ d=128、Hq=16，输出为 2048；O 再映回 1024。见
 <code>test_exact_real_parameter_totals_independent_hand_arithmetic</code>。</li>
 <li><strong>30B-A3B 应该再加宽度 6144 的 dense FFN 吗？</strong>
 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成
-4，并排除零基下标 1 的层后，只有下标 3 的层是 MoE。见
+4，并排除下标 1 的层后，只有下标 3 的层是 MoE。见
 <code>test_mixed_sparse_layer_selection_no_unused_dense_mlp_count</code>。</li>
 <li><strong>四个专家 logits 为
 <code>[2,1,-1,0]</code>、top-k=2，实际调用谁？</strong> 仅下标 0、1

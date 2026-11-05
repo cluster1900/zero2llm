@@ -8114,7 +8114,7 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 1. **0.6B 的 Q 投影输出为什么不是 1024？** 因为显式 d=128、Hq=16，输出为 2048；O 再映回 1024。见 `test_exercise_explicit_head_width_and_qk_norm_weights`。
 2. **Q norm 是否有 16×128 个 gain？** 没有，本快照只有 128 个，按最后一维归一化、跨头共享。对应同一形状测试及 `test_exercise_qk_norm_and_split_half_rotation_hand_reference`。
 3. **0.6B 的输入／输出 embedding 是否应该计算两遍？** 不应，绑定后唯一架构参数为 596,049,920。见 `test_exact_real_parameter_totals_independent_hand_arithmetic`。
-4. **30B-A3B 应该再加宽度 6144 的 dense FFN 吗？** 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成 4，并排除零基下标 1 的层后，只有下标 3 的层是 MoE。见 `test_mixed_sparse_layer_selection_no_unused_dense_mlp_count`。
+4. **30B-A3B 应该再加宽度 6144 的 dense FFN 吗？** 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成 4，并排除下标 1 的层后，只有下标 3 的层是 MoE。见 `test_mixed_sparse_layer_selection_no_unused_dense_mlp_count`。
 5. **四个专家 logits 为 `[2,1,-1,0]`、top-k=2，实际调用谁？** 仅下标 0、1 的专家，权重重新归一化约为 0.731059、0.268941。见 `test_sparse_moe_dispatch_and_selected_probability_hand_oracle`。
 6. **BF16、单条 4096-token 序列，两个真实配置的缓存谁大？** dense 为 448 MiB，MoE 为 384 MiB；都不含权重和临时内存。见 `test_exercise_cache_bytes_and_head_ratio`。
 7. **`enable_thinking=False` 和在文本里写 `/no_think` 相同吗？** 不同。前者改变模板后缀；后者是保留给模型解释的软提示。见 `test_exercise_official_template_not_naive_concatenation`。
