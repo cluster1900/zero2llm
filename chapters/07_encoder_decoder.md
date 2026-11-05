@@ -212,12 +212,12 @@ if chosen == eos:
 
 ```bash
 python3 code/10_generation_loop.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_generation.py' -v
 ```
 
 本章无 PyTorch/GPU 依赖。回归覆盖三步 mask 数值、标签错位、温度数表、低温唯一最大项、EOS、最大新增数、零预算、固定 seed 及非法输入。
 
-运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 ### 先回答六个问题
 

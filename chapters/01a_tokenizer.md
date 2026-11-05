@@ -139,7 +139,7 @@ text = raw.decode('utf-8')
 
 ```bash
 python3 code/08_byte_bpe.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_foundations.py' -v
 ```
 
 训练语料是 `banana banana`、`banana bandana` 和 `你好，你好！`。请求最多 20 次合并，但语料提前没有相邻对可合并，因此实际词表大小为 275，即 256 个基础字节加 19 个新 token。实测输出中的计数如下：
@@ -154,7 +154,7 @@ python3 -m unittest discover -s tests -v
 
 把整句训练文本合成一个 token，可以让训练集看起来非常短，却没有证明它对新文本也有效。第三行从未出现在训练语料中，仍然可编码和恢复，但几乎没有合并收益。这正好提醒我们：**能编码、token 少、模型理解得好，是三个不同的问题。**
 
-运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 实现优先让你能读懂，反复扫描语料会很慢，不能拿它直接训练大规模词表。
 

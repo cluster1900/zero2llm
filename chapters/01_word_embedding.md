@@ -116,12 +116,12 @@ def cosine_similarity(vec_a, vec_b):
 
 ```bash
 python3 code/01_vector_similarity.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_foundations.py' -v
 ```
 
 脚本会打印上面的水果数值，并按余弦排序给出结论。如果你把一个向量放大两倍，余弦应保持不变，但点积不会保持不变。
 
-运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 ## 1.6 向量加减能做什么，不能做什么？
 
