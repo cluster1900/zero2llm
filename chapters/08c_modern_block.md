@@ -198,7 +198,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_modern_block.py'
 
 没有 PyTorch 时，CLI 会简短提示安装方式并以退出码 2 结束。不需要下载模型或数据。
 
-固定实验条件：CPU、PyTorch 2.14.1+cpu、float32、单线程、seed=42，B=2、T=12、8 次更新。数据用单独的 generator，seed=43，先生成长度 T+1 的 ID，再取相邻输入/目标。三行模型使用同一份 batch、同一输入顺序和步数，每次都创建全新的 AdamW，lr=0.001、betas=(0.9,0.999)、eps=1e-8、weight_decay=0，无 dropout。
+固定实验条件：CPU、附录 H 所列 PyTorch、float32、单线程、seed=42，B=2、T=12、8 次更新。数据用单独的 generator，seed=43，先生成长度 T+1 的 ID，再取相邻输入/目标。三行模型使用同一份 batch、同一输入顺序和步数，每次都创建全新的 AdamW，lr=0.001、betas=(0.9,0.999)、eps=1e-8、weight_decay=0，无 dropout。
 
 ### 表 P13-4：这一次实跑的训练闭环结果
 

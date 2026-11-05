@@ -272,7 +272,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture
 
 若使用仓库的虚拟环境，把 python 换成 `.venv/bin/python`。没有 PyTorch 时，CLI 给出安装提示并以非零状态退出。
 
-本章在 CPU / torch 2.14.1 / float64 下验证，核心输出为：
+本章在 CPU / 附录 H 所列 torch / float64 下验证，核心输出为：
 
 ```text
 手算 encoder: [2.0, 3.5, 5.5]

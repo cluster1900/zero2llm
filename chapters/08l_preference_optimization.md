@@ -289,7 +289,7 @@ python -m unittest discover -s tests -p test_preference_optimization.py -v
 
 GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我猜是 0”虽然字符更多，也不是多个策略动作。不要把这两层混写成“已经训练了一个生成式小 LLM”。
 
-2026-10-19，在 CPU、PyTorch 2.14.1+cpu、seed=22、单线程下实测：
+在附录 H 所列环境下（CPU、seed=22、单线程）实测：
 
 | 指标 | SFT 起点 | DPO 后 | GRPO 后 |
 | --- | --- | --- | --- |

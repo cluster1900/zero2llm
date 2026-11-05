@@ -219,7 +219,7 @@ RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：
 
 实验协议写死在 `length_experiment()`，便于复现和审计：
 
-- CPU、float32、单线程；验证环境 PyTorch 2.14.1+cpu，依赖见仓库 requirements。
+- CPU、float32、单线程；验证环境见附录 H，依赖见仓库 requirements。
 - 两层模型，d_model=32，H=4，词表大小 10；普通 RoPE、全头旋转、base=10000。
 - 从一开始允许 `max_seq_len=64`，**实际训练样本始终只有 8 个位置**。
 - AdamW，学习率 0.003，weight_decay=0；batch=32，更新 400 次，共 12800 个训练样本。

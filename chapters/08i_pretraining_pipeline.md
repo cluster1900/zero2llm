@@ -256,7 +256,7 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。
 
-2026-10-19 在 Python 3.12.14、torch 2.14.1+cpu、单线程、float32、seed=7 下的本书实测：
+在附录 H 所列环境下（单线程、float32、seed=7）的本书实测：
 
 | 记录 | 结果 | 能说明什么 |
 | --- | --- | --- |

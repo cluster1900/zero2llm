@@ -149,7 +149,7 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 
 教学配置是 CPU 单线程、`d_model=16`、4 头、1 层、最大位置 32、B=4、T=8、AdamW 学习率 0.003、40 次更新。每次从两首训练诗随机取 4 个窗口；共消费 40×4×8=1280 个预测位置，**包含重复，不等于 1280 个独立样本**。每次运行重新初始化模型与优化器，同时固定 Python 抽样 RNG 和 PyTorch 种子，并开启确定性算法。
 
-下面是 2026-10-19、PyTorch 2.14.1+cpu 的复核记录，显示到六位小数。seed 11 保留后值采用独立审核环境的 4.397413730…，四舍五入为 4.397414；本地复跑为 4.397413254…，相差一个 float32 ULP。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU 数值差异，而不容许学习率改变造成的偏移。训练/保留 loss 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：
+下面是附录 H 所列环境下的复核记录，显示到六位小数。seed 11 保留后值采用独立审核环境的 4.397413730…，四舍五入为 4.397414；本地复跑为 4.397413254…，相差一个 float32 ULP。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU 数值差异，而不容许学习率改变造成的偏移。训练/保留 loss 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：
 
 | 运行 | 首 batch loss | 训练文档 loss 前→后 | 保留文档 loss 前→后 |
 | --- | --- | --- | --- |
@@ -170,7 +170,7 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 
 两组不是各占一半：整体均值应是 `(4 × 见过组 loss + 19 × 未见组 loss) / 23`。共有目标的 loss 实际下降；整体上升主要来自那 19 个从未作为训练答案的目标。在训练 softmax 分类时，这些类别没有正目标奖励，但仍出现在分母里，其分数可能被相对压低。**这次留出 loss 上升主要反映标签分布不匹配，本实验不能证明过拟合。看到留出 loss 上升，先检查留出标签是否见过。** 只有 4 个共有标点变好，也不能据此推断词汇或语言泛化变好。
 
-过拟合指模型过度适应训练材料、在可比的新样本上表现变差；训练 loss 下降而验证 loss 上升只是需要诊断的现象，不是自动成立的结论。若要演示它，需要另设词汇覆盖可比、来源独立的留出材料，固定评估口径并跟踪训练过程，例如检查验证 loss 是否先下降后上升。本批只讨论过拟合概念，**没有演示或证实过拟合**，也不将不匹配的两组数据包装成过拟合实验。
+过拟合指模型过度适应训练材料、在可比的新样本上表现变差；训练 loss 下降而验证 loss 上升只是需要诊断的现象，不是自动成立的结论。若要演示它，需要另设词汇覆盖可比、来源独立的留出材料，固定评估口径并跟踪训练过程，例如检查验证 loss 是否先下降后上升。本章只讨论过拟合概念，**没有演示或证实过拟合**，也不将不匹配的两组数据包装成过拟合实验。
 
 同种子同环境重复是复现实验的检查，不是跨硬件/版本逐位相同的承诺；换种子也不是新增独立测试语料。
 
@@ -192,14 +192,14 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 3. 梯度 `[-0.25,0.25]`，更新后 `[1.123612289,-0.025]`；两题取 mean 时每题梯度除以 2。对应 `test_gradient_finite_difference_and_update` 与 `test_reduction_and_autograd_match_handcalc`。
 4. 梯度累加成两倍；下一批前调用 `optimizer.zero_grad(set_to_none=True)`。对应 `test_gradient_accumulation_and_clear`；`test_train_step_rejects_zero_grad_omission_numerically` 另跑不清零的错误循环，确认其参数偏离正确参考，避免仅靠搜一行源码“证明正确”。
 5. 两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。对应 `test_eval_no_grad_and_restore_mode`：用真实 `evaluate` 前向的 pre-hook 确认 `training=False` 与 `is_grad_enabled=False`，另检查权重不变、模式恢复，并用 Dropout 对照。`test_evaluate_unequal_documents_token_weighted` 使用 1 个与 4 个目标的不等长文档，核对 token 加权 3.4，而不是文档均值 2.5。
-6. 重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23 个留出目标未在训练标签中出现，4 个共有标点的 loss 反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本批未演示过拟合。下一章 S0 更只是同语料记忆。对应 `test_split_and_leakage_mutation`：将训练文档混入保留集合会报错；`test_fixed_seed_repeat_and_heldout_report` 检查重复运行；`test_40_step_snapshots_and_label_strata` 固定种子 7/11 的 40 步结果、实际学习率、19/23 计数、共有组下降方向及两组重组合，不断言“训练必能改善整体保留 loss”。
+6. 重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23 个留出目标未在训练标签中出现，4 个共有标点的 loss 反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本章未演示过拟合。下一章 S0 更只是同语料记忆。对应 `test_split_and_leakage_mutation`：将训练文档混入保留集合会报错；`test_fixed_seed_repeat_and_heldout_report` 检查重复运行；`test_40_step_snapshots_and_label_strata` 固定种子 7/11 的 40 步结果、实际学习率、19/23 计数、共有组下降方向及两组重组合，不断言“训练必能改善整体保留 loss”。
 
 ## P09.8 来源与边界
 
-核验日期：2026-10-19。API 依据锁定为 PyTorch 2.14 文档，运行数值使用 2.14.1+cpu：
+来源核验日期见附录 H。API 依据锁定为 PyTorch 2.14 文档，运行数值使用附录 H 所列补丁版本：
 
 - [CrossEntropyLoss](https://docs.pytorch.org/docs/2.14/generated/torch.nn.CrossEntropyLoss.html)：logits 输入、类别标签与 reduction。
 - [Optimizer.zero_grad](https://docs.pytorch.org/docs/2.14/generated/torch.optim.Optimizer.zero_grad.html)：梯度清理与 `set_to_none`。
 - [Autograd mechanics](https://docs.pytorch.org/docs/2.14/notes/autograd.html)：梯度记录、no-grad 与 eval 的区别。
-- 大纲 S14 的 [Transformers 文档入口](https://huggingface.co/docs/transformers/index) 是进一步学习训练框架的导航；本实验不调用 Transformers，也不把动态文档版本冒充已验证依赖。
-- 大纲 S18 [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556) 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出 scaling law，也不据此承诺增加步数就能提升泛化。
+- [Transformers 文档入口](https://huggingface.co/docs/transformers/index) 是进一步学习训练框架的导航；本实验不调用 Transformers，也不把动态文档版本冒充已验证依赖。
+- [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556) 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出 scaling law，也不据此承诺增加步数就能提升泛化。

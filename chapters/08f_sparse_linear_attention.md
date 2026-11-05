@@ -230,7 +230,7 @@ OMP_NUM_THREADS=1 python code/17_sparse_linear_attention.py
 python -m unittest discover -s tests -p test_sparse_linear_attention.py -v
 ```
 
-本批实际使用 Python 3.12.14、PyTorch 2.14.1+cpu、单线程、seed=16、float64。随机 B=2、T=7、r=3、d_v=2 对照得到最大误差 `3.33e-16`，S/z 形状分别为 `[2,3,2]`、`[2,3]`；检索结果见上表。不同平台的末位浮点误差可不同，不是质量分数。
+实际在附录 H 所列环境下（单线程、seed=16、float64）运行。随机 B=2、T=7、r=3、d_v=2 对照得到最大误差 `3.33e-16`，S/z 形状分别为 `[2,3,2]`、`[2,3]`；检索结果见上表。不同平台的末位浮点误差可不同，不是质量分数。
 
 教学接口主动收窄范围：
 

@@ -268,7 +268,7 @@ OMP_NUM_THREADS=1 python code/19_moe.py
 OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_moe.py' -v
 ```
 
-2026-10-19，CPU、PyTorch 2.14.1+cpu、seed=180 的实际输出包括：
+附录 H 所列环境下（CPU、seed=180）的实际输出包括：
 
 ```text
 capacity=None; selected=[[0, 1], [3, 2], [0, 1]]

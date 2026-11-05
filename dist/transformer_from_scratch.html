@@ -589,8 +589,8 @@ token 都有一个向量，就需要“句子编号、位置编号、向量分�
 Softmax；位置编码章使用三角函数；训练章再讲损失和梯度。你可以先按数字算一遍，再理解一般公式。不需要先修完一套高等数学，但理解训练和优化仍需要逐步建立导数与概率的基本概念。</p>
 <h2 id="两条实验路线没有-gpu-也能开始">0.3 两条实验路线：没有 GPU
 也能开始</h2>
-<p><strong>必修：CPU 与小数据。</strong> 本批次的向量和字节级 BPE
-实验只用 Python 标准库，不下载模型、不访问外部 API。后面的基础 PyTorch
+<p><strong>必修：CPU 与小数据。</strong> 本书的向量和字节级 BPE 实验只用
+Python 标准库，不下载模型、不访问外部 API。后面的基础 PyTorch
 实验也以小模型为主。</p>
 <p>从仓库根目录运行：</p>
 <div class="sourceCode" id="cb1"><pre
@@ -674,7 +674,7 @@ CPU 参考实现；跳过 GPU
 </tr>
 </tbody>
 </table></div>
-<p>本批 BPE
+<p>本书 BPE
 的合并规则由语料、合并次数和并列时的排序决定，不含随机步骤。后面的神经网络会有初始化与采样随机性；固定种子能减少变化，却不保证所有硬件、版本都逐位相同。测试数值结果时还要说明容差。</p>
 <p>性能要另外记：同一模型、相同输入输出长度、相同 batch
 和设备，才适合比较；首 token 延迟和后续 token
@@ -884,8 +884,8 @@ token？</li>
 6；训练集表现不能代替未见数据评估；至少记录设备、依赖版本、输入规模和测量方法。带着这些边界意识，下一步从一个最简单的问题开始：<strong>编号不是意义，向量又能帮我们做什么？</strong></p>
 <p>资料说明：Transformer 基础来源为 <a
 href="https://arxiv.org/abs/1706.03762v7">Attention Is All You
-Need</a>。软件接口以本批固定版本和实际实验为准，核验日期为
-2026-10-18。</p>
+Need</a>。软件接口以本书固定版本和实际实验为准，来源核验日期见附录
+H。</p>
 <hr />
 <h1 id="第1章-从编号到空间向量-词嵌入与几何直觉">第1章：从编号到空间向量——词嵌入与几何直觉</h1>
 <p>假设你要给水果做一个小型检索器：输入“苹果”，希望它找到口感相近的水果。计算机能比较数字，却不能直接拿两个汉字相减。我们需要一种数字表示，但“有数字”不等于“有意义”。</p>
@@ -1125,7 +1125,7 @@ class="math display">\[[9,8,7]-[1,8,5]+[1,-8,5]=[9,-8,7]\]</span></p>
 <code>ValueError</code>；不能这样保证。现实系统通常由 tokenizer
 把未知整词拆成已知子词或字节等单位，然后查它们的向量。<strong>这就是下一章要补上的环节：文本怎样变成那些
 ID？</strong></p>
-<p>本章核验日期：2026-10-18。查表接口可参阅 <a
+<p>本章来源核验日期见附录 H。查表接口可参阅 <a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html">PyTorch
 2.14 的 Embedding 文档</a>；本章必修代码不依赖
 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 <a
@@ -1143,8 +1143,7 @@ token，还是“苹”“果”两个 token？一串 emoji 又该怎样处理�
 <p><strong>Tokenizer（分词器）的工作是把文本变成 token ID
 序列，并提供对应的解码方式。</strong> Token
 不一定是词，也不一定是字。它可能是子词、一个标点、带空格的片段，甚至一个字符的部分字节。训练语言模型之前，我们需要先知道预测的单位是什么。</p>
-<p>本章属于扩展计划 P02，暂以“1A”插在词嵌入与旧第 2
-章之间，保留旧章节链接。本章的两个实验都使用 CPU
+<p>本章接在词嵌入之后。本章的两个实验都使用 CPU
 和小型合成语料，不下载任何语言模型。</p>
 <h2 id="a.1-三种切法整词字符与字节">1A.1 三种切法：整词、字符与字节</h2>
 <p>想象要用积木拼一句话。整词积木大，拼起来步数少，但新词可能不在盒子里；字符积木小，组合灵活，但词表仍要考虑哪些字符；字节积木更基础，UTF-8
@@ -1202,9 +1201,9 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb6-1"><a hr
 字节词表能表示没见过的文字，并不意味着模型学会了这门语言。Tokenizer
 解决的是编码问题，语言能力仍取决于数据、模型和训练。</p>
 </div>
-<h3 id="对照旧第-8-章保留-baby-gpt-的字符基线">对照旧第 8 章：保留
-Baby-GPT 的字符基线</h3>
-<p>旧第 8 章和配套的 <code>code/07_baby_gpt.py</code>
+<h3 id="对照-baby-gpt保留字符级分词基线">对照
+Baby-GPT：保留字符级分词基线</h3>
+<p>Baby-GPT 一章和配套的 <code>code/07_baby_gpt.py</code>
 刻意采用更简单的字符级分词器：</p>
 <div class="sourceCode" id="cb7"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>unique_chars <span class="op">=</span> <span class="bu">sorted</span>(<span class="bu">set</span>(text_corpus))</span>
@@ -1423,8 +1422,8 @@ token，可以让训练集看起来非常短，却没有证明它对新文本也
 Face Tokenizers</h2>
 <p>可选实验 <a
 href="code/09_hf_tokenizer.py">code/09_hf_tokenizer.py</a> 固定使用
-<code>tokenizers==0.21.4</code>。核验和运行日期为
-2026-10-18，官方接口来源锁定到 <a
+<code>tokenizers==0.21.4</code>。核验和运行日期见附录
+H，官方接口来源锁定到 <a
 href="https://github.com/huggingface/tokenizers/tree/v0.21.4">v0.21.4
 代码与文档目录</a>。这不是要求你使用最新版本，而是把本章实验条件固定下来。</p>
 <div class="sourceCode" id="cb13"><pre
@@ -2315,7 +2314,7 @@ href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.functional.scaled_do
 <li><a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html">PyTorch
 2.14：MultiheadAttention</a>：对照不同接口的 mask
-语义。动态文档核验日期：2026-10-19。</li>
+语义。动态文档核验日期见附录 H。</li>
 </ul>
 <hr />
 <h1 id="第4章-多头注意力-Multi-Head-Attention-给每个维度记一本账">第4章：多头注意力（Multi-Head
@@ -2329,7 +2328,7 @@ class="math inline">\(V\)</span>。本章把这套计算分成几个并行的“
 <p>配套代码是 <a
 href="code/04_multi_head_attention.py">code/04_multi_head_attention.py</a>。本章只讨论<strong>标准、等宽的多头自注意力</strong>：Q、K、V
 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV
-头等变体见已实现的 <a href="#p14-grouped-kv">P14</a>（大纲 S05：<a
+头等变体见已实现的 <a href="#p14-grouped-kv">P14</a>（<a
 href="https://arxiv.org/abs/2305.13245">GQA 原始论文</a>）。</p>
 <hr />
 <h2 id="为什么要多头多张权重表而不是预先分配的专家">4.1
@@ -2877,7 +2876,8 @@ class="math inline">\(BHT^2\)</span>
 <p>多头本身不添加“我在第几个位置”的信息。没有位置编码、也没有依赖位置的掩码时，重排输入
 token，输出只会跟着重排。因果掩码限制可见方向，但与为表示加入位置信息不同。下一章继续讨论<strong>位置编码（Positional
 Encoding）</strong>。</p>
-<p>文档核验日：2026-10-19，来源见相关段落。文档版本不等于本书的完整兼容性测试范围；本章实验验证教学计算，不提供未测的速度或显存提升比例。</p>
+<p>文档核验日见附录
+H，来源见相关段落。文档版本不等于本书的完整兼容性测试范围；本章实验验证教学计算，不提供未测的速度或显存提升比例。</p>
 <hr />
 <h1 id="第-5-章-位置编码-Positional-Encoding-给词语发-座位号">第 5
 章：位置编码（Positional Encoding）——给词语发“座位号”</h1>
@@ -3554,7 +3554,8 @@ mask 的条件不同。</li>
 <p>下一章把注意力放入完整 Block：残差怎样提供信息路径，LayerNorm
 怎样处理数值尺度，FFN 又增加了什么能力。</p>
 <h2 id="来源与版本-1">来源与版本</h2>
-<p>核验日期：2026-10-19。下列是原作者的一手论文；本章数值表和微型实验是教学计算，不是论文的翻译质量复现。</p>
+<p>来源核验日期见附录
+H。下列是原作者的一手论文；本章数值表和微型实验是教学计算，不是论文的翻译质量复现。</p>
 <ol type="1">
 <li>Vaswani et al., <a
 href="https://arxiv.org/html/1706.03762v7">Attention Is All You
@@ -4206,7 +4207,7 @@ Block，也不是整个语言模型的规模。</p>
 <div class="sourceCode" id="cb51"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/06_transformer_block.py</span>
 <span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_blocks.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
-<p>本章核验环境是 CPU、PyTorch 2.14.1+cpu。无需
+<p>本章核验环境是 CPU，补丁版本见附录 H。无需
 GPU、模型权重、联网训练或付费 API。</p>
 <p>脚本会打印本章全部七张数值表，以及以下关键行。手算部分固定输入、使用
 float64；随机 Block 冒烟部分固定种子 42。</p>
@@ -4287,9 +4288,8 @@ Transformer</a></p>
 章「编码器与解码器」，看相似的积木如何通过可见范围、cross-attention
 和训练目标，组成不同的系统。</p>
 <h3 id="来源与核验范围">来源与核验范围</h3>
-<p>以下为论文原文与官方 API 文档；访问核验日期为
-<strong>2026-10-19</strong>。本章表格是配套脚本的教学计算，不是原论文
-benchmark 的复现。</p>
+<p>以下为论文原文与官方 API 文档；访问核验日期见附录
+H。本章表格是配套脚本的教学计算，不是原论文 benchmark 的复现。</p>
 <ul>
 <li>He 等，2015：<a href="https://arxiv.org/pdf/1512.03385">Deep
 Residual Learning for Image
@@ -4908,8 +4908,8 @@ href="https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_gene
 及长度参数的接口语义；本章不用这个库执行实验。</li>
 <li><a
 href="https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation">Transformers
-4.57.1 缓存说明</a>：理解历史 K/V
-复用的概念路标。文档核验日期：2026-10-19。</li>
+4.57.1 缓存说明</a>：理解历史 K/V 复用的概念路标。文档核验日期见附录
+H。</li>
 </ul>
 <hr />
 <h1 id="训练基础-P09-让一次猜字变成一次学习">训练基础（P09）：让一次猜字变成一次学习</h1>
@@ -5157,10 +5157,10 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb61-1"><a href=
 个窗口；共消费 40×4×8=1280 个预测位置，<strong>包含重复，不等于 1280
 个独立样本</strong>。每次运行重新初始化模型与优化器，同时固定 Python
 抽样 RNG 和 PyTorch 种子，并开启确定性算法。</p>
-<p>下面是 2026-10-19、PyTorch 2.14.1+cpu
-的复核记录，显示到六位小数。seed 11 保留后值采用独立审核环境的
-4.397413730…，四舍五入为 4.397414；本地复跑为 4.397413254…，相差一个
-float32 ULP。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU
+<p>下面是附录 H 所列环境下的复核记录，显示到六位小数。seed 11
+保留后值采用独立审核环境的 4.397413730…，四舍五入为 4.397414；本地复跑为
+4.397413254…，相差一个 float32 ULP。测试对表值使用绝对容差
+1e-6，容纳舍入和这一级 CPU
 数值差异，而不容许学习率改变造成的偏移。训练/保留 loss
 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：</p>
 <div class="table-wrapper"><table>
@@ -5247,7 +5247,7 @@ loss 上升主要反映标签分布不匹配，本实验不能证明过拟合。
 下降而验证 loss
 上升只是需要诊断的现象，不是自动成立的结论。若要演示它，需要另设词汇覆盖可比、来源独立的留出材料，固定评估口径并跟踪训练过程，例如检查验证
 loss
-是否先下降后上升。本批只讨论过拟合概念，<strong>没有演示或证实过拟合</strong>，也不将不匹配的两组数据包装成过拟合实验。</p>
+是否先下降后上升。本章只讨论过拟合概念，<strong>没有演示或证实过拟合</strong>，也不将不匹配的两组数据包装成过拟合实验。</p>
 <p>同种子同环境重复是复现实验的检查，不是跨硬件/版本逐位相同的承诺；换种子也不是新增独立测试语料。</p>
 <p>下一章的 S0 会在三首诗上训练并检查背诵，它是
 <strong>同语料记忆/工程基线</strong>。本章两首训练、一首保留是另一种评估演示，不要把两个
@@ -5295,7 +5295,7 @@ Dropout
 2.5。</li>
 <li>重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23
 个留出目标未在训练标签中出现，4 个共有标点的 loss
-反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本批未演示过拟合。下一章
+反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本章未演示过拟合。下一章
 S0 更只是同语料记忆。对应
 <code>test_split_and_leakage_mutation</code>：将训练文档混入保留集合会报错；<code>test_fixed_seed_repeat_and_heldout_report</code>
 检查重复运行；<code>test_40_step_snapshots_and_label_strata</code>
@@ -5304,8 +5304,8 @@ S0 更只是同语料记忆。对应
 loss”。</li>
 </ol>
 <h2 id="p09.8-来源与边界">P09.8 来源与边界</h2>
-<p>核验日期：2026-10-19。API 依据锁定为 PyTorch 2.14 文档，运行数值使用
-2.14.1+cpu：</p>
+<p>来源核验日期见附录 H。API 依据锁定为 PyTorch 2.14
+文档，运行数值使用附录 H 所列补丁版本：</p>
 <ul>
 <li><a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.CrossEntropyLoss.html">CrossEntropyLoss</a>：logits
@@ -5316,12 +5316,12 @@ href="https://docs.pytorch.org/docs/2.14/generated/torch.optim.Optimizer.zero_gr
 <li><a
 href="https://docs.pytorch.org/docs/2.14/notes/autograd.html">Autograd
 mechanics</a>：梯度记录、no-grad 与 eval 的区别。</li>
-<li>大纲 S14 的 <a
+<li><a
 href="https://huggingface.co/docs/transformers/index">Transformers
 文档入口</a> 是进一步学习训练框架的导航；本实验不调用
 Transformers，也不把动态文档版本冒充已验证依赖。</li>
-<li>大纲 S18 <a href="https://arxiv.org/abs/2203.15556">Training
-Compute-Optimal Large Language Models</a>
+<li><a href="https://arxiv.org/abs/2203.15556">Training Compute-Optimal
+Large Language Models</a>
 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出
 scaling law，也不据此承诺增加步数就能提升泛化。</li>
 </ul>
@@ -5340,7 +5340,7 @@ P11 只改变生成的计算方法，加 KV cache；不会偷偷换模型再宣�
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python3</span> code/07_baby_gpt.py</span>
 <span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_baby_gpt.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>需要 <code>requirements.txt</code> 中的 CPU PyTorch；本文数值来自
-Python 3.12、PyTorch 2.14.1+cpu、种子
+Python 3.12、附录 H 所列 PyTorch、种子
 42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同
 seed 承诺跨平台逐位相同。</p>
 <p>运行本章测试文件，末尾应显示
@@ -5757,7 +5757,7 @@ logits。两个分布变化后仍可能选同一个最大项，argmax
 负责训练基础的梯度和数据边界；下一单元 P11
 负责缓存与完整计算的数值等价，不用一次庞大测试掩盖各自的契约。</p>
 <h2 id="原始来源与实现版本">原始来源与实现版本</h2>
-<p>核验日：2026-10-19。S0
+<p>来源核验日见附录 H。S0
 是本仓库教学实现，不是某个商业模型的精确复刻。</p>
 <ol type="1">
 <li><a
@@ -6070,7 +6070,7 @@ min/median/max。</li>
 工作，因此本实验不涉及 CUDA 同步。将方法搬到 GPU
 时需要另外处理同步。</li>
 </ul>
-<p>本机测量值和版本见本批验证记录；每次运行都会重新打印，不将抖动的毫秒数写成单元测试常数。小矩阵下
+<p>本机测量值每次运行都会重新打印，不将抖动的毫秒数写成单元测试常数。小矩阵下
 Python 验证、<code>cat</code>
 和分配可能抵消省下的计算，缓存不保证在这个微型 CPU
 例子里更快。正确的优化报告应同时列出两条路径和计时范围，而不是只挑最漂亮的一次。</p>
@@ -6119,7 +6119,7 @@ KV 缓存里丢掉旧的工具结果，再用 RoPE 旋转把保留的 key
 挪到新位置。要注意，保留 token 的 K/V
 当初看过被删内容，所以这样做与只用保留文本重新 prefill 并不相同。</p>
 <h2 id="原始来源与版本-1">原始来源与版本</h2>
-<p>核验日期：2026-10-19。本章 S1 是教学实现，既不是 HF Cache API
+<p>来源核验日期见附录 H。本章 S1 是教学实现，既不是 HF Cache API
 的完整实现，也不是 vLLM 服务实现。</p>
 <ol type="1">
 <li><a
@@ -6133,10 +6133,10 @@ PagedAttention</a>，§2–3：KV cache
 称为 PagedAttention。</li>
 <li><a href="code/07_baby_gpt.py">code/07_baby_gpt.py</a> 与 <a
 href="code/12_kv_cache.py">code/12_kv_cache.py</a>：本章形状、容量策略、计时范围及可运行数值的直接依据。</li>
-<li>大纲 S15 的 <a
+<li><a
 href="https://docs.vllm.ai/en/latest/design/paged_attention/">vLLM Paged
-Attention 设计文档</a>（动态文档，访问核验日
-2026-10-19）仅作后续服务实现导航。本章不依赖
+Attention 设计文档</a>（动态文档，访问核验日见附录
+H）仅作后续服务实现导航。本章不依赖
 vLLM、没有运行其内核，也未实现分页缓存；本地 S1
 的行为以配套脚本为准。</li>
 </ol>
@@ -6580,7 +6580,7 @@ loss，不报告语言模型困惑度。只在四种合法答案里均匀猜，�
 10%。训练让模型学会使用合法答案，不应混淆这两条基线。</p>
 <p>实验协议写死在 <code>length_experiment()</code>，便于复现和审计：</p>
 <ul>
-<li>CPU、float32、单线程；验证环境 PyTorch 2.14.1+cpu，依赖见仓库
+<li>CPU、float32、单线程；验证环境见附录 H，依赖见仓库
 requirements。</li>
 <li>两层模型，d_model=32，H=4，词表大小 10；普通
 RoPE、全头旋转、base=10000。</li>
@@ -7198,8 +7198,8 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb87-1"><a href=
 <span id="cb87-3"><a href="#cb87-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_modern_block.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>没有 PyTorch 时，CLI 会简短提示安装方式并以退出码 2
 结束。不需要下载模型或数据。</p>
-<p>固定实验条件：CPU、PyTorch
-2.14.1+cpu、float32、单线程、seed=42，B=2、T=12、8 次更新。数据用单独的
+<p>固定实验条件：CPU、附录 H 所列
+PyTorch、float32、单线程、seed=42，B=2、T=12、8 次更新。数据用单独的
 generator，seed=43，先生成长度 T+1 的
 ID，再取相邻输入/目标。三行模型使用同一份
 batch、同一输入顺序和步数，每次都创建全新的
@@ -7814,9 +7814,8 @@ href="https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py">D
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb93-1"><a href="#cb93-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
 <span id="cb93-2"><a href="#cb93-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/15_grouped_kv.py</span>
 <span id="cb93-3"><a href="#cb93-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_grouped_kv.py <span class="at">-v</span></span></code></pre></div>
-<p>本批在 Python 3.12.14、PyTorch 2.14.1+cpu、单 CPU 线程、seed=42
-下运行。模型表格使用 float32，独立 MLA 矩阵使用
-float64；不训练、不下载权重。关键输出：</p>
+<p>在附录 H 所列环境下（单 CPU 线程、seed=42）运行。模型表格使用
+float32，独立 MLA 矩阵使用 float64；不训练、不下载权重。关键输出：</p>
 <pre class="text"><code>Hq=4 Hkv=2 mapping: (0, 0, 1, 1)
 one-key head outputs: [[10.0, 11.0], [10.0, 11.0], [20.0, 21.0], [20.0, 21.0]]
 Hkv=4: KV parameters=9216, cache=18432 bytes, formula=18432, shape=(2, 4, 12, 12), max_error=3.58e-07
@@ -7894,8 +7893,8 @@ href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1">DeepSeek-V3
 的联合内容压缩、解耦位置项与缩放维度。</li>
 <li><a
 href="https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py">DeepSeek-V3
-官方推理源码</a>：核验内容/位置缓存分离的实现入口；动态链接核验日
-2026-10-19。</li>
+官方推理源码</a>：核验内容/位置缓存分离的实现入口；动态链接核验日见附录
+H。</li>
 </ul>
 <p>本章实现 GQA 的完整 tiny-model 前向和紧凑缓存；MLA
 仅实现独立矩阵教学实验，未实现完整训练模型、checkpoint
@@ -8473,8 +8472,8 @@ TPOT=0。</p>
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb108-1"><a href="#cb108-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/16_attention_systems.py</span>
 <span id="cb108-2"><a href="#cb108-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_attention_systems.py <span class="at">-v</span></span></code></pre></div>
 <p>核心只需要 Python 标准库。</p>
-<p>本批在 Python 3.12.14 上运行，随机部分 seed=15。环境中的 PyTorch 是
-2.14.1+cpu，没有可用 CUDA。关键输出为：</p>
+<p>在附录 H 所列环境下（随机部分 seed=15）运行。环境中的 PyTorch 见附录
+H，没有可用 CUDA。关键输出为：</p>
 <pre class="text"><code>Online hand example: output=6.000000000000, expected=6; blocks=[2,1]
 Uneven blocks Q=5,K=7,d=3,dv=2: max_error=1.11e-16; tolerance=1e-12
 All-masked safety: [[0.0]]
@@ -8487,7 +8486,7 @@ GPU SDPA: not requested, not run. This CPU script is not a performance benchmark
 <code>docs/testing.md</code>。</p>
 <h2 id="p15.16-gpu-选修先确认后端不先晒跑分">P15.16 GPU
 选修：先确认后端，不先晒跑分</h2>
-<p><strong>本批 GPU kernel 未运行，未测 GPU 显存、时延或吞吐。</strong>
+<p><strong>本章 GPU kernel 未运行，未测 GPU 显存、时延或吞吐。</strong>
 CPU SDPA 检查通过不代表执行了 CUDA FlashAttention。</p>
 <p>如果你已经有兼容的 GPU、驱动与官方 CUDA 版
 PyTorch，可以单独尝试：</p>
@@ -8496,7 +8495,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb110-1"><a href
 <p>不要为这一章把现有 CPU 环境强行替换掉；GPU
 环境的安装要按官方硬件/驱动要求单独配置。脚本会打印实际
 PyTorch、CUDA、设备、dtype 和形状，并在缺少依赖或 CUDA 时明确
-<code>SKIP</code>。本批实际运行这个开关得到：</p>
+<code>SKIP</code>。本章实际运行这个开关得到：</p>
 <pre class="text"><code>SKIP GPU SDPA: torch=2.14.1+cpu, CUDA unavailable; GPU kernel not run.</code></pre>
 <p>选修 smoke 的 Q/K/V 各为
 <code>[1,1,8,16]</code>、float16；三者数据本身共 768
@@ -8514,8 +8513,8 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb112-1"><a 
 数值参考比较；“调用了 SDPA”本身不能证明走了期望后端。<a
 href="https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py">PyTorch
 固定源码 v2.5.1：SDPA 后端选择接口</a></p>
-<p>此固定源码链接用于接口背景，不是安装建议。本批另检查了实际 torch
-2.14.1 的 <code>sdpa_kernel</code> 和
+<p>此固定源码链接用于接口背景，不是安装建议。本章另检查了附录 H 所列
+torch 的 <code>sdpa_kernel</code> 和
 <code>SDPBackend.FLASH_ATTENTION</code> 可导入，但无 GPU，因此没有验证其
 GPU 支持条件。后端不支持或运行失败时会报告
 skip/失败原因，不会悄悄退回数学后端然后宣称 GPU Flash 成功。</p>
@@ -8535,7 +8534,7 @@ event，避免只测到提交任务的时间。</li>
 实际后端；保存硬件、软件版本和命令。微型 attention smoke
 不能替代端到端服务基准。</li>
 </ol>
-<p>这是选修实验的记录清单，<strong>不是本批已经跑出的服务性能报告</strong>。</p>
+<p>这是选修实验的记录清单，<strong>不是本章已经跑出的服务性能报告</strong>。</p>
 <h2 id="p15.17-自测题与参考答案">P15.17 自测题与参考答案</h2>
 <ol type="1">
 <li>FlashAttention 为什么不等于把稠密 attention 改成 O(Nd)？与 GQA
@@ -8600,8 +8599,8 @@ href="https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/details.html">实�
 vLLM。</li>
 <li><a
 href="https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py">PyTorch
-v2.5.1 官方后端选择源码</a>：固定接口背景；实际 CPU 测试环境为 torch
-2.14.1+cpu，GPU 选修未运行。</li>
+v2.5.1 官方后端选择源码</a>：固定接口背景；实际 CPU 测试环境见附录
+H，GPU 选修未运行。</li>
 </ul>
 <p>本章不改 S4、不训练模型、不实现 CUDA
 或生产调度器，不把人造时间线写成实验吞吐，不承诺任何 GPU 加速比。</p>
@@ -9102,9 +9101,9 @@ href="#p15-attention-systems">P15</a> 的 FlashAttention
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb115-1"><a href="#cb115-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
 <span id="cb115-2"><a href="#cb115-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/17_sparse_linear_attention.py</span>
 <span id="cb115-3"><a href="#cb115-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_sparse_linear_attention.py <span class="at">-v</span></span></code></pre></div>
-<p>本批实际使用 Python 3.12.14、PyTorch
-2.14.1+cpu、单线程、seed=16、float64。随机 B=2、T=7、r=3、d_v=2
-对照得到最大误差 <code>3.33e-16</code>，S/z 形状分别为
+<p>实际在附录 H 所列环境下（单线程、seed=16、float64）运行。随机
+B=2、T=7、r=3、d_v=2 对照得到最大误差 <code>3.33e-16</code>，S/z
+形状分别为
 <code>[2,3,2]</code>、<code>[2,3]</code>；检索结果见上表。不同平台的末位浮点误差可不同，不是质量分数。</p>
 <p>教学接口主动收窄范围：</p>
 <ul>
@@ -9686,7 +9685,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb120-1"><a href
 <p>若使用仓库的虚拟环境，把 python 换成
 <code>.venv/bin/python</code>。没有 PyTorch 时，CLI
 给出安装提示并以非零状态退出。</p>
-<p>本章在 CPU / torch 2.14.1 / float64 下验证，核心输出为：</p>
+<p>本章在 CPU / 附录 H 所列 torch / float64 下验证，核心输出为：</p>
 <pre class="text"><code>手算 encoder: [2.0, 3.5, 5.5]
 手算 full decoder: [6.0, 9.0, 13.666666666666666]
 手算 bounded 后缀: [9.75, 13.666666666666666]
@@ -10170,7 +10169,7 @@ token。不要把它当成整段请求直方图。</p>
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb124-1"><a href="#cb124-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
 <span id="cb124-2"><a href="#cb124-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/19_moe.py</span>
 <span id="cb124-3"><a href="#cb124-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_moe.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
-<p>2026-10-19，CPU、PyTorch 2.14.1+cpu、seed=180 的实际输出包括：</p>
+<p>附录 H 所列环境下（CPU、seed=180）的实际输出包括：</p>
 <pre class="text"><code>capacity=None; selected=[[0, 1], [3, 2], [0, 1]]
 requested=[2, 2, 1, 1]; accepted=[2, 2, 1, 1]; aux=1.066667
 capacity=1; selected=[[0, 1], [3, 2], [0, 1]]
@@ -10887,8 +10886,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb131-1"><a href
 <span id="cb131-10"><a href="#cb131-10" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_pretraining_pipeline.py <span class="at">-v</span></span></code></pre></div>
 <p>没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练
 CLI 返回清晰提示和退出码 2。</p>
-<p>2026-10-19 在 Python 3.12.14、torch
-2.14.1+cpu、单线程、float32、seed=7 下的本书实测：</p>
+<p>在附录 H 所列环境下（单线程、float32、seed=7）的本书实测：</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -11256,7 +11254,8 @@ atol=2e-6、rtol=2e-5；不是把所有训练轨迹都要求逐位相同。本�
 eager attention 后端</strong>恢复的 logits
 则要求零误差。在开发时，恢复入口曾自动选择 SDPA，造成约 6e-8
 的微小差异；解决方法是固定同一个后端，而不是不问原因就放宽容差。</p>
-<p>2026-10-19，在本章下述固定组合、Linux CPU 环境得到的一次结果为：</p>
+<p>在本章下述固定组合、Linux CPU 环境下得到的一次结果（日期见附录
+H）：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -12144,8 +12143,8 @@ SFT 一律用这些超参数。</p>
 <p><strong>这不是全量微调与 LoRA 的公平效果对比。</strong> LoRA
 从第一阶段的终点继续训练同一任务，学习率也不同。我们只检验：完整训练循环能更新参数、低秩支路能单独更新、基础权重不变，以及合并前后的计算一致。想比较质量，需要相同起点、独立评估数据、明确预算和调参规则。</p>
 <h3 id="本次实测">本次实测</h3>
-<p>2026-10-19，Python 3.12 / PyTorch 2.14.1+cpu
-的一次结果如下。数值为教学夹具记录，不是吞吐
+<p>在 Python 3.12 与附录 H 所列 PyTorch
+下的一次结果如下。数值为教学夹具记录，不是吞吐
 benchmark；其他平台可能有末位浮点差异。</p>
 <div class="table-wrapper"><table>
 <thead>
@@ -12782,7 +12781,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb155-1"><a href
 <p>GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我猜是
 0”虽然字符更多，也不是多个策略动作。不要把这两层混写成“已经训练了一个生成式小
 LLM”。</p>
-<p>2026-10-19，在 CPU、PyTorch 2.14.1+cpu、seed=22、单线程下实测：</p>
+<p>在附录 H 所列环境下（CPU、seed=22、单线程）实测：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -13549,7 +13548,7 @@ generator，也没有概率校正实现。不要删除这条边界，再把“�
 <div class="sourceCode" id="cb157"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb157-1"><a href="#cb157-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/24_reasoning_mtp.py</span>
 <span id="cb157-2"><a href="#cb157-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_reasoning_mtp.py <span class="at">-v</span></span></code></pre></div>
-<p>已验证环境为 CPU、PyTorch <code>2.14.1+cpu</code>、单线程、种子
+<p>已验证环境为 CPU、附录 H 所列 PyTorch、单线程、种子
 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装
 <code>requirements.txt</code> 的提示并以状态 2 退出。</p>
 <p>固定 demo 使用词表 11、隐藏宽度 16、1 层教学 MoE、2 个额外
@@ -13579,9 +13578,9 @@ token、草稿耗时、目标 chunk 成本以及缓存搬运；只报一个高�
 共享主干辅助学习，是三种不同设置。</p>
 <p>本章只解释这个区别，没有实现蒸馏流水线、教师服务、数据筛选系统或新扩展项目。S6
 的辅助梯度进入主干，不能将其命名为 R1 蒸馏复现。</p>
-<p>截至
-2026-10-19，本章只依据官方版本化报告作如下跨版本提醒：<strong>DeepSeek-V4.1-Flash
-的 DSpark 不能直接贴上 V3 MTP 的标签。</strong> 官方报告 §2.4.3
+<p>本章只依据官方版本化报告作如下跨版本提醒（核对截止日期见附录
+H）：<strong>DeepSeek-V4.1-Flash 的 DSpark 不能直接贴上 V3 MTP
+的标签。</strong> 官方报告 §2.4.3
 描述了半自回归草稿和基于置信度安排验证的方案；它在预训练后专门训练，起初冻结
 backbone，后训练中其目标也不向 backbone
 反传。不要从“都是投机解码”推断两者采用同一训练目标或参数共享设计。<a
@@ -15098,10 +15097,9 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb173-1"><a href
 <span id="cb173-7"><a href="#cb173-7" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_qwen3_case.py <span class="at">-v</span></span></code></pre></div>
 <p>默认输出为每项组件附上带完整 revision 的 source
 URL，并打印本章精确参数和缓存数字。程序无网络请求。</p>
-<p><code>--torch</code> 使用 CPU、PyTorch
-<code>2.14.1+cpu</code>、Jinja2 <code>3.1.6</code>、种子
-250、单线程、float64。缺少 PyTorch 或 Jinja2 时给出安装
-<code>requirements.txt</code> 的提示并以状态 2
+<p><code>--torch</code> 使用 CPU、附录 H 所列 PyTorch、Jinja2
+<code>3.1.6</code>、种子 250、单线程、float64。缺少 PyTorch 或 Jinja2
+时给出安装 <code>requirements.txt</code> 的提示并以状态 2
 退出；不是“只打印配置就算可选实验通过”。本章没有额外安装
 Transformers，也不修改仓库的依赖锁定。</p>
 <p>微型配置为 D=8、Hq=4、Hkv=2、d=4、2 层、词表 17，仍然保留
@@ -17259,8 +17257,8 @@ id="附录数学公式速查卡与深度学习黑话翻译词典"></span></p>
 <blockquote>
 <p>这不是要背完的最后一章，而是读书时随手翻的工具箱。先修只有前言：遇到公式查附录
 A，遇到术语查附录 B，不知道下一步读什么查附录 C，准备运行实验查附录
-D，看到新模型新闻查附录 E，自测查附录 F，来源查附录
-G。公式手算、自测与固定配置证据由仓库测试核对；本页不宣布任何未运行硬件的性能。</p>
+D，看到新模型新闻查附录 E，自测查附录 F，来源查附录 G，版本与日期查附录
+H。公式手算、自测与固定配置证据由仓库测试核对；本页不宣布任何未运行硬件的性能。</p>
 </blockquote>
 <h2 id="附录-a大模型核心数学公式速查卡">附录
 A：大模型核心数学公式速查卡</h2>
@@ -17643,8 +17641,8 @@ D：运行与硬件：先做小实验，再决定是否扩展</h2>
 <p>本书的必需路线是小规模 CPU 教学，不要求购买 GPU。安装命令以仓库
 README 与固定 requirements 为准；按平台选安装包时查 <a
 href="https://pytorch.org/get-started/locally/">PyTorch
-官方安装页</a>。这个动态页面核对日期为
-<strong>2026-10-20</strong>，不是永远不变的安装承诺。</p>
+官方安装页</a>。这个动态页面的核对日期见附录
+H，不是永远不变的安装承诺。</p>
 <h3 id="d.1-kv-cache-载荷速查">D.1 KV cache 载荷速查</h3>
 <p>对未量化的 K/V 张量，按实际保存的头数计算：</p>
 <p><span class="math display">\[\mathrm{bytes}=2\times L\times B\times
@@ -17851,15 +17849,255 @@ Need，arXiv:1706.03762v7</a>，§3.2 attention
 <li><a
 href="https://docs.pytorch.org/docs/2.14/notes/randomness.html">PyTorch
 2.14 reproducibility</a>，固定文档版本；<a
-href="https://pytorch.org/get-started/locally/">官方安装选择器</a>为动态页，核对日期2026-10-20。</li>
+href="https://pytorch.org/get-started/locally/">官方安装选择器</a>为动态页，核对日期见附录
+H。</li>
 <li><a
 href="https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/config.json">Qwen3-0.6B
 固定官方 config</a>，revision/hash 如 E.2；相关官方实现版本见 P25。</li>
 <li><a href="https://www.3blue1brown.com/lessons/attention/">3Blue1Brown
 原作者 attention 页面</a>与 <a
 href="https://github.com/karpathy/nanoGPT">nanoGPT
-原作者仓库</a>：阅读入口，核对日期2026-10-20，不当作本书实验版本。</li>
+原作者仓库</a>：阅读入口，核对日期见附录 H，不当作本书实验版本。</li>
 </ul>
+<h2 id="p28.h-版本与来源">附录 H：版本与来源</h2>
+<p>下表保留从正文移出的日期与版本。种子、线程数、dtype
+和数值结果仍在原章。正在讲授的库版本锁定留在原处，不计入本表。既有测试钉住的日期句仍留在原章，不重复计入本表。</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>章</th>
+<th>内容</th>
+<th>版本 / 日期</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>00</td>
+<td>来源核验日期</td>
+<td>2026-10-18</td>
+</tr>
+<tr>
+<td>01</td>
+<td>来源核验日期</td>
+<td>2026-10-18</td>
+</tr>
+<tr>
+<td>01a</td>
+<td>核验和运行日期</td>
+<td>2026-10-18</td>
+</tr>
+<tr>
+<td>03</td>
+<td>动态文档核验日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>04</td>
+<td>文档核验日</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>05</td>
+<td>来源核验日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>06</td>
+<td>核验环境 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>06</td>
+<td>访问核验日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>07</td>
+<td>文档核验日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>07a</td>
+<td>复核记录日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>07a</td>
+<td>复核记录 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>07a</td>
+<td>来源核验日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>07a</td>
+<td>运行数值 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08</td>
+<td>运行环境 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08</td>
+<td>来源核验日</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08a</td>
+<td>来源核验日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08a</td>
+<td>访问核验日</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08b</td>
+<td>验证环境 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08c</td>
+<td>实验条件 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08d</td>
+<td>Python</td>
+<td>3.12.14</td>
+</tr>
+<tr>
+<td>08d</td>
+<td>PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08d</td>
+<td>动态链接核验日</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08e</td>
+<td>Python</td>
+<td>3.12.14</td>
+</tr>
+<tr>
+<td>08e</td>
+<td>PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08e</td>
+<td>导入检查 torch</td>
+<td>2.14.1</td>
+</tr>
+<tr>
+<td>08e</td>
+<td>CPU 测试环境 torch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08f</td>
+<td>Python</td>
+<td>3.12.14</td>
+</tr>
+<tr>
+<td>08f</td>
+<td>PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08g</td>
+<td>验证 torch</td>
+<td>2.14.1</td>
+</tr>
+<tr>
+<td>08h</td>
+<td>实测日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08h</td>
+<td>实测 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08i</td>
+<td>实测日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08i</td>
+<td>Python</td>
+<td>3.12.14</td>
+</tr>
+<tr>
+<td>08i</td>
+<td>torch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08j</td>
+<td>实测日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08k</td>
+<td>实测日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08k</td>
+<td>实测 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08l</td>
+<td>实测日期</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08l</td>
+<td>实测 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08m</td>
+<td>已验证环境 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>08m</td>
+<td>跨版本核对截止</td>
+<td>2026-10-19</td>
+</tr>
+<tr>
+<td>08o</td>
+<td>–torch 环境 PyTorch</td>
+<td>2.14.1+cpu</td>
+</tr>
+<tr>
+<td>10</td>
+<td>安装页核对日期</td>
+<td>2026-10-20</td>
+</tr>
+<tr>
+<td>10</td>
+<td>安装选择器核对日期</td>
+<td>2026-10-20</td>
+</tr>
+<tr>
+<td>10</td>
+<td>阅读入口核对日期</td>
+<td>2026-10-20</td>
+</tr>
+</tbody>
+</table></div>
 <hr />
 
     </main>

@@ -244,4 +244,4 @@ python3 -m unittest discover -s tests -v
 - [Attention Is All You Need，v7，§3.1、§3.2.3、§3.4](https://arxiv.org/html/1706.03762v7)：双塔结构、因果约束、目标右移和输出层。
 - [BERT 原始论文，§3](https://arxiv.org/abs/1810.04805)：双向编码器预训练；“双向”不是任何任务都可看未来答案。
 - [Transformers 4.57.1 生成参数文档](https://huggingface.co/docs/transformers/v4.57.1/en/main_classes/text_generation)：temperature、EOS 及长度参数的接口语义；本章不用这个库执行实验。
-- [Transformers 4.57.1 缓存说明](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：理解历史 K/V 复用的概念路标。文档核验日期：2026-10-19。
+- [Transformers 4.57.1 缓存说明](https://huggingface.co/docs/transformers/v4.57.1/en/cache_explanation)：理解历史 K/V 复用的概念路标。文档核验日期见附录 H。

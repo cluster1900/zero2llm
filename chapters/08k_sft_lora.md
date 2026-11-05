@@ -281,7 +281,7 @@ _updates(model, batch, steps=24, lr=0.5)
 
 ### 本次实测
 
-2026-10-19，Python 3.12 / PyTorch 2.14.1+cpu 的一次结果如下。数值为教学夹具记录，不是吞吐 benchmark；其他平台可能有末位浮点差异。
+在 Python 3.12 与附录 H 所列 PyTorch 下的一次结果如下。数值为教学夹具记录，不是吞吐 benchmark；其他平台可能有末位浮点差异。
 
 | 检查项 | 结果 |
 | --- | --- |
