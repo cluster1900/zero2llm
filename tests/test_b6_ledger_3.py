@@ -211,6 +211,22 @@ class B6LedgerMoveGroup3Test(unittest.TestCase):
         self.assertIn("专项测试包含六个**实际执行的数值错误变体**", doc)
         self.assertIn("另执行 SWA 来源与 Markdown 竖线转义两项契约变异", doc)
 
+    def test_08o_p25_11_answers_heading_without_ledger(self):
+        body = (CHAPTERS / "08o_qwen3_case.md").read_text(encoding="utf-8")
+        sec = body[body.index("## P25.11 为什么这次不是让两个错误实现互相作证"):]
+        sec = sec[:sec.index("\n## ", 1)] if "\n## " in sec[1:] else sec
+        self.assertIn("本章的数值结论不靠两份实现互相比对：结构与数值以独立的标量参考为准，另可与官方实现对照，"
+                      "避免两份实现共享同一个错误而一起通过；分层做法与变体清单见 `docs/testing.md`。", sec)
+        self.assertIn("本章的数值对照只验证小型结构和数值路径，不表示已经加载或运行上述真实 checkpoint。", sec)
+        self.assertNotIn("这个交叉检查", body)
+
+    def test_not_rerun_claims_are_dated_and_comment_is_fenced(self):
+        doc = TESTING.read_text(encoding="utf-8")
+        self.assertIn("（上句“本次提供 b5046 后，36 个全部实际通过”为 2026-10-20 记录于 0749bef，B6 未复跑。）", doc)
+        self.assertIn("（上段“独立官方环境 28 项全部通过”为 2026-10-20 记录于 0749bef，B6 未复跑。）", doc)
+        self.assertIn("```bash\n# 分开报告标准库、模板与数值测试；跳过不是通过。\n```", doc)
+        self.assertNotIn("\n\n# 分开报告", doc)
+
     def test_ledger_markers_gone_from_edited_chapters(self):
         for name in MOVED:
             body = (CHAPTERS / name).read_text(encoding="utf-8")
