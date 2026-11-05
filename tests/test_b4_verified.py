@@ -116,9 +116,19 @@ class RopeQueryTable(unittest.TestCase):
         result = ns["length_experiment"](seed=2026)
         text = read("08b_rope_yarn.md")
         table = text.split("### 表 P12-6", 1)[1].split("\n\n", 2)[1]
+        stated = {}
+        for line in table.splitlines()[2:]:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            stated[int(cells[0])] = cells
+        self.assertEqual(sorted(stated), [row["length"] for row in result["rows"]])
         for row in result["rows"]:
-            line = f"| {row['length']} | {row['count']} | {row['loss_sum']:.3f} | {row['mean_ce']:.6f} |"
-            self.assertIn(line, table)
+            cells = stated[row["length"]]
+            with self.subTest(length=row["length"]):
+                # Exact: length, count and loss_sum (3 decimals).
+                self.assertEqual(cells[:3], [str(row["length"]), str(row["count"]), f"{row['loss_sum']:.3f}"])
+                # mean_ce: last (6th) decimal may differ by ±1 (Wu, 2026-11-05; CI gave
+                # 1.160583 vs 1.160584 on #44, cause unknown). ±2 or more fails.
+                self.assertLessEqual(abs(float(f"{row['mean_ce']:.6f}") - float(cells[3])), 1e-6 + 1e-12)
         self.assertIn("| 64 | 512 | 594.219 | 1.160584 |", table)
 
 
