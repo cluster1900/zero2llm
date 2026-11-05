@@ -9290,7 +9290,7 @@ href="https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1">报告
 <p>再向源码走一步：<a
 href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py">固定版
 inference/model.py</a> 中，Attention._compress_kv 由指定 source 层产生
-global latent，其他层读共享缓存；decoder 边界的下标 20 的层是
+global latent，其他层读共享缓存；decoder 边界处下标 20 的层是
 source，之后的 decoder 层复用它。每层的 _window_kv 仍从本层 attention
 输入生成局部状态。真实路径还包括归一化、位置旋转、量化和 residual-stream
 mixing，不能将它们抹去后声称与生产张量逐项相同。</p>
