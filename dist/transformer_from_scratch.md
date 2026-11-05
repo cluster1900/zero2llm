@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-11-05
+% 2026-11-06
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -7040,11 +7040,11 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 
 普通 next-token prediction 在位置 t 的隐藏向量 h_t 上，预测下一个 token x_{t+1}。S6 的教学旁路另外增加独立线性 head，用**同一个 h_t** 预测 x_{t+2}、x_{t+3}……。
 
-设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon h：
+设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon j：
 
 $$
 z_t^{(1)}=W_1h_t,\qquad
-z_t^{(h)}=W_hh_t\quad(h=2,\ldots,D+1).
+z_t^{(j)}=W_jh_t\quad(j=2,\ldots,D+1).
 $$
 
 主 head 是 S5 原来的 head，不是再复制一个。h_t 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 h_t。
@@ -7055,9 +7055,9 @@ $$
 
 | 隐藏位置的输入 token | 1 | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- | --- |
-| 主 head：h=1 | 2 | 3 | 4 | 5 | 忽略 |
-| 旁路下标 0 的 head：h=2 | 3 | 4 | 5 | 忽略 | 忽略 |
-| 旁路下标 1 的 head：h=3 | 4 | 5 | 忽略 | 忽略 | 忽略 |
+| 主 head：j=1 | 2 | 3 | 4 | 5 | 忽略 |
+| 旁路下标 0 的 head：j=2 | 3 | 4 | 5 | 忽略 | 忽略 |
+| 旁路下标 1 的 head：j=3 | 4 | 5 | 忽略 | 忽略 | 忽略 |
 
 最后几格不是“答案是 0”，而是窗口里已经没有对应标签。实现使用 `-100` 表示**不计损失**。不要 `roll` 后忘记遮住尾部，否则最后一个位置会被要求预测窗口开头，制造不存在的循环文本。
 
@@ -7081,19 +7081,19 @@ S6 没有实现那条串行结构，也没有复现其权重共享、训练规�
 
 ## P23.5 损失：先算哪些格，再决定怎么平均
 
-对 horizon h 的有效位置集合 M_h，本章定义：
+对 horizon j 的有效位置集合 M_j，本章定义：
 
 $$
-L_h=-\frac{1}{|M_h|}\sum_{(b,t)\in M_h}
-\log\operatorname{softmax}(z_{b,t}^{(h)})[x_{b,t+h}].
+L_j=-\frac{1}{|M_j|}\sum_{(b,t)\in M_j}
+\log\operatorname{softmax}(z_{b,t}^{(j)})[x_{b,t+j}].
 $$
 
-若 M_h 为空，令 L_h=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。
+若 M_j 为空，令 L_j=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。
 
 S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 D 个额外 head 的损失取平均：
 
 $$
-L=L_1+\frac{\lambda}{D}\sum_{h=2}^{D+1}L_h+L_{MoE}\quad(D>0).
+L=L_1+\frac{\lambda}{D}\sum_{j=2}^{D+1}L_j+L_{MoE}\quad(D>0).
 $$
 
 D=0 时省略中间项；L_MoE 是 S5 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon 没有标签时，其 CE 为零，但**整项训练损失未必为零**，因为 MoE 辅助项可能仍存在。把所有 horizon 的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。
@@ -7113,9 +7113,9 @@ $$
 
 `future_labels` 接受三个可选输入，形状都是 [B,T]：
 
-- `valid`：这个 token 是否真实存在，而不是 padding。跨度 t 到 t+h 中的**每个位置**都必须有效。
+- `valid`：这个 token 是否真实存在，而不是 padding。跨度 t 到 t+j 中的**每个位置**都必须有效。
 - `segments`：文档段编号。跨度中所有位置必须属于同一段，不能跨边界预测；即使编号后来又重复，也不能跳过中间另一段。
-- `supervise`：哪些目标位置应计入损失，例如只监督 assistant token。检查的是 t+h，**不是 t**。最后一个 prompt token 预测第一个 assistant token 正是合法监督。
+- `supervise`：哪些目标位置应计入损失，例如只监督 assistant token。检查的是 t+j，**不是 t**。最后一个 prompt token 预测第一个 assistant token 正是合法监督。
 
 重要边界：这些是**标签 mask，不是 attention mask**。S5 的主干仍是普通因果注意力；给两篇文档编号不会自动禁止后一篇读取前一篇。需要隔离上下文时，本示例用不同样本行，不声称实现了 packed block-diagonal attention。教学 MoE 的负载辅助项也没有改成只统计有效标签，所以应使用无 padding 的等长小样本，或单独定义并验证完整的 padding 处理。
 
@@ -7282,8 +7282,6 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
-读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
-
 ## P23.13 延伸阅读：更便宜的草稿
 
 P23.7 的验收规则不关心草稿从哪来：只要每轮都由目标模型贪心验收，输出就等于普通贪心。所以草稿可以换成更便宜或更准的方法，例如一次并行写出整块草稿的 [DFlash，arXiv:2602.06036](https://arxiv.org/abs/2602.06036)、按逐位置置信度截断草稿的 [DSpark，arXiv:2607.05147](https://arxiv.org/abs/2607.05147)，以及沿预测距离递归、复用主干最后一层的 [ECHO，arXiv:2610.24766](https://arxiv.org/abs/2610.24766)。
@@ -7308,6 +7306,10 @@ batch 小时解码受内存带宽限制，多验证几个草稿位置几乎不�
 - [DeepSeek-V3 Technical Report，arXiv:2412.19437v2](https://arxiv.org/html/2412.19437v2)：§2.2，串行 MTP 模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。
 - [Fast Inference from Transformers via Speculative Decoding，arXiv:2211.17192v2](https://arxiv.org/html/2211.17192v2)：§2 与附录 A，草稿验证和随机采样校正的原始依据。本章实现仅为贪心。
 - [DeepSeek-V4.1-Flash，arXiv:2609.19969v1](https://arxiv.org/html/2609.19969v1)：§2.4.3，仅用于核对 DSpark 与 V3 MTP 的差异；不把不同版本的训练方案拼接成一个实现。
+
+## 本章小结
+
+读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
 
 
 ---
@@ -7747,8 +7749,6 @@ P24_LLAMA_BIN=/tmp/p24-engine/build/bin \
 6. TTFT≈0.2 秒，TPOT≈0.2 秒。SSE 块不一定一块一个 token，缺少逐 token 观测时不能这样命名。
 7. 不应；这是不完整响应。length 表示生成因预算被截断，不证明内容已经自然写完。
 
-你现在得到的不是一个“装上就万能”的工具名单，而是一条可检查的链：**数值规则 → 格式与架构 → 设备内核 → 服务边界 → 同条件评估**。后面读真实模型配置时，继续沿这条链检查，不要让模型名替代证据。
-
 ## P24.13 延伸阅读：混合位宽 GGUF
 
 P24.7 说过 GGUF 只是容器，同一个文件里不同张量可以用不同量化类型。常见做法是给对量化更敏感的张量多分几个 bit；哪些张量敏感，要靠困惑度或任务评估来定。
@@ -7760,6 +7760,10 @@ P24.7 说过 GGUF 只是容器，同一个文件里不同张量可以用不同�
 ## P24.15 延伸阅读：FP4 块缩放 {#p24.15-fp4-block}
 
 FP4 块格式让每一小块元素共享一个 scale，块越小，异常值影响的范围越小：MXFP4 每 32 个元素共享一个 E8M0 scale（[MX 格式论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537) Table 1），NVFP4 每 16 个元素共享一个 FP8 E4M3 scale（[Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)）。
+
+## 本章小结
+
+你现在得到的不是一个“装上就万能”的工具名单，而是一条可检查的链：**数值规则 → 格式与架构 → 设备内核 → 服务边界 → 同条件评估**。后面读真实模型配置时，继续沿这条链检查，不要让模型名替代证据。
 
 
 ---
@@ -7995,7 +7999,7 @@ False 比 True 多加的后缀（空行有意义）：
 
 两份快照的 added-token 元数据都给出 `<think>` 为 ID 151667、`</think>` 为 151668；它们的 `special` 标记是 false。带尖括号的保留文本，不一定就被 tokenizer 标成“special”；`skip_special_tokens` 不能代替明确的 reasoning 解析。
 
-另一个容易混淆的字段是 BOS：模型配置含 `bos_token_id=151643`，但 tokenizer 配置的 `bos_token` 为 null、`add_bos_token=false`。不能看见前者就手工往每段对话前重复加 BOS。具体输入应遵循所选 tokenizer 与模板的处理规则。[固定 tokenizer 配置](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json)
+另一个容易混淆的字段是 BOS：模型配置含 `bos_token_id=151643`（固定 tokenizer 配置中这个 ID 就是 `<|endoftext|>`），但 tokenizer 配置的 `bos_token` 为 null、`add_bos_token=false`。不能看见前者就手工往每段对话前重复加 BOS。具体输入应遵循所选 tokenizer 与模板的处理规则。[固定 tokenizer 配置](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/tokenizer_config.json)
 
 完整模板还包含历史 assistant、工具调用等分支；本章只测试单轮文本路径，不假装单轮测试已经覆盖所有工具／多轮语义。
 
@@ -8022,7 +8026,7 @@ False 比 True 多加的后缀（空行有意义）：
 
 此外还有上下文预算：`prompt token 数 + max_new_tokens` 不能超过选用的运行限额。模板中的角色边界、空 thinking 块、历史消息也属于 prompt；字符数不能代替 token 数。`context_budget(12,8,20)` 正好用完 20，`context_budget(12,9,20)` 必须拒绝。
 
-最后，**配置长度不等于能力保证**。两个 config 的 `max_position_embeddings` 都是 40960；对应模型卡描述的原生上下文是 32768。30B-A3B 的卡另外说明借助 YaRN 达到 131072，并解释 40960 默认值的预算安排。两个快照的 tokenizer_config.json 里 `model_max_length` 是 131072，这是 tokenizer 截断和长度警告用的上限，不是模型配置，也不证明模型能处理这么长。本地快照的 `rope_scaling=null`，本章没有启用或验证 YaRN，更不能从 40960 的字段宣布 131072 已经可用。[30B-A3B 长文本说明](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md#processing-long-texts)
+最后，**配置长度不等于能力保证**。两个 config 的 `max_position_embeddings` 都是 40960；对应模型卡描述的原生上下文是 32768，两者相差 40960 − 32768 = 8192。30B-A3B 的卡另外说明借助 YaRN 达到 131072，并解释 40960 默认值的预算安排。两个快照的 tokenizer_config.json 里 `model_max_length` 是 131072，这是 tokenizer 截断和长度警告用的上限，不是模型配置，也不证明模型能处理这么长。本地快照的 `rope_scaling=null`，本章没有启用或验证 YaRN，更不能从 40960 的字段宣布 131072 已经可用。[30B-A3B 长文本说明](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md#processing-long-texts)
 
 本章保存的 generation config 声明采样、temperature=0.6、top-p=0.95、top-k=20。官方卡对 non-thinking 推荐的是另一组采样设置；模板开关本身不会自动重写所有生成参数。不要把上一章用于严格对照的教学贪心解码直接包装成这里的推荐生产配置。
 
@@ -8094,11 +8098,13 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 9. **把五个 token 分成 1、2、2 三块，缓存长度该是什么？** 依次为 1、3、5；最终 logits 要与独立完整前缀一致，微型 float64 K/V 共 1280 字节。见 `test_arbitrary_chunks_match_independent_full_prefix_and_cache_bytes`。
 10. **微型参数表只是公式吗？** 不是，还核对了实际模块的每个参数名字、形状和唯一总数：dense 1536，MoE 2312。见 `test_exercise_tiny_actual_named_shapes_and_unique_counts`。
 
-读完本章，应能把“Qwen3 用了 GQA 和 MoE”改写为更有信息量的句子：**这份完整 revision 的 dense／MoE checkpoint，按这些配置和实现证据使用了这些组件；我们只在这个小型、可复算的范围内验证过它们。** 这也是阅读下一个模型案例时应保留的习惯。
-
 ## P25.14 延伸阅读：读其他模型的配置 {#p25.14-config-compare}
 
 读其他模型时，可以照本章的方法逐字段对照官方配置或报告，例如[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)的 Table 1。
+
+## 本章小结
+
+读完本章，应能把“Qwen3 用了 GQA 和 MoE”改写为更有信息量的句子：**这份完整 revision 的 dense／MoE checkpoint，按这些配置和实现证据使用了这些组件；我们只在这个小型、可复算的范围内验证过它们。** 这也是阅读下一个模型案例时应保留的习惯。
 
 
 ---
