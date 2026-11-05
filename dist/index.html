@@ -9290,8 +9290,8 @@ inference/config.json</a> 使用
 n_layers=40、window_size=128；kv_source_layers 为 [2,8,14,20]，索引从 0
 开始。</li>
 <li>主干前两层只有 SWA；随后 18 个 encoder 层的压缩比是 2，20 个 decoder
-层的压缩比是 1（报告 §2.3：每 m 个 token 压缩成一条 main KV，m=1
-即不压缩）。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。<a
+层的压缩比是 1（报告 §2.3：压缩比为 1 即不压缩的 main
+KV）。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。<a
 href="https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1">报告
 §4.2.1</a></li>
 </ul>

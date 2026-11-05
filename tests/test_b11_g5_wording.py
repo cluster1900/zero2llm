@@ -28,7 +28,7 @@ G5R = [
 ('chapters/08e_attention_systems.md','此固定源码链接用于接口背景，不是安装建议。','“调用了 SDPA”本身不能证明走了期望后端。[PyTorch 固定源码 v2.5.1：SDPA 后端选择接口](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)\n\n本章另检查了'),
 ('chapters/08e_attention_systems.md','这是选修实验的记录清单','要做真正的性能对比，需要另外安排可复现基准：固定模型 revision、dtype 和工作负载（长度分布、到达方式、并发、前缀命中率），预热后重复多轮并正确同步计时；同时报 TTFT、TPOT、E2E、输出吞吐和失败请求，分项记录显存，并用 profiler 核验实际后端。'),
 ('chapters/08f_sparse_linear_attention.md','或者把线性层与普通注意力层交替。','或者让线性层与普通注意力层按比例混合。'),
-('chapters/08g_ced_architecture.md','20 个 decoder 层的压缩比是 1。配置','20 个 decoder 层的压缩比是 1（报告 §2.3：每 m 个 token 压缩成一条 main KV，m=1 即不压缩）。'),
+('chapters/08g_ced_architecture.md','20 个 decoder 层的压缩比是 1。配置','20 个 decoder 层的压缩比是 1（报告 §2.3：压缩比为 1 即不压缩的 main KV）。'),
 ('chapters/08g_ced_architecture.md','本章核验了技术报告 v1（核验日期见附录 H），以及官方 Hugging Face 仓库的固定 revision','核验所用的报告版本与仓库固定 revision 见本章末「资料与实现边界」。\n'),
 ('chapters/08g_ced_architecture.md','`tensor[:, -0:]` 会意外保留全部历史','缓存是调用者持有的快照，新请求传 None；增量调用不覆盖旧快照，改权重、换配置或换模型后旧缓存会被拒绝。'),
 ('chapters/08g_ced_architecture.md','mHC、Engram','、RMSNorm、FFN、量化、视觉输入、其他生产组件与 GPU kernel。'),
@@ -55,6 +55,9 @@ class B11G5Wording(unittest.TestCase):
         self.assertNotIn("test_rotation_matches", (ROOT / "chapters/08b_rope_yarn.md").read_text(encoding="utf-8"))
         self.assertNotIn("log2", (ROOT / "chapters/08h_moe.md").read_text(encoding="utf-8"))
         self.assertNotIn("assign=True", (ROOT / "chapters/08a_kv_cache.md").read_text(encoding="utf-8"))
+        g = (ROOT / "chapters/08g_ced_architecture.md").read_text(encoding="utf-8")
+        self.assertEqual(g.count("每 m 个 token 压缩成一条 main KV"), 0)
+        self.assertEqual(g.count("（报告 §2.3：压缩比为 1 即不压缩的 main KV）"), 1)
 
     def test_08h_answers_no_test_names(self):
         body = (ROOT / "chapters/08h_moe.md").read_text(encoding="utf-8")

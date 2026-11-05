@@ -4797,7 +4797,7 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 - [固定版 config.json](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/config.json) 的 text_config 中，num_hidden_layers=40，sliding_window=128。
 - [固定版 inference/config.json](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/config.json) 使用 n_layers=40、window_size=128；kv_source_layers 为 [2,8,14,20]，索引从 0 开始。
-- 主干前两层只有 SWA；随后 18 个 encoder 层的压缩比是 2，20 个 decoder 层的压缩比是 1（报告 §2.3：每 m 个 token 压缩成一条 main KV，m=1 即不压缩）。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。[报告 §4.2.1](https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1)
+- 主干前两层只有 SWA；随后 18 个 encoder 层的压缩比是 2，20 个 decoder 层的压缩比是 1（报告 §2.3：压缩比为 1 即不压缩的 main KV）。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。[报告 §4.2.1](https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1)
 
 再向源码走一步：[固定版 inference/model.py](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py) 中，Attention._compress_kv 由指定 source 层产生 global latent，其他层读共享缓存；decoder 边界处下标 20 的层是 source，之后的 decoder 层复用它。每层的 _window_kv 仍从本层 attention 输入生成局部状态。真实路径还包括归一化、位置旋转、量化和 residual-stream mixing，不能将它们抹去后声称与生产张量逐项相同。
 
