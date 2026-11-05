@@ -6412,6 +6412,11 @@ S0：词表大小、主干宽度、头数、层数、允许的最大输入长度
 <code>RopeConfig(17,16,4,2,64)</code> 表示 17 个 token、宽度 16、4
 个头、2 层、最多 64 个位置。每头宽度 d=4。</p>
 <div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>步骤</th>
@@ -6453,7 +6458,7 @@ S0：词表大小、主干宽度、头数、层数、允许的最大输入长度
 <tr>
 <td>logits</td>
 <td>[2,12,17]</td>
-<td>各 Block 后接归一化和词表分类头</td>
+<td>最后一个 Block 之后做一次 <code>ln_f</code>，再接词表分类头</td>
 </tr>
 </tbody>
 </table></div>
@@ -7343,8 +7348,10 @@ cache。配置、Norm 的 ε 或 GELU 近似模式变化也需要重置。手工
 </ol>
 <p>参考答案：</p>
 <ol type="1">
-<li>LN 在两个输入上都减去各自均值，得到同样的
-<code>[-1,1]</code>；RMSNorm 不居中，均方从 5 变 17，分子也改变。</li>
+<li>LN 在两个输入上都减去各自均值，分子都是
+<code>[-1,1]</code>，方差也都为 1，所以输出同为
+<code>[-0.816497,0.816497]</code>；RMSNorm 不居中，均方从 5 变
+17，分子也改变。</li>
 <li>溢出在平方那一步已经发生，随后升精度只能保留无穷；必须先转换再平方。</li>
 <li>不违反。SiLU 门不是概率，可以大于 1、为负；sigmoid 本身才在 0 与 1
 之间。</li>
