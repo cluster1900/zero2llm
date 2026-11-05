@@ -161,7 +161,7 @@ $$\Delta=x_{\mathrm{new}}-x_{\mathrm{old}},\qquad r=\Delta/x_{\mathrm{old}}.$$
 
 **第二步，锁定原始字节。** 仓库 `code/data/qwen3/manifest.json` 保存获取日期、URL、长度和 SHA-256。本配置为 **726 字节**，SHA-256 为 `660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd`。哈希证明当前文件与已记录字节相同，不证明来源自己没有错误。
 
-**第三步，做差异审查。** 文件写的是 hidden_size=1024、num_attention_heads=16、head_dim=128。1024/16=64，与显式 128 不同；投影宽度是 $16\times128=2048$，不能擅自改成 1024。新 revision 即使文件长度不变也可能改字段，必须同时检查 hash 和语义 diff，不能只看文件大小。
+**第三步，做差异审查。** 文件写的是 hidden_size=1024、num_attention_heads=16、head_dim=128。1024/16=64，与显式 128 不同；Q 投影宽度是 $16\times128=2048$（K/V 各为 $8\times128=1024$），不能擅自把 Q 投影改成 1024。新 revision 即使文件长度不变也可能改字段，必须同时检查 hash 和语义 diff，不能只看文件大小。
 
 **第四步，小实验验证。** 在仓库根目录运行：
 
