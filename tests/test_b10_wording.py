@@ -54,6 +54,17 @@ class TestB10Wording(unittest.TestCase):
     def test_svg_residual_labels(self):
         self.assertEqual(read("assets/diagrams/transformer_block.svg").count("(+1 梯度残差直通)"), 2)
 
+    def test_svg_subtitle_no_lossless(self):
+        svg = read("assets/diagrams/transformer_block.svg")
+        self.assertEqual(svg.count("无损"), 0)
+        self.assertEqual(svg.count("保持信号无损直通深层网络"), 0)
+        self.assertEqual(svg.count("信号经残差直通深层网络"), 1)
+
+    def test_testing_md_08k_sync(self):
+        doc = read("docs/testing.md")
+        self.assertEqual(doc.count("代码测试会发现：这些忽略目标对应的 logits"), 0)
+        self.assertEqual(doc.count("代码测试会发现：预测被忽略 token 的那组 logits"), 1)
+
     def test_08c_head_symbol_guard(self):
         self.assertIsNone(re.search(r"(?<![\w_])H=4(?!D)", read("chapters/08c_modern_block.md")))
 

@@ -29,7 +29,7 @@
 
   <!-- Title -->
   <text x="375" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="bold" fill="#f8fafc" text-anchor="middle">图 6-1：现代 Pre-LN Transformer Block 积木架构全貌</text>
-  <text x="375" y="65" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">绿色为残差信息高速公路（抄近道），保持信号无损直通深层网络</text>
+  <text x="375" y="65" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">绿色为残差信息高速公路（抄近道），信号经残差直通深层网络</text>
 
   <!-- Input Node -->
   <g transform="translate(265, 85)">

@@ -108,7 +108,7 @@ MOVED_B2 = {
  ],
  "08k_sft_lora.md": [
   "测试还使用手写的完整标签序列对照，避免实现与测试都照抄同一个错误 span。",
-  "代码测试会发现：这些忽略目标对应的 logits 没有直接 loss 梯度，但 user 字符的 embedding 仍可能通过注意力影响 assistant 预测，因此收到梯度。"
+  "代码测试会发现：预测被忽略 token 的那组 logits 没有直接 loss 梯度，但 user 字符的 embedding 仍可能通过注意力影响 assistant 预测，因此收到梯度。"
  ],
  "09a_minigpt_healthcheck.md": [
   "测试还把同样形状的模型改为 float64，逐个确认缓存张量每元素 8 字节：MHA 为 8192 字节，GQA 为 4096 字节。若把元素大小写死为 4，这个独立 dtype 对照会失败。",
