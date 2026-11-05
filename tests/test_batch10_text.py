@@ -784,9 +784,10 @@ class FinalBatchTextTests(unittest.TestCase):
                 self.assertEqual(bool(_p25_wrong_claim_segments(inject(s))), n <= 8)
 
     def test_neutral_completion_not_review_or_production_claim(self):
-        for path in ("README.md", "docs/expansion-outline.md"):
+        for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):
             body = (ROOT / path).read_text(encoding="utf-8")
-            self.assertIn("已实现", body)
+            if path != "chapters/00_preface.md":
+                self.assertIn("已实现", body)
             self.assertNotIn("P27–P28 尚未", body)
             self.assertNotIn("P28 新附录仍按批次推进", body)
             for stale in (

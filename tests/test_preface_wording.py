@@ -25,7 +25,8 @@ class PrefaceWordingTests(unittest.TestCase):
         chapters = PREFACE.parent
         rows = re.findall(r"^\| (P\d\d) \| (\S+\.md) \| (.+?) \|$", PREFACE.read_text(encoding="utf-8"), re.M)
         self.assertEqual([r[0] for r in rows], [f"P{i:02d}" for i in range(29)])
-        self.assertEqual(sorted(r[1] for r in rows), sorted(p.name for p in chapters.glob("*.md")))
+        # 有序比较：表的行序 = 文件名排序 = P00–P28 阅读顺序，交换两行文件也会失败。
+        self.assertEqual([r[1] for r in rows], sorted(p.name for p in chapters.glob("*.md")))
         for pnum, name, title in rows:
             with self.subTest(pnum=pnum, file=name):
                 path = chapters / name
