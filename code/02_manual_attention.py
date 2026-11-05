@@ -63,7 +63,7 @@ def main():
     print("  V (Value) : 如果别人认可我，我能贡献给他的核心思想是什么？\n")
 
     # 下面三个 2×2 矩阵是事先写好的例子，不是训练出来的。
-    # 代码把词向量竖着放。新向量的第 i 个数 = 矩阵第 i 行 · 词向量。
+    # 代码把词向量竖着放。新向量下标 i 的数 = 矩阵下标 i 的行 · 词向量。
     # 以“我”=[1.0, 0.5] 和 W_Q 为例，可以在草稿纸上核对：
     #   Q0 = 0.5*1.0 + 0.2*0.5 = 0.6
     #   Q1 = 0.1*1.0 + 0.8*0.5 = 0.5
@@ -105,7 +105,7 @@ def main():
     for i in range(len(words)):
         row_scores = []
         for j in range(len(words)):
-            # 点积计算：Q 的第 i 个向量与 K 的第 j 个向量做点积
+            # 点积计算：Q 下标 i 的向量与 K 下标 j 的向量做点积
             dot = dot_product(Q[i], K[j])
             scaled = dot / scale_factor
             row_scores.append(scaled)

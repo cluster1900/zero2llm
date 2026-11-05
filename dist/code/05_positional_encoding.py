@@ -16,7 +16,7 @@ def generate_positional_encoding(max_seq_len, d_model):
     """返回 CPU float32 [max_seq_len, d_model]，位置从 0 开始。
 
     max_seq_len 是非负整数，d_model 是正整数（不接受 bool）。
-    i 是第几对维度，不是已经乘过 2 的列号：
+    i 是维度对的下标，不是已经乘过 2 的列号：
       PE(pos, 2i)   = sin(pos / 10000 ** (2i / d_model))
       PE(pos, 2i+1) = cos(pos / 10000 ** (2i / d_model))
     d_model=5 时填充 (0,1)、(2,3)、最后的第 4 列 sine。
@@ -30,7 +30,7 @@ def generate_positional_encoding(max_seq_len, d_model):
 
     pe = torch.zeros(max_seq_len, d_model, dtype=torch.float32, device='cpu')
     for pos in range(max_seq_len):
-        # 向上取整，奇数宽度的最后一列也要填；k 是“第几对”。
+        # 向上取整，奇数宽度的最后一列也要填；k 是维度对的下标（从 0 起）。
         for k in range((d_model + 1) // 2):
             div_term = math.pow(10000.0, (2 * k) / d_model)
             pe[pos, 2 * k] = math.sin(pos / div_term)
@@ -59,7 +59,7 @@ def ascii_visualize(pe_matrix):
 
 
 def position_cosines(pe_matrix):
-    """本章表格：第 0 行与各行的 cosine；输入须为非零行的二维矩阵。"""
+    """本章表格：下标 0 的行与各行的 cosine；输入须为非零行的二维矩阵。"""
     if pe_matrix.ndim != 2 or pe_matrix.shape[0] == 0:
         raise ValueError('expected a nonempty [positions, dimensions] matrix')
     norms = torch.linalg.vector_norm(pe_matrix, dim=-1)
@@ -98,7 +98,7 @@ def length_example():
     """只检查能否取到编码，不把成功前向当成长度泛化。"""
     table = nn.Embedding(8, 8)
     try:
-        table(torch.tensor([8]))  # 表只有第 0 到第 7 行。
+        table(torch.tensor([8]))  # 表只有下标 0 到 7 的行。
     except IndexError:
         table_rejects_position_8 = True
     else:

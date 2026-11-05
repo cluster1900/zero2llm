@@ -117,12 +117,12 @@ z = torch.arange(24).reshape(1, 3, 8)
 split = z.reshape(1, 3, 2, 4)
 heads = split.transpose(1, 2)
 
-print(heads[0, 0])  # 第 0 条序列，第 0 个头
+print(heads[0, 0])  # 下标 0 的序列，下标 0 的头
 # tensor([[ 0,  1,  2,  3],
 #         [ 8,  9, 10, 11],
 #         [16, 17, 18, 19]])
 
-print(heads[0, 1])  # 同一条序列，第 1 个头
+print(heads[0, 1])  # 同一条序列，下标 1 的头
 # tensor([[ 4,  5,  6,  7],
 #         [12, 13, 14, 15],
 #         [20, 21, 22, 23]])

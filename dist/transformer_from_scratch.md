@@ -1140,12 +1140,12 @@ z = torch.arange(24).reshape(1, 3, 8)
 split = z.reshape(1, 3, 2, 4)
 heads = split.transpose(1, 2)
 
-print(heads[0, 0])  # 第 0 条序列，第 0 个头
+print(heads[0, 0])  # 下标 0 的序列，下标 0 的头
 # tensor([[ 0,  1,  2,  3],
 #         [ 8,  9, 10, 11],
 #         [16, 17, 18, 19]])
 
-print(heads[0, 1])  # 同一条序列，第 1 个头
+print(heads[0, 1])  # 同一条序列，下标 1 的头
 # tensor([[ 4,  5,  6,  7],
 #         [12, 13, 14, 15],
 #         [20, 21, 22, 23]])
@@ -1653,7 +1653,7 @@ Add=(1, 2, 4)；Concat=(1, 2, 8)
 ```python
 pe = torch.zeros(max_seq_len, d_model, dtype=torch.float32, device='cpu')
 for pos in range(max_seq_len):
-    # 向上取整，奇数宽度的最后一列也要填；k 是“第几对”。
+    # 向上取整，奇数宽度的最后一列也要填；k 是维度对的下标（从 0 起）。
     for k in range((d_model + 1) // 2):
         div_term = math.pow(10000.0, (2 * k) / d_model)
         pe[pos, 2 * k] = math.sin(pos / div_term)
@@ -1663,7 +1663,7 @@ for pos in range(max_seq_len):
 
 逐行核对：
 
-- 外层遍历位置 0 到 $T-1$，内层遍历“第几对”。`2*k` 已经是偶数列索引，不要在指数里再多乘一次 2。
+- 外层遍历位置 0 到 $T-1$，内层遍历维度对的下标 k。`2*k` 已经是偶数列索引，不要在指数里再多乘一次 2。
 - `(d_model + 1) // 2` 向上取整。$D=5$ 时需要三次循环，最后一次填 d4 的 sine；若写 `d_model // 2`，d4 会被错误地留成零。
 - `if` 只决定有没有合法的 cosine 列，不应把最后一个 sine 也跳过。
 - 支持空序列 $[0,D]$；拒绝负长度、非正宽度，以及浮点数或布尔值维度。这是教学函数的明确契约。
