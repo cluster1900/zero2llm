@@ -41,10 +41,11 @@ class Batch9TextTests(unittest.TestCase):
         self.assertIn("29 个章节文件", readme)
         self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
-        self.assertIn("第九批验证", readme)
+        self.assertIn("[P24–P26 验证记录](docs/batch9-validation.md)", readme)
         for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):
             body = (ROOT / path).read_text()
-            if path != "chapters/00_preface.md":
+            if path == "docs/expansion-outline.md":
+                # README 的完成度改由 test_batch10_text 按目录表推导核对；前言不写台账。
                 self.assertIn("已实现", body)
             self.assertNotIn("P24–P26 本分支", body)
             self.assertNotIn("本分支继续撰写 P24–P26", body)

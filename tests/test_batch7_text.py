@@ -44,7 +44,7 @@ class Batch7TextTests(unittest.TestCase):
         self.assertIn("29 个章节文件", readme)
         self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
-        self.assertIn("第七批验证", readme)
+        self.assertIn("[P18–P20 验证记录](docs/batch7-validation.md)", readme)
         self.assertTrue((ROOT / "requirements-frameworks.txt").is_file())
         chapter = (ROOT / "chapters/08j_training_frameworks.md").read_text()
         for name in ("Transformers", "TRL", "DeepSpeed", "Megatron"):

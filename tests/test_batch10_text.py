@@ -299,7 +299,7 @@ class FinalBatchTextTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         canonical_scripts = set(re.findall(r"\]\((code/[0-9][0-9]_[^)]+\.py)\)", readme))
         self.assertEqual(len(canonical_scripts), 28)
-        for marker in ("29 个章节文件", "28 个配套代码实验", "P27–P28", "第十批验证"):
+        for marker in ("29 个章节文件", "28 个配套代码实验", "P27–P28", "[P27–P28 验证记录](docs/batch10-validation.md)"):
             self.assertIn(marker, readme)
         for link in re.findall(r"\]\(((?:chapters|code|docs)/[^)#]+)(?:#[^)]*)?\)", readme):
             self.assertTrue((ROOT / link).is_file(), link)
@@ -786,7 +786,7 @@ class FinalBatchTextTests(unittest.TestCase):
     def test_neutral_completion_not_review_or_production_claim(self):
         for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):
             body = (ROOT / path).read_text(encoding="utf-8")
-            if path != "chapters/00_preface.md":
+            if path == "docs/expansion-outline.md":
                 self.assertIn("已实现", body)
             self.assertNotIn("P27–P28 尚未", body)
             self.assertNotIn("P28 新附录仍按批次推进", body)
@@ -797,8 +797,22 @@ class FinalBatchTextTests(unittest.TestCase):
                 "每批审核后才继续",
             ):
                 self.assertNotIn(stale, body)
-        for path in ("README.md",):
-            self.assertIn("原大纲 29 个单元的内容已实现", (ROOT / path).read_text(encoding="utf-8"))
+        # README 的完成度说法从目录表推导：章节行数 = 章节文件数，配有 code/ 链接的行数写进正文。
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        rows = [line for line in readme.splitlines() if line.startswith("| [**")]
+        chapter_files = sorted(p.name for p in (ROOT / "chapters").glob("*.md"))
+        self.assertEqual(
+            [re.search(r"\]\(chapters/([^)#]+)\)", row).group(1) for row in rows], chapter_files
+        )
+        with_code = [row for row in rows if "](code/" in row.rstrip(" |").rsplit("|", 1)[-1]]
+        scripts = set(re.findall(r"\]\((code/[0-9][0-9]_[^)]+\.py)\)", "\n".join(rows)))
+        self.assertEqual(len(scripts), len(list((ROOT / "code").glob("[0-9][0-9]_*.py"))))
+        self.assertIn(
+            f"全书共 {len(rows)} 个章节文件（含前言、第 1A 章与附录），其中 {len(with_code)} 章"
+            f"在下方目录表里配有可运行的代码实验，合计 {len(scripts)} 个编号示例脚本",
+            readme,
+        )
+        self.assertNotIn("全部 29 个单元的正文与配套实验均已实现", readme)
         self.assertNotIn("本次 PR", (ROOT / "chapters/09a_minigpt_healthcheck.md").read_text(encoding="utf-8"))
         self.assertIn("不等于所有生产技术", (ROOT / "README.md").read_text(encoding="utf-8"))
 

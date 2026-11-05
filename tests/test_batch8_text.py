@@ -52,7 +52,7 @@ class Batch8TextTests(unittest.TestCase):
         self.assertIn("29 个章节文件", readme)
         self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
-        self.assertIn("第八批验证", readme)
+        self.assertIn("[P21–P23 验证记录](docs/batch8-validation.md)", readme)
         for name, _, _ in LESSONS:
             body = (ROOT / "chapters" / name).read_text()
             self.assertNotIn(r"\(", body)

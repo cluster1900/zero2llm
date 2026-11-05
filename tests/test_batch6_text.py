@@ -45,7 +45,7 @@ class Batch6TextTests(unittest.TestCase):
         self.assertIn("29 个章节文件", readme)
         self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
-        self.assertIn("第六批验证", readme)
+        self.assertIn("[P15–P17 验证记录](docs/batch6-validation.md)", readme)
         self.assertNotIn("固定 query 投影。 原始论文", (ROOT / "chapters/08d_grouped_kv_mla.md").read_text())
         record = (ROOT / "docs/batch5-validation.md").read_text()
         self.assertIn("35/44", record)
