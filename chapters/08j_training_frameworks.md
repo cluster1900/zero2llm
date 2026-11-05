@@ -109,7 +109,7 @@ $$
 
 固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计**未 shift 的 labels 中非 -100 的数量**，作为 num_items_in_batch 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。
 
-这不是说所有版本、所有模型都有同一个问题，而是本章用的组合需要明确约定。这里把首位本就不会被预测的标签也设为 -100，让框架计数和实际目标对齐。对应实现可核对 [4.51.3 Trainer 的 get_batch_samples 与 compute_loss 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)。测试故意恢复首位 BOS，要求独立更新对照报错，而不是只接受一个仍然下降的 loss。
+这不是说所有版本、所有模型都有同一个问题，而是本章用的组合需要明确约定。这里把首位本就不会被预测的标签也设为 -100，让框架计数和实际目标对齐。对应实现可核对 [4.51.3 Trainer 的 get_batch_samples 与 compute_loss 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)。
 
 **因此，loss 在下降不够，程序退出码是 0 也不够。先对齐目标、分母和梯度，再谈训练结果。** 改到其他版本、加入 packing、梯度累积或多卡时，要重新检查有效 token 计数，不能把本例补丁无条件推广。
 
@@ -156,7 +156,9 @@ python code/21_training_frameworks.py
 python -m unittest discover -s tests -p 'test_training_frameworks.py' -v
 ```
 
-第二条会执行标准库测试；若可选包缺失或版本不在本章验证组合中，HF 测试会明确显示 skipped。**跳过不等于 HF 通过。** 脚本默认也明确打印 HF smoke: NOT RUN，必须加 --hf 才会真正训练。
+第二条会执行标准库测试；若可选包缺失或版本不在本章验证组合中，HF 测试会明确显示 skipped。脚本默认也明确打印 HF smoke: NOT RUN，必须加 --hf 才会真正训练。
+
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 需要框架实验时，另建环境，避免为了本章升级全书原有依赖。例如在支持该 CPU wheel 的 Linux / Python 3.12 环境中：
 
@@ -244,7 +246,7 @@ P=10、D=4 不能整除。我们的教学分配不加 padding，前两个 rank �
 
 单位全部是 bytes。最大的 rank 分片应使用 ceil(P/D)=3，而不是 floor(P/D)=2。若用浮点 2.5 个参数来估算最满的 rank，会低估；若每个 rank 都实际分配 3 个槽位，则又是含 padding 的另一种账本，集群合计不能仍写 10 个槽位。
 
-脚本用 divmod 得到商和余数，逐 rank 返回真实元素数，保证总和严格等于 P；D>P 时允许部分 rank 拥有 0 个分片元素，不能凭空多出参数。测试覆盖这些非整除和空分片边界，也检查 D=1 时四种策略完全相同。
+脚本用 divmod 得到商和余数，逐 rank 返回真实元素数，保证总和严格等于 P；D>P 时允许部分 rank 拥有 0 个分片元素，不能凭空多出参数。
 
 ### 账本不是显存峰值
 

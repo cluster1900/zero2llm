@@ -224,7 +224,7 @@ h 每经过一层就改变。于是第二层 local V 会跟着第一层的处理
 
 代码用 KV.start 记录第一行的绝对位置，不能把缓存的行号 0 当成原序列的位置 0。增量输入 C 行时，位置项要从 offset 开始；注意力的比较也是 `key_position <= query_position`，而不是按本次小块的行号比较。
 
-当 W=1 时，不需要保留旧 local 行。切片要专门处理长度 0：Python 中 `-0` 等于 `0`，`tensor[:, -0:]` 会意外保留全部历史。tail_kv 使用 `size-n` 作为起点，测试覆盖了这个边界。
+当 W=1 时，不需要保留旧 local 行。切片要专门处理长度 0：Python 中 `-0` 等于 `0`，`tensor[:, -0:]` 会意外保留全部历史。tail_kv 使用 `size-n` 作为起点。
 
 缓存是调用者持有的快照，新请求传 None。增量调用不原地覆盖之前的快照，可以从同一个前缀分叉实验。它还记录模型身份和配置 / buffer 版本；常规原地改权重、换配置或换模型后会拒绝旧缓存。不要编辑缓存张量，也不要用 `.data` 或底层共享存储写入绕过版本跟踪；这里不承诺检测这些破坏。
 
@@ -270,7 +270,7 @@ OMP_NUM_THREADS=1 python code/18_ced_architecture.py
 OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture.py' -v
 ```
 
-若使用仓库的虚拟环境，把 python 换成 `.venv/bin/python`。没有 PyTorch 时，CLI 给出安装提示并以非零状态退出；测试按仓库稳定 torch 版本门槛跳过数值部分，**跳过不是通过**。
+若使用仓库的虚拟环境，把 python 换成 `.venv/bin/python`。没有 PyTorch 时，CLI 给出安装提示并以非零状态退出。
 
 本章在 CPU / torch 2.14.1 / float64 下验证，核心输出为：
 
@@ -288,14 +288,9 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture
 
 ### 为什么 full/cache 对齐还不够
 
-如果完整路径和缓存路径共用一个错误 mask，两条路径可能同时看未来，对齐测试仍然会通过。因此测试同时覆盖：
+如果完整路径和缓存路径共用一个错误 mask，两条路径可能同时看未来，对齐测试仍然会通过。
 
-1. **独立标量 oracle**：用 Python 循环做二维乘法、逐位置 Softmax 和残差，不调用脚本的 attention、projection 或 cache helper；检查 full 和 bounded 两条路径。
-2. **手算结果**：直接断言 `[2,7/2,11/2]`、`[6,9,41/3]` 与 `[39/4,41/3]`。
-3. **未来隔离**：对每一个 prefix cut 改写之后的输入，前缀 encoder / global / 输出都不应变化；replay 也不能提前读 global bank 的未来行。
-4. **缓存等价**：每一种两块切分和逐 token 增量都与独立 full oracle 对齐，包含 offset、W=1、短 prompt、快照分叉和新请求。
-5. **近似差异**：多层 replay 的末位置以及后续 decode 确实可与完整路径不同；不把“不等价”误写成 bug。
-6. **错误变体**：故意把 global 来源接成当前 decoder h、取消局部窗口、放开未来、重置增量位置、把 replay 全局 query 位置重置为 0。必须被实际数值断言抓住，不能把变体运行崩溃当成“成功检测”。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 完整数值比较使用 rtol=atol=1e−12。这只适用于本章小规模 float64 实验；生产低精度算子不应照搬这个阈值。
 

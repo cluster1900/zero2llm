@@ -63,7 +63,7 @@ messages = [
 
 剩余九个字依次是：`只=8，答=9，颜=10，色=11，问=12，红=13，蓝=14，绿=15，黄=16`。特殊标记由模板直接插入 ID；正文逐字编码，未知字变为 UNK。
 
-因此，用户在正文输入字符串 `<assistant>`，不会凭这个拼写变成 role ID 4；每个未知字符只是 UNK。测试会确认内容中不能凭特殊标记的外观插入新角色。**这只是一条序列化性质，不是提示注入防护或模型安全保证。** 模型仍可能受普通语言内容影响。
+因此，用户在正文输入字符串 `<assistant>`，不会凭这个拼写变成 role ID 4；每个未知字符只是 UNK。**这只是一条序列化性质，不是提示注入防护或模型安全保证。** 模型仍可能受普通语言内容影响。
 
 真实 BPE/tokenizer 的词表远大于本例，不能把这个 17 项字符表套到已有 checkpoint 上。新加 special token 时，也要处理模型 embedding / 输出层的大小及其训练状态，而不是只修改字符串。
 
@@ -76,7 +76,7 @@ messages = [
 推理：<bos><user>问红<end><assistant>
 ```
 
-`generation_prompt` 与 `encode_chat` 共用消息编码逻辑。测试不只看第一轮，还逐轮确认：推理 prompt 必须与训练序列到该轮回答起点为止的前缀完全相同。不能训练时用一种 role 标记、推理时随手换另一种，也不能多加一遍 BOS/EOS。
+`generation_prompt` 与 `encode_chat` 共用消息编码逻辑。不能训练时用一种 role 标记、推理时随手换另一种，也不能多加一遍 BOS/EOS。
 
 [Transformers 4.51.3 的模板文档](https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating) 说明了模板与生成提示的关系，并提醒避免在模板已经加入特殊 token 后重复加入。本章只借助这些接口概念，不把手写模板称为 `apply_chat_template` 的实际运行结果。P20 已经验证过的 HF tokenizer 也没有被本章暗中改写。
 
@@ -168,7 +168,7 @@ PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加 0�
 
 ### 零个目标不能“平均一下”
 
-如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常；测试把一整个 batch 的标签设为忽略值，验证参数未变、没有 backward，也没有 optimizer 更新。
+如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常。
 
 我们的 encoder 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
 
@@ -229,7 +229,7 @@ Ax=3,\quad
 y=\begin{bmatrix}19.5\\0\end{bmatrix}.
 $$
 
-只写一句“输出等于基础输出加 adapter 输出”很容易让两个实现一起错。测试直接以这组手算数值为参考，另用 r=2、alpha=6 的独立矩阵检查“漏除 rank”错误，同时检查 A/B 一共 5 个可训练参数、W0 的 6 个参数被冻结。
+只写一句“输出等于基础输出加 adapter 输出”很容易让两个实现一起错。
 
 ### 冻结参数不等于关闭整条计算图
 
@@ -249,7 +249,7 @@ $$
 
 代码使用随机初始化 A、零初始化 B，保证刚插入 adapter 时 `BA=0`，不改变原模型预测。具体采用 Kaiming-uniform 初始化 A；它是本实现的选择，不声称逐项复现原论文的高斯初始化。固定版 [PEFT 0.15.0 LoRA 配置说明](https://huggingface.co/docs/peft/v0.15.0/package_reference/lora) 也区分初始化、rank、alpha 与 target modules；本章没有调用 PEFT。
 
-在第一步，如果 B=0，则对 A 的梯度为 0，但对 B 的梯度通常不为 0。B 更新之后，下一步 A 也能获得梯度。测试确实执行这两次 backward，验证这一变化。若 A、B 都初始化为零，两个方向都可能没有初始学习信号；不要因为“初始更新应为零”就把两个矩阵都清零。
+在第一步，如果 B=0，则对 A 的梯度为 0，但对 B 的梯度通常不为 0。B 更新之后，下一步 A 也能获得梯度。若 A、B 都初始化为零，两个方向都可能没有初始学习信号；不要因为“初始更新应为零”就把两个矩阵都清零。
 
 ## P21.7 真正训练一次，明确哪些结果不能比较
 
@@ -307,7 +307,7 @@ python code/22_sft_lora.py
 python -m unittest discover -s tests -p 'test_sft_lora.py' -v
 ```
 
-测试在缺少 PyTorch 时会明确跳过真实训练相关部分。**skipped 不算训练验证成功。** 默认脚本打印 `training: NOT RUN`；它不会因为输出了 loss 手算数字，就假装跑过训练。
+测试在缺少 PyTorch 时会明确跳过真实训练相关部分。默认脚本打印 `training: NOT RUN`；它不会因为输出了 loss 手算数字，就假装跑过训练。
 
 已经安装全书基础依赖后，执行真实 CPU 更新：
 
@@ -417,11 +417,7 @@ B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽
 
 **参考答案：** 都不能。默认命令明确输出 NOT RUN，缺 Torch 的 `--train` 以退出码 2 结束；测试用无 site-packages 的独立进程实际核对。LoRA 是从全量阶段终点继续训练同一批数据，不是同起点对比；报告明确没有 held-out 质量评估。
 
-### 本章的反例不是注释
-
-测试在内存中真正修改并运行 12 种语义错误：监督 user、漏掉 assistant EOS、误监督 role header、截断等号边界错误、错移 logits、错误 loss 分母、丢掉 LoRA 缩放、缩放漏除 rank、合并漏缩放、基础层未冻结、B 初始非零、移除 causal mask。每种都要求独立参考或明确的边界契约拒绝它，且不修改仓库文件。测试因此不是只证明“两个一起写错的实现彼此相同”。
-
-本次有 PyTorch 环境中 28 个测试通过；无 PyTorch 路线执行 13 个标准库测试，另外 15 个明确跳过。未来修改后应重新运行，不应把这些数字当成永远有效的标签。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 ## 本章小结与来源边界
 
