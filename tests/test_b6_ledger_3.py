@@ -430,7 +430,7 @@ class B6LedgerMoveGroup3Test(unittest.TestCase):
             "08k_sft_lora.md": ["float32 整模因乘法顺序不同，按 `atol=2e-6、rtol=2e-5` 检查。这里验证的是数值等价，不是实测推理加速。"],
             "08l_preference_optimization.md": ["修改被排除位置的 logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。"],
             "08g_ced_architecture.md": ["把第一层 decoder 的 local V 投影放大三倍", "如果 global bank 也被改变了，说明路径很可能接回了 decoder 自己。"],
-            "08h_moe.md": ["在 78x 的手算例子里", "输入第一维梯度为 78+20log2，第二维为 78。"],
+            "08h_moe.md": ["在 78x 的手算例子里", "输入第一维梯度为 78+20 ln 2，第二维为 78。"],
         }
         for name, items in kept.items():
             text = (ROOT / "chapters" / name).read_text(encoding="utf-8")
@@ -462,7 +462,7 @@ class B6LedgerMoveGroup3Test(unittest.TestCase):
 
     def test_b2_dangling_fixes(self):
         ch = lambda n: (CHAPTERS / n).read_text(encoding="utf-8")
-        self.assertIn("9. 不能。见 `test_mutations_fail_independent_oracle_not_only_cache_agreement`。", ch("08h_moe.md"))
+        self.assertIn("9. 不能。见本章测试。", ch("08h_moe.md"))
         self.assertIn("脚本用标准库生成这些数值。这个例子是直接优化", ch("07a_training_loop.md"))
         self.assertIn("它便于人工检查。", ch("08k_sft_lora.md"))
         self.assertIn("第二条会执行标准库测试。脚本默认", ch("08j_training_frameworks.md"))

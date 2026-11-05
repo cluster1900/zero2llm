@@ -173,7 +173,7 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 2. 5、6。重新从 0 开始会查错位置嵌入。
 3. 3840 字节。不是总内存，也不是 `cat` 时的峰值。
 4. 不需要；提示最后位置的 logits 已可选首字。选出后才将它作为后续 decode 输入。
-5. 传 `cache=None`；`generate_cached` 自动为每次调用创建空缓存。参数更新后旧缓存无效。实现核对参数对象身份、版本、dtype 与 device，包含 `assign=True` 替换参数的情况；不支持通过 `.data` 等方式故意绕过 PyTorch 版本跟踪。
+5. 传 `cache=None`；`generate_cached` 自动为每次调用创建空缓存。参数更新或替换后，旧缓存会被拒绝。
 6. 不算，需比较每个位置完整 logits；也不能，因为旧 K/V 的位置与上下文没有重新计算。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。

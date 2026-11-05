@@ -24,11 +24,7 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 ## P17.2 哪些是已经核验的官方事实
 
-本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。本章核验了技术报告 v1（核验日期见附录 H），以及官方 Hugging Face 仓库的固定 revision：
-
-```text
-314113f8a7dadb388215396ba5fbee2c610a04d6
-```
+本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。核验所用的报告版本与仓库固定 revision 见本章末「资料与实现边界」。
 
 [技术报告 §2.1–2.2](https://arxiv.org/html/2609.19969v1#S2.SS1) 与 [固定版官方模型卡](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/README.md) 相互印证：语言主干为 40 层，分成 20 层 causal encoder 和 20 层 decoder；decoder global KV 来自 encoder 最终表示，而非各 decoder 层自己的表示。官方报告的激活参数口径是 **prefill 每 token 8B、decode 每 token 16B**。这是官方架构数据，**不是本书测得的速度、内存或质量结果，也不是模型总参数量**。
 
@@ -36,7 +32,7 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 - [固定版 config.json](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/config.json) 的 text_config 中，num_hidden_layers=40，sliding_window=128。
 - [固定版 inference/config.json](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/config.json) 使用 n_layers=40、window_size=128；kv_source_layers 为 [2,8,14,20]，索引从 0 开始。
-- 主干前两层只有 SWA；随后 18 个 encoder 层的压缩比是 2，20 个 decoder 层的压缩比是 1。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。[报告 §4.2.1](https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1)
+- 主干前两层只有 SWA；随后 18 个 encoder 层的压缩比是 2，20 个 decoder 层的压缩比是 1（报告 §2.3：压缩比为 1 即不压缩的 main KV）。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。[报告 §4.2.1](https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1)
 
 再向源码走一步：[固定版 inference/model.py](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py) 中，Attention._compress_kv 由指定 source 层产生 global latent，其他层读共享缓存；decoder 边界处下标 20 的层是 source，之后的 decoder 层复用它。每层的 _window_kv 仍从本层 attention 输入生成局部状态。真实路径还包括归一化、位置旋转、量化和 residual-stream mixing，不能将它们抹去后声称与生产张量逐项相同。
 
@@ -93,7 +89,7 @@ decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串
 
 replay（重放）就是重新运行一段历史的计算，用它恢复当前需要的状态。它不是把历史文字再生成一遍，也不是修改用户输入。
 
-设局部窗口 W 包含当前 token，每层最多再读取 W−1 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。
+设局部窗口 W 包含当前 token，每层最多再读取 W−1 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。
 
 [报告 §3.2.2](https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2) 的 Bounded Replay 只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 s、当前 query 为 i，局部可见范围变成：
 
@@ -122,7 +118,13 @@ $$
 | KV 量化 | 每个缓存数值怎样表示、占多少字节 | 数据流完全不变就一定无误差 |
 | P/D 服务分离 | 计算阶段怎样分配到设备与队列 | 模型已经采用 CED |
 
-[报告 §2.3](https://arxiv.org/html/2609.19969v1#S2.SS3) 与固定版模型卡把 CSA2 分成 Full、Reindex、Reuse 三种模式：Full 产生 global KV 并选择索引；Reindex 复用 global KV、重新选择索引；Reuse 连选择结果一起复用。它们仍保留本层 query 与 SWA 状态。这里的 Full 是 **CSA2 模式名**，不能理解成“取消因果约束的全注意力”。
+[报告 §2.3](https://arxiv.org/html/2609.19969v1#S2.SS3) 与固定版模型卡把 CSA2 分成三种模式：
+
+- **Full**：产生 global KV，并选择索引。
+- **Reindex**：复用前面层的 global KV，重新选择索引。
+- **Reuse**：global KV 和选择结果都复用。
+
+三种模式都保留本层 query 与 SWA 状态。这里的 Full 是 **CSA2 模式名**，不能理解成“取消因果约束的全注意力”。
 
 所以，CED 解释“资料从下半网络准备”，CSA2 进一步解释“哪些层共用资料和选取结果”。两者可以协同，但不应把所有缓存节省都归功于 CED。相关头数 / latent 概念见 [P14](#p14-grouped-kv)，局部与稀疏路径见 [P16](#p16-sparse-linear)。
 
@@ -137,7 +139,7 @@ ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两�
 3. decoder 本层输入产生 local K/V。
 4. 完整前向、增量缓存和近似后缀 replay 三条路径。
 
-它省略 tokenizer、词嵌入训练、输出词表和 loss，也省略生产的 MoE、压缩 latent / Z、CSA2 共享与 Top-K、层级索引器、RoPE / YaRN、RMSNorm、FFN、mHC、Engram、量化、视觉输入、DSpark 与 GPU kernel。因此输出是二维 hidden states，**不是语言模型 logits，不能用来评估语言质量**。
+它省略 tokenizer、词嵌入训练、输出词表和 loss，也省略生产的 MoE、压缩 latent / Z、CSA2 共享与 Top-K、层级索引器、RoPE / YaRN、RMSNorm、FFN、量化、视觉输入、其他生产组件与 GPU kernel。因此输出是二维 hidden states，**不是语言模型 logits，不能用来评估语言质量**。
 
 还有两项特意不同的数学约定：
 
@@ -224,9 +226,7 @@ h 每经过一层就改变。于是第二层 local V 会跟着第一层的处理
 
 代码用 KV.start 记录第一行的绝对位置，不能把缓存的行号 0 当成原序列的位置 0。增量输入 C 行时，位置项要从 offset 开始；注意力的比较也是 `key_position <= query_position`，而不是按本次小块的行号比较。
 
-当 W=1 时，不需要保留旧 local 行。切片要专门处理长度 0：Python 中 `-0` 等于 `0`，`tensor[:, -0:]` 会意外保留全部历史。tail_kv 使用 `size-n` 作为起点。
-
-缓存是调用者持有的快照，新请求传 None。增量调用不原地覆盖之前的快照，可以从同一个前缀分叉实验。它还记录模型身份和配置 / buffer 版本；常规原地改权重、换配置或换模型后会拒绝旧缓存。不要编辑缓存张量，也不要用 `.data` 或底层共享存储写入绕过版本跟踪；这里不承诺检测这些破坏。
+缓存是调用者持有的快照，新请求传 None；增量调用不覆盖旧快照，改权重、换配置或换模型后旧缓存会被拒绝。
 
 bounded 路径会把 approximate 标记保留到后续 decode。它记录“来自截断 replay 的状态”，不是错误大小；某些窗口或输入上误差恰好为零，也不能把来源标记擅自改成精确。
 
@@ -309,3 +309,8 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture
 4. 至少要分别跟踪 main KV、indexer K、Top-K 选择及各自 source，处理共享层的写入与读取时机，并重新验证索引与压缩条目的因果可见性。压缩块没有收齐时不能提前公开含有未来输入的摘要；修改名字不提供这些保证。
 
 记住这条主线即可：**CED 改变 decoder global KV 的来源；局部 SWA 仍有自己的逐层状态，所以需要 replay；有界 replay 是明确接受误差的取舍，不是免费的等价省算。** 本章已经用实际张量和反例验证这三件事，但没有复现官方训练、权重、服务系统或性能。
+
+## 资料与实现边界
+
+- [DeepSeek-V4.1-Flash 技术报告 v1（arXiv 2609.19969）](https://arxiv.org/html/2609.19969v1)：核验日期见附录 H。
+- 官方 Hugging Face 仓库 deepseek-ai/DeepSeek-V4.1-Flash，固定 revision `314113f8a7dadb388215396ba5fbee2c610a04d6`；本章引用的模型卡、config.json、inference/model.py 均为该 revision。
