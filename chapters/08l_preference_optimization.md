@@ -187,6 +187,8 @@ positions 是原序列中目标的位置 1…T−1，starts 是该行答案开�
 
 EOS 如果确实属于答案，应当计入；PAD 不计入。这个 helper 只支持右 padding、有至少一个 prompt token 和一个答案 token 的输入，遇到左 padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 tokenizer 拼接边界，调用方还要保证 chosen / rejected 共用同一 prompt 和一致的结束规则。
 
+修改被排除位置的 logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。
+
 ## P22.6 GRPO：同一道题，先比较一组答案
 
 [DeepSeekMath v3，第 4.1 节，2024-04-27](https://arxiv.org/html/2402.03300v3#S4.SS1) 引入 GRPO：对同一个问题采样一组答案，用组内奖励建立相对基线，不必另外训练 PPO 式价值网络。本章讲 **outcome reward**：每份完整答案得到一个分数，同一答案的有效 token 共用一个优势值；不是逐步过程奖励。

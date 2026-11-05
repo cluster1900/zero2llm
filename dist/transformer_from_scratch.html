@@ -2273,7 +2273,8 @@ token，将它接到前缀，再继续。这里的步骤依赖无法凭“矩阵
 cache 会减少重复计算，却不会让未知的未来 token
 提前成为已知输入。本章不提前实现缓存。</p>
 <p>因果性可以用一个反事实小实验验证：保持前几个输入不变，任意修改最后一个
-token，早于它的输出应保持不变。相反，双向无掩码注意力通常会变化。</p>
+token，早于它的输出应保持不变。相反，双向无掩码注意力通常会变化。这里没有
+dropout，模型参数固定，以浮点容差比较。</p>
 <h2 id="运行观察和自测">3.7 运行、观察和自测</h2>
 <p>在 CPU 环境安装仓库锁定的 PyTorch 后运行：</p>
 <div class="sourceCode" id="cb23"><pre
@@ -5985,7 +5986,8 @@ cache。</li>
 <li>错误边界：train 模式、空输入、超过位置上限、错误
 batch/层数/头维、不同模型或更新权重后的旧缓存。</li>
 </ul>
-<p>脚本打印最大绝对误差，超出容差时必须排查位置、mask、拼接维度或参数是否相同。</p>
+<p>float32 的运算顺序可能因为矩阵大小不同而有微小舍入差；测试使用明确的
+<code>atol/rtol</code>，不是要求逐位相同，也不是放宽到“都能生成一句诗”。脚本打印最大绝对误差，超出容差时必须排查位置、mask、拼接维度或参数是否相同。</p>
 <p><code>KVCache</code>
 的容器不可重赋字段，但其中的张量仍可被调用者修改。因此约定缓存张量只读，不承诺
 Python 的 frozen dataclass 能深度冻结 Tensor。它不是持久化
@@ -8141,12 +8143,7 @@ warp 调度；“有两个块长参数”不等于写出了 FlashAttention kerne
 <p>这是 API 的安全约定，<strong>不是说空集合上的 Softmax
 有正常的概率分布</strong>。直接把全行填成 −∞ 再算
 <code>exp(s-max(s))</code>，可能遇到 <code>−∞−(−∞)</code> 而产生
-NaN。测试特意覆盖：</p>
-<ul>
-<li>第一块全被遮住，后面才出现合法 key。</li>
-<li>后面的合法分数比前面大，需要重新缩放。</li>
-<li>整行全被遮住，最终返回零。</li>
-</ul>
+NaN。</p>
 <p>分数 10000、10001、10002 也不需要直接算
 exp(10002)。减去最大值后，最大指数是 exp(0)=1。输入 Q/K/V
 要求有限，点积本身若已经溢出也会拒绝；稳定 Softmax
@@ -9548,6 +9545,10 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb119-1"><a 
 <span id="cb119-4"><a href="#cb119-4" aria-hidden="true" tabindex="-1"></a>h <span class="op">=</span> h <span class="op">+</span> attention(q, global_kv[i], offset) <span class="op">+</span> attention(q, kv, offset, window)</span></code></pre></div>
 <p>h 每经过一层就改变。于是第二层 local V
 会跟着第一层的处理改变，而提前准备的 global V 不会。</p>
+<p>可以对此做“干预”，不只检查变量名：把第一层 decoder 的 local V
+投影放大三倍，重新计算。结果应当是：encoder-derived global banks
+保持不变，第二层 decoder 的 local cache 和最终输出改变。如果 global bank
+也被改变了，说明路径很可能接回了 decoder 自己。</p>
 <h2 id="p17.10-形状和绝对位置必须一起记">P17.10
 形状和绝对位置必须一起记</h2>
 <p>默认例子 B=1、N=6、D=2、W=3。这里 D 始终是向量宽度；后文用 L_e、L_d
@@ -10097,6 +10098,10 @@ router 梯度为 0。</li>
 router，不能把“空专家没有直接任务梯度”误说成“对应 router
 行永远没有梯度”。</li>
 </ol>
+<p>在 78x 的手算例子里，x=[1,0]、router 第一列为 [0,log2,log4]、第二列为
+0。令损失为输出各维之和，router 第一列梯度为
+<code>[0,-20,+20]</code>：权重变化会在 10x 与 100x
+间重新分配。输入第一维梯度为 78+20log2，第二维为 78。</p>
 <p>“今天没收到梯度”不等于“永远不会变化”：其他 batch
 可能路由到它，优化器的历史动量、权重衰减和梯度清理方式也会影响实际更新。</p>
 <h2 id="p18.8-顺着代码走一次">P18.8 顺着代码走一次</h2>
@@ -12228,6 +12233,9 @@ Linear</strong>，保留原来的 bias，不改原 adapter
 或基础层。调用两次也各自从同一个原始 W0 出发，不会把 BA
 重复加两遍。合并后的模型不再额外执行 adapter
 支路；若既改了原权重又保留支路，更新就会被算两次。</p>
+<p>float64 小整数例子得到精确对齐；float32 整模因乘法顺序不同，按
+<code>atol=2e-6、rtol=2e-5</code>
+检查。这里验证的是数值等价，不是实测推理加速。</p>
 <p>实际保存 adapter 时，还需要记录基础 checkpoint
 的精确版本、目标层名、rank/alpha、tokenizer/template、额外训练的
 embedding 或其他模块。只有 A/B
@@ -12662,6 +12670,8 @@ padding、有至少一个 prompt token 和一个答案 token 的输入，遇到�
 padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 tokenizer
 拼接边界，调用方还要保证 chosen / rejected 共用同一 prompt
 和一致的结束规则。</p>
+<p>修改被排除位置的
+logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。</p>
 <h2 id="p22.6-grpo同一道题先比较一组答案">P22.6
 GRPO：同一道题，先比较一组答案</h2>
 <p><a href="https://arxiv.org/html/2402.03300v3#S4.SS1">DeepSeekMath
