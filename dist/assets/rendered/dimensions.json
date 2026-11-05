@@ -23,10 +23,6 @@
     "width": 226,
     "height": 383
   },
-  "flow-02": {
-    "width": 310.3984375,
-    "height": 213
-  },
   "attention_mechanism": {
     "width": 850,
     "height": 560
@@ -34,10 +30,6 @@
   "flow-03": {
     "width": 274.9453125,
     "height": 385
-  },
-  "flow-04": {
-    "width": 218.015625,
-    "height": 412
   },
   "multi_head_attention": {
     "width": 850,
@@ -158,5 +150,13 @@
   "cpu_timing": {
     "width": 960.0,
     "height": 460.0
+  },
+  "flow-02": {
+    "width": 304.046875,
+    "height": 213
+  },
+  "flow-04": {
+    "width": 324,
+    "height": 439
   }
 }

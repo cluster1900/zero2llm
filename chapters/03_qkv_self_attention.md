@@ -35,7 +35,7 @@ flowchart TD
 flowchart TD
     accTitle: 注意力下半程：按比例收集信息
     accDescr: 分数除以根号 2，每行经 Softmax 得到权重，再与 V 相乘得到 3 乘 2 的输出。
-    A["缩放：Score ÷ √2<br/>√2 ≈ 1.414"] --> B["逐行 Softmax<br/>每行权重之和为 1"]
+    A["缩放：Score ÷ √d_k（本例 √2）<br/>√2 ≈ 1.414"] --> B["逐行 Softmax<br/>每行权重之和为 1"]
     B --> C["权重矩阵乘 V<br/>按比例加权求和"]
     C --> D["新的词向量 Output<br/>形状 [3, 2]"]
 ```
