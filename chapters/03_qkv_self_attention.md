@@ -143,7 +143,7 @@ exps = [math.exp(s - m) for s in scores]
 weights = [e / sum(exps) for e in exps]
 ```
 
-`code/02_manual_attention.py` 逐步打印投影、点积、权重与输出；入口先要求列表非空且每项有限，拒绝 NaN/正负无穷。这个简化函数处理普通分数，不把负无穷掩码混入它。测试在小分数上与朴素公式对照，在大分数上验证不溢出，并检查整体平移不改结果。
+`code/02_manual_attention.py` 逐步打印投影、点积、权重与输出；入口先要求列表非空且每项有限，拒绝 NaN/正负无穷。这个简化函数处理普通分数，不把负无穷掩码混入它。
 
 ### 3.3a 延伸阅读：Softmax Collapse {#p04-softmax-collapse}
 
@@ -190,7 +190,7 @@ safe = torch.where(any_allowed, masked, torch.zeros_like(masked))
 weights = torch.softmax(safe, dim=-1).masked_fill(~allowed, 0.0)
 ```
 
-先让空行的 Softmax 输入安全，再在结果中清零，避免先产生 NaN 再尝试补救。辅助函数要求原始分数有限，并检查布尔类型和广播形状。测试还对空行反向传播，检查梯度有限。这是本书实现的契约，不表示所有框架、内核和版本都采用相同处理方式。
+先让空行的 Softmax 输入安全，再在结果中清零，避免先产生 NaN 再尝试补救。辅助函数要求原始分数有限，并检查布尔类型和广播形状。这是本书实现的契约，不表示所有框架、内核和版本都采用相同处理方式。
 
 ## 3.6 训练可并行，为什么生成还要一步步来？
 
@@ -211,6 +211,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 脚本 03 有缩放对照、掩码、官方 SDPA 对照及 padding/因果扰动实验。固定随机种子只是让例子可重现，不构成效果评测；官方实现的输出按容差检查，不要求跨平台逐位相等。不需要 GPU、模型权重或网络推理服务。
+
+运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
 
 自测：
 
