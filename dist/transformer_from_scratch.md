@@ -2876,7 +2876,7 @@ S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位�
 ```python
 import runpy
 ns = runpy.run_path("code/07_baby_gpt.py")  # 只定义函数和类，不执行 main()
-model = ns["BabyGPT"](vocab_size=ns["vocab_size"], d_model=48, num_heads=4, num_layers=2)  # 换成你训练好的实例
+model = ns["BabyGPT"](vocab_size=ns["vocab_size"], d_model=48, num_heads=4, num_layers=2)  # 未训练的演示实例；main() 不返回模型，要存训练后的权重需在自己的训练循环里调用
 ns["save_checkpoint"]("baby_gpt.pt", model)
 restored = ns["load_checkpoint"]("baby_gpt.pt")
 restored.eval()
@@ -7660,7 +7660,7 @@ P23.13 的 DFlash 一次并行写出整块草稿；EAGLE-4 走另一条路：**�
 | 草稿怎么产生 | 目标模型自带的多 token 头，常做成固定链 | 单层自回归草稿器，读目标多层隐藏状态 | 块扩散：一次并行出一整块（论文块长 16） | 沿用 EAGLE-3.1 单层归一化草稿器；读目标 **3 个分别归一化的隐藏状态 + token embedding**，输出再喂回下一步 |
 | 树还是链 | 多为固定链 | 动态树（EAGLE-2 风格） | 块（非自回归树） | **低并发动态树、高并发动态链**；每轮由代价模型改形状 |
 | 随 batch 怎么调 | 固定长度，大 batch 时验证窗浪费 | 主要按接受概率长树，不显式吃硬件代价 | 固定块长，大 batch 时可能起草过多 | 一次性测硬件上的起草／验证代价；每步比较期望收益与边际代价 |
-| 词表打分 | 完整 LM head | EAGLE-3 用截断草稿词表 | 视实现 | **低秩候选头**：先用 rank-128 投影给全部词表打分，再只对前 128 个候选用完整 LM head（Qwen3.8-27B 草稿词表 248320） |
+| 词表打分 | 完整 LM head | EAGLE-3 用截断草稿词表 | 视实现 | **低秩候选头**：先用 rank-128 投影给全部词表打分，再只对前 128 个候选用完整 LM head（目标 Qwen3.8-27B 的完整词表 248320，TP4 下每片 62080；不是截断词表） |
 | 长上下文 | 视目标 | 全上下文注意力成本随长度涨 | 视实现 | 草稿注意力滑窗 **4096**；草稿 KV **只追加不淘汰** |
 
 来源：EAGLE-4 论文 PDF（[eagle-hq/EAGLE-4@`3b96ef6`](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)，Preprint，无 arXiv 号）、[LightSeek / TokenSpeed 文](https://lightseek.org/blog/eagle-4.html)（2026-10-20）、[fal 技术解读](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20）；仓库许可证为 **源码可见**（`LicenseRef-Eagle-4-Source-Available`），不是 OSI 开源。代码包 `eagle-harness` 以插件形式接到 SGLang / vLLM / TokenSpeed；本书**不复制**其源码。
@@ -7693,7 +7693,7 @@ Algorithm 1（论文）每轮做三件事：① 每起草一层后看要不要�
 
 厂商报告的速度（不是本书测量）：LightSeek / TokenSpeed 文称 Qwen3.8-27B BF16、4×B300 TP4、单请求 temperature=1 时 750 tok/s，相对不投机 2.85×、相对模型自带 MTP 1.28×；agentic coding 采样负载约 3.0×。论文 Fig.1 / Hugging Face 卡在 temperature=0 的 SPEED-Bench 定性子集上报告 EAGLE-4 863.8 tok/s、3.59×（相对 Vanilla）。两组设定不同，不要混成一个数。fal 文说明已发布模型尚未包含多层草稿、MoE 草稿和 Latent ReLU。
 
-边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗 4096 与词表 248320 来自官方仓库文档／工具注释（`docs/known-limits.md`、`tools/bench_kernels.py`，提交 `3b96ef6`）。与 DFlash 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。
+边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗 4096 与词表 248320 来自官方仓库文档／工具注释（`docs/known-limits.md`、`tools/bench_kernels.py`，提交 `3b96ef6`）；248320 也是 Qwen3.8-27B config.json 里 text_config 的 `vocab_size`（[固定版本](https://huggingface.co/Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/config.json)）。与 DFlash 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。
 
 ## P23.16 延伸：FlashMap——用 flow map 一次写出有块内依赖的草稿 {#p23.16-flashmap}
 

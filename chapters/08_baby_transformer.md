@@ -206,7 +206,7 @@ S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位�
 ```python
 import runpy
 ns = runpy.run_path("code/07_baby_gpt.py")  # 只定义函数和类，不执行 main()
-model = ns["BabyGPT"](vocab_size=ns["vocab_size"], d_model=48, num_heads=4, num_layers=2)  # 换成你训练好的实例
+model = ns["BabyGPT"](vocab_size=ns["vocab_size"], d_model=48, num_heads=4, num_layers=2)  # 未训练的演示实例；main() 不返回模型，要存训练后的权重需在自己的训练循环里调用
 ns["save_checkpoint"]("baby_gpt.pt", model)
 restored = ns["load_checkpoint"]("baby_gpt.pt")
 restored.eval()

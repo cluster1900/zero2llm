@@ -70,6 +70,8 @@ class BabyGptCheckpointSnippet(unittest.TestCase):
         main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
         called = {n.func.id for n in ast.walk(main) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
         self.assertNotIn("save_checkpoint", called)
+        # load_checkpoint already returns eval(); the snippet still shows it explicitly.
+        self.assertTrue(self.snippet().rstrip().endswith("restored.eval()"))
         self.assertFalse("07_baby_gpt".isidentifier())
         self.snippet()
 
@@ -142,6 +144,41 @@ class MuseSparkLayerTypes(unittest.TestCase):
                       f"共 {len(full)} 层，局部 {n - len(full)} 层。所以它不是一层局部、一层全局地严格交替，而是 3 局部 : 1 全局。", text)
         self.assertIn("d4804f9d76b8c071b993d813e9e87067b780cbee", text)
         self.assertNotIn("局部与全局注意力交替", text)
+        # Derive the wording of the rule from the rule itself.
+        period = full[1] - full[0]
+        self.assertTrue(all(b - a == period for a, b in zip(full, full[1:])))
+        self.assertEqual(full[-1], n - 1)          # anchored at the LAST layer
+        self.assertNotEqual(full[0], 0)             # so not counted from the first
+        self.assertEqual(period - 1, 3)             # matches "3 局部 : 1 全局"
+        self.assertIn(f"给出的默认规则是：从最后一层往前数，每 {period} 层有 1 层全局（`full_attention`），"
+                      "其余是局部（`sliding_attention`）。", text)
+        para = text.split("**Muse Spark Open（S33）。**", 1)[1].split("\n\n", 1)[0]
+        self.assertNotIn("未验证", para)
+
+
+class EagleVocab(unittest.TestCase):
+    def test_full_vocab_not_draft(self):
+        text = read("08m_reasoning_mtp.md")
+        m = re.search(r"目标 Qwen3.8-27B 的完整词表 (\d+)，TP4 下每片 (\d+)；不是截断词表", text)
+        self.assertIsNotNone(m)
+        vocab, shard = int(m.group(1)), int(m.group(2))
+        # bench_kernels.py L67 @3b96ef6: "vocab 248320, TP4 shard 62080" -> shard is vocab/4.
+        self.assertEqual(vocab, 4 * shard)
+        self.assertIn(f"248320 也是 Qwen3.8-27B config.json 里 text_config 的 `vocab_size`", text)
+        self.assertIn("Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/config.json", text)
+        self.assertNotIn("草稿词表 248320", text)
+
+
+class FrameworkInstallHint(unittest.TestCase):
+    def test_hint_matches_chapter_install(self):
+        text = read("08j_training_frameworks.md")
+        url = re.search(r"--index-url (\S+) torch==([\d.]+)", text)
+        src = (CODE / "21_training_frameworks.py").read_text(encoding="utf-8")
+        fn = src.split("def framework_status", 1)[1].split("\ndef ", 1)[0]
+        hint = "".join(ast.literal_eval(m) for m in re.findall(r'"(?:[^"\\]|\\.)*"', fn.split(".join(issues) +", 1)[1].split("if issues", 1)[0]))
+        self.assertEqual(hint, f". In a separate environment, install torch=={url.group(2)} from "
+                               f"{url.group(1)}, then requirements-frameworks.txt; skipped is not passed.")
+        self.assertNotIn("requirements.txt and", hint)
 
 
 class DeepSeekV3BiasRule(unittest.TestCase):
@@ -183,7 +220,11 @@ class CachePollutionNegative(unittest.TestCase):
         neg = src.split("def negative_controls", 1)[1].split("\ndef ", 1)[0]
         a_len = int(re.search(r"_, stale = good\(base, tokens\[:, :(\d+)\], None\)", neg).group(1))
         b_len = int(re.search(r"other = \(tokens\[:, :(\d+)\]", neg).group(1))
-        batch = int(re.search(r"'batch': (\d+)", src).group(1))
+        tree = ast.parse(src)
+        fx = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "fixture")
+        rows = next(n for n in ast.walk(fx) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "tensor").args[0]
+        batch = len(rows.elts)  # rows of the fixture() tensor literal
+        self.assertIn("# Same model/weight signature and batch size (lengths differ), WRONG request history", src)
         text = read("09a_minigpt_healthcheck.md")
         self.assertIn("### 负例三：后一个请求接上了前一个请求的历史", text)
         self.assertIn(f"请求 A 是一批 {batch} 条序列的前三个 token（形状 [{batch},{a_len}]），已经产生缓存。"
@@ -195,7 +236,10 @@ class CachePollutionNegative(unittest.TestCase):
 class VerifiedUnchanged(unittest.TestCase):
     def test_slingshot_sentence(self):
         # arXiv:2610.31642v1 §4: "These Slingshot spikes are a direct consequence of Softmax Collapse".
-        self.assertIn("记住训练集之后，Slingshot 损失尖峰由它引起", read("03_qkv_self_attention.md"))
+        text = read("03_qkv_self_attention.md")
+        self.assertIn("记住训练集之后，Slingshot 损失尖峰由它引起", text)
+        # §8: "extreme margins ... are uncommon in standard large-scale training".
+        self.assertIn("论文 §8 也指出，这么大的间隔在标准大规模训练中并不常见", text)
 
     def test_v41_kv_scale_sentence(self):
         # DeepSeek-V4.1-Flash inference/model.py@314113f _compress_kv:

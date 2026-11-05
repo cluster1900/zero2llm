@@ -128,8 +128,8 @@ def framework_status():
         normalized = version.split("+")[0] if package == "torch" else version
         if normalized != expected:
             issues.append(f"{package}={version} (need {expected})")
-    reason = ("; ".join(issues) + ". Install requirements.txt and "
-              "requirements-frameworks.txt in a separate environment; skipped is not passed.") if issues else ""
+    reason = ("; ".join(issues) + ". In a separate environment, install torch==2.14.1 from "
+              "https://download.pytorch.org/whl/cpu, then requirements-frameworks.txt; skipped is not passed.") if issues else ""
     return not issues, reason, versions
 
 

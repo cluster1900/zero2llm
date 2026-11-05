@@ -5850,7 +5850,7 @@ checkpoint；文件名以数字开头，也不能直接
 <div class="sourceCode" id="cb69"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> runpy</span>
 <span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a>ns <span class="op">=</span> runpy.run_path(<span class="st">&quot;code/07_baby_gpt.py&quot;</span>)  <span class="co"># 只定义函数和类，不执行 main()</span></span>
-<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> ns[<span class="st">&quot;BabyGPT&quot;</span>](vocab_size<span class="op">=</span>ns[<span class="st">&quot;vocab_size&quot;</span>], d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>)  <span class="co"># 换成你训练好的实例</span></span>
+<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> ns[<span class="st">&quot;BabyGPT&quot;</span>](vocab_size<span class="op">=</span>ns[<span class="st">&quot;vocab_size&quot;</span>], d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>)  <span class="co"># 未训练的演示实例；main() 不返回模型，要存训练后的权重需在自己的训练循环里调用</span></span>
 <span id="cb69-4"><a href="#cb69-4" aria-hidden="true" tabindex="-1"></a>ns[<span class="st">&quot;save_checkpoint&quot;</span>](<span class="st">&quot;baby_gpt.pt&quot;</span>, model)</span>
 <span id="cb69-5"><a href="#cb69-5" aria-hidden="true" tabindex="-1"></a>restored <span class="op">=</span> ns[<span class="st">&quot;load_checkpoint&quot;</span>](<span class="st">&quot;baby_gpt.pt&quot;</span>)</span>
 <span id="cb69-6"><a href="#cb69-6" aria-hidden="true" tabindex="-1"></a>restored.<span class="bu">eval</span>()</span></code></pre></div>
@@ -14787,8 +14787,8 @@ EAGLE-4 怎么按代价选树或链</h2>
 <td>EAGLE-3 用截断草稿词表</td>
 <td>视实现</td>
 <td><strong>低秩候选头</strong>：先用 rank-128
-投影给全部词表打分，再只对前 128 个候选用完整 LM head（Qwen3.8-27B
-草稿词表 248320）</td>
+投影给全部词表打分，再只对前 128 个候选用完整 LM head（目标 Qwen3.8-27B
+的完整词表 248320，TP4 下每片 62080；不是截断词表）</td>
 </tr>
 <tr>
 <td>长上下文</td>
@@ -14867,7 +14867,10 @@ Vanilla）。两组设定不同，不要混成一个数。fal
 <p>边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗
 4096 与词表 248320
 来自官方仓库文档／工具注释（<code>docs/known-limits.md</code>、<code>tools/bench_kernels.py</code>，提交
-<code>3b96ef6</code>）。与 DFlash
+<code>3b96ef6</code>）；248320 也是 Qwen3.8-27B config.json 里
+text_config 的 <code>vocab_size</code>（<a
+href="https://huggingface.co/Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/config.json">固定版本</a>）。与
+DFlash
 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。</p>
 <h2 id="p23.16-flashmap">P23.16 延伸：FlashMap——用 flow map
 一次写出有块内依赖的草稿</h2>
