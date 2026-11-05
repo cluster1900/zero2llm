@@ -145,17 +145,9 @@ Full 是 **CSA2 路径名**，不是“不加因果 mask 的 dense attention”�
 
 尤其要看[参考 `Aligner.forward`][V41-vision]：先把 H×W×C 改成通道在前，向**右侧和底部补零**使边长能被 3 整除，再执行不重叠的 `unfold`。一个新 token 内部的顺序是“通道 → 邻域行 → 邻域列”，不是“邻域位置 → 通道”。最后才经过两层 MLP（中间 GELU）。本章只复现前面的坐标重排，不运行 ViT、projector、视觉位置编码或图像理解。
 
-### mHC、Engram、DSpark 各解决什么
+### mHC、Engram、DSpark
 
-| 阅读路标 | 先问的问题 | 本章核对范围 |
-| --- | --- | --- |
-| Single-Pass mHC | 多条 residual stream 怎样混合？哪些依赖妨碍融合？ | 报告 §2.4.1；输入混合系数错开一 block 使用，配置 `hc_mult=4` |
-| Engram | 哪些信息通过条件查表记忆，而不只靠每次 dense 计算？ | 报告 §2.4.2；tokenizer 压缩、哈希和门控；参考配置层号 `[1,14]` |
-| DSpark | 怎样产生草稿，决定验证长度，又保持目标模型负责最终输出？ | 报告 §2.4.3；读训练时序，再区分 forward 与部署调度 |
-
-阅读入口为同一份[版本化报告的 §2.4.1–2.4.3][V41-paper]与[固定源码][V41-model]。不要把三者当作 MLA 的三个别名：一个改 residual stream，一个提供参数化的条件记忆，一个服务于草稿生成。Engram 的内部查表也不能直接称为“联网搜索”或“用户文档 RAG”。
-
-本章只检查 `hc_mult`、`engram_layer_ids`、DSpark 接口字段并建立阅读路线，**未实现这些完整模块，未训练它们，也未验证各自官方收益**。遇到报告之外的新说法，应在矩阵中先记为 unknown，而不是靠熟悉的缩写把空白补满。
+DeepSeek-V4.1-Flash [报告的 §2.4.1–2.4.3][V41-paper] 还介绍了 mHC、Engram 和 DSpark：一个改 residual stream 的混合，一个提供条件查表记忆，一个服务于草稿生成。本章只读配置字段，不实现它们。
 
 ## P26.7 自动生成“组件—章节—证据”矩阵
 

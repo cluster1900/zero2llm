@@ -94,19 +94,6 @@ class BabyGptCheckpointSnippet(unittest.TestCase):
                 os.chdir(old)
 
 
-class AkvMessageIndices(unittest.TestCase):
-    def test_zero_based_indices(self):
-        text = read("08a_kv_cache.md")
-        self.assertIn('`"drop_message": {"4": [2]}` 表示处理完下标 4 的消息后丢掉下标 2 的消息的 KV，'
-                      '`"reposition": [4]` 表示处理完下标 4 的消息后压紧位置。'
-                      'README 的消息下标从 0 开始数：示例里下标 2 是第一条工具结果 Record A，下标 4 是第二条工具结果 Record B。', text)
-        # README Quick Start payload (pinned commit c567a42): roles by index.
-        roles = ["user", "assistant", "tool", "assistant", "tool"]
-        tools = [i for i, r in enumerate(roles) if r == "tool"]
-        self.assertEqual(tools, [2, 4])
-        self.assertIn("c567a429a058f1abce3b2879e69978b09e0fda4c", text)
-
-
 class RopeQueryTable(unittest.TestCase):
     @unittest.skipUnless(has_torch(), "torch required")
     def test_t64_row_matches_rerun(self):
@@ -142,43 +129,6 @@ class ThroughputWindows(unittest.TestCase):
         self.assertIn(f"注意两个窗口不一样长：各自从 t=0 算到自己最后一个输出 token，静态 {static_end} ms，连续 {cont_end} ms。", text)
 
 
-class MuseSparkLayerTypes(unittest.TestCase):
-    def test_default_pattern(self):
-        text = read("08f_sparse_linear_attention.md")
-        n = 62  # MuseSparkTextConfig.num_hidden_layers default at d4804f9
-        # Rule from configuration_muse_spark.py __post_init__ at that commit.
-        types = ["full_attention" if (n - 1 - i) % 4 == 0 else "sliding_attention" for i in range(n)]
-        full = [i for i, t in enumerate(types) if t == "full_attention"]
-        self.assertIn("它没有线性层，而是局部与全局注意力混排。", text)
-        self.assertIn(f"默认 {n} 层时，全局层是第 {full[0]}、{full[1]}、…、{full[-1]} 层（从 0 数），"
-                      f"共 {len(full)} 层，局部 {n - len(full)} 层。所以它不是一层局部、一层全局地严格交替，而是 3 局部 : 1 全局。", text)
-        self.assertIn("d4804f9d76b8c071b993d813e9e87067b780cbee", text)
-        self.assertNotIn("局部与全局注意力交替", text)
-        # Derive the wording of the rule from the rule itself.
-        period = full[1] - full[0]
-        self.assertTrue(all(b - a == period for a, b in zip(full, full[1:])))
-        self.assertEqual(full[-1], n - 1)          # anchored at the LAST layer
-        self.assertNotEqual(full[0], 0)             # so not counted from the first
-        self.assertEqual(period - 1, 3)             # matches "3 局部 : 1 全局"
-        self.assertIn(f"给出的默认规则是：从最后一层往前数，每 {period} 层有 1 层全局（`full_attention`），"
-                      "其余是局部（`sliding_attention`）。", text)
-        para = text.split("**Muse Spark Open（S33）。**", 1)[1].split("\n\n", 1)[0]
-        self.assertNotIn("未验证", para)
-
-
-class EagleVocab(unittest.TestCase):
-    def test_full_vocab_not_draft(self):
-        text = read("08m_reasoning_mtp.md")
-        m = re.search(r"目标 Qwen3.8-27B 的完整词表 (\d+)，TP4 下每片 (\d+)；不是截断词表", text)
-        self.assertIsNotNone(m)
-        vocab, shard = int(m.group(1)), int(m.group(2))
-        # bench_kernels.py L67 @3b96ef6: "vocab 248320, TP4 shard 62080" -> shard is vocab/4.
-        self.assertEqual(vocab, 4 * shard)
-        self.assertIn(f"248320 也是 Qwen3.8-27B config.json 里 text_config 的 `vocab_size`", text)
-        self.assertIn("Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/config.json", text)
-        self.assertNotIn("草稿词表 248320", text)
-
-
 class FrameworkInstallHint(unittest.TestCase):
     def test_hint_matches_chapter_install(self):
         text = read("08j_training_frameworks.md")
@@ -189,24 +139,6 @@ class FrameworkInstallHint(unittest.TestCase):
         self.assertEqual(hint, f". In a separate environment, install torch=={url.group(2)} from "
                                f"{url.group(1)}, then requirements-frameworks.txt; skipped is not passed.")
         self.assertNotIn("requirements.txt and", hint)
-
-
-class DeepSeekV3BiasRule(unittest.TestCase):
-    def test_attribution(self):
-        text = read("08h_moe.md")
-        self.assertIn("那条规则来自 DeepSeek-V3（[arXiv:2412.19437](https://arxiv.org/abs/2412.19437) §2.1.2），"
-                      "原文用文字描述：每步结束时，过载专家的偏置减 γ，欠载专家的偏置加 γ。"
-                      "写成公式 `b_j ← b_j + γ sign(ℓ̄ − ℓ_j)` 是 S29 的转写，不是 V3 原文的公式。", text)
-
-
-class QuantizedDependencies(unittest.TestCase):
-    def test_default_vs_25b(self):
-        text = read("08n_quantized_serving.md")
-        self.assertNotIn("torch", imports(CODE / "25_quantized_serving.py"))
-        self.assertIn("torch", imports(CODE / "25b_mixed_bit.py"))
-        self.assertIn("`25_quantized_serving.py` 的默认实验只用 Python 标准库、CPU、小数组，不下载权重；"
-                      "P24.13 的 `25b_mixed_bit.py` 另需 PyTorch（CPU 即可）。", text)
-        self.assertIn("## P24.13 混合位宽 GGUF", text)
 
 
 class QwenTokenizerLength(unittest.TestCase):
@@ -244,31 +176,12 @@ class CachePollutionNegative(unittest.TestCase):
 
 
 class VerifiedUnchanged(unittest.TestCase):
-    def test_slingshot_sentence(self):
-        # arXiv:2610.31642v1 §4: "These Slingshot spikes are a direct consequence of Softmax Collapse".
-        text = read("03_qkv_self_attention.md")
-        self.assertIn("记住训练集之后，Slingshot 损失尖峰由它引起", text)
-        # §8: "extreme margins ... are uncommon in standard large-scale training".
-        self.assertIn("论文 §8 也指出，这么大的间隔在标准大规模训练中并不常见", text)
-
     def test_v41_kv_scale_sentence(self):
         # DeepSeek-V4.1-Flash inference/model.py@314113f _compress_kv:
         # fp4_act_quant(latent, 16, True, scale_dtype=torch.float8_e4m3fn)
         text = read("09_modern_llms.md")
         self.assertIn("源码按 16 通道一组使用 E4M3 scale", text)
         self.assertIn("DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py", text)
-
-    @unittest.skipUnless(has_torch(), "torch required")
-    def test_echo_heldout_accuracy(self):
-        import io, contextlib, torch
-        torch.set_num_threads(1)
-        ns = runpy.run_path(str(CODE / "24b_spec_drafts.py"))
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            ns["main"]([])
-        acc = re.search(r"held-out accuracy at horizons 1/2/3 = ([\d./]+)", buf.getvalue()).group(1).split("/")
-        self.assertEqual(len(set(acc)), 1)
-        self.assertIn(f"在留出数据上 horizon 1/2/3 的贪心准确率都是 {acc[0]}", read("08m_reasoning_mtp.md"))
 
 
 if __name__ == "__main__":

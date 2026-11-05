@@ -331,164 +331,27 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 
 读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
 
-## P23.13 延伸：块草稿、置信截断与 ECHO 递归草稿头
+## P23.13 延伸阅读：更便宜的草稿
 
-P23.7 的验收规则不关心草稿从哪来：只要每轮都由目标模型贪心验收，输出就等于普通贪心。2026 年几篇工作都在“草稿怎么更便宜、更准”上做文章。配套 [`../code/24b_spec_drafts.py`](../code/24b_spec_drafts.py) 把三种思路缩成 CPU 玩具，**全部复用本章未修改的 `greedy_decode` 验收**，并断言输出与普通贪心逐 token 相同。
+P23.7 的验收规则不关心草稿从哪来：只要每轮都由目标模型贪心验收，输出就等于普通贪心。所以草稿可以换成更便宜或更准的方法，例如一次并行写出整块草稿的 [DFlash，arXiv:2602.06036](https://arxiv.org/abs/2602.06036)、按逐位置置信度截断草稿的 [DSpark，arXiv:2607.05147](https://arxiv.org/abs/2607.05147)，以及沿预测距离递归、复用主干最后一层的 [ECHO，arXiv:2610.24766](https://arxiv.org/abs/2610.24766)。
 
-**块草稿（DFlash）**。[DFlash（arXiv 2602.06036，2026-02-05 提交）](https://arxiv.org/abs/2602.06036)用一个轻量块扩散草稿模型一次并行写出整块草稿（论文设置块长 16、5 层草稿网络），并把目标模型的隐藏特征注入草稿层的 K/V。论文报告在 Qwen3-8B 上最高约 6.1× 无损加速，约为 EAGLE-3 的 2.5 倍。本书的 `BlockDraft` 只保留“一次调用给出整块”这个接口：用 S6 的多个 MTP 头在同一前缀上并行给出 3 个候选，不是扩散模型，也不做特征注入。
+## P23.14 延伸阅读：推理强度预算与 LK loss {#p23.14-budget-lk}
 
-**置信截断（DSpark）**。[DSpark（arXiv 2607.05147，2026-07-06 提交）](https://arxiv.org/abs/2607.05147)给每个草稿位置预测一个置信度 `c_k = σ(w·[h_k; W1[x_{k−1}]])`，训练目标是 `c* = 1 − ½‖p_d − p_t‖₁`，再由调度器（论文 Algorithm 1，贪心）决定每个请求送多长的草稿去验证；草稿头里的 Markov 部分是低秩 `B = W1W2`（r=256），γ 是草稿块长，生产部署块长 γ=5（最多一次 5 个草稿 token），位置损失权重 `w_k = exp(−(k−1)/γ)` 也用同一个 γ。论文报告相对 MTP-1 单用户速度 V4-Flash 提升 60–85%、V4-Pro 提升 57–78%。`c*` 恰好等于 `Σ_v min(p_d, p_t)`，也就是随机投机采样的接受率：代码用 20 万次 Monte Carlo 抽样验证两者相差小于 0.01，并在测试中把 ½ 删掉作为变异，必须被抓住。`BlockDraft(tau=…)` 用草稿自身最大概率代替学到的置信头，在第一个低于阈值的位置截断；阈值设成 1.01 时草稿全被截掉，输出仍不变，只是退化成普通逐 token 解码。
+[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)在 RL 中给每道题估一个 token 预算，轨迹超出预算的若干倍就把任务奖励改成 −1，以此训练出不同推理强度的档位。[LK Losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881) 则让草稿直接优化接受率 `Σ_x min(p(x), q(x))` 的负对数，而不是 KL。
 
-**ECHO 递归草稿头**。[ECHO（arXiv 2610.24766，2026-10-17 提交）](https://arxiv.org/abs/2610.24766)沿**预测距离（horizon）**递归：`h_t = T^L(F(h_{t−1}, e(x_t)))`。T^L 不是新加的模块，而是**主干自己的最后一层（第 L 层）解码层**，输出头也与主干共享；F 是轻量融合层（两路各做 RMSNorm、拼接、线性投影）。第 k 个 horizon 只调用一次 T^L：把第 k−1 个 horizon 的隐藏状态与**再往后一个 token** 的嵌入融合，预测再远一个位置。论文明确把它与“反复精炼同一位置”的 looped transformer 区分开。训练时用动态深度采样（DDS）：每个优化步按 π=(0.6, 0.3, 0.1) 抽一个 horizon 数 D∈{1,2,3}（期望 1.5），只训练前 D 个 horizon，于是第 k 个 horizon 被训练的频率是 `f_k = P(D ≥ k)`，即 (1, 0.4, 0.1)（论文式 4）。论文对比表中 ECHO-1.5(3) 为 36.34、固定深度 3 的 ECHO-3 为 36.36（平均深度只有一半），主干为 10B-A1B、600B token 预训练。本书的 `ECHOHead` 直接复用 S6 目标模型的最后一个 block 作为 T^L，并复用嵌入、`ln_f` 与输出头。写成下标：位置 t 的第 k 个 horizon `h^(k)_t = T^L(F(h^(k−1)_t, e(x_{t+k})))`，监督标签是 `x_{t+k+1}`（代码里 `idx[:, k+1:]`），`h^(0)` 就是目标模型自己的最后一层状态。每个优化步按 π 抽 D，对 horizon 1..D 的交叉熵取平均。起草时，第 j 个草稿把上一 horizon 的状态与最新 token（先是 pending，再是刚起草的 token）融合。**冻结目标模型、只训练融合层 F 是本书的简化**：论文里 F 与共享的主干（包括 T^L 和输出头）在预训练中联合优化，草稿能力本身就会塑造主干。训练后，在留出数据上 horizon 1/2/3 的贪心准确率都是 1.000（规律太简单，见下方边界）。测试改动下标 t+2 处的 token：`h^(1)_t` 必须不变、`h^(2)_t` 必须改变；把实现换成“在同一位置反复套 T 的 looped 版本”会被这条测试抓住，把标签错用成 `x_{t+2}` 的变异也会被抓住。
+## P23.15 延伸阅读：batch 变大时的投机解码 {#p23.15-eagle4}
 
-![ECHO 教学融合层在 CPU 上的训练损失（horizon 1..D 平均，DDS 抽 D；seed 231，单次运行）](assets/diagrams/p23/echo_loss.svg)
+batch 小时解码受内存带宽限制，多验证几个草稿位置几乎不增加耗时；batch 变大后矩阵乘吃满算力，验证就要付真实的算力账。EAGLE-4（[论文 PDF](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)）按实测的起草和验证代价，每轮决定起草多少、用树还是用链。
 
-平均接受长度可以直接从各位置条件接受率算出：`E[τ] = 1 + Σ_d Π_{i≤d} a_i`，1 是每轮必有的修正或 bonus token。a=(0.8, 0.6, 0.4) 时为 2.472，测试用 5 万次模拟核对，并把“乘积”误写成“直接相加”作为变异。
+## P23.16 延伸阅读：FlashMap {#p23.16-flashmap}
 
-边界：三个类都是教学重建，不是论文代码（ECHO 仓库未声明许可证，本书未复制其代码）；目标规律 `x_{t+1} = (3x_t+1) mod 11` 极易学习，所以接受率接近 100%，不代表真实模型。ECHO 论文自述的局限同样适用：预训练只重复一次、微调只用单一种子；DDS 每步只抽一个 D，各步的损失构成不同，所以图中曲线本身就会抖；曲线也只是单次运行。不声称任何加速。
-
-## P23.14 延伸：推理强度预算与 LK loss {#p23.14-budget-lk}
-
-**预算控制（S29 §4.1.2）。** 想要“同一题少想一点”，K3 在 RL 中给每道题 x 估一个初始预算 `b0(x)`，来自冷启动模型。轨迹的 token 数 `T(y)` 超过 `τ · b0(x)` 时，任务奖励直接改成 −1。通用任务只数思考 token；agent 任务数全部输出，包括工具调用参数。训练先用较大的 τ 得到 max 档，再把 τ 退火变小，得到 high 和 low 档。
-
-[`../code/24c_budget_lk.py`](../code/24c_budget_lk.py) 用 4 条自造轨迹，`b0 = 1000`：
-
-| (任务奖励, token) | τ=3 | τ=2 | τ=1 |
-|---|---|---|---|
-| (1, 900) | 1 | 1 | 1 |
-| (1, 1500) | 1 | 1 | −1 |
-| (0, 700) | 0 | 0 | 0 |
-| (1, 2600) | 1 | −1 | −1 |
-
-测试检查：恰好等于阈值不罚；τ 变小后，被罚的轨迹不会恢复。
-
-**MTP 变成草稿模型（S29 §4.1.4）。** K3 预训练时带一个 MTP 层。后训练时冻结目标模型，把这个 MTP 层微调成 EAGLE-3 式草稿（[EAGLE-3，arXiv:2503.01840](https://arxiv.org/abs/2503.01840)）。训练时草稿展开 7 步。输入融合第 1、第 4 和最后一个 AttnRes block 的特征（见 [6.9](#p07-attnres)）。融合矩阵 `W_E3` 初始化为 `[0 0 I]`，所以起点就是 MTP 层预训练时见过的高层特征。
-
-**LK loss。** P23.13 已用 Monte Carlo 验证：随机投机采样的逐 token 接受率是 `Σ_x min(p(x), q(x))`。K3 直接优化它的负对数（Eq.16），来自 [LK losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881)：
-
-`L_LK = −log Σ_x min(p(x), q(x))`，p、q 都在温度 1 下取，不加交叉熵项。
-
-动机是：草稿容量有限时，KL 更小不保证接受率更高。脚本给出一个自造反例，目标 p = (0.6, 0.3, 0.1)：
-
-| 草稿 | KL(p‖q) | 接受率 | LK |
-|---|---|---|---|
-| A = (0.45, 0.40, 0.15) | 0.0458 | 0.850 | 0.1625 |
-| B = (0.65, 0.349, 0.001) | 0.3671 | 0.901 | 0.1043 |
-
-A 的 KL 更小，B 的接受率更高。原因是 KL 重罚“目标有、草稿几乎没有”的 token，而接受率只看重叠的面积。测试还核对接受率等于 1 减总变差距离，并把 min 换成 max 作为变异。
-
-**Nemotron 3.5 Super（S30）** 的做法不同：一个递归共享的 MTP 头，从 Nemotron 3 Super Base 两个头中的第一个初始化。官方文档的 Table 8 引用值是，草稿长度 7 时平均接受长度 4.287 → 4.718（greedy）、3.787 → 4.612（sampled）。这些是厂商报告的数字，本书没有复现。
-
-## P23.15 延伸：为什么 batch 一大投机就不划算，以及 EAGLE-4 怎么按代价选树或链 {#p23.15-eagle4}
-
-P23.13 的 DFlash 一次并行写出整块草稿；EAGLE-4 走另一条路：**自回归小草稿器 + 按实测代价决定这一轮起草多少、验证多少**。对照如下（机制列以官方说明为准；加速倍数均为厂商／作者报告，本书未复现 27B）：
-
-| | MTP 自带草稿 | EAGLE-3 | DFlash | EAGLE-4 |
-|---|---|---|---|---|
-| 草稿怎么产生 | 目标模型自带的多 token 头，常做成固定链 | 单层自回归草稿器，读目标多层隐藏状态 | 块扩散：一次并行出一整块（论文块长 16） | 沿用 EAGLE-3.1 单层归一化草稿器；读目标 **3 个分别归一化的隐藏状态 + token embedding**，输出再喂回下一步 |
-| 树还是链 | 多为固定链 | 动态树（EAGLE-2 风格） | 块（非自回归树） | **低并发动态树、高并发动态链**；每轮由代价模型改形状 |
-| 随 batch 怎么调 | 固定长度，大 batch 时验证窗浪费 | 主要按接受概率长树，不显式吃硬件代价 | 固定块长，大 batch 时可能起草过多 | 一次性测硬件上的起草／验证代价；每步比较期望收益与边际代价 |
-| 词表打分 | 完整 LM head | EAGLE-3 用截断草稿词表 | 视实现 | **低秩候选头**：先用 rank-128 投影给全部词表打分，再只对前 128 个候选用完整 LM head（目标 Qwen3.8-27B 的完整词表 248320，TP4 下每片 62080；不是截断词表） |
-| 长上下文 | 视目标 | 全上下文注意力成本随长度涨 | 视实现 | 草稿注意力滑窗 **4096**；草稿 KV **只追加不淘汰** |
-
-来源：EAGLE-4 论文 PDF（[eagle-hq/EAGLE-4@`3b96ef6`](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)，Preprint，无 arXiv 号）、[LightSeek / TokenSpeed 文](https://lightseek.org/blog/eagle-4.html)（2026-10-20）、[fal 技术解读](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20）；仓库许可证为 **源码可见**（`LicenseRef-Eagle-4-Source-Available`），不是 OSI 开源。代码包 `eagle-harness` 以插件形式接到 SGLang / vLLM / TokenSpeed；本书**不复制**其源码。
-
-### 直觉：小 batch 时验证几乎免费，大 batch 时不再免费
-
-解码在小 batch 时往往是**内存带宽受限**：目标模型每次只算很少的 token，算力闲着，多验证几个草稿位置几乎不增加墙钟时间。batch 变大后，矩阵乘已经吃满算力，再塞进一棵很宽的验证树，就要付真实的算力账——这就是“投机解码收益随 batch 增大而消失”的工程原因。fal 文把同一权衡说成：更大的树给验收更多备选，但也更贵；EAGLE-4 的 harness 用 GPU 上测得的延迟表来管这个权衡。
-
-### 公式：期望收益 ÷ 边际代价
-
-论文 §3.1 把每一步都收成一次比较：
-
-`ΔA / ΔC ≥ τ`
-
-- `ΔA`：再多起草一层（或再多验证一个节点）时期望多接受的 token 数。链上若每步接受率近似为 p，第 k 个草稿位置的边际收益是 `p^k`（再加每轮必有的修正／bonus，见 P23.13 的 `E[τ]`）。树上则用根到节点的草稿概率乘积当接受可能性（EAGLE-2 风格）。
-- `ΔC`：在当前硬件、当前 batch、当前上下文长度下，**一次性测得**的起草或验证耗时增量，查表得到。
-- `τ`：阈值；论文写明起草阈值随深度升高，因为深枝估计更不可靠。
-
-Algorithm 1（论文）每轮做三件事：① 每起草一层后看要不要再深一层；② 按分数从高到低加验证节点，直到下一个节点不值它的验证代价；③ 读当前负载，轻载允许多分支、重载收成短链。同一套草稿权重，不改训练，只改这一轮的树／链形状。
-
-采样（温度 > 0）时，若按本轮已抽出的 token 决定何时停，会偏置目标分布；论文与 LightSeek 文都写明：采样轮的深度要**提前固定**为上一轮代价准则本会停下的深度，再用树拒绝采样保持目标分布。贪心时输出与目标一致。本书仍只演示贪心。
-
-### CPU 玩具：选 k，再断言贪心验收不变
-
-[`../code/24d_eagle4_cost.py`](../code/24d_eagle4_cost.py) 把上面的比较收成**链**上的教学版（不是完整动态树，也不读真实 GPU 表）：
-
-1. 给定接受率 p、单步起草代价 `c_d`、验证代价 `c0 + c1·n`，用 `ΔA/ΔC ≥ τ` 选出草稿长度 k；换一组模拟 batch（改大 `c1`）会看到选出的 k 变短，直到为 0。
-2. 用选出的 k 走本章未改动的 `greedy_decode`，草稿即便乱写也会被纠正，输出与逐 token 贪心逐 token 相同。
-3. 低秩候选头：在词表 5000、`d=64` 上用 W 的截断 SVD 得到 `A、B` 先打分、取 top-128，再只对候选行做完整 `W h`；打印 top-1 与全词表打分一致的比例，以及乘法次数对比。**这是教学简化**：论文把低秩头训练成检索器，报告 rank-128 时候选里含全头 top-1 的比例为 98.2%（作者报告，未复现）。
-
-厂商报告的速度（不是本书测量）：LightSeek / TokenSpeed 文称 Qwen3.8-27B BF16、4×B300 TP4、单请求 temperature=1 时 750 tok/s，相对不投机 2.85×、相对模型自带 MTP 1.28×；agentic coding 采样负载约 3.0×。论文 Fig.1 / Hugging Face 卡在 temperature=0 的 SPEED-Bench 定性子集上报告 EAGLE-4 863.8 tok/s、3.59×（相对 Vanilla）。两组设定不同，不要混成一个数。fal 文说明已发布模型尚未包含多层草稿、MoE 草稿和 Latent ReLU。
-
-边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗 4096 与词表 248320 来自官方仓库文档／工具注释（`docs/known-limits.md`、`tools/bench_kernels.py`，提交 `3b96ef6`）；248320 也是 Qwen3.8-27B config.json 里 text_config 的 `vocab_size`（[固定版本](https://huggingface.co/Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/config.json)）。与 DFlash 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。
-
-## P23.16 延伸：FlashMap——用 flow map 一次写出有块内依赖的草稿 {#p23.16-flashmap}
-
-P23.13 的 DFlash 一次前向写出整块草稿，但**块内各位置彼此独立**；EAGLE 系（含 P23.15 的 EAGLE-4）是**自回归小草稿器**，一步一个 token。FlashMap 走第三条路：用 **flow map 语言模型**从高斯噪声一步跳到整块 token，在**单次前向**里保留块内依赖，再交给目标模型一次并行验证。
-
-先用一句话分清三个名词（本书不训练真实 flow）：
-
-- **流（flow）**：把“噪声”连续地搬到“数据”的一条 ODE；在 token 上，数据是块内各位置的 one-hot。数值积分往往要几十上百步（论文称 NFE，network function evaluations）。
-- **Flow map**：直接学习“从时间 s 跳到时间 t”的算子，用**一次**网络评估代替多步积分；还可把几次短跳拼成 2-step 等。
-- **块内依赖**：草稿 `"new york"` 合理，`"new diego"` 不合理。独立逐位置预测（DFlash）会按边缘分布出交叉组合；联合建模才能少出这种一眼假的块——这正是论文 §6.2 shuffle 测试要量的东西。
-
-### 对照：EAGLE / DFlash / FlashMap
-
-机制列以论文与官方仓库为准；加速倍数均为**论文自报**，本书未复现 Qwen3-8B。
-
-| | EAGLE（自回归草稿） | DFlash（块扩散草稿） | FlashMap（flow map 草稿） |
-|---|---|---|---|
-| 草稿怎么产生 | 轻量自回归草稿器，一步一个 token；读目标多层隐藏状态 | 轻量块扩散：一次前向并行出整块（论文块长 K=16）；位置彼此**独立** | 条件 DiT 上的 flow map：从噪声一次（或少数次）跳到整块；块内 self-attn **保留依赖** |
-| 目标信息怎么用 | 融合目标若干层 hidden | 目标 hidden 注入草稿 K/V | 交叉注意力读目标若干层 hidden（论文取层 1/9/17/25/33）；**冻结**目标 embedding 与 LM head |
-| 每轮草稿代价 | 与草稿长度成正比（逐步） | 约 1 次草稿前向 | 默认 **1 NFE**；可选 `num_steps=2` |
-| 验收 | 目标一次并行验证；贪心时输出 = 目标贪心 | 同左 | 同左（无损） |
-| 论文自报（Qwen3-8B） | EAGLE-3 作对照基线（同数据重训） | 同条件重训的块扩散基线 | 1-step 在 GSM8K、T=0 上最高约 **6.14×** 无损加速；九个基准上平均比同条件 DFlash 快约 **7.4%**；附录有 Qwen3-4B |
-
-来源：[FlashMap，arXiv:2610.24365v1](https://arxiv.org/abs/2610.24365)（2026-10-17；Figure 1(c)、§5、Table 1/2）；代码 [al-jshen/flashmap@`cd5b45b`](https://github.com/al-jshen/flashmap/tree/cd5b45bdf19b1d81ee00bf4c2f212c7c0ed93ac6)（MIT）；权重 [j-shen/FlashMap-Qwen3-8B](https://huggingface.co/j-shen/FlashMap-Qwen3-8B) / [4B](https://huggingface.co/j-shen/FlashMap-Qwen3-4B)（Apache-2.0）；项目页 [jshen.net/flashmap](https://jshen.net/flashmap/)。官方 README 另接 SGLang（`DSPARK` 算法位）与 vLLM speculative config。
-
-### 训练两阶段（只记结构，不抄公式当实现）
-
-1. **先训 flow**：在 one-hot token 块上做连续流（Flow Map Language Models，[arXiv:2602.16813](https://arxiv.org/abs/2602.16813)）；骨干是 6 层条件 DiT（宽 2048、16 头），槽位损失权重 `w_k = e^{-(k-1)/κ}`（论文 κ=7，K=16）。
-2. **再蒸馏成 flow map**：把多步流蒸馏成两时间 denoiser，使一次（或少数次）跳跃逼近积分；论文用 semigroup 蒸馏。1 NFE 时联合结构只部分保留；**2-step** 能收回教师流大部分 shuffle Δ（§6.2）。
-
-### Shuffle 测试：分清“边缘准”和“块内一致”
-
-论文 Table 2（Qwen3-8B，T=0，**论文自报**）：同一套边缘分布下，比较“各槽共享噪声”与“各槽独立噪声”的接受长度，Δ = γ_shared − γ_shuffled。DFlash 无噪声联合、Δ=0；多步流 Δ 最大；FlashMap 1-step Δ 很小，2-step 接近多步教师。教学含义：**只把每个位置的边缘分布拟合好，不等于草稿块本身讲得通**。
-
-### CPU 玩具：联合采样 vs 独立采样
-
-[`../code/24e_flashmap_joint.py`](../code/24e_flashmap_joint.py) 用论文 Fig.1(b) 的两模式直觉（`"new york"` / `"san diego"`）做最小离散玩具——**不是** DiT，也不加载官方权重：
-
-1. 联合草稿：先抽一个模式，再写出两个 token → 块内永远一致。
-2. 独立草稿：两槽各自按边缘抽 → 会出现 `"new diego"` 这类交叉组合，前缀接受长度更短。
-3. Shuffle 对照：独立按槽抽模式（边缘不变、联合被拆掉）→ Δ>0，对应 Table 2 的教学点。
-4. 再用本章未改的 `greedy_decode` 验收一个“整块联合”接口的草稿，断言输出与普通贪心逐 token 相同（无损）。
-
-真实 FlashMap 需要 GPU 与目标模型权重；官方最小调用见仓库 README（`draft.spec_generate(target, …, num_steps=1)`）。本书不下载 Qwen3、不声称本机加速。
-
-路标（不必展开）：ReaDy（[arXiv:2610.20503](https://arxiv.org/abs/2610.20503)）在混合线性注意力里用循环状态给 DSpark 类草稿补上下文；与 FlashMap 正交。
+[FlashMap，arXiv:2610.24365](https://arxiv.org/abs/2610.24365) 用 flow map 从噪声一步跳到整块草稿，在单次前向里保留块内各位置的依赖，再交给目标模型并行验证。
 
 ## 资料版本与复现边界
 
-核验日期：2026-10-19；P23.16 资料核验 2026-10-29。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
+核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
 
 - [DeepSeek-R1，arXiv:2501.12948v1](https://arxiv.org/html/2501.12948v1)：§2.2–2.4，Zero／冷启动／RL／数据筛选／SFT／蒸馏的区别。
 - [DeepSeek-V3 Technical Report，arXiv:2412.19437v2](https://arxiv.org/html/2412.19437v2)：§2.2，串行 MTP 模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。
 - [Fast Inference from Transformers via Speculative Decoding，arXiv:2211.17192v2](https://arxiv.org/html/2211.17192v2)：§2 与附录 A，草稿验证和随机采样校正的原始依据。本章实现仅为贪心。
 - [DeepSeek-V4.1-Flash，arXiv:2609.19969v1](https://arxiv.org/html/2609.19969v1)：§2.4.3，仅用于核对 DSpark 与 V3 MTP 的差异；不把不同版本的训练方案拼接成一个实现。
-- [DFlash，arXiv:2602.06036](https://arxiv.org/abs/2602.06036)（提交 2026-02-05，核验 2026-10-25）：块草稿、特征注入与加速倍数，见 P23.13。
-- [DSpark，arXiv:2607.05147](https://arxiv.org/abs/2607.05147)（提交 2026-07-06，核验 2026-10-25）：置信头、`c*` 目标、Algorithm 1 调度与速度数字。
-- [ECHO，arXiv:2610.24766](https://arxiv.org/abs/2610.24766)（提交 2026-10-17，核验 2026-10-25）：式 1 递归（共享最后一层）、式 4 的 f_k、DDS 分布与 Limitations。
-- S29：[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（核验 2026-10-26）：§4.1.2 预算控制，§4.1.4 EAGLE-3 草稿与式 16，见 P23.14。
-- [EAGLE-3，arXiv:2503.01840](https://arxiv.org/abs/2503.01840) 与 [LK losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881)：K3 引用的原文，见 P23.14。
-- S30：[Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（核验 2026-10-26）：共享 MTP 头与 Table 8 引用值，厂商报告。
-- [EAGLE-4：One Flexible Drafter for All Batch Sizes and Hardware](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)（Preprint PDF，无 arXiv 号；仓库提交 `3b96ef6`，核验 2026-10-28）：§3.1 代价模型与 Algorithm 1，§3.2 低秩候选头，§3.3 滑窗与只追加草稿 KV；许可为源码可见。
-- [EAGLE](https://arxiv.org/abs/2401.15077)、[EAGLE-2](https://arxiv.org/abs/2406.16858)、[EAGLE-3](https://arxiv.org/abs/2503.01840)：家族原文；EAGLE-4 论文与 `CITATION.cff` 亦列出。
-- [LightSeek / TokenSpeed：EAGLE-4 training and serving](https://lightseek.org/blog/eagle-4.html)（2026-10-20，核验 2026-10-28）：750 tok/s 等厂商报告、Harness 树／链、Efficient LM Head、滑窗 4096。
-- [fal：EAGLE-4 Technical Deepdive](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20，核验 2026-10-28）：batch 权衡、与 DFlash/DSpark 对照；已发布模型不含多层／MoE／Latent ReLU。
-- 代码与权重：[eagle-hq/EAGLE-4](https://github.com/eagle-hq/EAGLE-4)（`3b96ef6`）、[PyPI eagle-harness](https://pypi.org/project/eagle-harness/)、[EAGLE-Corp/Qwen3.8-27B-EAGLE4](https://huggingface.co/EAGLE-Corp/Qwen3.8-27B-EAGLE4)；本书实验见 [`../code/24d_eagle4_cost.py`](../code/24d_eagle4_cost.py)。
-- [FlashMap，arXiv:2610.24365v1](https://arxiv.org/abs/2610.24365)（2026-10-17，核验 2026-10-29）：§3 flow / flow map 草稿与蒸馏，§5–6 与 Figure 1(c)/Table 1/2 数字，§6.2 shuffle 测试；见 P23.16。
-- [Flow Map Language Models，arXiv:2602.16813](https://arxiv.org/abs/2602.16813)：FlashMap 所蒸馏的 continuous flow 骨架。
-- 代码与权重：[al-jshen/flashmap](https://github.com/al-jshen/flashmap)（提交 `cd5b45bdf19b1d81ee00bf4c2f212c7c0ed93ac6`，MIT）、[j-shen/FlashMap-Qwen3-8B](https://huggingface.co/j-shen/FlashMap-Qwen3-8B)、[j-shen/FlashMap-Qwen3-4B](https://huggingface.co/j-shen/FlashMap-Qwen3-4B)（Apache-2.0）；项目页 [jshen.net/flashmap](https://jshen.net/flashmap/)；本书实验见 [`../code/24e_flashmap_joint.py`](../code/24e_flashmap_joint.py)。
-- 路标：[ReaDy，arXiv:2610.20503](https://arxiv.org/abs/2610.20503)（混合线性注意力循环状态服务草稿；不必展开）。
