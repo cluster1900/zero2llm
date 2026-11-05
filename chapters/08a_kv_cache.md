@@ -190,7 +190,7 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 - `drop(P)`（Eq. 4）：把集合 P 里的 KV 条目排除在以后的注意力之外。保留条目的位置编码不变，下一个 `append` 的位置编号也不变。实现上可以只在 mask 里把它们设成“不看”，就像 P11.4 的矩形 mask 多了几列“不看”。
 - `repos`（Eq. 5）：把保留下来的 r 个 key 按逻辑顺序改到位置 0…r−1，下一个 token 用位置 r。对 RoPE，把一个 key 从位置 p 挪到 q 只需 $K\leftarrow R(q)R(p)^{-1}K$；**V 原样不动**，因为 V 本来就没有旋转。为什么旋转一下就够，见 [P12.3](#p12-rope) 的相对位置性质。
 
-AKV 的接口在原来的 OpenAI 格式请求上加两个字段（[README](https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/README.md) 的 Quick Start 示例和字段表）：`"drop_message": {"4": [2]}` 表示处理完第 4 条消息后丢掉第 2 条消息的 KV，`"reposition": [4]` 表示处理完第 4 条后压紧位置。论文 Fig. 6 画的是另一种写法（`"cache": {"drop": …}`），本书以仓库 README 为准。
+AKV 的接口在原来的 OpenAI 格式请求上加两个字段（[README](https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/README.md) 的 Quick Start 示例和字段表）：`"drop_message": {"4": [2]}` 表示处理完下标 4 的消息后丢掉下标 2 的消息的 KV，`"reposition": [4]` 表示处理完下标 4 的消息后压紧位置。README 的消息下标从 0 开始数：示例里下标 2 是第一条工具结果 Record A，下标 4 是第二条工具结果 Record B。论文 Fig. 6 画的是另一种写法（`"cache": {"drop": …}`），本书以仓库 README 为准。
 
 **关键：drop + repos 不等于重新 prefill。** 保留下来的 token 当初算 K/V 时，是**看过**被删内容的。第 1 层的 K/V 只由 token 本身和位置决定，所以 repos 之后能和重算完全一样；但从第 2 层起，输入已经是混入了上下文的隐藏状态，被删内容的信息就留在保留 token 的 K/V 里。论文 §3.4 和 Fig. 5 说的正是这个“历史依赖”：同样的 token、同样的位置，操作顺序不同，缓存状态就不同；Fig. 1 也注明保留的 KV 仍可能带着被删历史的信息。
 
