@@ -195,13 +195,7 @@ mean_loss = total_loss / total_targets if total_targets else None
 
 这里的 warmup 只是一个可核对的实验设置，不是“所有模型都必须两步预热”。峰值、步数、batch token 数、优化器与初始化共同影响训练。恢复到第 5 步之后，不能把学习率又从第 1 步开始，也不能不记录就把总预算从 12 改成 120；本程序会拒绝不同 horizon 的 checkpoint。
 
-### 混合精度不等于“所有张量都改成半精度”
-
-本实验用 **CPU float32**，没有 AMP，也没有 GradScaler。混合精度训练通常让适合的算子使用较低精度，部分归约或敏感操作保持较高精度；收益取决于设备、算子与形状，不保证每个小任务更快。
-
-FP16 的较小梯度可能下溢；loss scaling 在反向前放大 loss，更新前还原梯度。BF16 与 FP16 的数值范围不同，也不是只换名称就能复用所有设置。应检查有限 loss/梯度、与 float32 参考的偏差，并使用适合该设备和模型的 autocast/scaler 流程，而不是盲目调用 `model.half()`。若用了 GradScaler，其状态也属于恢复训练的一部分。[PyTorch 2.14 AMP 文档](https://docs.pytorch.org/docs/2.14/amp.html)
-
-GPU 混合精度、吞吐、显存与多卡恢复均为**未运行的扩展方向**，本章没有速度或显存节省实测。想扩展时先固定 GPU 型号、驱动、PyTorch/CUDA 版本、dtype、有效 batch tokens、预热和计时边界，再分别测正确性与性能；不能拿本章 CPU 的确定性结果替代 GPU 验证。
+混合精度是让适合的算子用较低精度、敏感运算保持较高精度，不是把所有张量都改成半精度（[PyTorch 2.14 AMP 文档](https://docs.pytorch.org/docs/2.14/amp.html)）；本章的 CPU float32 实验没有使用 AMP。
 
 ## P19.8 Checkpoint：不是一张权重照片，而是训练现场
 
@@ -256,17 +250,18 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。
 
-在附录 H 所列环境下（单线程、float32、seed=7）的本书实测：
+在附录 H 所列环境下（单线程、float32、seed=7）的本书实测，数据版本指纹也列在附录 H：
 
 | 记录 | 结果 | 能说明什么 |
 | --- | --- | --- |
-| 数据版本 | `1b1a8d64d76a38761d8166a145550efdab89a852874994c19be8333947c75705` | 本次完整生成/处理契约的指纹 |
 | 训练器 | 单头 attention、宽度 12、dropout=0.2、2,040 参数 | 小型检查模型，不是生产模型 |
 | 优化器 | AdamW，betas=(0.9,0.999)，eps=1e-8，weight_decay=0.01 | 恢复测试确实包含有状态优化器 |
 | 数据消费 | 12 次更新、84 个有效目标 | 21 个目标重复 4 遍，不是 84 个不同知识点 |
 | 恢复一致性 | 第 3 步及第 5 步中断后，完整状态与连续运行逐项相等 | 包含参数、优化器、RNG、游标和 loss 轨迹 |
 | 验证均值 | 3.702012198 → 3.486805235，均为 7 个目标 | 仅这份玩具划分上的变化 |
 | 最终测试集 | 默认未评分 | 不用测试分数指导本演示 |
+
+2,040 个参数可以这样复算（单个 block，词表 18、块长 12、宽度 12、SwiGLU 中间维 24）：token embedding 18×12=216，位置 embedding 12×12=144，两个 RMSNorm 2×12=24，QKV 12×36=432，输出投影 12×12=144，SwiGLU 三个投影 3×12×24=864，输出头 12×18=216，合计 2,040。
 
 模型复用 P13 / S3 的 RMSNorm 与 SwiGLU，但为了让文档边界可逐格检查，另写了单头显式 attention 与文档内学习式位置 embedding。**它不是把 S3 的 cache 模型无缝升级成另一条主线**，也没有实现 RoPE、KV cache 或高效变长 attention kernel。此处关注数据契约，后续接入框架时再验证接口对应。
 

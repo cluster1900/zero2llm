@@ -10798,23 +10798,9 @@ warmup，随后线性降到峰值的 10%。前几步和最后一步的值如下�
 token 数、优化器与初始化共同影响训练。恢复到第 5
 步之后，不能把学习率又从第 1 步开始，也不能不记录就把总预算从 12 改成
 120；本程序会拒绝不同 horizon 的 checkpoint。</p>
-<h3
-id="混合精度不等于所有张量都改成半精度">混合精度不等于“所有张量都改成半精度”</h3>
-<p>本实验用 <strong>CPU float32</strong>，没有 AMP，也没有
-GradScaler。混合精度训练通常让适合的算子使用较低精度，部分归约或敏感操作保持较高精度；收益取决于设备、算子与形状，不保证每个小任务更快。</p>
-<p>FP16 的较小梯度可能下溢；loss scaling 在反向前放大
-loss，更新前还原梯度。BF16 与 FP16
-的数值范围不同，也不是只换名称就能复用所有设置。应检查有限 loss/梯度、与
-float32 参考的偏差，并使用适合该设备和模型的 autocast/scaler
-流程，而不是盲目调用 <code>model.half()</code>。若用了
-GradScaler，其状态也属于恢复训练的一部分。<a
+<p>混合精度是让适合的算子用较低精度、敏感运算保持较高精度，不是把所有张量都改成半精度（<a
 href="https://docs.pytorch.org/docs/2.14/amp.html">PyTorch 2.14 AMP
-文档</a></p>
-<p>GPU
-混合精度、吞吐、显存与多卡恢复均为<strong>未运行的扩展方向</strong>，本章没有速度或显存节省实测。想扩展时先固定
-GPU 型号、驱动、PyTorch/CUDA 版本、dtype、有效 batch
-tokens、预热和计时边界，再分别测正确性与性能；不能拿本章 CPU
-的确定性结果替代 GPU 验证。</p>
+文档</a>）；本章的 CPU float32 实验没有使用 AMP。</p>
 <h2 id="p19.8-checkpoint不是一张权重照片而是训练现场">P19.8
 Checkpoint：不是一张权重照片，而是训练现场</h2>
 <p>模型参数回答“目前学到哪了”，但不足以回答“下一步会发生什么”。想象暂停视频：只保存当前画面，无法知道播放器下一帧的位置、播放速度或随机播放列表。</p>
@@ -10921,7 +10907,9 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb131-1"><a href
 <span id="cb131-10"><a href="#cb131-10" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_pretraining_pipeline.py <span class="at">-v</span></span></code></pre></div>
 <p>没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练
 CLI 返回清晰提示和退出码 2。</p>
-<p>在附录 H 所列环境下（单线程、float32、seed=7）的本书实测：</p>
+<p>在附录 H
+所列环境下（单线程、float32、seed=7）的本书实测，数据版本指纹也列在附录
+H：</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -10936,11 +10924,6 @@ CLI 返回清晰提示和退出码 2。</p>
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>数据版本</td>
-<td><code>1b1a8d64d76a38761d8166a145550efdab89a852874994c19be8333947c75705</code></td>
-<td>本次完整生成/处理契约的指纹</td>
-</tr>
 <tr>
 <td>训练器</td>
 <td>单头 attention、宽度 12、dropout=0.2、2,040 参数</td>
@@ -10973,6 +10956,11 @@ CLI 返回清晰提示和退出码 2。</p>
 </tr>
 </tbody>
 </table></div>
+<p>2,040 个参数可以这样复算（单个 block，词表 18、块长 12、宽度
+12、SwiGLU 中间维 24）：token embedding 18×12=216，位置 embedding
+12×12=144，两个 RMSNorm 2×12=24，QKV 12×36=432，输出投影
+12×12=144，SwiGLU 三个投影 3×12×24=864，输出头 12×18=216，合计
+2,040。</p>
 <p>模型复用 P13 / S3 的 RMSNorm 与
 SwiGLU，但为了让文档边界可逐格检查，另写了单头显式 attention
 与文档内学习式位置 embedding。<strong>它不是把 S3 的 cache
@@ -11630,61 +11618,16 @@ optimizer 或 Python 对象。safetensors
 Megatron 的固定版说明区分与 TP/PP
 布局绑定的旧格式及其他分布式格式，不能默认不同框架的 checkpoint
 可以直接交换。</p>
-<h2 id="p20.10-多-gpu-选修先写实验单不在-cpu-假演示">P20.10 多 GPU
-选修：先写实验单，不在 CPU 假演示</h2>
-<p>本章没有安装 DeepSpeed / Megatron，也没有可报告的多 GPU
-运行、通信量实测、显存峰值或加速比。下面只是实验设计与配置阅读题，不是已经通过的运行命令。</p>
-<p>一个最小 ZeRO-2 配置片段可以先读成：</p>
-<div class="sourceCode" id="cb139"><pre
-class="sourceCode json"><code class="sourceCode json"><span id="cb139-1"><a href="#cb139-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb139-2"><a href="#cb139-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;train_micro_batch_size_per_gpu&quot;</span><span class="fu">:</span> <span class="dv">1</span><span class="fu">,</span></span>
-<span id="cb139-3"><a href="#cb139-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;gradient_accumulation_steps&quot;</span><span class="fu">:</span> <span class="dv">1</span><span class="fu">,</span></span>
-<span id="cb139-4"><a href="#cb139-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;zero_optimization&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;stage&quot;</span><span class="fu">:</span> <span class="dv">2</span><span class="fu">},</span></span>
-<span id="cb139-5"><a href="#cb139-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;bf16&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;enabled&quot;</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">},</span></span>
-<span id="cb139-6"><a href="#cb139-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;fp16&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;enabled&quot;</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">}</span></span>
-<span id="cb139-7"><a href="#cb139-7" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
-<p>它只说明每 rank 的
-microbatch、累积次数、状态分片级别与未启用混合精度，<strong>不是完整训练程序</strong>。启动器模板形如：</p>
-<pre class="text"><code>DeepSpeed：deepspeed --num_gpus=2 YOUR_GPU_TRAIN.py --deepspeed YOUR_DS_CONFIG.json
-Megatron：torchrun --nproc_per_node=2 YOUR_MEGATRON_ENTRY.py [与该入口一致的模型和数据参数]</code></pre>
-<p>大写项是待填写的占位符，不是本仓库文件。YOUR_GPU_TRAIN.py
-必须自己解析配置、正确接入 DeepSpeed 或 HF Trainer；不能把本章强制
-use_cpu=True 的 –hf 脚本塞进去冒充多卡训练。Megatron 入口、数据预处理和
-flags 应来自选定 revision 的官方示例；仅把 –tensor-model-parallel-size=2
-写在任意脚本后面没有意义。可从 <a
-href="https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0">固定版官方仓库</a>
-的 examples 与训练参数说明开始。</p>
-<p>Megatron 还有一个可供选修的具体入口：<a
-href="https://github.com/NVIDIA/Megatron-LM/blob/core_v0.12.0/examples/run_simple_mcore_train_loop.py">core_v0.12.0
-的 run_simple_mcore_train_loop.py</a>。本章已读取该版本源码，确认它使用
-MockGPTDataset、本地空 tokenizer、2 层模型、TP=2、PP=1，并运行 5
-次更新。选好官方兼容依赖、进入该版本仓库后，待验证命令为：</p>
-<div class="sourceCode" id="cb141"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb141-1"><a href="#cb141-1" aria-hidden="true" tabindex="-1"></a><span class="va">CUDA_VISIBLE_DEVICES</span><span class="op">=</span>0,1 <span class="ex">torchrun</span> <span class="at">--standalone</span> <span class="at">--nproc_per_node</span><span class="op">=</span>2 <span class="dt">\</span></span>
-<span id="cb141-2"><a href="#cb141-2" aria-hidden="true" tabindex="-1"></a>  examples/run_simple_mcore_train_loop.py</span></code></pre></div>
-<p>这条命令<strong>未在本书环境执行</strong>。需恰好暴露两张可用 CUDA
-GPU，因为该入口用可见 GPU 数初始化 world size，源码又把 TP 固定为
-2；还会编译数据 helper，并在当前目录写
-ckpt。应使用新的实验目录并先检查源码，不能直接覆盖已有检查点。它是理解
-Megatron-Core
-接线的入口，不是通用生产训练配方，也不自动证明保存了可恢复的优化器状态。</p>
-<p>动手前把下列内容保存成自己的实验单：</p>
-<ol type="1">
-<li>代码 tag / commit、PyTorch / CUDA / 驱动 / NCCL / DeepSpeed 或
-Megatron 版本；与本章 CPU 依赖分开管理。</li>
-<li>至少两张兼容 GPU 的型号、每卡显存、互联、CPU /
-RAM，跨机器时记录网络；是否真的支持计划使用的 BF16 / FP16 路径。</li>
-<li>完整展开后的启动命令和配置，不只保存一张截断的终端截图；写明 DP / TP
-/ PP / EP 的 rank 分组。</li>
-<li>固定模型、tokenizer、数据、序列长度、有效 token 数、batch
-与优化器；先用最小模型检查目标与梯度，再逐步扩张。</li>
-<li>对比 DDP 与 ZeRO-2
-时尽量只改变状态分片，分别记录持久状态估计、实测峰值分配 /
-保留显存、通信和速度。</li>
-<li>warm-up、设备同步、重复次数、均值和波动；保存 checkpoint
-后真正重启恢复一次。</li>
-</ol>
-<p>这份实验单的价值不在于把配置写得很长，而在于让别人知道结果能比较什么、不能比较什么。在条件未具备时停在“未测”，比把理论账本包装成实测更专业。</p>
+<h2 id="p20.10-多-gpu-选修本章未运行">P20.10 多 GPU
+选修：本章未运行</h2>
+<p>本章没有安装 DeepSpeed / Megatron，也没有多 GPU
+运行、通信量、显存峰值或加速比的实测。想动手时，可从固定版 <a
+href="https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0">Megatron-LM
+core_v0.12.0</a> 的 examples 开始，例如 <a
+href="https://github.com/NVIDIA/Megatron-LM/blob/core_v0.12.0/examples/run_simple_mcore_train_loop.py">run_simple_mcore_train_loop.py</a>（TP=2，需恰好两张可见
+CUDA GPU，本书未执行）；不能把本章强制 use_cpu=True 的 –hf
+脚本塞进多卡启动器冒充多卡训练。动手时记录代码版本、硬件与完整启动配置，先用最小模型检查目标与梯度；对比
+DDP 与 ZeRO-2 时只改变状态分片，并真正重启恢复一次 checkpoint。</p>
 <h2 id="p20.11-练习排错与验收">P20.11 练习、排错与验收</h2>
 <h3 id="练习">练习</h3>
 <ol type="1">
@@ -11707,12 +11650,10 @@ shape 不兼容。结构说明与已学习参数是两个不同对象。</li>
 的非忽略标签。此时会把本例梯度缩小为正确值的 9/11。</li>
 <li>所有权为 [3,2,2]，持久状态为 [48,32,32] bytes，合计 112
 bytes。不能用 112/3 作为每个 rank 都安全的容量上界。</li>
-<li>tests/test_training_frameworks.py
-实际执行八种语义变异：丢掉分片余数、提前切分梯度、提前切分参数、漏算
-master weight、错移 CE 标签、恢复首位 BOS 计数、取消
-optimizer.step、损坏恢复后的权重。前四种被独立手算账本发现；错移标签被独立
-CE 参考识别；后三种被真实 Trainer 更新、非零变化和恢复 logits
-断言识别。程序能运行或 loss 下降，都不能代替这些检查。</li>
+<li>例如错移 CE 标签，会被独立 CE
+参考发现；本章测试实际执行的语义变异清单见
+<code>docs/testing.md</code>。程序能运行或 loss
+下降，都不能代替这些检查。</li>
 </ol>
 <p>常见排错顺序：</p>
 <ul>
@@ -11776,7 +11717,7 @@ Fine-Tuning，有监督微调）规定从示范答案中学习什么；全量更
 决定怎样调整参数。SFT 不等于 LoRA，LoRA 也不只用于
 SFT。换了训练方法，错误的标签依旧是错误的标签。</p>
 <p>读完本章，你应能给一段多轮对话逐 token 标出 loss，手算一个 LoRA
-层，并用测试证明基础权重没有被偷偷更新。前置是 P02 的 tokenizer、P09
+层，并检查基础权重保持不变。前置是 P02 的 tokenizer、P09
 的交叉熵与梯度，以及 P19–P20 的数据和框架契约。不需要
 GPU，也不下载模型。</p>
 <p>配套 <a href="code/22_sft_lora.py">code/22_sft_lora.py</a>
@@ -11813,25 +11754,17 @@ loss，但不能推出模型像人一样理解规则，更不能把“正确格�
 assistant-only loss。</p>
 <p><a
 href="https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py">TRL
-0.18.2 的 SFTTrainer 源码</a>
-展示了成熟训练入口如何处理数据和训练配置。这里引用它作为框架定位，不调用其中
-API；更不把其他版本的参数名当成这个版本已经验证过的接口。</p>
-<p>版本阅读说明：P20 的 TRL 0.17.0 用于介绍训练框架与职责；本章固定
-0.18.2，只查看 SFTTrainer 的数据处理和训练入口；P22 则固定
-0.16.1，逐项拆解该版本 GRPO
-的具体公式与配置。选择不同标签是为了分别固定这些来源快照，<strong>不是推荐把三版混装，也不是声称三章使用同一套
-TRL 环境</strong>。这里没有执行 TRL，因此不作跨版本 API
-兼容承诺；尤其不能把 P22 的样本标准差、稳定项、归约和 KL 估计约定推广到
-0.18.2。实际运行的是本章独立 PyTorch
-脚本；若要迁移到框架，需另选一个统一版本，重新核对模板、mask、配置与实际训练结果。</p>
+的 SFTTrainer 源码</a>
+展示了成熟训练入口如何处理数据和训练配置。本章只引用它作框架定位，不运行；固定版本及
+P20–P22 为何引用不同 TRL 版本，见附录 H。</p>
 <h2 id="p21.2-对话模板角色不是另一个输入通道">P21.2
 对话模板：角色不是另一个输入通道</h2>
 <p>输入常以消息列表保存：</p>
-<div class="sourceCode" id="cb142"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb142-1"><a href="#cb142-1" aria-hidden="true" tabindex="-1"></a>messages <span class="op">=</span> [</span>
-<span id="cb142-2"><a href="#cb142-2" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;user&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;问红&quot;</span>},</span>
-<span id="cb142-3"><a href="#cb142-3" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;assistant&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;红&quot;</span>},</span>
-<span id="cb142-4"><a href="#cb142-4" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
+<div class="sourceCode" id="cb139"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb139-1"><a href="#cb139-1" aria-hidden="true" tabindex="-1"></a>messages <span class="op">=</span> [</span>
+<span id="cb139-2"><a href="#cb139-2" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;user&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;问红&quot;</span>},</span>
+<span id="cb139-3"><a href="#cb139-3" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;assistant&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;红&quot;</span>},</span>
+<span id="cb139-4"><a href="#cb139-4" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
 <p>但本章的 decoder-only 模型最终收到的仍是一串 token
 ID，而不是一个会自动理解 role
 字段的聊天对象。模板决定怎样把消息列表变成序列。</p>
@@ -11900,8 +11833,7 @@ href="https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating">Trans
 4.51.3 的模板文档</a>
 说明了模板与生成提示的关系，并提醒避免在模板已经加入特殊 token
 后重复加入。本章只借助这些接口概念，不把手写模板称为
-<code>apply_chat_template</code> 的实际运行结果。P20 已经验证过的 HF
-tokenizer 也没有被本章暗中改写。</p>
+<code>apply_chat_template</code> 的实际运行结果。</p>
 <h2 id="p21.3-八个位置只有两个评分点">P21.3
 八个位置，只有两个评分点</h2>
 <p>先完整写出“问红 → 红”的数据。这里的位置从 0 开始，<code>-100</code>
@@ -11970,9 +11902,9 @@ tokenizer 也没有被本章暗中改写。</p>
 <p><strong>labels 与 input_ids 保持同样的位置。不要在构造 labels
 时提前移动答案。</strong> 移动发生在计算 loss
 的函数里，并且只发生一次：</p>
-<div class="sourceCode" id="cb145"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb145-1"><a href="#cb145-1" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> labels[:, <span class="dv">1</span>:]</span>
-<span id="cb145-2"><a href="#cb145-2" aria-hidden="true" tabindex="-1"></a>predictions <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>]</span></code></pre></div>
+<div class="sourceCode" id="cb142"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb142-1"><a href="#cb142-1" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> labels[:, <span class="dv">1</span>:]</span>
+<span id="cb142-2"><a href="#cb142-2" aria-hidden="true" tabindex="-1"></a>predictions <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>]</span></code></pre></div>
 <p>所以位置 5 的 logits 预测位置 6 的“红”，位置 6 的 logits 预测位置 7
 的 EOS。我们<strong>不是</strong>用“红”位置的 logits
 预测同一个“红”；那样会让模型看到答案再复述答案。最后一个输入位置的
@@ -11987,6 +11919,7 @@ m_{b,t+1}\log p_\theta(x_{b,t+1}\mid x_{b,\le t}),
 N=2。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：</p>
 <p><span class="math display">\[
 \mathcal L=-\frac{\ln 0.5+\ln 0.25}{2}
+=\frac{(-\ln 0.5)+(-\ln 0.25)}{2}
 =\frac{0.69314718+1.38629436}{2}
 \approx1.03972077.
 \]</span></p>
@@ -12078,9 +12011,8 @@ y=W_0x+\frac{\alpha}{r}B(Ax).
 <p>可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是<strong>这次更新</strong>：<code>rank(BA)≤r</code>，还可能低于
 r。</p>
 <p>这里是 <a href="https://arxiv.org/abs/2106.09685v2">LoRA 原论文
-v2</a> 的普通低秩更新及 alpha/r 缩放形式，不包含 DoRA、rsLoRA
-或其他变体。PyTorch 的 Linear 接受行式 batch，所以实现写成先
-<code>F.linear(x,A)</code> 再
+v2</a> 的普通低秩更新及 alpha/r 缩放形式。PyTorch 的 Linear 接受行式
+batch，所以实现写成先 <code>F.linear(x,A)</code> 再
 <code>F.linear(...,B)</code>；不要因为记法切换就把 BA
 的乘法顺序颠倒。</p>
 <h3 id="先数参数再谈节省">先数参数，再谈节省</h3>
@@ -12162,16 +12094,16 @@ Transformer：字符 embedding + 可学习绝对位置、LayerNorm、q/k/v/o
 dropout，不共享输入/输出权重，一共 3,760 参数。它不是在 S5
 主线上偷偷替换组件，也不读取之前章节的 checkpoint。</p>
 <p>训练过程分两阶段：</p>
-<div class="sourceCode" id="cb147"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb147-1"><a href="#cb147-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 第一阶段：整个随机小模型学习这四条合成示范。</span></span>
-<span id="cb147-2"><a href="#cb147-2" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.15</span>)</span>
-<span id="cb147-3"><a href="#cb147-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb147-4"><a href="#cb147-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 第二阶段：冻结刚得到的基础模型，给 q/v 加普通 LoRA。</span></span>
-<span id="cb147-5"><a href="#cb147-5" aria-hidden="true" tabindex="-1"></a>model.zero_grad(set_to_none<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb147-6"><a href="#cb147-6" aria-hidden="true" tabindex="-1"></a>model.requires_grad_(<span class="va">False</span>)</span>
-<span id="cb147-7"><a href="#cb147-7" aria-hidden="true" tabindex="-1"></a>model.q_proj <span class="op">=</span> LoRALinear(model.q_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb147-8"><a href="#cb147-8" aria-hidden="true" tabindex="-1"></a>model.v_proj <span class="op">=</span> LoRALinear(model.v_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb147-9"><a href="#cb147-9" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb144"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb144-1"><a href="#cb144-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 第一阶段：整个随机小模型学习这四条合成示范。</span></span>
+<span id="cb144-2"><a href="#cb144-2" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.15</span>)</span>
+<span id="cb144-3"><a href="#cb144-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb144-4"><a href="#cb144-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 第二阶段：冻结刚得到的基础模型，给 q/v 加普通 LoRA。</span></span>
+<span id="cb144-5"><a href="#cb144-5" aria-hidden="true" tabindex="-1"></a>model.zero_grad(set_to_none<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb144-6"><a href="#cb144-6" aria-hidden="true" tabindex="-1"></a>model.requires_grad_(<span class="va">False</span>)</span>
+<span id="cb144-7"><a href="#cb144-7" aria-hidden="true" tabindex="-1"></a>model.q_proj <span class="op">=</span> LoRALinear(model.q_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb144-8"><a href="#cb144-8" aria-hidden="true" tabindex="-1"></a>model.v_proj <span class="op">=</span> LoRALinear(model.v_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb144-9"><a href="#cb144-9" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
 <p><code>_updates</code> 只把 <code>requires_grad=True</code> 的参数交给
 SGD，并按“清梯度 → 前向 → assistant-only loss → backward →
 step”的顺序更新。固定 seed=21，CPU float32，单线程；无 momentum、weight
@@ -12233,21 +12165,25 @@ benchmark；其他平台可能有末位浮点差异。</p>
 </tr>
 </tbody>
 </table></div>
+<p>第二阶段只再降约 0.0008：它从第一阶段终点 0.61146003 起步，只训练 q/v
+投影上的 128 个 LoRA 参数（B 初始为零），参数最大变化约
+0.036，远小于第一阶段的约
+0.766；本章没有另做实验区分这几个因素各自的作用。</p>
 <p>训练 loss
 的下降证明这个目标在这批数据上被优化，不证明模型会回答新问题。脚本显式输出
 <code>heldout_quality_evaluated=false</code> 与
 <code>hf_peft_qlora_run=false</code>，避免把未测项目混进“通过”的结果。</p>
 <h3 id="运行方式">运行方式</h3>
 <p>只查看模板、标签和手算，不需要 PyTorch：</p>
-<div class="sourceCode" id="cb148"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb148-1"><a href="#cb148-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/22_sft_lora.py</span>
-<span id="cb148-2"><a href="#cb148-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb145"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb145-1"><a href="#cb145-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/22_sft_lora.py</span>
+<span id="cb145-2"><a href="#cb145-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>默认脚本打印 <code>training: NOT RUN</code>；它不会因为输出了 loss
 手算数字，就假装跑过训练。</p>
 <p>已经安装全书基础依赖后，执行真实 CPU 更新：</p>
-<div class="sourceCode" id="cb149"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb149-1"><a href="#cb149-1" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> code/22_sft_lora.py <span class="at">--train</span></span>
-<span id="cb149-2"><a href="#cb149-2" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb146"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb146-1"><a href="#cb146-1" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> code/22_sft_lora.py <span class="at">--train</span></span>
+<span id="cb146-2"><a href="#cb146-2" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>本章不新增 requirements，也不需要安装 transformers、trl、peft 或
 bitsandbytes。若没有 PyTorch 却指定
 <code>--train</code>，标准库演示仍可输出，但训练明确提示 SKIP 并以退出码
@@ -12356,8 +12292,7 @@ assistant 正文是否必然有零个目标？</p>
 alpha/r，结果还能一样吗？</p>
 <p><strong>参考答案：</strong> 输出 <code>[19.5,0]</code>，合并权重
 <code>[[7,2,15],[2,5,2]]</code>。忘记系数 2 会得到错误输出
-<code>[10.5,3]</code>。矩阵 oracle
-直接检查手算答案；实际删掉缩放的变异代码会被拒绝，不只是口头说“应该测”。</p>
+<code>[10.5,3]</code>。矩阵 oracle 直接检查手算答案。</p>
 <h3 id="题-6梯度到哪里">题 6：梯度到哪里</h3>
 <p>仍用该例子，令 L=y₁+y₂，求 A、B、x 的梯度。为什么冻结 W0 后 x
 仍可能有梯度？</p>
@@ -12653,16 +12588,20 @@ model，也不必在每个优化步在线生成答案。它仍然依赖偏好数
 </tr>
 </tbody>
 </table></div>
+<p>代码输入的是对数概率：A 为 ln 0.6≈−0.510826 / ln 0.2≈−1.609438，参考
+ln 0.4≈−0.916291 / −0.916291；B 为 ln 0.2≈−1.609438 / ln
+0.5≈−0.693147，参考 ln 0.1≈−2.302585 / −0.693147。相对 margin
+是两组差之差，例如 A：(−0.510826+1.609438)−0=1.098612。</p>
 <p>batch 对两对样本取平均，结果约 0.495273。B 的 chosen 概率仍小于
 rejected，但相对参考已经改善，所以 z
 仍为正。如果当前策略和参考完全相同，每对 loss 都是 ln
 2≈0.693147，而不是零。</p>
 <p>对应的核心代码只有几行：</p>
-<div class="sourceCode" id="cb150"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb150-1"><a href="#cb150-1" aria-hidden="true" tabindex="-1"></a>margin <span class="op">=</span> (chosen <span class="op">-</span> rejected) <span class="op">-</span> (</span>
-<span id="cb150-2"><a href="#cb150-2" aria-hidden="true" tabindex="-1"></a>    ref_chosen.detach() <span class="op">-</span> ref_rejected.detach()</span>
-<span id="cb150-3"><a href="#cb150-3" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb150-4"><a href="#cb150-4" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.nn.functional.softplus(<span class="op">-</span>beta <span class="op">*</span> margin).mean()</span></code></pre></div>
+<div class="sourceCode" id="cb147"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb147-1"><a href="#cb147-1" aria-hidden="true" tabindex="-1"></a>margin <span class="op">=</span> (chosen <span class="op">-</span> rejected) <span class="op">-</span> (</span>
+<span id="cb147-2"><a href="#cb147-2" aria-hidden="true" tabindex="-1"></a>    ref_chosen.detach() <span class="op">-</span> ref_rejected.detach()</span>
+<span id="cb147-3"><a href="#cb147-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb147-4"><a href="#cb147-4" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.nn.functional.softplus(<span class="op">-</span>beta <span class="op">*</span> margin).mean()</span></code></pre></div>
 <p>四个输入都是 [B] 的<strong>答案 log probability</strong>，不是 token
 ID，也不是 reward。detach 切断参考分支的梯度；参考参数本身也不应交给
 optimizer。softplus 的稳定实现避免先算巨大的 exp 再溢出。</p>
@@ -12683,15 +12622,15 @@ reference、把乘 β 写成除
 token 到一对概率：形状不能代替对齐</h2>
 <p>语言模型 logits 为 [B,T,V]，input_ids 和 attention_mask 为
 [B,T]。本章的 <code>completion_log_probs</code> 做三步：</p>
-<div class="sourceCode" id="cb151"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb151-1"><a href="#cb151-1" aria-hidden="true" tabindex="-1"></a>next_logps <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>].log_softmax(dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb151-2"><a href="#cb151-2" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> input_ids[:, <span class="dv">1</span>:]</span>
-<span id="cb151-3"><a href="#cb151-3" aria-hidden="true" tabindex="-1"></a>selected <span class="op">=</span> next_logps.gather(<span class="op">-</span><span class="dv">1</span>, targets.unsqueeze(<span class="op">-</span><span class="dv">1</span>)).squeeze(<span class="op">-</span><span class="dv">1</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb148"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb148-1"><a href="#cb148-1" aria-hidden="true" tabindex="-1"></a>next_logps <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>].log_softmax(dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb148-2"><a href="#cb148-2" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> input_ids[:, <span class="dv">1</span>:]</span>
+<span id="cb148-3"><a href="#cb148-3" aria-hidden="true" tabindex="-1"></a>selected <span class="op">=</span> next_logps.gather(<span class="op">-</span><span class="dv">1</span>, targets.unsqueeze(<span class="op">-</span><span class="dv">1</span>)).squeeze(<span class="op">-</span><span class="dv">1</span>)</span></code></pre></div>
 <p>这就是一次 causal shift：输入位置 t 预测 token
 t+1。然后根据每行实际的 prompt 长度和 padding mask，只保留答案目标：</p>
-<div class="sourceCode" id="cb152"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb152-1"><a href="#cb152-1" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> attention_mask[:, <span class="dv">1</span>:].<span class="bu">bool</span>() <span class="op">&amp;</span> (positions <span class="op">&gt;=</span> starts)</span>
-<span id="cb152-2"><a href="#cb152-2" aria-hidden="true" tabindex="-1"></a>sequence_logps <span class="op">=</span> (selected <span class="op">*</span> mask).<span class="bu">sum</span>(dim<span class="op">=-</span><span class="dv">1</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb149"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb149-1"><a href="#cb149-1" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> attention_mask[:, <span class="dv">1</span>:].<span class="bu">bool</span>() <span class="op">&amp;</span> (positions <span class="op">&gt;=</span> starts)</span>
+<span id="cb149-2"><a href="#cb149-2" aria-hidden="true" tabindex="-1"></a>sequence_logps <span class="op">=</span> (selected <span class="op">*</span> mask).<span class="bu">sum</span>(dim<span class="op">=-</span><span class="dv">1</span>)</span></code></pre></div>
 <p>positions 是原序列中目标的位置 1…T−1，starts
 是该行答案开始的位置。<strong>最后一个 prompt token 的 logits
 要参与预测第一个答案 token</strong>，不能把“输入来自 prompt”误解成“这行
@@ -12790,15 +12729,15 @@ loss，但不是同一个目标。</p>
 <h2 id="p22.7-真正跑一次参数概率和-kl-都由更新得到">P22.7
 真正跑一次：参数、概率和 KL 都由更新得到</h2>
 <p>从仓库根目录运行：</p>
-<div class="sourceCode" id="cb155"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb155-1"><a href="#cb155-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库手算，不导入 torch</span></span>
-<span id="cb155-2"><a href="#cb155-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py</span>
-<span id="cb155-3"><a href="#cb155-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb155-4"><a href="#cb155-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 安装仓库基线依赖后，实际 CPU 更新</span></span>
-<span id="cb155-5"><a href="#cb155-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py <span class="at">--torch</span></span>
-<span id="cb155-6"><a href="#cb155-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb155-7"><a href="#cb155-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 独立数值与梯度测试</span></span>
-<span id="cb155-8"><a href="#cb155-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_preference_optimization.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb152"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb152-1"><a href="#cb152-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库手算，不导入 torch</span></span>
+<span id="cb152-2"><a href="#cb152-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py</span>
+<span id="cb152-3"><a href="#cb152-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb152-4"><a href="#cb152-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 安装仓库基线依赖后，实际 CPU 更新</span></span>
+<span id="cb152-5"><a href="#cb152-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py <span class="at">--torch</span></span>
+<span id="cb152-6"><a href="#cb152-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb152-7"><a href="#cb152-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 独立数值与梯度测试</span></span>
+<span id="cb152-8"><a href="#cb152-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_preference_optimization.py <span class="at">-v</span></span></code></pre></div>
 <p>缺少 PyTorch 时默认手算正常退出；显式请求 <code>--torch</code> 会打印
 <code>SKIP</code> 并以状态码 2 退出，不能把“没有运行”当成训练成功。可用
 <code>python -S</code> 模拟不加载第三方包。</p>
@@ -12875,58 +12814,44 @@ zip
 截断或继续训练。实际数据流水线也应保留能追溯到样本的标识，不要在排序、截断、异步打分后丢失对应关系。</p>
 <h2 id="p22.8-接到-trl固定版本配置阅读明确未运行">P22.8 接到
 TRL：固定版本配置阅读，明确未运行</h2>
-<p>本节核对的是 <strong>TRL 0.16.1</strong> 的 <a
+<p>本节核对 TRL 的 <a
 href="https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py">DPOConfig
 源码</a> 与 <a
 href="https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py">GRPOConfig
-源码</a>，核验日期见附录
-H。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。</p>
-<p><strong>为什么相邻章节引用的 TRL 版本不一样？</strong> <a
-href="#p20-frameworks">P20</a> 用 <a
-href="https://huggingface.co/docs/trl/v0.17.0/en/index">0.17.0
-官方总览</a> 建立框架与训练入口的地图；<a href="#p21-sft">P21</a> 用 <a
-href="https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py">0.18.2
-SFTTrainer 源码</a> 说明 SFT 训练器的职责。本章则选择 <strong>0.16.1
-作为固定的历史 GRPO 实现切片</strong>，逐项核对奖励标准化、KL 估计和
-loss
-归约，再与手写教学变体对照。选择这个较早标签是为了固定具体的比较对象，不是推荐退回旧环境。</p>
-<p>这三个版本号属于三处资料引用，<strong>不是同一套训练环境，不是一条逐章升级或降级的安装路线，也没有经过跨版本兼容性验证</strong>。下面对
-0.16.1
-行为的结论只适用于所链接的源码；本章没有比较另外两版的相同函数，因此不推断它们的
-GRPO 行为一定相同或一定不同。三个章节均未运行 TRL，P20
-的真实框架实验是另行锁定的 Transformers / Accelerate 实验。</p>
+源码</a>，只读未运行；固定版本、核验日期，以及 P20–P22 为何引用不同 TRL
+版本，见附录 H。</p>
 <p>下面只是一份<strong>未执行的配置示意</strong>，不包含模型下载、Trainer
 构造或 train 调用：</p>
-<div class="sourceCode" id="cb156"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb156-1"><a href="#cb156-1" aria-hidden="true" tabindex="-1"></a><span class="co"># NOT RUN：仅供阅读，需在单独环境核对完整依赖。</span></span>
-<span id="cb156-2"><a href="#cb156-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> GPT2Config</span>
-<span id="cb156-3"><a href="#cb156-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> trl <span class="im">import</span> DPOConfig, GRPOConfig</span>
-<span id="cb156-4"><a href="#cb156-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb156-5"><a href="#cb156-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 若开展框架实验，可从这个结构创建随机本地模型；不是预训练权重。</span></span>
-<span id="cb156-6"><a href="#cb156-6" aria-hidden="true" tabindex="-1"></a>tiny_architecture <span class="op">=</span> GPT2Config(</span>
-<span id="cb156-7"><a href="#cb156-7" aria-hidden="true" tabindex="-1"></a>    vocab_size<span class="op">=</span><span class="dv">12</span>, n_positions<span class="op">=</span><span class="dv">32</span>, n_ctx<span class="op">=</span><span class="dv">32</span>,</span>
-<span id="cb156-8"><a href="#cb156-8" aria-hidden="true" tabindex="-1"></a>    n_embd<span class="op">=</span><span class="dv">16</span>, n_layer<span class="op">=</span><span class="dv">1</span>, n_head<span class="op">=</span><span class="dv">2</span>, n_inner<span class="op">=</span><span class="dv">32</span>,</span>
-<span id="cb156-9"><a href="#cb156-9" aria-hidden="true" tabindex="-1"></a>    resid_pdrop<span class="op">=</span><span class="fl">0.0</span>, embd_pdrop<span class="op">=</span><span class="fl">0.0</span>, attn_pdrop<span class="op">=</span><span class="fl">0.0</span>,</span>
-<span id="cb156-10"><a href="#cb156-10" aria-hidden="true" tabindex="-1"></a>    bos_token_id<span class="op">=</span><span class="dv">2</span>, eos_token_id<span class="op">=</span><span class="dv">3</span>, pad_token_id<span class="op">=</span><span class="dv">0</span>,</span>
-<span id="cb156-11"><a href="#cb156-11" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb156-12"><a href="#cb156-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb156-13"><a href="#cb156-13" aria-hidden="true" tabindex="-1"></a>dpo_config <span class="op">=</span> DPOConfig(</span>
-<span id="cb156-14"><a href="#cb156-14" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-dpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb156-15"><a href="#cb156-15" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">2</span>, max_steps<span class="op">=</span><span class="dv">2</span>,</span>
-<span id="cb156-16"><a href="#cb156-16" aria-hidden="true" tabindex="-1"></a>    max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>, max_length<span class="op">=</span><span class="dv">16</span>,</span>
-<span id="cb156-17"><a href="#cb156-17" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.1</span>, loss_type<span class="op">=</span><span class="st">&quot;sigmoid&quot;</span>,</span>
-<span id="cb156-18"><a href="#cb156-18" aria-hidden="true" tabindex="-1"></a>    fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>, gradient_checkpointing<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb156-19"><a href="#cb156-19" aria-hidden="true" tabindex="-1"></a>    report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
-<span id="cb156-20"><a href="#cb156-20" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb156-21"><a href="#cb156-21" aria-hidden="true" tabindex="-1"></a>grpo_config <span class="op">=</span> GRPOConfig(</span>
-<span id="cb156-22"><a href="#cb156-22" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-grpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb156-23"><a href="#cb156-23" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">4</span>, num_generations<span class="op">=</span><span class="dv">4</span>,</span>
-<span id="cb156-24"><a href="#cb156-24" aria-hidden="true" tabindex="-1"></a>    max_steps<span class="op">=</span><span class="dv">2</span>, max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>,</span>
-<span id="cb156-25"><a href="#cb156-25" aria-hidden="true" tabindex="-1"></a>    temperature<span class="op">=</span><span class="fl">1.0</span>, top_p<span class="op">=</span><span class="fl">1.0</span>, top_k<span class="op">=</span><span class="va">None</span>,</span>
-<span id="cb156-26"><a href="#cb156-26" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.04</span>, epsilon<span class="op">=</span><span class="fl">0.2</span>, num_iterations<span class="op">=</span><span class="dv">2</span>,</span>
-<span id="cb156-27"><a href="#cb156-27" aria-hidden="true" tabindex="-1"></a>    use_vllm<span class="op">=</span><span class="va">False</span>, fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb156-28"><a href="#cb156-28" aria-hidden="true" tabindex="-1"></a>    gradient_checkpointing<span class="op">=</span><span class="va">False</span>, report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
-<span id="cb156-29"><a href="#cb156-29" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb153"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb153-1"><a href="#cb153-1" aria-hidden="true" tabindex="-1"></a><span class="co"># NOT RUN：仅供阅读，需在单独环境核对完整依赖。</span></span>
+<span id="cb153-2"><a href="#cb153-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> GPT2Config</span>
+<span id="cb153-3"><a href="#cb153-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> trl <span class="im">import</span> DPOConfig, GRPOConfig</span>
+<span id="cb153-4"><a href="#cb153-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb153-5"><a href="#cb153-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 若开展框架实验，可从这个结构创建随机本地模型；不是预训练权重。</span></span>
+<span id="cb153-6"><a href="#cb153-6" aria-hidden="true" tabindex="-1"></a>tiny_architecture <span class="op">=</span> GPT2Config(</span>
+<span id="cb153-7"><a href="#cb153-7" aria-hidden="true" tabindex="-1"></a>    vocab_size<span class="op">=</span><span class="dv">12</span>, n_positions<span class="op">=</span><span class="dv">32</span>, n_ctx<span class="op">=</span><span class="dv">32</span>,</span>
+<span id="cb153-8"><a href="#cb153-8" aria-hidden="true" tabindex="-1"></a>    n_embd<span class="op">=</span><span class="dv">16</span>, n_layer<span class="op">=</span><span class="dv">1</span>, n_head<span class="op">=</span><span class="dv">2</span>, n_inner<span class="op">=</span><span class="dv">32</span>,</span>
+<span id="cb153-9"><a href="#cb153-9" aria-hidden="true" tabindex="-1"></a>    resid_pdrop<span class="op">=</span><span class="fl">0.0</span>, embd_pdrop<span class="op">=</span><span class="fl">0.0</span>, attn_pdrop<span class="op">=</span><span class="fl">0.0</span>,</span>
+<span id="cb153-10"><a href="#cb153-10" aria-hidden="true" tabindex="-1"></a>    bos_token_id<span class="op">=</span><span class="dv">2</span>, eos_token_id<span class="op">=</span><span class="dv">3</span>, pad_token_id<span class="op">=</span><span class="dv">0</span>,</span>
+<span id="cb153-11"><a href="#cb153-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb153-12"><a href="#cb153-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb153-13"><a href="#cb153-13" aria-hidden="true" tabindex="-1"></a>dpo_config <span class="op">=</span> DPOConfig(</span>
+<span id="cb153-14"><a href="#cb153-14" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-dpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb153-15"><a href="#cb153-15" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">2</span>, max_steps<span class="op">=</span><span class="dv">2</span>,</span>
+<span id="cb153-16"><a href="#cb153-16" aria-hidden="true" tabindex="-1"></a>    max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>, max_length<span class="op">=</span><span class="dv">16</span>,</span>
+<span id="cb153-17"><a href="#cb153-17" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.1</span>, loss_type<span class="op">=</span><span class="st">&quot;sigmoid&quot;</span>,</span>
+<span id="cb153-18"><a href="#cb153-18" aria-hidden="true" tabindex="-1"></a>    fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>, gradient_checkpointing<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb153-19"><a href="#cb153-19" aria-hidden="true" tabindex="-1"></a>    report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
+<span id="cb153-20"><a href="#cb153-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb153-21"><a href="#cb153-21" aria-hidden="true" tabindex="-1"></a>grpo_config <span class="op">=</span> GRPOConfig(</span>
+<span id="cb153-22"><a href="#cb153-22" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-grpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb153-23"><a href="#cb153-23" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">4</span>, num_generations<span class="op">=</span><span class="dv">4</span>,</span>
+<span id="cb153-24"><a href="#cb153-24" aria-hidden="true" tabindex="-1"></a>    max_steps<span class="op">=</span><span class="dv">2</span>, max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>,</span>
+<span id="cb153-25"><a href="#cb153-25" aria-hidden="true" tabindex="-1"></a>    temperature<span class="op">=</span><span class="fl">1.0</span>, top_p<span class="op">=</span><span class="fl">1.0</span>, top_k<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb153-26"><a href="#cb153-26" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.04</span>, epsilon<span class="op">=</span><span class="fl">0.2</span>, num_iterations<span class="op">=</span><span class="dv">2</span>,</span>
+<span id="cb153-27"><a href="#cb153-27" aria-hidden="true" tabindex="-1"></a>    use_vllm<span class="op">=</span><span class="va">False</span>, fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb153-28"><a href="#cb153-28" aria-hidden="true" tabindex="-1"></a>    gradient_checkpointing<span class="op">=</span><span class="va">False</span>, report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
+<span id="cb153-29"><a href="#cb153-29" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 <p>先读懂这些设置，再谈运行：</p>
 <ul>
 <li>12 项词表、16 维、1 层、2 个头把模型结构限制在小规模；tokenizer 的
@@ -12957,8 +12882,7 @@ KL。<strong>名字相同不保证变体相同，源代码与版本才是复现�
 <p>未来要运行 TRL，应新建独立环境锁定整套依赖，不要为这段未运行配置改变
 P20
 已验证的环境。至少保存：完整版本、随机种子、数据和模板、采样参数、每组奖励、mask、旧策略保存时点、有效长度、KL
-的方向与估计方式、参数更新证据。只有真正跑完，才能把 NOT RUN 改成
-EXECUTED。</p>
+的方向与估计方式、参数更新证据。</p>
 <h2 id="p22.9-奖励投机学会拿分不等于学会任务">P22.9
 奖励投机：学会拿分，不等于学会任务</h2>
 <p>把奖励设计为“输出中含数字 2 就得分”，那么“答案不是 2，其实是
@@ -13049,9 +12973,6 @@ EXECUTED。</p>
 <code>docs/testing.md</code>。</p>
 <p>测试通过说明这份微型实现满足所声明的契约，不说明 RLHF
 安全性、真实人类偏好或大模型能力已被验证。</p>
-<p>本章可以带走的一句话是：<strong>偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。</strong>
-下一章会把这一框架接到推理预算、MTP
-和投机解码，并继续区分训练目标与推理时计算。</p>
 <h2 id="p22.11-mopd">P22.11 延伸阅读：on-policy
 蒸馏与多教师合并（MOPD）</h2>
 <p>On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 token
@@ -13064,11 +12985,13 @@ href="https://arxiv.org/abs/2607.24653">Kimi K3
 Distillation（MOPD）。</p>
 <h2 id="p22.12-softmax-cancellation">P22.12 延伸阅读：Softmax
 Cancellation</h2>
-<p>软目标交叉熵对学生 logits 的梯度是 <span
-class="math inline">\(q-p\)</span>。学生接近老师时，这是两个几乎相等的数相减，浮点里有效位会大量抵消；<a
-href="https://arxiv.org/abs/2610.31642">A Fix for Softmax and
-Cross-Entropy，arXiv:2610.31642</a> §3 给出从 logit 差出发、用
-<code>log1p</code> 和 <code>expm1</code> 计算的修法。</p>
+<p>这篇论文已在 <a href="#p04-softmax-collapse">P04 3.3a</a> 介绍；其 §3
+讨论软目标交叉熵梯度 <span class="math inline">\(q-p\)</span>
+的抵消与修法，本书不展开。</p>
+<h2 id="本章小结-1">本章小结</h2>
+<p>本章可以带走的一句话是：<strong>偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。</strong>
+下一章会把这一框架接到推理预算、MTP
+和投机解码，并继续区分训练目标与推理时计算。</p>
 <hr />
 <h1 id="p23-mtp">训练与应用（P23）：推理模型、MTP 与投机解码</h1>
 <p>做一道算术题，可以把草稿写得更长，可以换一种解题方法，也可以让同桌先写几个候选步骤、再由你检查。这三件事听起来都像“多想一点”，其实改变的是不同东西。</p>
@@ -13582,9 +13505,9 @@ generator，也没有概率校正实现。不要删除这条边界，再把“�
 <h2 id="p23.10-运行结果少几次-target-调用不等于真的快了">P23.10
 运行结果：少几次 target 调用，不等于真的快了</h2>
 <p>在仓库根目录运行：</p>
-<div class="sourceCode" id="cb157"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb157-1"><a href="#cb157-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/24_reasoning_mtp.py</span>
-<span id="cb157-2"><a href="#cb157-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_reasoning_mtp.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb154"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb154-1"><a href="#cb154-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/24_reasoning_mtp.py</span>
+<span id="cb154-2"><a href="#cb154-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_reasoning_mtp.py <span class="at">-v</span></span></code></pre></div>
 <p>已验证环境为 CPU、附录 H 所列 PyTorch、单线程、种子
 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装
 <code>requirements.txt</code> 的提示并以状态 2 退出。</p>
@@ -13892,11 +13815,11 @@ scale 约定，必须看相应格式与内核。</p>
 s/2；被截断的 40
 可不受这个保证。实际浮点计算还会有自身的舍入误差，不能要求所有端点逐位完全相等。</p>
 <p>代码的核心对应三步：</p>
-<div class="sourceCode" id="cb159"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb159-1"><a href="#cb159-1" aria-hidden="true" tabindex="-1"></a>scaled <span class="op">=</span> x <span class="op">/</span> params.scale</span>
-<span id="cb159-2"><a href="#cb159-2" aria-hidden="true" tabindex="-1"></a>bounded <span class="op">=</span> <span class="bu">min</span>(params.qmax <span class="op">-</span> params.zero_point,</span>
-<span id="cb159-3"><a href="#cb159-3" aria-hidden="true" tabindex="-1"></a>              <span class="bu">max</span>(params.qmin <span class="op">-</span> params.zero_point, scaled))</span>
-<span id="cb159-4"><a href="#cb159-4" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> <span class="bu">round</span>(bounded) <span class="op">+</span> params.zero_point</span></code></pre></div>
+<div class="sourceCode" id="cb156"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb156-1"><a href="#cb156-1" aria-hidden="true" tabindex="-1"></a>scaled <span class="op">=</span> x <span class="op">/</span> params.scale</span>
+<span id="cb156-2"><a href="#cb156-2" aria-hidden="true" tabindex="-1"></a>bounded <span class="op">=</span> <span class="bu">min</span>(params.qmax <span class="op">-</span> params.zero_point,</span>
+<span id="cb156-3"><a href="#cb156-3" aria-hidden="true" tabindex="-1"></a>              <span class="bu">max</span>(params.qmin <span class="op">-</span> params.zero_point, scaled))</span>
+<span id="cb156-4"><a href="#cb156-4" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> <span class="bu">round</span>(bounded) <span class="op">+</span> params.zero_point</span></code></pre></div>
 <p>为什么先截断再转整数？如果 calibration 的 scale 极小，一个有限的大 x
 除以 s 仍可能溢出为无穷。先按整数阈值饱和，就不需要执行
 <code>round(inf)</code>。阈值本身是整数，因此这与“先舍入、后截断”的数学规则一致。不要先强转
@@ -14316,32 +14239,32 @@ href="https://github.com/ggml-org/llama.cpp/releases/tag/b5046">b5046
 <pre class="text"><code>10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e</code></pre>
 <p>这是 Linux x86_64 路线。可在新的临时目录复现下载与校验，不改已有
 Python 环境：</p>
-<div class="sourceCode" id="cb162"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb162-1"><a href="#cb162-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/p24-engine</span>
-<span id="cb162-2"><a href="#cb162-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fL</span> <span class="at">--max-time</span> 120 <span class="dt">\</span></span>
-<span id="cb162-3"><a href="#cb162-3" aria-hidden="true" tabindex="-1"></a>  https://github.com/ggml-org/llama.cpp/releases/download/b5046/llama-b5046-bin-ubuntu-x64.zip <span class="dt">\</span></span>
-<span id="cb162-4"><a href="#cb162-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-o</span> /tmp/p24-engine/llama-b5046.zip</span>
-<span id="cb162-5"><a href="#cb162-5" aria-hidden="true" tabindex="-1"></a><span class="bu">printf</span> <span class="st">&#39;%s  %s\n&#39;</span> <span class="dt">\</span></span>
-<span id="cb162-6"><a href="#cb162-6" aria-hidden="true" tabindex="-1"></a>  10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e <span class="dt">\</span></span>
-<span id="cb162-7"><a href="#cb162-7" aria-hidden="true" tabindex="-1"></a>  /tmp/p24-engine/llama-b5046.zip <span class="kw">|</span> <span class="fu">sha256sum</span> <span class="at">-c</span> <span class="at">-</span></span>
-<span id="cb162-8"><a href="#cb162-8" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span> /tmp/p24-engine/llama-b5046.zip <span class="at">-d</span> /tmp/p24-engine</span></code></pre></div>
+<div class="sourceCode" id="cb159"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb159-1"><a href="#cb159-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/p24-engine</span>
+<span id="cb159-2"><a href="#cb159-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fL</span> <span class="at">--max-time</span> 120 <span class="dt">\</span></span>
+<span id="cb159-3"><a href="#cb159-3" aria-hidden="true" tabindex="-1"></a>  https://github.com/ggml-org/llama.cpp/releases/download/b5046/llama-b5046-bin-ubuntu-x64.zip <span class="dt">\</span></span>
+<span id="cb159-4"><a href="#cb159-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-o</span> /tmp/p24-engine/llama-b5046.zip</span>
+<span id="cb159-5"><a href="#cb159-5" aria-hidden="true" tabindex="-1"></a><span class="bu">printf</span> <span class="st">&#39;%s  %s\n&#39;</span> <span class="dt">\</span></span>
+<span id="cb159-6"><a href="#cb159-6" aria-hidden="true" tabindex="-1"></a>  10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e <span class="dt">\</span></span>
+<span id="cb159-7"><a href="#cb159-7" aria-hidden="true" tabindex="-1"></a>  /tmp/p24-engine/llama-b5046.zip <span class="kw">|</span> <span class="fu">sha256sum</span> <span class="at">-c</span> <span class="at">-</span></span>
+<span id="cb159-8"><a href="#cb159-8" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span> /tmp/p24-engine/llama-b5046.zip <span class="at">-d</span> /tmp/p24-engine</span></code></pre></div>
 <p>下载和解压须成功、校验须匹配才继续。可执行文件位于解压后的
 <code>build/bin</code>。官方二进制如果不适合你的系统，不要忽略 loader
 错误，更不要绕过系统安全提示；改用适合系统的官方构建方案，并重新记录版本与结果。macOS、Windows
 或自行编译的同版本，本章未实测。</p>
 <p>从仓库根目录运行：</p>
-<div class="sourceCode" id="cb163"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb163-1"><a href="#cb163-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/25_quantized_serving.py <span class="dt">\</span></span>
-<span id="cb163-2"><a href="#cb163-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--llama-bin</span> /tmp/p24-engine/build/bin <span class="dt">\</span></span>
-<span id="cb163-3"><a href="#cb163-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--work-dir</span> /tmp/p24-smoke</span></code></pre></div>
+<div class="sourceCode" id="cb160"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb160-1"><a href="#cb160-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/25_quantized_serving.py <span class="dt">\</span></span>
+<span id="cb160-2"><a href="#cb160-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--llama-bin</span> /tmp/p24-engine/build/bin <span class="dt">\</span></span>
+<span id="cb160-3"><a href="#cb160-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--work-dir</span> /tmp/p24-smoke</span></code></pre></div>
 <p>这个 opt-in 命令<strong>不帮你下载或安装任何软件</strong>。它检查
 <code>llama-cli --version</code>，创建微型 GGUF，并依次执行：</p>
-<div class="sourceCode" id="cb164"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb164-1"><a href="#cb164-1" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-quantize</span> tiny-f32.gguf tiny-q8_0.gguf Q8_0</span>
-<span id="cb164-2"><a href="#cb164-2" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-cli</span> <span class="at">-m</span> tiny-q8_0.gguf <span class="at">-p</span> Hi <span class="at">-n</span> 4 <span class="at">-c</span> 128 <span class="at">-t</span> 1 <span class="dt">\</span></span>
-<span id="cb164-3"><a href="#cb164-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-ngl</span> 0 <span class="at">--seed</span> 24 <span class="at">--temp</span> 0 <span class="at">--no-display-prompt</span></span>
-<span id="cb164-4"><a href="#cb164-4" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-server</span> <span class="at">-m</span> tiny-q8_0.gguf <span class="at">-c</span> 128 <span class="at">-t</span> 1 <span class="at">-ngl</span> 0 <span class="dt">\</span></span>
-<span id="cb164-5"><a href="#cb164-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--host</span> 127.0.0.1 <span class="at">--port</span> <span class="op">&lt;</span>临时空闲端口<span class="op">&gt;</span> --alias p24-tiny</span></code></pre></div>
+<div class="sourceCode" id="cb161"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb161-1"><a href="#cb161-1" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-quantize</span> tiny-f32.gguf tiny-q8_0.gguf Q8_0</span>
+<span id="cb161-2"><a href="#cb161-2" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-cli</span> <span class="at">-m</span> tiny-q8_0.gguf <span class="at">-p</span> Hi <span class="at">-n</span> 4 <span class="at">-c</span> 128 <span class="at">-t</span> 1 <span class="dt">\</span></span>
+<span id="cb161-3"><a href="#cb161-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-ngl</span> 0 <span class="at">--seed</span> 24 <span class="at">--temp</span> 0 <span class="at">--no-display-prompt</span></span>
+<span id="cb161-4"><a href="#cb161-4" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-server</span> <span class="at">-m</span> tiny-q8_0.gguf <span class="at">-c</span> 128 <span class="at">-t</span> 1 <span class="at">-ngl</span> 0 <span class="dt">\</span></span>
+<span id="cb161-5"><a href="#cb161-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--host</span> 127.0.0.1 <span class="at">--port</span> <span class="op">&lt;</span>临时空闲端口<span class="op">&gt;</span> --alias p24-tiny</span></code></pre></div>
 <p>上面的文件名与端口是阅读用简写；脚本保存的
 <code>smoke-report.json</code>
 记录实际绝对路径和端口。<code>-ngl 0</code> 不把模型层卸载到
@@ -14410,15 +14333,15 @@ href="code/fixtures/p24_llama_completion.sse">真实 SSE 捕获</a>
 <p>引擎在本机运行时，客户端仍要遵守请求协议。这里选择
 <code>/v1/completions</code>，使用纯文本 prompt，不用 chat
 template，因为微型模型没有受训对话模板。</p>
-<div class="sourceCode" id="cb165"><pre
-class="sourceCode json"><code class="sourceCode json"><span id="cb165-1"><a href="#cb165-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb165-2"><a href="#cb165-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;p24-tiny&quot;</span><span class="fu">,</span></span>
-<span id="cb165-3"><a href="#cb165-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;prompt&quot;</span><span class="fu">:</span> <span class="st">&quot;Hi&quot;</span><span class="fu">,</span></span>
-<span id="cb165-4"><a href="#cb165-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;max_tokens&quot;</span><span class="fu">:</span> <span class="dv">4</span><span class="fu">,</span></span>
-<span id="cb165-5"><a href="#cb165-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;temperature&quot;</span><span class="fu">:</span> <span class="dv">0</span><span class="fu">,</span></span>
-<span id="cb165-6"><a href="#cb165-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;seed&quot;</span><span class="fu">:</span> <span class="dv">24</span><span class="fu">,</span></span>
-<span id="cb165-7"><a href="#cb165-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;stream&quot;</span><span class="fu">:</span> <span class="kw">true</span></span>
-<span id="cb165-8"><a href="#cb165-8" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb162"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb162-1"><a href="#cb162-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb162-2"><a href="#cb162-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;p24-tiny&quot;</span><span class="fu">,</span></span>
+<span id="cb162-3"><a href="#cb162-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;prompt&quot;</span><span class="fu">:</span> <span class="st">&quot;Hi&quot;</span><span class="fu">,</span></span>
+<span id="cb162-4"><a href="#cb162-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;max_tokens&quot;</span><span class="fu">:</span> <span class="dv">4</span><span class="fu">,</span></span>
+<span id="cb162-5"><a href="#cb162-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;temperature&quot;</span><span class="fu">:</span> <span class="dv">0</span><span class="fu">,</span></span>
+<span id="cb162-6"><a href="#cb162-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;seed&quot;</span><span class="fu">:</span> <span class="dv">24</span><span class="fu">,</span></span>
+<span id="cb162-7"><a href="#cb162-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;stream&quot;</span><span class="fu">:</span> <span class="kw">true</span></span>
+<span id="cb162-8"><a href="#cb162-8" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
 <p>路径和字段来自锁定版本的 <a
 href="https://github.com/ggml-org/llama.cpp/blob/74d4f5b041ad837153b0e90fc864b8290e01d8d5/examples/server/README.md">llama.cpp
 server 文档</a>。OpenAI-compatible
@@ -14558,16 +14481,16 @@ BF16，那是在比较两套部署方案，不能把差异全归给调度器。�
 填进“本书复现”一栏。</p>
 <h2 id="p24.12-运行找错与自测">P24.12 运行、找错与自测</h2>
 <p>从仓库根目录：</p>
-<div class="sourceCode" id="cb167"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb167-1"><a href="#cb167-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/25_quantized_serving.py</span>
-<span id="cb167-2"><a href="#cb167-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_quantized_serving.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb164"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb164-1"><a href="#cb164-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/25_quantized_serving.py</span>
+<span id="cb164-2"><a href="#cb164-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_quantized_serving.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>运行本章测试文件，末尾应显示
 <code>OK</code>；测试分类、计数与错误版本清单见
 <code>docs/testing.md</code>。</p>
 <p>提供已准备好的引擎后，可选真实测试：</p>
-<div class="sourceCode" id="cb168"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb168-1"><a href="#cb168-1" aria-hidden="true" tabindex="-1"></a><span class="va">P24_LLAMA_BIN</span><span class="op">=</span>/tmp/p24-engine/build/bin <span class="dt">\</span></span>
-<span id="cb168-2"><a href="#cb168-2" aria-hidden="true" tabindex="-1"></a>  <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_quantized_serving.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb165"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb165-1"><a href="#cb165-1" aria-hidden="true" tabindex="-1"></a><span class="va">P24_LLAMA_BIN</span><span class="op">=</span>/tmp/p24-engine/build/bin <span class="dt">\</span></span>
+<span id="cb165-2"><a href="#cb165-2" aria-hidden="true" tabindex="-1"></a>  <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_quantized_serving.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <h3 id="自测题">自测题</h3>
 <ol type="1">
 <li>s=0.25、z=0 时，0.125、0.375、40
@@ -15124,14 +15047,14 @@ href="https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f
 <h2 id="p25.10-运行不下载权重也能得到有意义的证据">P25.10
 运行：不下载权重，也能得到有意义的证据</h2>
 <p>在仓库根目录运行：</p>
-<div class="sourceCode" id="cb173"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb173-1"><a href="#cb173-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库：校验本地快照、输出每个组件的来源与预算。</span></span>
-<span id="cb173-2"><a href="#cb173-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
-<span id="cb173-3"><a href="#cb173-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb173-4"><a href="#cb173-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 仓库基线 PyTorch/Jinja2：执行随机小模型和模板路径。</span></span>
-<span id="cb173-5"><a href="#cb173-5" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/26_qwen3_case.py <span class="at">--torch</span></span>
-<span id="cb173-6"><a href="#cb173-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb173-7"><a href="#cb173-7" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_qwen3_case.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb170"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb170-1"><a href="#cb170-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库：校验本地快照、输出每个组件的来源与预算。</span></span>
+<span id="cb170-2"><a href="#cb170-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
+<span id="cb170-3"><a href="#cb170-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb170-4"><a href="#cb170-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 仓库基线 PyTorch/Jinja2：执行随机小模型和模板路径。</span></span>
+<span id="cb170-5"><a href="#cb170-5" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/26_qwen3_case.py <span class="at">--torch</span></span>
+<span id="cb170-6"><a href="#cb170-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb170-7"><a href="#cb170-7" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_qwen3_case.py <span class="at">-v</span></span></code></pre></div>
 <p>默认输出为每项组件附上带完整 revision 的 source
 URL，并打印本章精确参数和缓存数字。程序无网络请求。</p>
 <p><code>--torch</code> 使用 CPU、附录 H 所列 PyTorch、Jinja2
@@ -15820,11 +15743,11 @@ D：九个视觉位置如何变一个</h3>
 <h2 id="p26.9-运行可验证结果和失败边界">P26.9
 运行、可验证结果和失败边界</h2>
 <p>在仓库根目录运行，不需要安装 PyTorch：</p>
-<div class="sourceCode" id="cb176"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb176-1"><a href="#cb176-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py</span>
-<span id="cb176-2"><a href="#cb176-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py <span class="at">--matrix-only</span></span>
-<span id="cb176-3"><a href="#cb176-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py <span class="at">--json</span></span>
-<span id="cb176-4"><a href="#cb176-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_deepseek_case.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb173"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb173-1"><a href="#cb173-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py</span>
+<span id="cb173-2"><a href="#cb173-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py <span class="at">--matrix-only</span></span>
+<span id="cb173-3"><a href="#cb173-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py <span class="at">--json</span></span>
+<span id="cb173-4"><a href="#cb173-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_deepseek_case.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>默认输出完整证据矩阵和四个实验；<code>--json</code>
 输出可被程序读取的同一份报告，<code>--matrix-only</code>
 只打印矩阵。三个模式互斥；从其他工作目录运行也会按脚本位置找到快照。程序不联网、不下载权重，也不执行配置中的
@@ -16117,9 +16040,9 @@ alt="miniGPT 的 S0–S6 主线经过配置对账、数值不变量和错误反�
 <code>scripts/plot_p27_healthcheck.py</code> 读取仓库内金标报告
 <code>docs/gold/p27_healthcheck_mtp.json</code>（<code>OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json</code>
 在 CPU float32、种子 270/271 下写出）生成，不使用手填基准值。复现：</p>
-<div class="sourceCode" id="cb177"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb177-1"><a href="#cb177-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> docs/gold/p27_healthcheck_mtp.json</span>
-<span id="cb177-2"><a href="#cb177-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json <span class="at">--out-dir</span> assets/diagrams/p27</span></code></pre></div>
+<div class="sourceCode" id="cb174"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb174-1"><a href="#cb174-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> docs/gold/p27_healthcheck_mtp.json</span>
+<span id="cb174-2"><a href="#cb174-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json <span class="at">--out-dir</span> assets/diagrams/p27</span></code></pre></div>
 <h2 id="p27.1-先分清三种相同">P27.1 先分清三种“相同”</h2>
 <p>做实验最容易犯的错误，是比较了不该相同的东西。</p>
 <div class="table-wrapper"><table>
@@ -16253,15 +16176,15 @@ v2，MTP</a></p>
 <h3 id="运行入口与失败含义">运行入口与失败含义</h3>
 <p>在仓库根目录、已安装 <code>requirements.txt</code> 的 Python
 环境中运行：</p>
-<div class="sourceCode" id="cb178"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb178-1"><a href="#cb178-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py</span></code></pre></div>
+<div class="sourceCode" id="cb175"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb175-1"><a href="#cb175-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py</span></code></pre></div>
 <p>加上可选 MTP 检查：</p>
-<div class="sourceCode" id="cb179"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb179-1"><a href="#cb179-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span></span></code></pre></div>
+<div class="sourceCode" id="cb176"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb176-1"><a href="#cb176-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span></span></code></pre></div>
 <p>需要保存可比较的机器可读报告时：</p>
-<div class="sourceCode" id="cb180"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb180-1"><a href="#cb180-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> healthcheck.json</span>
-<span id="cb180-2"><a href="#cb180-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_minigpt_healthcheck.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb177"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb177-1"><a href="#cb177-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> healthcheck.json</span>
+<span id="cb177-2"><a href="#cb177-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_minigpt_healthcheck.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p><code>--json</code> 只改变输出格式，不跳过任何检查；每个缓存阶段的
 <code>chunk_checks</code>
 记录实际运行的四种分块及各自误差、字节数，汇总误差取其中最大值。默认路径不下载模型、不访问外部服务、不使用
@@ -16491,21 +16414,21 @@ href="code/28_minigpt_healthcheck.py"><code>code/28_minigpt_healthcheck.py</code
 行），原样摘录，由 <code>scripts/sync_code_excerpts.py</code>
 从源码生成并由测试锁定：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L120-L133 -->
-<div class="sourceCode" id="cb181"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb181-1"><a href="#cb181-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
-<span id="cb181-2"><a href="#cb181-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cache_equivalence(stage, tokens, sizes<span class="op">=</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">4</span>)):</span>
-<span id="cb181-3"><a href="#cb181-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> stage.cached_forward <span class="kw">is</span> <span class="va">None</span>:</span>
-<span id="cb181-4"><a href="#cb181-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;stage has no cache path&#39;</span>)</span>
-<span id="cb181-5"><a href="#cb181-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(<span class="bu">type</span>(size) <span class="kw">is</span> <span class="kw">not</span> <span class="bu">int</span> <span class="kw">or</span> size <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">for</span> size <span class="kw">in</span> sizes) <span class="kw">or</span> <span class="bu">sum</span>(sizes) <span class="op">!=</span> tokens.shape[<span class="dv">1</span>]:</span>
-<span id="cb181-6"><a href="#cb181-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;positive chunks must cover tokens exactly&#39;</span>)</span>
-<span id="cb181-7"><a href="#cb181-7" aria-hidden="true" tabindex="-1"></a>    expected <span class="op">=</span> stage.model(tokens)[<span class="dv">0</span>]</span>
-<span id="cb181-8"><a href="#cb181-8" aria-hidden="true" tabindex="-1"></a>    cache, pieces, start <span class="op">=</span> <span class="va">None</span>, [], <span class="dv">0</span></span>
-<span id="cb181-9"><a href="#cb181-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> size <span class="kw">in</span> sizes:</span>
-<span id="cb181-10"><a href="#cb181-10" aria-hidden="true" tabindex="-1"></a>        output, cache <span class="op">=</span> stage.cached_forward(stage.model, tokens[:, start:start <span class="op">+</span> size], cache)</span>
-<span id="cb181-11"><a href="#cb181-11" aria-hidden="true" tabindex="-1"></a>        pieces.append(output)</span>
-<span id="cb181-12"><a href="#cb181-12" aria-hidden="true" tabindex="-1"></a>        start <span class="op">+=</span> size</span>
-<span id="cb181-13"><a href="#cb181-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> cache.length <span class="op">!=</span> start:</span>
-<span id="cb181-14"><a href="#cb181-14" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;cache length differs from consumed prefix&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb178"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb178-1"><a href="#cb178-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
+<span id="cb178-2"><a href="#cb178-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cache_equivalence(stage, tokens, sizes<span class="op">=</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">4</span>)):</span>
+<span id="cb178-3"><a href="#cb178-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> stage.cached_forward <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb178-4"><a href="#cb178-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;stage has no cache path&#39;</span>)</span>
+<span id="cb178-5"><a href="#cb178-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(<span class="bu">type</span>(size) <span class="kw">is</span> <span class="kw">not</span> <span class="bu">int</span> <span class="kw">or</span> size <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">for</span> size <span class="kw">in</span> sizes) <span class="kw">or</span> <span class="bu">sum</span>(sizes) <span class="op">!=</span> tokens.shape[<span class="dv">1</span>]:</span>
+<span id="cb178-6"><a href="#cb178-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;positive chunks must cover tokens exactly&#39;</span>)</span>
+<span id="cb178-7"><a href="#cb178-7" aria-hidden="true" tabindex="-1"></a>    expected <span class="op">=</span> stage.model(tokens)[<span class="dv">0</span>]</span>
+<span id="cb178-8"><a href="#cb178-8" aria-hidden="true" tabindex="-1"></a>    cache, pieces, start <span class="op">=</span> <span class="va">None</span>, [], <span class="dv">0</span></span>
+<span id="cb178-9"><a href="#cb178-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> size <span class="kw">in</span> sizes:</span>
+<span id="cb178-10"><a href="#cb178-10" aria-hidden="true" tabindex="-1"></a>        output, cache <span class="op">=</span> stage.cached_forward(stage.model, tokens[:, start:start <span class="op">+</span> size], cache)</span>
+<span id="cb178-11"><a href="#cb178-11" aria-hidden="true" tabindex="-1"></a>        pieces.append(output)</span>
+<span id="cb178-12"><a href="#cb178-12" aria-hidden="true" tabindex="-1"></a>        start <span class="op">+=</span> size</span>
+<span id="cb178-13"><a href="#cb178-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> cache.length <span class="op">!=</span> start:</span>
+<span id="cb178-14"><a href="#cb178-14" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;cache length differs from consumed prefix&#39;</span>)</span></code></pre></div>
 <p>逐行读：</p>
 <ul>
 <li>第 120 行
@@ -16538,15 +16461,15 @@ ID，再比较前三个位置的全部 logits。因果 decoder
 是其中的最大值；不能只抽查切点 3。</p>
 <p>对应源码是 <code>causal_error</code>（第 110–117 行）：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L110-L117 -->
-<div class="sourceCode" id="cb182"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb182-1"><a href="#cb182-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
-<span id="cb182-2"><a href="#cb182-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> causal_error(model, tokens, cut<span class="op">=</span><span class="dv">3</span>):</span>
-<span id="cb182-3"><a href="#cb182-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Intervene only on FUTURE inputs, then inspect all earlier logits.&quot;&quot;&quot;</span></span>
-<span id="cb182-4"><a href="#cb182-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="dv">0</span> <span class="op">&lt;</span> cut <span class="op">&lt;</span> tokens.shape[<span class="dv">1</span>]:</span>
-<span id="cb182-5"><a href="#cb182-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;cut must split prefix and nonempty future&#39;</span>)</span>
-<span id="cb182-6"><a href="#cb182-6" aria-hidden="true" tabindex="-1"></a>    changed <span class="op">=</span> tokens.clone()</span>
-<span id="cb182-7"><a href="#cb182-7" aria-hidden="true" tabindex="-1"></a>    changed[:, cut:] <span class="op">=</span> (changed[:, cut:] <span class="op">+</span> <span class="dv">5</span>) <span class="op">%</span> model.config.vocab_size</span>
-<span id="cb182-8"><a href="#cb182-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> check_close(model(changed)[<span class="dv">0</span>][:, :cut], model(tokens)[<span class="dv">0</span>][:, :cut])</span></code></pre></div>
+<div class="sourceCode" id="cb179"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb179-1"><a href="#cb179-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
+<span id="cb179-2"><a href="#cb179-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> causal_error(model, tokens, cut<span class="op">=</span><span class="dv">3</span>):</span>
+<span id="cb179-3"><a href="#cb179-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Intervene only on FUTURE inputs, then inspect all earlier logits.&quot;&quot;&quot;</span></span>
+<span id="cb179-4"><a href="#cb179-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="dv">0</span> <span class="op">&lt;</span> cut <span class="op">&lt;</span> tokens.shape[<span class="dv">1</span>]:</span>
+<span id="cb179-5"><a href="#cb179-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;cut must split prefix and nonempty future&#39;</span>)</span>
+<span id="cb179-6"><a href="#cb179-6" aria-hidden="true" tabindex="-1"></a>    changed <span class="op">=</span> tokens.clone()</span>
+<span id="cb179-7"><a href="#cb179-7" aria-hidden="true" tabindex="-1"></a>    changed[:, cut:] <span class="op">=</span> (changed[:, cut:] <span class="op">+</span> <span class="dv">5</span>) <span class="op">%</span> model.config.vocab_size</span>
+<span id="cb179-8"><a href="#cb179-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> check_close(model(changed)[<span class="dv">0</span>][:, :cut], model(tokens)[<span class="dv">0</span>][:, :cut])</span></code></pre></div>
 <ul>
 <li>第 113–114
 行：切点必须把序列分成非空的过去与非空的未来，否则这次干预什么也没检验。</li>
@@ -16685,25 +16608,25 @@ monkey-patch 后的任意运行时结构。</p>
 prefill。</p>
 <p>加载顺序的核心是 <code>load_checkpoint</code> 第 182–199 行：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L182-L199 -->
-<div class="sourceCode" id="cb183"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb183-1"><a href="#cb183-1" aria-hidden="true" tabindex="-1"></a>    checkpoint <span class="op">=</span> torch.load(source, map_location<span class="op">=</span><span class="st">&#39;cpu&#39;</span>, weights_only<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb183-2"><a href="#cb183-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(checkpoint, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">set</span>(checkpoint) <span class="op">!=</span> {<span class="st">&#39;metadata&#39;</span>, <span class="st">&#39;state_dict&#39;</span>}:</span>
-<span id="cb183-3"><a href="#cb183-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint envelope mismatch&#39;</span>)</span>
-<span id="cb183-4"><a href="#cb183-4" aria-hidden="true" tabindex="-1"></a>    meta <span class="op">=</span> checkpoint[<span class="st">&#39;metadata&#39;</span>]</span>
-<span id="cb183-5"><a href="#cb183-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(meta, <span class="bu">dict</span>) <span class="kw">or</span> meta.get(<span class="st">&#39;dtype&#39;</span>) <span class="kw">not</span> <span class="kw">in</span> (<span class="st">&#39;torch.float32&#39;</span>, <span class="st">&#39;torch.float64&#39;</span>):</span>
-<span id="cb183-6"><a href="#cb183-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;unsupported checkpoint dtype/metadata&#39;</span>)</span>
-<span id="cb183-7"><a href="#cb183-7" aria-hidden="true" tabindex="-1"></a>    model.to(dtype<span class="op">=</span>{<span class="st">&#39;torch.float32&#39;</span>: torch.float32, <span class="st">&#39;torch.float64&#39;</span>: torch.float64}[meta[<span class="st">&#39;dtype&#39;</span>]])</span>
-<span id="cb183-8"><a href="#cb183-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> meta <span class="op">!=</span> _metadata(stage, model, vocabulary):</span>
-<span id="cb183-9"><a href="#cb183-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint architecture/config/vocabulary/depth mismatch&#39;</span>)</span>
-<span id="cb183-10"><a href="#cb183-10" aria-hidden="true" tabindex="-1"></a>    state <span class="op">=</span> checkpoint[<span class="st">&#39;state_dict&#39;</span>]</span>
-<span id="cb183-11"><a href="#cb183-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(state, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">any</span>(<span class="kw">not</span> <span class="bu">isinstance</span>(t, torch.Tensor) <span class="cf">for</span> t <span class="kw">in</span> state.values()):</span>
-<span id="cb183-12"><a href="#cb183-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint state must contain tensors&#39;</span>)</span>
-<span id="cb183-13"><a href="#cb183-13" aria-hidden="true" tabindex="-1"></a>    expected_state <span class="op">=</span> model.state_dict()</span>
-<span id="cb183-14"><a href="#cb183-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># load_state_dict can silently cast integer/bool/complex tensors. Validate</span></span>
-<span id="cb183-15"><a href="#cb183-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># each named target&#39;s exact dtype, including any non-floating buffers, first.</span></span>
-<span id="cb183-16"><a href="#cb183-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(key <span class="kw">in</span> expected_state <span class="kw">and</span> tensor.dtype <span class="op">!=</span> expected_state[key].dtype</span>
-<span id="cb183-17"><a href="#cb183-17" aria-hidden="true" tabindex="-1"></a>           <span class="cf">for</span> key, tensor <span class="kw">in</span> state.items()):</span>
-<span id="cb183-18"><a href="#cb183-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint tensor dtype mismatch&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb180"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb180-1"><a href="#cb180-1" aria-hidden="true" tabindex="-1"></a>    checkpoint <span class="op">=</span> torch.load(source, map_location<span class="op">=</span><span class="st">&#39;cpu&#39;</span>, weights_only<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb180-2"><a href="#cb180-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(checkpoint, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">set</span>(checkpoint) <span class="op">!=</span> {<span class="st">&#39;metadata&#39;</span>, <span class="st">&#39;state_dict&#39;</span>}:</span>
+<span id="cb180-3"><a href="#cb180-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint envelope mismatch&#39;</span>)</span>
+<span id="cb180-4"><a href="#cb180-4" aria-hidden="true" tabindex="-1"></a>    meta <span class="op">=</span> checkpoint[<span class="st">&#39;metadata&#39;</span>]</span>
+<span id="cb180-5"><a href="#cb180-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(meta, <span class="bu">dict</span>) <span class="kw">or</span> meta.get(<span class="st">&#39;dtype&#39;</span>) <span class="kw">not</span> <span class="kw">in</span> (<span class="st">&#39;torch.float32&#39;</span>, <span class="st">&#39;torch.float64&#39;</span>):</span>
+<span id="cb180-6"><a href="#cb180-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;unsupported checkpoint dtype/metadata&#39;</span>)</span>
+<span id="cb180-7"><a href="#cb180-7" aria-hidden="true" tabindex="-1"></a>    model.to(dtype<span class="op">=</span>{<span class="st">&#39;torch.float32&#39;</span>: torch.float32, <span class="st">&#39;torch.float64&#39;</span>: torch.float64}[meta[<span class="st">&#39;dtype&#39;</span>]])</span>
+<span id="cb180-8"><a href="#cb180-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> meta <span class="op">!=</span> _metadata(stage, model, vocabulary):</span>
+<span id="cb180-9"><a href="#cb180-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint architecture/config/vocabulary/depth mismatch&#39;</span>)</span>
+<span id="cb180-10"><a href="#cb180-10" aria-hidden="true" tabindex="-1"></a>    state <span class="op">=</span> checkpoint[<span class="st">&#39;state_dict&#39;</span>]</span>
+<span id="cb180-11"><a href="#cb180-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(state, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">any</span>(<span class="kw">not</span> <span class="bu">isinstance</span>(t, torch.Tensor) <span class="cf">for</span> t <span class="kw">in</span> state.values()):</span>
+<span id="cb180-12"><a href="#cb180-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint state must contain tensors&#39;</span>)</span>
+<span id="cb180-13"><a href="#cb180-13" aria-hidden="true" tabindex="-1"></a>    expected_state <span class="op">=</span> model.state_dict()</span>
+<span id="cb180-14"><a href="#cb180-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># load_state_dict can silently cast integer/bool/complex tensors. Validate</span></span>
+<span id="cb180-15"><a href="#cb180-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># each named target&#39;s exact dtype, including any non-floating buffers, first.</span></span>
+<span id="cb180-16"><a href="#cb180-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(key <span class="kw">in</span> expected_state <span class="kw">and</span> tensor.dtype <span class="op">!=</span> expected_state[key].dtype</span>
+<span id="cb180-17"><a href="#cb180-17" aria-hidden="true" tabindex="-1"></a>           <span class="cf">for</span> key, tensor <span class="kw">in</span> state.items()):</span>
+<span id="cb180-18"><a href="#cb180-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint tensor dtype mismatch&#39;</span>)</span></code></pre></div>
 <ul>
 <li>第 182 行：<code>map_location='cpu'</code> 加
 <code>weights_only=True</code>，只允许张量与基础容器被反序列化。</li>
@@ -16870,14 +16793,14 @@ mask，不修改磁盘上的旧课例。源码锚点如果找不到或出现多�
 <p>变异器 <code>mutate_function</code> 的函数体只有 7 行（第 308–314
 行）：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L308-L314 -->
-<div class="sourceCode" id="cb184"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb184-1"><a href="#cb184-1" aria-hidden="true" tabindex="-1"></a>    raw <span class="op">=</span> inspect.unwrap(function)</span>
-<span id="cb184-2"><a href="#cb184-2" aria-hidden="true" tabindex="-1"></a>    source <span class="op">=</span> textwrap.dedent(inspect.getsource(raw))</span>
-<span id="cb184-3"><a href="#cb184-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> source.count(old) <span class="op">!=</span> <span class="dv">1</span>:</span>
-<span id="cb184-4"><a href="#cb184-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;mutation anchor must occur exactly once&#39;</span>)</span>
-<span id="cb184-5"><a href="#cb184-5" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="bu">dict</span>(raw.__globals__)</span>
-<span id="cb184-6"><a href="#cb184-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">exec</span>(<span class="bu">compile</span>(source.replace(old, new, <span class="dv">1</span>), <span class="st">&#39;&lt;p27-behavior-mutant&gt;&#39;</span>, <span class="st">&#39;exec&#39;</span>), namespace)</span>
-<span id="cb184-7"><a href="#cb184-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> namespace[raw.<span class="va">__name__</span>]</span></code></pre></div>
+<div class="sourceCode" id="cb181"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb181-1"><a href="#cb181-1" aria-hidden="true" tabindex="-1"></a>    raw <span class="op">=</span> inspect.unwrap(function)</span>
+<span id="cb181-2"><a href="#cb181-2" aria-hidden="true" tabindex="-1"></a>    source <span class="op">=</span> textwrap.dedent(inspect.getsource(raw))</span>
+<span id="cb181-3"><a href="#cb181-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> source.count(old) <span class="op">!=</span> <span class="dv">1</span>:</span>
+<span id="cb181-4"><a href="#cb181-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;mutation anchor must occur exactly once&#39;</span>)</span>
+<span id="cb181-5"><a href="#cb181-5" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="bu">dict</span>(raw.__globals__)</span>
+<span id="cb181-6"><a href="#cb181-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">exec</span>(<span class="bu">compile</span>(source.replace(old, new, <span class="dv">1</span>), <span class="st">&#39;&lt;p27-behavior-mutant&gt;&#39;</span>, <span class="st">&#39;exec&#39;</span>), namespace)</span>
+<span id="cb181-7"><a href="#cb181-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> namespace[raw.<span class="va">__name__</span>]</span></code></pre></div>
 <ul>
 <li>第 308–309 行：取被装饰前的原函数，读出它的真实源码。</li>
 <li>第 310–311
@@ -16912,18 +16835,18 @@ id="负例三后一个请求接上了前一个请求的历史">负例三：后�
 <p>前两个负例的判定循环在 <code>negative_controls</code> 第 332–342
 行：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L332-L342 -->
-<div class="sourceCode" id="cb185"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb185-1"><a href="#cb185-1" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, forward <span class="kw">in</span> variants.items():</span>
-<span id="cb185-2"><a href="#cb185-2" aria-hidden="true" tabindex="-1"></a>        first, cache <span class="op">=</span> forward(base, tokens[:, :<span class="dv">3</span>], <span class="va">None</span>)</span>
-<span id="cb185-3"><a href="#cb185-3" aria-hidden="true" tabindex="-1"></a>        rest, _ <span class="op">=</span> forward(base, tokens[:, <span class="dv">3</span>:], cache)</span>
-<span id="cb185-4"><a href="#cb185-4" aria-hidden="true" tabindex="-1"></a>        actual <span class="op">=</span> torch.cat((first, rest), <span class="dv">1</span>)</span>
-<span id="cb185-5"><a href="#cb185-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> torch.isfinite(actual).<span class="bu">all</span>():</span>
-<span id="cb185-6"><a href="#cb185-6" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;negative must return finite logits, not crash/NaN&#39;</span>)</span>
-<span id="cb185-7"><a href="#cb185-7" aria-hidden="true" tabindex="-1"></a>        delta <span class="op">=</span> <span class="bu">float</span>((actual <span class="op">-</span> expected).<span class="bu">abs</span>().<span class="bu">max</span>())</span>
-<span id="cb185-8"><a href="#cb185-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> torch.allclose(actual, expected, atol<span class="op">=</span>ATOL, rtol<span class="op">=</span>RTOL):</span>
-<span id="cb185-9"><a href="#cb185-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="ss">f&#39;</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss"> survived the equivalence oracle&#39;</span>)</span>
-<span id="cb185-10"><a href="#cb185-10" aria-hidden="true" tabindex="-1"></a>        rows.append({<span class="st">&#39;name&#39;</span>: name, <span class="st">&#39;caught&#39;</span>: <span class="va">True</span>, <span class="st">&#39;max_logit_error&#39;</span>: delta,</span>
-<span id="cb185-11"><a href="#cb185-11" aria-hidden="true" tabindex="-1"></a>                     <span class="st">&#39;before_error&#39;</span>: before_split})</span></code></pre></div>
+<div class="sourceCode" id="cb182"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb182-1"><a href="#cb182-1" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, forward <span class="kw">in</span> variants.items():</span>
+<span id="cb182-2"><a href="#cb182-2" aria-hidden="true" tabindex="-1"></a>        first, cache <span class="op">=</span> forward(base, tokens[:, :<span class="dv">3</span>], <span class="va">None</span>)</span>
+<span id="cb182-3"><a href="#cb182-3" aria-hidden="true" tabindex="-1"></a>        rest, _ <span class="op">=</span> forward(base, tokens[:, <span class="dv">3</span>:], cache)</span>
+<span id="cb182-4"><a href="#cb182-4" aria-hidden="true" tabindex="-1"></a>        actual <span class="op">=</span> torch.cat((first, rest), <span class="dv">1</span>)</span>
+<span id="cb182-5"><a href="#cb182-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> torch.isfinite(actual).<span class="bu">all</span>():</span>
+<span id="cb182-6"><a href="#cb182-6" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;negative must return finite logits, not crash/NaN&#39;</span>)</span>
+<span id="cb182-7"><a href="#cb182-7" aria-hidden="true" tabindex="-1"></a>        delta <span class="op">=</span> <span class="bu">float</span>((actual <span class="op">-</span> expected).<span class="bu">abs</span>().<span class="bu">max</span>())</span>
+<span id="cb182-8"><a href="#cb182-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> torch.allclose(actual, expected, atol<span class="op">=</span>ATOL, rtol<span class="op">=</span>RTOL):</span>
+<span id="cb182-9"><a href="#cb182-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="ss">f&#39;</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss"> survived the equivalence oracle&#39;</span>)</span>
+<span id="cb182-10"><a href="#cb182-10" aria-hidden="true" tabindex="-1"></a>        rows.append({<span class="st">&#39;name&#39;</span>: name, <span class="st">&#39;caught&#39;</span>: <span class="va">True</span>, <span class="st">&#39;max_logit_error&#39;</span>: delta,</span>
+<span id="cb182-11"><a href="#cb182-11" aria-hidden="true" tabindex="-1"></a>                     <span class="st">&#39;before_error&#39;</span>: before_split})</span></code></pre></div>
 <ul>
 <li>第 333–335 行：变异版本先喂 3 个 token、再带着自己的缓存喂剩下 5
 个，拼成完整 logits。</li>
@@ -17817,9 +17740,9 @@ class="math inline">\(16\times128=2048\)</span>，不能擅自改成 1024。新
 revision 即使文件长度不变也可能改字段，必须同时检查 hash 和语义
 diff，不能只看文件大小。</p>
 <p><strong>第四步，小实验验证。</strong> 在仓库根目录运行：</p>
-<div class="sourceCode" id="cb186"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb186-1"><a href="#cb186-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
-<span id="cb186-2"><a href="#cb186-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_reference_appendix.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb183"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb183-1"><a href="#cb183-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
+<span id="cb183-2"><a href="#cb183-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_reference_appendix.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>第一条仅读取固定小文件并打印账本；第二条用标准库重新核对原始字节、上述三个字段、形状/概率/梯度卡和本节自测。若另运行
 P25 <code>--torch</code>
 或官方参考测试，记录它们的独立依赖和实际结果。没有下载真实权重，所以不能把此处称作“复现
@@ -17908,6 +17831,11 @@ href="https://github.com/karpathy/nanoGPT">nanoGPT
 <p>下表保留从正文移出的日期与版本。种子、线程数、dtype
 和数值结果仍在原章。正在讲授的库版本锁定留在原处，不计入本表。</p>
 <div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>章</th>
@@ -18132,6 +18060,11 @@ href="https://github.com/karpathy/nanoGPT">nanoGPT
 <td>2026-10-19</td>
 </tr>
 <tr>
+<td>08i</td>
+<td>数据版本指纹（SHA-256）</td>
+<td><code>1b1a8d64d76a38761d8166a145550efdab89a852874994c19be8333947c75705</code></td>
+</tr>
+<tr>
 <td>08j</td>
 <td>实测日期</td>
 <td>2026-10-19</td>
@@ -18155,6 +18088,12 @@ href="https://github.com/karpathy/nanoGPT">nanoGPT
 <td>08k</td>
 <td>来源核验日期</td>
 <td>2026-10-19</td>
+</tr>
+<tr>
+<td>08k</td>
+<td>TRL 源码快照（只读，未执行）</td>
+<td>0.18.2 SFTTrainer；P20 引 0.17.0 官方总览，P22 引 0.16.1 GRPO
+源码，分别固定资料快照，不是同一套环境，未作跨版本兼容验证</td>
 </tr>
 <tr>
 <td>08l</td>
@@ -18170,6 +18109,12 @@ href="https://github.com/karpathy/nanoGPT">nanoGPT
 <td>08l</td>
 <td>TRL 源码核验日期</td>
 <td>2026-10-19</td>
+</tr>
+<tr>
+<td>08l</td>
+<td>TRL 源码快照（只读，未执行）</td>
+<td>0.16.1 DPOConfig / GRPOConfig / GRPOTrainer，作为固定的历史 GRPO
+实现切片，不是推荐退回旧环境</td>
 </tr>
 <tr>
 <td>08m</td>
