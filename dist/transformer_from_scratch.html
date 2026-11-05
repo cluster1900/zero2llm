@@ -10729,8 +10729,7 @@ attention 输出精确为零；最终 PAD logits 也置零。这不是让 PAD
 读取任意文档来“凑一个可见项”。</p>
 <p>测试还做了更直观的核对：关闭 dropout 后，把 A、B 一起 packing
 得到的真实位置 logits，应与分别单独处理的结果接近；只改 A 的字，B
-的输出应完全不变。把 mask
-故意换成普通下三角后，后一条检查确实会失败。</p>
+的输出应完全不变。</p>
 <h2 id="p19.5-loss每道有效小题一票不是每箱一票">P19.5
 Loss：每道有效小题一票，不是每箱一票</h2>
 <p>下面给五个有效目标指定一组<strong>人为设计、未训练得来</strong>的正确答案概率。忽略位置没有
@@ -10814,8 +10813,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb130-1"><a 
 <span id="cb130-6"><a href="#cb130-6" aria-hidden="true" tabindex="-1"></a>mean_loss <span class="op">=</span> total_loss <span class="op">/</span> total_targets <span class="cf">if</span> total_targets <span class="cf">else</span> <span class="va">None</span></span></code></pre></div>
 <p>这是说明聚合方式的片段，完整 <code>evaluate()</code>
 会在循环中做前向，使用 <code>eval()</code> 与
-<code>no_grad()</code>，最后恢复原训练模式。测试用 2 个目标和 5
-个目标的两块检查加权方式，故意平均块均值会给出不同结果。</p>
+<code>no_grad()</code>，最后恢复原训练模式。</p>
 <h3
 id="全部标签都忽略时不能只想到除零">全部标签都忽略时，不能只想到除零</h3>
 <p><code>tensor_loss</code> 返回可求导的零与
@@ -10824,8 +10822,7 @@ id="全部标签都忽略时不能只想到除零">全部标签都忽略时，�
 backward、optimizer.step、学习率推进或 token 计数。</p>
 <p>为什么连 <code>optimizer.step()</code> 也要跳过？AdamW
 有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全
-PAD 行，验证整个状态不变；故意仍然执行 AdamW step
-的坏版本确实改变权重。</p>
+PAD 行，验证整个状态不变。</p>
 <p>还要分清“框架替我们移位”和“已经手工移位”。本章的
 <code>tensor_loss</code> 接受已对齐的 next-token
 labels，<strong>不再移位</strong>。Transformers 某些 causal-LM
@@ -16687,11 +16684,7 @@ bit 相等；也不能随意把容差放宽到“看起来差不多”。</p>
 <p>为什么跑四种分块？单 token decode 擅长暴露位置偏移错误，多 token
 chunk 擅长暴露矩形 mask 错误，整段前向则给出没有历史缓存的边界。如果只测
 <code>T=1</code> 或只测一次完整 prefill，某些错误永远不触发。</p>
-<p>对照对象也必须锁住：若把完整前向换成“缓存路径一次喂完”，两边可能共享同一个错误。测试让缓存路径的每块
-logits 都加
-0.25，四种分块都应被真正的完整前向抓住；缓存路径与自己比较却会漏掉。另一个测试只把第一块乘
-1.5，包括整段 <code>[8]</code> 在内也都应报警。这里没有改
-K/V，错误只在返回的 logits，不能依靠后续缓存崩溃碰巧抓住它。</p>
+<p>对照对象也必须锁住：若把完整前向换成“缓存路径一次喂完”，两边可能共享同一个错误。</p>
 <p>下面是 <a
 href="code/28_minigpt_healthcheck.py"><code>code/28_minigpt_healthcheck.py</code></a>
 中 <code>cache_equivalence</code> 的前 14 行（第 120–133
@@ -16932,9 +16925,7 @@ base 或词表顺序不同就在这里被拒，根本不会走到张量加载。
 多出的键。</p>
 <p>逐张量核对也不能被“本次输出相同”替代：S0 的 mask 是 16×16，本次 T=8
 只用左上角。测试改变 <code>[15,15]</code>，本次 logits 仍完全相同，但
-checkpoint
-的状态已经不忠实，往返检查必须报警。兼容性测试还区分拒绝原因：一个文件若先因不支持的
-dtype 被拒绝，不能把这次异常算作“架构语义不兼容已验证”。</p>
+checkpoint 的状态已经不忠实，往返检查必须报警。</p>
 <p>只加载自己生成或明确可信的文件。测试使用没有自定义还原方法、没有执行副作用的普通字典子类，确认限制型反序列化会拒绝未允许的对象，而不是用危险载荷演示风险。代码使用
 CPU 映射与
 <code>weights_only=True</code>，这是收窄反序列化行为，不是“网上任何文件都安全”的承诺。<a
