@@ -24,7 +24,7 @@
 
 ![四层学习地图](assets/diagrams/learning_layers.svg)
 
-生活类比是一张路标，不是证明。例如，“图书馆检索”帮助理解 Q、K、V 的分工，但模型并没有真的翻阅书架；“专家”帮助理解 MoE 路由，但每个专家并不天然对应一个人类职业。每到关键处，我们都会回到公式、代码或可验证的输出。
+生活类比是一张路标，不是证明。例如，“图书馆检索”帮助理解 Q、K、V 的分工，但模型并没有真的翻阅书架；“专家”帮助理解 MoE 路由（P18），但每个专家并不天然对应一个人类职业。每到关键处，我们都会回到公式、代码或可验证的输出。
 
 ## 0.2 需要准备什么？
 
@@ -69,7 +69,7 @@ python3 -m venv .venv
 
 | 字段 | 例子或写法 |
 | --- | --- |
-| 代码版本 | 本次 Git commit；若有未提交修改，写明 |
+| 代码版本 | 本书版本/下载日期；若改过代码写明改动 |
 | 环境 | Python 版本、依赖版本、操作系统、CPU/GPU |
 | 输入 | 文本全文或数据集版本；训练集与验证集分开 |
 | 随机性 | 种子；若算法没有随机步骤则写“确定性” |
@@ -961,7 +961,7 @@ allowed = valid[:, None, :, None] & valid[:, None, None, :]
 allowed = allowed & torch.ones(T, T, dtype=torch.bool).tril()
 ```
 
-`valid` 是 [B,T]，两个切片分别变成 [B,1,T,1] 与 [B,1,1,T]，广播后得到 [B,1,T,T]，可供多个头共享。若单头分数是 [B,T,T]，使用 `allowed[:, 0]`；不要误把 [B,T] 直接广播成分数矩阵。代码中创建下三角时还指定与输入相同的 device。
+`valid` 是 [B,T]，两个切片分别变成 [B,1,T,1] 与 [B,1,1,T]，广播后得到 [B,1,T,T]；中间那根长度为 1 的轴留给第 4 章的多个头共享。若单头分数是 [B,T,T]，使用 `allowed[:, 0]`；不要误把 [B,T] 直接广播成分数矩阵。上面的片段省略了 device；`code/attention_core.py` 中的完整版本创建下三角时指定与输入相同的 device。
 
 注意不同 API 的约定不同：PyTorch 2.14 的 functional SDPA 布尔 mask 中 True 表示参与，`nn.MultiheadAttention` 的布尔禁止掩码使用相反语义。不要把同一个布尔张量不经核对就换接口。
 
@@ -980,7 +980,7 @@ safe = torch.where(any_allowed, masked, torch.zeros_like(masked))
 weights = torch.softmax(safe, dim=-1).masked_fill(~allowed, 0.0)
 ```
 
-先让空行的 Softmax 输入安全，再在结果中清零，避免先产生 NaN 再尝试补救。辅助函数要求原始分数有限，并检查布尔类型和广播形状。这是本书实现的契约，不表示所有框架、内核和版本都采用相同处理方式。
+先让空行的 Softmax 输入安全，再在结果中清零，避免先产生 NaN 再尝试补救。辅助函数要求原始分数有限，并检查布尔类型和广播形状。这是本书的选择，不表示所有框架、内核和版本都采用相同处理方式。
 
 ## 3.6 训练可并行，为什么生成还要一步步来？
 
@@ -1029,7 +1029,7 @@ python3 -m unittest discover -s tests -p 'test_attention.py' -v
 
 上一章我们用 $Q$ 和 $K$ 打分，做 Softmax，再用权重汇总 $V$。本章把这套计算分成几个并行的“头”，重点追踪形状怎样变化、参数和计算成本怎样计数。
 
-配套代码是 [code/04_multi_head_attention.py](../code/04_multi_head_attention.py)。本章只讨论**标准、等宽的多头自注意力**：Q、K、V 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV 头等变体见已实现的 [P14](#p14-grouped-kv)（[GQA 原始论文](https://arxiv.org/abs/2305.13245)）。
+配套代码是 [code/04_multi_head_attention.py](../code/04_multi_head_attention.py)。本章只讨论**标准、等宽的多头自注意力**：Q、K、V 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV 头等变体见 [P14](#p14-grouped-kv)（[GQA 原始论文](https://arxiv.org/abs/2305.13245)）。
 
 ---
 
@@ -1066,7 +1066,7 @@ python3 -m unittest discover -s tests -p 'test_attention.py' -v
 | $T$ | sequence length，每条序列有多少个 token 位置 | 3 |
 | $D$ | model dimension，每个位置的总特征宽度 | 8 |
 | $H$ | head count，注意力头数 | 2 |
-| $d_h$ | head dimension，每个头的特征宽度 | 4 |
+| $d_h$ | head dimension，每个头的特征宽度；等宽时就是第 3 章的 $d_k$、$d_v$ | 4 |
 
 本章约定：
 
@@ -1221,7 +1221,7 @@ query 1       True    True    False
 query 2       True    True    True
 ```
 
-可以这样建立一个供所有 batch、所有头共用的 `[T,T]` 掩码：
+可以这样建立一个供所有 batch、所有头共用的 `[T,T]` 掩码（`x` 与 `mha` 在 4.6 节创建）：
 
 ```python
 allowed = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()
@@ -1512,7 +1512,7 @@ $$PE_{(pos,2i+1)}=\cos\left(\frac{pos}{10000^{2i/D}}\right).$$
 
 快针在几个位置里就来回摆动，慢针在短句里几乎不动。它们合起来提供多种尺度的变化信息。
 
-![图 5-1：正弦余弦位置编码的波形频率谱](assets/diagrams/positional_encoding_waves.svg)
+![图 5-1：不同频率的正弦波形示意](assets/diagrams/positional_encoding_waves.svg)
 
 图 5-1 为了在位置 0 到 24 的同一画布上看清变化，使用 $\sin(pos)$、$\sin(pos/8)$、$\sin(pos/80)$ 三条示意曲线；**不是下方 $D=8$ 表格中的三个实际列**。图中红点表示算出的函数值。
 
@@ -1629,7 +1629,7 @@ Add=(1, 2, 4)；Concat=(1, 2, 8)
 
 加法的代价是什么？$[1,0]+[0,1]$ 与 $[0,1]+[1,0]$ 都是 `[1,1]`，因此只给一个和，不能一般性地恢复两个任意输入。不要用“高维向量天生正交”来保证词义与位置能无损拆开；学习到的词向量和固定 PE 并没有这种自动保证。
 
-它仍然是一个可训练的设计选择：加法保持输入宽度，词向量与后续层共同适应这种混合。对一个线性投影，$(X+PE)W=XW+PEW$；拼接则允许使用分别作用于内容和位置的 $W_x,W_p$。二者约束不同，是否更好需要实验。原论文采用相加，并在输入词嵌入处使用 $\sqrt{D}$ 缩放；本例为便于手算，把 $X$ 直接当作待相加的输入。[来源 1，§3.4–3.5]
+它仍然是一个可训练的设计选择：加法保持输入宽度，词向量与后续层共同适应这种混合。对一个线性投影，$(X+PE)W=XW+PEW$；拼接则允许使用分别作用于内容和位置的 $W_x,W_p$。二者约束不同，是否更好需要实验。原论文采用相加。注意：原论文在相加前先把词嵌入乘以 $\sqrt{D}$。本例为便于手算不做这一步，把 $X$ 直接当作待相加的输入。[来源 1，§3.4–3.5]
 
 ## 5.7 长度要分三本账
 
@@ -1668,7 +1668,7 @@ for pos in range(max_seq_len):
 - 外层遍历位置 0 到 $T-1$，内层遍历维度对的下标 k。`2*k` 已经是偶数列索引，不要在指数里再多乘一次 2。
 - `(d_model + 1) // 2` 向上取整。$D=5$ 时需要三次循环，最后一次填 d4 的 sine；若写 `d_model // 2`，d4 会被错误地留成零。
 - `if` 只决定有没有合法的 cosine 列，不应把最后一个 sine 也跳过。
-- 支持空序列 $[0,D]$；拒绝负长度、非正宽度，以及浮点数或布尔值维度。这是教学函数的明确契约。
+- 支持空序列 $[0,D]$；拒绝负长度、非正宽度，以及浮点数或布尔值维度。
 
 运行方式，在已安装项目依赖的 Python 环境中执行：
 
