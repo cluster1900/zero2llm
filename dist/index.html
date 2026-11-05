@@ -600,9 +600,9 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-v</span></span></code></pre></div>
 <p>第一条确认你使用的是哪个
 Python；接下来两条运行例子；最后一条运行<strong>全书</strong>的回归测试：<code>tests/</code>
-下所有测试文件、700 多条测试都会执行，其中大多与本章无关。CI 在 Python
-3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；第 27
-章（09a）报告的实测数字来自 Python 3.13.5、PyTorch
+下所有测试文件、700 多条测试都会执行，其中大多与上面两个例子无关。CI 在
+Python 3.12 加 PyTorch 2.14.1（CPU
+版）上运行这条命令；P27（09a）报告的实测数字来自 Python 3.13.5、PyTorch
 2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是
 <code>chapters/</code>。</p>
 <div class="tip">
@@ -1130,9 +1130,9 @@ href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html">PyTo
 2.14 的 Embedding 文档</a>；本章必修代码不依赖
 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 <a
 href="https://aclanthology.org/N13-1090/">Linguistic Regularities in
-Continuous Space Word Representations（NAACL 2013）</a>；同组的 <a
-href="https://arxiv.org/abs/1310.4546">Distributed Representations of
-Words and Phrases and their Compositionality</a>
+Continuous Space Word Representations（NAACL 2013）</a>；Mikolov
+等人同年稍后的 <a href="https://arxiv.org/abs/1310.4546">Distributed
+Representations of Words and Phrases and their Compositionality</a>
 主要讲负采样与短语向量，也可一并阅读。</p>
 <hr />
 <h1 id="第1A章-Tokenizer-从字符-字节到-BPE">第1A章：Tokenizer——从字符、字节到
@@ -7174,8 +7174,8 @@ class="math display">\[\sqrt{\operatorname{mean}(x^2)+\epsilon}\ \ne\
 范围。错误地先在 float16 中平方，之后再转换
 float32，已经救不回无穷了。bfloat16 的情况不同：它的指数位与 float32
 相同，最大约 3.4×10³⁸，40000 的平方不会溢出；源码同样把它升到
-float32，是因为 bfloat16 只有 8 位有效尾数，平方和均值在 float32
-中更精确。源码先转换，再做平方、均值和倒平方根：</p>
+float32，是因为 bfloat16 只有 8 位有效精度（7 位尾数），平方和均值在
+float32 中更精确。源码先转换，再做平方、均值和倒平方根：</p>
 <div class="sourceCode" id="cb84"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a>work <span class="op">=</span> x.<span class="bu">float</span>() <span class="cf">if</span> x.dtype <span class="kw">in</span> (torch.float16, torch.bfloat16) <span class="cf">else</span> x</span>
 <span id="cb84-2"><a href="#cb84-2" aria-hidden="true" tabindex="-1"></a>inv_rms <span class="op">=</span> torch.rsqrt(work.square().mean(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>) <span class="op">+</span> <span class="va">self</span>.eps)</span>

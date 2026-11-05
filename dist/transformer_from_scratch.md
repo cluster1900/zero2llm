@@ -47,7 +47,7 @@ python3 code/08_byte_bpe.py
 python3 -m unittest discover -s tests -v
 ```
 
-第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、700 多条测试都会执行，其中大多与本章无关。CI 在 Python 3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；第 27 章（09a）报告的实测数字来自 Python 3.13.5、PyTorch 2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
+第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、700 多条测试都会执行，其中大多与上面两个例子无关。CI 在 Python 3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；P27（09a）报告的实测数字来自 Python 3.13.5、PyTorch 2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
 
 > [!TIP]
 > **选修：Hugging Face 对照实验。** 只想理解算法，可以跳过。想比较真实分词库时，新建虚拟环境，再安装 `requirements-tokenizer.txt` 中固定的 `tokenizers==0.21.4`，运行 `code/09_hf_tokenizer.py`。它仍只用 CPU 和本地合成语料，不下载语言模型。安装依赖需要网络，安装完成后的实验不需要网络。
@@ -284,7 +284,7 @@ $$[9,8,7]-[1,8,5]+[1,-8,5]=[9,-8,7]$$
 
 参考答案：不会，只要映射一致，仍能查到原来那行；点积 50、距离 5；不能，数学上没有定义，本书抛出 `ValueError`；不能这样保证。现实系统通常由 tokenizer 把未知整词拆成已知子词或字节等单位，然后查它们的向量。**这就是下一章要补上的环节：文本怎样变成那些 ID？**
 
-本章核验日期：2026-10-18。查表接口可参阅 [PyTorch 2.14 的 Embedding 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)；本章必修代码不依赖 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 [Linguistic Regularities in Continuous Space Word Representations（NAACL 2013）](https://aclanthology.org/N13-1090/)；同组的 [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) 主要讲负采样与短语向量，也可一并阅读。
+本章核验日期：2026-10-18。查表接口可参阅 [PyTorch 2.14 的 Embedding 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)；本章必修代码不依赖 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 [Linguistic Regularities in Continuous Space Word Representations（NAACL 2013）](https://aclanthology.org/N13-1090/)；Mikolov 等人同年稍后的 [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) 主要讲负采样与短语向量，也可一并阅读。
 
 
 ---
@@ -3524,7 +3524,7 @@ $$\sqrt{\operatorname{mean}(x^2)+\epsilon}\ \ne\ \sqrt{\operatorname{mean}(x^2)}
 
 ### 低精度为什么先升到 float32
 
-float16 能表示 40000 左右的数，但它的平方已经远超 float16 范围。错误地先在 float16 中平方，之后再转换 float32，已经救不回无穷了。bfloat16 的情况不同：它的指数位与 float32 相同，最大约 3.4×10³⁸，40000 的平方不会溢出；源码同样把它升到 float32，是因为 bfloat16 只有 8 位有效尾数，平方和均值在 float32 中更精确。源码先转换，再做平方、均值和倒平方根：
+float16 能表示 40000 左右的数，但它的平方已经远超 float16 范围。错误地先在 float16 中平方，之后再转换 float32，已经救不回无穷了。bfloat16 的情况不同：它的指数位与 float32 相同，最大约 3.4×10³⁸，40000 的平方不会溢出；源码同样把它升到 float32，是因为 bfloat16 只有 8 位有效精度（7 位尾数），平方和均值在 float32 中更精确。源码先转换，再做平方、均值和倒平方根：
 
 ```python
 work = x.float() if x.dtype in (torch.float16, torch.bfloat16) else x

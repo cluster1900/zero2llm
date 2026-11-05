@@ -66,7 +66,7 @@ $$\sqrt{\operatorname{mean}(x^2)+\epsilon}\ \ne\ \sqrt{\operatorname{mean}(x^2)}
 
 ### 低精度为什么先升到 float32
 
-float16 能表示 40000 左右的数，但它的平方已经远超 float16 范围。错误地先在 float16 中平方，之后再转换 float32，已经救不回无穷了。bfloat16 的情况不同：它的指数位与 float32 相同，最大约 3.4×10³⁸，40000 的平方不会溢出；源码同样把它升到 float32，是因为 bfloat16 只有 8 位有效尾数，平方和均值在 float32 中更精确。源码先转换，再做平方、均值和倒平方根：
+float16 能表示 40000 左右的数，但它的平方已经远超 float16 范围。错误地先在 float16 中平方，之后再转换 float32，已经救不回无穷了。bfloat16 的情况不同：它的指数位与 float32 相同，最大约 3.4×10³⁸，40000 的平方不会溢出；源码同样把它升到 float32，是因为 bfloat16 只有 8 位有效精度（7 位尾数），平方和均值在 float32 中更精确。源码先转换，再做平方、均值和倒平方根：
 
 ```python
 work = x.float() if x.dtype in (torch.float16, torch.bfloat16) else x
