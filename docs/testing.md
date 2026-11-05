@@ -207,6 +207,8 @@ FFN 中间宽度，以及表 P13-4 的每层 FFN 参数和整模型参数，也�
 
 ## 08j_training_frameworks.md
 
+tests/test_training_frameworks.py 实际执行八种语义变异：丢掉分片余数、提前切分梯度、提前切分参数、漏算 master weight、错移 CE 标签、恢复首位 BOS 计数、取消 optimizer.step、损坏恢复后的权重。前四种被独立手算账本发现；错移标签被独立 CE 参考识别；后三种被真实 Trainer 更新、非零变化和恢复 logits 断言识别。
+
 测试故意恢复首位 BOS，要求独立更新对照报错，而不是只接受一个仍然下降的 loss。
 
 **跳过不等于 HF 通过。**

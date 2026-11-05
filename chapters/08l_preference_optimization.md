@@ -138,6 +138,8 @@ DPO 的推导把 KL 正则化奖励最大化与特定偏好模型联系起来，
 | A | 0.6 / 0.2 | 0.4 / 0.4 | ln 3 ≈ 1.098612 | 0.549306 | 0.455746 |
 | B | 0.2 / 0.5 | 0.1 / 0.5 | ln 2 ≈ 0.693147 | 0.346574 | 0.534800 |
 
+代码输入的是对数概率：A 为 ln 0.6≈−0.510826 / ln 0.2≈−1.609438，参考 ln 0.4≈−0.916291 / −0.916291；B 为 ln 0.2≈−1.609438 / ln 0.5≈−0.693147，参考 ln 0.1≈−2.302585 / −0.693147。相对 margin 是两组差之差，例如 A：(−0.510826+1.609438)−0=1.098612。
+
 batch 对两对样本取平均，结果约 0.495273。B 的 chosen 概率仍小于 rejected，但相对参考已经改善，所以 z 仍为正。如果当前策略和参考完全相同，每对 loss 都是 ln 2≈0.693147，而不是零。
 
 对应的核心代码只有几行：
@@ -310,11 +312,7 @@ GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我�
 
 ## P22.8 接到 TRL：固定版本配置阅读，明确未运行
 
-本节核对的是 **TRL 0.16.1** 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，核验日期见附录 H。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。
-
-**为什么相邻章节引用的 TRL 版本不一样？** [P20](#p20-frameworks) 用 [0.17.0 官方总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 建立框架与训练入口的地图；[P21](#p21-sft) 用 [0.18.2 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py) 说明 SFT 训练器的职责。本章则选择 **0.16.1 作为固定的历史 GRPO 实现切片**，逐项核对奖励标准化、KL 估计和 loss 归约，再与手写教学变体对照。选择这个较早标签是为了固定具体的比较对象，不是推荐退回旧环境。
-
-这三个版本号属于三处资料引用，**不是同一套训练环境，不是一条逐章升级或降级的安装路线，也没有经过跨版本兼容性验证**。下面对 0.16.1 行为的结论只适用于所链接的源码；本章没有比较另外两版的相同函数，因此不推断它们的 GRPO 行为一定相同或一定不同。三个章节均未运行 TRL，P20 的真实框架实验是另行锁定的 Transformers / Accelerate 实验。
+本节核对 TRL 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，只读未运行；固定版本、核验日期，以及 P20–P22 为何引用不同 TRL 版本，见附录 H。
 
 下面只是一份**未执行的配置示意**，不包含模型下载、Trainer 构造或 train 调用：
 
@@ -360,7 +358,7 @@ grpo_config = GRPOConfig(
 
 尤其不能预期 TRL 与教学脚本逐数相同。[该版本 GRPOTrainer 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_trainer.py) 的具体实现使用组内 `std` 默认修正，即样本标准差，分母为 G−1；奖励标准化稳定项为 10⁻⁴；loss 按全 batch 的有效 token 数归约，并使用采样 KL 估计。本章则采用总体标准差、10⁻⁸、每答案均权、精确条件 KL。**名字相同不保证变体相同，源代码与版本才是复现账本的一部分。**
 
-未来要运行 TRL，应新建独立环境锁定整套依赖，不要为这段未运行配置改变 P20 已验证的环境。至少保存：完整版本、随机种子、数据和模板、采样参数、每组奖励、mask、旧策略保存时点、有效长度、KL 的方向与估计方式、参数更新证据。只有真正跑完，才能把 NOT RUN 改成 EXECUTED。
+未来要运行 TRL，应新建独立环境锁定整套依赖，不要为这段未运行配置改变 P20 已验证的环境。至少保存：完整版本、随机种子、数据和模板、采样参数、每组奖励、mask、旧策略保存时点、有效长度、KL 的方向与估计方式、参数更新证据。
 
 ## P22.9 奖励投机：学会拿分，不等于学会任务
 
@@ -400,12 +398,14 @@ grpo_config = GRPOConfig(
 
 测试通过说明这份微型实现满足所声明的契约，不说明 RLHF 安全性、真实人类偏好或大模型能力已被验证。
 
-本章可以带走的一句话是：**偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。** 下一章会把这一框架接到推理预算、MTP 和投机解码，并继续区分训练目标与推理时计算。
-
 ## P22.11 延伸阅读：on-policy 蒸馏与多教师合并（MOPD） {#p22.11-mopd}
 
 On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 token 打分，公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)用这种做法把多个领域的 RL 专家合并进一个模型，称为 Multi-Teacher On-Policy Distillation（MOPD）。
 
 ## P22.12 延伸阅读：Softmax Cancellation {#p22.12-softmax-cancellation}
 
-软目标交叉熵对学生 logits 的梯度是 $q-p$。学生接近老师时，这是两个几乎相等的数相减，浮点里有效位会大量抵消；[A Fix for Softmax and Cross-Entropy，arXiv:2610.31642](https://arxiv.org/abs/2610.31642) §3 给出从 logit 差出发、用 `log1p` 和 `expm1` 计算的修法。
+这篇论文已在 [P04 3.3a](#p04-softmax-collapse) 介绍；其 §3 讨论软目标交叉熵梯度 $q-p$ 的抵消与修法，本书不展开。
+
+## 本章小结
+
+本章可以带走的一句话是：**偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。** 下一章会把这一框架接到推理预算、MTP 和投机解码，并继续区分训练目标与推理时计算。
