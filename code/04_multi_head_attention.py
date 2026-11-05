@@ -52,7 +52,7 @@ class SimpleMultiHeadAttention(nn.Module):
         batch_size, seq_len, _ = x.shape
 
         if verbose:
-            print(f"1. 输入张量 x 形状: {x.shape} (批次={batch_size}, 字数={seq_len}, 词向量维度={self.d_model})")
+            print(f"1. 输入张量 x 形状: {x.shape} (批次={batch_size}, 序列长度={seq_len}, 词向量维度={self.d_model})")
 
         # 1. 生成 Q, K, V
         Q = self.W_q(x)
@@ -78,7 +78,7 @@ class SimpleMultiHeadAttention(nn.Module):
         Q, K, V = (split_heads(projected) for projected in (Q, K, V))
 
         if verbose:
-            print(f"3. 切分多头并换轴后 Q 形状: {Q.shape} (批次, 头数={self.num_heads}, 字数={seq_len}, 单头维度={self.head_dim})")
+            print(f"3. 切分多头并换轴后 Q 形状: {Q.shape} (批次, 头数={self.num_heads}, 序列长度={seq_len}, 单头维度={self.head_dim})")
 
         # 3. 计算注意力分数 Score = (Q · K^T) / √head_dim
         # 最后的转置只对最后两个维度 (seq_len 和 head_dim) 翻转
@@ -124,7 +124,7 @@ def main():
 
     # 设定超参数（用小数字，肉眼清晰可见）
     batch_size = 1
-    seq_len = 4     # 4 个汉字："机器" "学习" "真" "酷"
+    seq_len = 4     # 4 个位置，标签为 "机器" "学习" "真" "酷"
     d_model = 8     # 总维度为 8
     num_heads = 2   # 切分成 2 个头，每个头维度为 4
 

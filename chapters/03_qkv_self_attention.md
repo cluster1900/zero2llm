@@ -171,7 +171,7 @@ allowed = valid[:, None, :, None] & valid[:, None, None, :]
 allowed = allowed & torch.ones(T, T, dtype=torch.bool).tril()
 ```
 
-`valid` 是 [B,T]，两个切片分别变成 [B,1,T,1] 与 [B,1,1,T]，广播后得到 [B,1,T,T]，可供多个头共享。若单头分数是 [B,T,T]，使用 `allowed[:, 0]`；不要误把 [B,T] 直接广播成分数矩阵。代码中创建下三角时还指定与输入相同的 device。
+`valid` 是 [B,T]，两个切片分别变成 [B,1,T,1] 与 [B,1,1,T]，广播后得到 [B,1,T,T]；中间那根长度为 1 的轴留给第 4 章的多个头共享。若单头分数是 [B,T,T]，使用 `allowed[:, 0]`；不要误把 [B,T] 直接广播成分数矩阵。上面的片段省略了 device；`code/attention_core.py` 中的完整版本创建下三角时指定与输入相同的 device。
 
 注意不同 API 的约定不同：PyTorch 2.14 的 functional SDPA 布尔 mask 中 True 表示参与，`nn.MultiheadAttention` 的布尔禁止掩码使用相反语义。不要把同一个布尔张量不经核对就换接口。
 
@@ -190,7 +190,7 @@ safe = torch.where(any_allowed, masked, torch.zeros_like(masked))
 weights = torch.softmax(safe, dim=-1).masked_fill(~allowed, 0.0)
 ```
 
-先让空行的 Softmax 输入安全，再在结果中清零，避免先产生 NaN 再尝试补救。辅助函数要求原始分数有限，并检查布尔类型和广播形状。这是本书实现的契约，不表示所有框架、内核和版本都采用相同处理方式。
+先让空行的 Softmax 输入安全，再在结果中清零，避免先产生 NaN 再尝试补救。辅助函数要求原始分数有限，并检查布尔类型和广播形状。这是本书的选择，不表示所有框架、内核和版本都采用相同处理方式。
 
 ## 3.6 训练可并行，为什么生成还要一步步来？
 

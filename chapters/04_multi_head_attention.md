@@ -4,7 +4,7 @@
 
 上一章我们用 $Q$ 和 $K$ 打分，做 Softmax，再用权重汇总 $V$。本章把这套计算分成几个并行的“头”，重点追踪形状怎样变化、参数和计算成本怎样计数。
 
-配套代码是 [code/04_multi_head_attention.py](../code/04_multi_head_attention.py)。本章只讨论**标准、等宽的多头自注意力**：Q、K、V 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV 头等变体见已实现的 [P14](#p14-grouped-kv)（[GQA 原始论文](https://arxiv.org/abs/2305.13245)）。
+配套代码是 [code/04_multi_head_attention.py](../code/04_multi_head_attention.py)。本章只讨论**标准、等宽的多头自注意力**：Q、K、V 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV 头等变体见 [P14](#p14-grouped-kv)（[GQA 原始论文](https://arxiv.org/abs/2305.13245)）。
 
 ---
 
@@ -41,7 +41,7 @@
 | $T$ | sequence length，每条序列有多少个 token 位置 | 3 |
 | $D$ | model dimension，每个位置的总特征宽度 | 8 |
 | $H$ | head count，注意力头数 | 2 |
-| $d_h$ | head dimension，每个头的特征宽度 | 4 |
+| $d_h$ | head dimension，每个头的特征宽度；等宽时就是第 3 章的 $d_k$、$d_v$ | 4 |
 
 本章约定：
 
@@ -196,7 +196,7 @@ query 1       True    True    False
 query 2       True    True    True
 ```
 
-可以这样建立一个供所有 batch、所有头共用的 `[T,T]` 掩码：
+可以这样建立一个供所有 batch、所有头共用的 `[T,T]` 掩码（`x` 与 `mha` 在 4.6 节创建）：
 
 ```python
 allowed = torch.ones(T, T, dtype=torch.bool, device=x.device).tril()

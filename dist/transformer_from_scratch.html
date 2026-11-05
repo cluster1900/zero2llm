@@ -577,7 +577,7 @@ class="book-diagram" width="520" alt="四层学习地图" /></a>
 </figure>
 <p>生活类比是一张路标，不是证明。例如，“图书馆检索”帮助理解 Q、K、V
 的分工，但模型并没有真的翻阅书架；“专家”帮助理解 MoE
-路由，但每个专家并不天然对应一个人类职业。每到关键处，我们都会回到公式、代码或可验证的输出。</p>
+路由（P18），但每个专家并不天然对应一个人类职业。每到关键处，我们都会回到公式、代码或可验证的输出。</p>
 <h2 id="需要准备什么">0.2 需要准备什么？</h2>
 <p>先会读 Python
 的变量、列表、循环和函数即可。向量是“一列数字”，矩阵可以先看成“多行数字排成的表”。张量则是有更多轴的数组：一批句子里的每个
@@ -601,7 +601,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-v</span></span></code></pre></div>
 <p>第一条确认你使用的是哪个
 Python；接下来两条运行例子；最后一条运行<strong>全书</strong>的回归测试：<code>tests/</code>
-下所有测试文件、600 多条测试都会执行，其中大多与上面两个例子无关。CI
+下所有测试文件、700 多条测试都会执行，其中大多与上面两个例子无关。CI
 运行这条命令的环境与 P27（09a）报告实测数字的环境都列在附录
 H。找不到文件时先确认终端当前目录是仓库根目录，而不是
 <code>chapters/</code>。</p>
@@ -646,7 +646,7 @@ CPU 参考实现；跳过 GPU
 <tbody>
 <tr>
 <td>代码版本</td>
-<td>本次 Git commit；若有未提交修改，写明</td>
+<td>本书版本/下载日期；若改过代码写明改动</td>
 </tr>
 <tr>
 <td>环境</td>
@@ -1479,7 +1479,7 @@ mask（第 3 章讲）；这两件事不等于改变原文本的 token 含义。
 <p>Token 数会影响上下文容量、部分 API
 的计费和计算开销；但不能用“一个中文字就是一个
 token”来估算所有模型。序列长度变化会影响后面注意力计算（第 3
-章）和生成缓存（KV cache，08a）的成本，词表变大又会增加 embedding /
+章）和生成缓存（KV cache，P11）的成本，词表变大又会增加 embedding /
 输出层的规模，选择词表是折中而不是越大越好。</p>
 <h2 id="a.8-自测与下一站">1A.8 自测与下一站</h2>
 <ol type="1">
@@ -2259,9 +2259,12 @@ mask。</p>
 class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>allowed <span class="op">=</span> valid[:, <span class="va">None</span>, :, <span class="va">None</span>] <span class="op">&amp;</span> valid[:, <span class="va">None</span>, <span class="va">None</span>, :]</span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>allowed <span class="op">=</span> allowed <span class="op">&amp;</span> torch.ones(T, T, dtype<span class="op">=</span>torch.<span class="bu">bool</span>).tril()</span></code></pre></div>
 <p><code>valid</code> 是 [B,T]，两个切片分别变成 [B,1,T,1] 与
-[B,1,1,T]，广播后得到 [B,1,T,T]，可供多个头共享。若单头分数是
-[B,T,T]，使用 <code>allowed[:, 0]</code>；不要误把 [B,T]
-直接广播成分数矩阵。代码中创建下三角时还指定与输入相同的 device。</p>
+[B,1,1,T]，广播后得到 [B,1,T,T]；中间那根长度为 1 的轴留给第 4
+章的多个头共享。若单头分数是 [B,T,T]，使用
+<code>allowed[:, 0]</code>；不要误把 [B,T]
+直接广播成分数矩阵。上面的片段省略了
+device；<code>code/attention_core.py</code>
+中的完整版本创建下三角时指定与输入相同的 device。</p>
 <p>注意不同 API 的约定不同：PyTorch 2.14 的 functional SDPA 布尔 mask 中
 True 表示参与，<code>nn.MultiheadAttention</code>
 的布尔禁止掩码使用相反语义。不要把同一个布尔张量不经核对就换接口。</p>
@@ -2282,7 +2285,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a h
 <span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>safe <span class="op">=</span> torch.where(any_allowed, masked, torch.zeros_like(masked))</span>
 <span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>weights <span class="op">=</span> torch.softmax(safe, dim<span class="op">=-</span><span class="dv">1</span>).masked_fill(<span class="op">~</span>allowed, <span class="fl">0.0</span>)</span></code></pre></div>
 <p>先让空行的 Softmax 输入安全，再在结果中清零，避免先产生 NaN
-再尝试补救。辅助函数要求原始分数有限，并检查布尔类型和广播形状。这是本书实现的契约，不表示所有框架、内核和版本都采用相同处理方式。</p>
+再尝试补救。辅助函数要求原始分数有限，并检查布尔类型和广播形状。这是本书的选择，不表示所有框架、内核和版本都采用相同处理方式。</p>
 <h2 id="训练可并行为什么生成还要一步步来">3.6
 训练可并行，为什么生成还要一步步来？</h2>
 <p>训练数据已经给出整条正确文本。假设序列为“我 爱 学 习”，输入位置 0
@@ -2350,7 +2353,7 @@ class="math inline">\(V\)</span>。本章把这套计算分成几个并行的“
 <p>配套代码是 <a
 href="code/04_multi_head_attention.py">code/04_multi_head_attention.py</a>。本章只讨论<strong>标准、等宽的多头自注意力</strong>：Q、K、V
 来自同一段输入，三者头数相同，每个头的 Q、K、V 宽度也相同。共享 KV
-头等变体见已实现的 <a href="#p14-grouped-kv">P14</a>（<a
+头等变体见 <a href="#p14-grouped-kv">P14</a>（<a
 href="https://arxiv.org/abs/2305.13245">GQA 原始论文</a>）。</p>
 <hr />
 <h2 id="为什么要多头多张权重表而不是预先分配的专家">4.1
@@ -2379,6 +2382,11 @@ Is All You Need，§3.2.2</a></p>
 先投影，再分头：不是把原始输入硬切成几块</h2>
 <p>先统一本章的符号。遇到形状时，先读每根轴的名字，再看轴有多长。</p>
 <div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th style="text-align: left;">符号</th>
@@ -2415,7 +2423,10 @@ class="math inline">\(H\)</span></td>
 <tr>
 <td style="text-align: left;"><span
 class="math inline">\(d_h\)</span></td>
-<td style="text-align: left;">head dimension，每个头的特征宽度</td>
+<td style="text-align: left;">head
+dimension，每个头的特征宽度；等宽时就是第 3 章的 <span
+class="math inline">\(d_k\)</span>、<span
+class="math inline">\(d_v\)</span></td>
 <td style="text-align: left;">4</td>
 </tr>
 </tbody>
@@ -2668,7 +2679,7 @@ query 0       True    False   False
 query 1       True    True    False
 query 2       True    True    True</code></pre>
 <p>可以这样建立一个供所有 batch、所有头共用的 <code>[T,T]</code>
-掩码：</p>
+掩码（<code>x</code> 与 <code>mha</code> 在 4.6 节创建）：</p>
 <div class="sourceCode" id="cb32"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>allowed <span class="op">=</span> torch.ones(T, T, dtype<span class="op">=</span>torch.<span class="bu">bool</span>, device<span class="op">=</span>x.device).tril()</span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>output, weights <span class="op">=</span> mha(x, mask<span class="op">=</span>allowed)</span></code></pre></div>
@@ -3115,8 +3126,8 @@ class="math inline">\(D\)</span></strong>；8 维编码也不等于 512
 <a href="assets/rendered/positional_encoding_waves.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/positional_encoding_waves.svg" class="book-diagram"
-width="720" alt="图 5-1：正弦余弦位置编码的波形频率谱" /></a>
-<figcaption>图 5-1：正弦余弦位置编码的波形频率谱</figcaption>
+width="720" alt="图 5-1：不同频率的正弦波形示意" /></a>
+<figcaption>图 5-1：不同频率的正弦波形示意</figcaption>
 </figure>
 <p>图 5-1 为了在位置 0 到 24 的同一画布上看清变化，使用 <span
 class="math inline">\(\sin(pos)\)</span>、<span
@@ -3466,8 +3477,9 @@ PE 并没有这种自动保证。</p>
 <p>它仍然是一个可训练的设计选择：加法保持输入宽度，词向量与后续层共同适应这种混合。对一个线性投影，<span
 class="math inline">\((X+PE)W=XW+PEW\)</span>；拼接则允许使用分别作用于内容和位置的
 <span
-class="math inline">\(W_x,W_p\)</span>。二者约束不同，是否更好需要实验。原论文采用相加，并在输入词嵌入处使用
-<span class="math inline">\(\sqrt{D}\)</span> 缩放；本例为便于手算，把
+class="math inline">\(W_x,W_p\)</span>。二者约束不同，是否更好需要实验。原论文采用相加。注意：原论文在相加前先把词嵌入乘以
+<span
+class="math inline">\(\sqrt{D}\)</span>。本例为便于手算不做这一步，把
 <span class="math inline">\(X\)</span> 直接当作待相加的输入。[来源
 1，§3.4–3.5]</p>
 <h2 id="长度要分三本账">5.7 长度要分三本账</h2>
@@ -3516,7 +3528,7 @@ sine；若写 <code>d_model // 2</code>，d4 会被错误地留成零。</li>
 <li><code>if</code> 只决定有没有合法的 cosine 列，不应把最后一个 sine
 也跳过。</li>
 <li>支持空序列 <span
-class="math inline">\([0,D]\)</span>；拒绝负长度、非正宽度，以及浮点数或布尔值维度。这是教学函数的明确契约。</li>
+class="math inline">\([0,D]\)</span>；拒绝负长度、非正宽度，以及浮点数或布尔值维度。</li>
 </ul>
 <p>运行方式，在已安装项目依赖的 Python 环境中执行：</p>
 <div class="sourceCode" id="cb42"><pre
