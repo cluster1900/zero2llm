@@ -128,7 +128,7 @@ P09 为复用三首诗的字符词表，提前知道了保留诗歌的字符。�
 
 PAD 查询整行都不可见，直接对全是负无穷的分数做 softmax 会产生不定义的结果。本实现先识别全禁用行，使用安全的临时零分数，再把禁止位置权重乘为零，使其 attention 输出精确为零；最终 PAD logits 也置零。这不是让 PAD 读取任意文档来“凑一个可见项”。
 
-测试还做了更直观的核对：关闭 dropout 后，把 A、B 一起 packing 得到的真实位置 logits，应与分别单独处理的结果接近；只改 A 的字，B 的输出应完全不变。把 mask 故意换成普通下三角后，后一条检查确实会失败。
+测试还做了更直观的核对：关闭 dropout 后，把 A、B 一起 packing 得到的真实位置 logits，应与分别单独处理的结果接近；只改 A 的字，B 的输出应完全不变。
 
 ## P19.5 Loss：每道有效小题一票，不是每箱一票
 
@@ -165,13 +165,13 @@ for batch in validation_batches:
 mean_loss = total_loss / total_targets if total_targets else None
 ```
 
-这是说明聚合方式的片段，完整 `evaluate()` 会在循环中做前向，使用 `eval()` 与 `no_grad()`，最后恢复原训练模式。测试用 2 个目标和 5 个目标的两块检查加权方式，故意平均块均值会给出不同结果。
+这是说明聚合方式的片段，完整 `evaluate()` 会在循环中做前向，使用 `eval()` 与 `no_grad()`，最后恢复原训练模式。
 
 ### 全部标签都忽略时，不能只想到除零
 
 `tensor_loss` 返回可求导的零与 `count=0`；统计均值返回 `None`，表示**没有可评分样本**，不是模型获得了完美的零损失。训练器直接跳过这种行，不执行 backward、optimizer.step、学习率推进或 token 计数。
 
-为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变；故意仍然执行 AdamW step 的坏版本确实改变权重。
+为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变。
 
 还要分清“框架替我们移位”和“已经手工移位”。本章的 `tensor_loss` 接受已对齐的 next-token labels，**不再移位**。Transformers 某些 causal-LM 接口则接收与输入同排的 labels，在模型内部移位；其 v4.51.3 的 language-modeling collator 在 `mlm=False` 时采用输入同排、padding 忽略的约定。换框架时必须核对具体模型，不能把这两种契约叠加使用。[官方 Data Collator 文档](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)
 
@@ -256,7 +256,7 @@ python code/20_pretraining_pipeline.py --steps 12 --interrupt 5
 python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 ```
 
-没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。测试的 tensor 部分明确跳过，**skip 不算训练验证通过**。
+没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。
 
 2026-10-19 在 Python 3.12.14、torch 2.14.1+cpu、单线程、float32、seed=7 下的本书实测：
 
@@ -269,25 +269,10 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 | 恢复一致性 | 第 3 步及第 5 步中断后，完整状态与连续运行逐项相等 | 包含参数、优化器、RNG、游标和 loss 轨迹 |
 | 验证均值 | 3.702012198 → 3.486805235，均为 7 个目标 | 仅这份玩具划分上的变化 |
 | 最终测试集 | 默认未评分 | 不用测试分数指导本演示 |
-| 回归测试 | 16 项通过；无 torch 环境为 7 通过、9 跳过 | 标准库与 tensor 边界分别验证 |
 
 模型复用 P13 / S3 的 RMSNorm 与 SwiGLU，但为了让文档边界可逐格检查，另写了单头显式 attention 与文档内学习式位置 embedding。**它不是把 S3 的 cache 模型无缝升级成另一条主线**，也没有实现 RoPE、KV cache 或高效变长 attention kernel。此处关注数据契约，后续接入框架时再验证接口对应。
 
-### 让坏版本真正跑一下
-
-`tests/test_pretraining_pipeline.py` 不只检查函数是否返回某个标志。每组先验证正确路径，再让有缺陷的计算产生可观察的差异：
-
-| 真实错误变体 | 如何检测 |
-| --- | --- |
-| 将文档 mask 换成普通 causal 下三角 | 改 A 的内容后 B 的 logits 变化；独立标量 attention oracle 不符 |
-| 整箱直接移位标签 | A 的 EOS 开始预测 B 的 BOS；目标数与 loss 改变 |
-| 令 labels 等于当前输入 | 不会预测未来的“抄写器”获得假低 loss |
-| 平均不等长块的均值 | 2 与 5 个目标的独立标量总和不符 |
-| 忽略全 PAD，但仍调用 AdamW step | 已建立的优化器状态推动参数继续变化 |
-| 恢复权重，却遗漏 optimizer | 后续 loss 轨迹与最终参数不同 |
-| 忽略 dropout RNG、shuffle RNG 或 cursor 中任一项 | 各自单独导致后续 loss 与最终参数不同 |
-
-最后一组在第 5 步暂停：已经发生过一次 epoch 洗牌，且 cursor 位于中间。如果在第一次洗牌之前测试“漏掉 shuffle RNG”，新建训练器的 RNG 可能恰好等于保存状态，错误版本和正确版本会暂时等价。**反例必须真的触发它声称检测的错误，不能只让测试名字看起来严格。**
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 ## P19.10 Scaling laws：有条件的拟合，不是“参数越多就会觉醒”
 

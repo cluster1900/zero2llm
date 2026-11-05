@@ -281,7 +281,7 @@ OMP_NUM_THREADS=1 python code/24_reasoning_mtp.py
 OMP_NUM_THREADS=1 python -m unittest discover -s tests -p test_reasoning_mtp.py -v
 ```
 
-已验证环境为 CPU、PyTorch `2.14.1+cpu`、单线程、种子 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装 `requirements.txt` 的提示并以状态 2 退出；测试按仓库的兼容版本闸门友好跳过，**跳过不是通过**。
+已验证环境为 CPU、PyTorch `2.14.1+cpu`、单线程、种子 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装 `requirements.txt` 的提示并以状态 2 退出。
 
 固定 demo 使用词表 11、隐藏宽度 16、1 层教学 MoE、2 个额外 head、长度为 2 的 prompt，生成 10 个 token。模型只随机初始化并做一次反向检查，没有训练质量结论。本次输出包括：
 
@@ -299,8 +299,6 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 看起来 10 次 target 调用变成 6 次，但 target 处理的位置由 11 增至 18，drafter 又完整计算了 24 个前缀 token。这里的 MTPDraft 为了易读，每次都重算完整前缀，也复用了目标主干，**不是低成本的生产草稿器，不应宣布加速**。本章没有测墙钟延迟、TTFT、TPOT 或 GPU 吞吐。
 
 定义本章的草稿接受比例为 `accepted / proposed`：分母包括因前面出错而被整体丢弃的后续提案。这是清楚可复算的保留比例，不是所有论文相同名称的统计口径。还应看每轮提交多少 token、草稿耗时、目标 chunk 成本以及缓存搬运；只报一个高接受率不够。
-
-独立测试另有一个“完美草稿”的标量目标：生成 10 个 token，target 调用从 10 次变成 4 次，处理位置都为 11，且有两个 bonus。它证明计数与流程按规则工作，不证明神经模型能够免费拿到完美草稿。
 
 ## P23.11 蒸馏与跨版本比较：到这里划边界
 
@@ -327,7 +325,7 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 9. p=[0.6,0.4]、q=[0.2,0.8] 时，拒绝的概率质量如何补回？0.4 全补到 A；这是数学例子，不是随机采样实现。检查 `test_hand_sampling_correction_is_math_only_not_a_sampler_claim`。
 10. 草稿第一个位置应该用哪个 head？是主 head，后面才是旁路 head 0、1。固定种子下前缀 `[1,2,5]` 的三个提案为 `[6,0,9]`，limit=1、2、3 分别取前一、二、三项；不能跳过主 head。检查 `test_fixed_seed_draft_head_to_position_scalar_oracle`，并用 `test_cli_pins_documented_outputs_and_actual_cost_counters` 固定正文演示的输出与成本计数。
 
-测试不只让两个共享代码的函数互相证明。它使用 Python 标量标签 oracle、显式 log-sum-exp、解析 logits 梯度与权重有限差分、独立 token-history 目标、真实 S5 完整前缀 logits／逐层 K/V 对照，以及不调用 `mtp_logits` 的逐 head 标量投影 oracle；还实际执行十二种错误变体，确认错位标签、错误分母、错误接受、缓存偏一、漏停 EOS、越过预算、跳过主 head、漏掉 correction 等会被拦住。最后一种由 `test_deleted_correction_mutant_fails_fast_without_timeout` 验证精确的 `RuntimeError`，不是把测试超时算作成功。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
 
