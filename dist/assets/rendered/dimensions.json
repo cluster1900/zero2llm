@@ -48,8 +48,8 @@
     "height": 500.0
   },
   "transformer_block": {
-    "width": 750,
-    "height": 640
+    "width": 750.0,
+    "height": 640.0
   },
   "transformer_full_architecture": {
     "width": 900,

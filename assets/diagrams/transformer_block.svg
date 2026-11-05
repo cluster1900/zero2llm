@@ -42,7 +42,7 @@
 
   <!-- Residual Highway 1 (Green Bypass) -->
   <path d="M 375 140 L 170 140 L 170 305 L 345 305" fill="none" stroke="#34d399" stroke-width="2.5" stroke-dasharray="5,3" marker-end="url(#arrRes)"/>
-  <text x="155" y="225" font-family="sans-serif" font-size="12" font-weight="bold" fill="#34d399" transform="rotate(-90 155 225)">残差高速公路 1 (+1 梯度无损直达)</text>
+  <text x="155" y="225" font-family="sans-serif" font-size="12" font-weight="bold" fill="#34d399" transform="rotate(-90 155 225)">残差高速公路 1 (+1 梯度残差直通)</text>
 
   <!-- LayerNorm 1 -->
   <g transform="translate(265, 155)">
@@ -72,7 +72,7 @@
 
   <!-- Residual Highway 2 (Green Bypass) -->
   <path d="M 375 345 L 170 345 L 170 515 L 345 515" fill="none" stroke="#34d399" stroke-width="2.5" stroke-dasharray="5,3" marker-end="url(#arrRes)"/>
-  <text x="155" y="435" font-family="sans-serif" font-size="12" font-weight="bold" fill="#34d399" transform="rotate(-90 155 435)">残差高速公路 2 (+1 梯度无损直达)</text>
+  <text x="155" y="435" font-family="sans-serif" font-size="12" font-weight="bold" fill="#34d399" transform="rotate(-90 155 435)">残差高速公路 2 (+1 梯度残差直通)</text>
 
   <!-- LayerNorm 2 -->
   <g transform="translate(265, 365)">
@@ -111,5 +111,5 @@
   <text x="535" y="305" font-family="sans-serif" font-size="12" font-weight="bold" fill="#f59e0b">🧱 积木核心奥秘：</text>
   <text x="535" y="325" font-family="sans-serif" font-size="11" fill="#cbd5e1">• 输入形状 == 输出形状</text>
   <text x="535" y="345" font-family="sans-serif" font-size="11" fill="#cbd5e1">• 尺寸始终保持 [B, T, D]</text>
-  <text x="535" y="365" font-family="sans-serif" font-size="11" fill="#cbd5e1">• 像乐高一样可任意堆叠！</text>
+  <text x="535" y="365" font-family="sans-serif" font-size="11" fill="#cbd5e1">• 像乐高一样可重复堆叠！</text>
 </svg>

@@ -36,7 +36,7 @@
 
 ### MLA 关心“历史状态存什么”
 
-[V3 报告 §2.1.1][V3-paper] 的 MLA 将内容 K、V 共同关联到低维 latent，另保留解耦的位置键。[固定配置][V3-config] 对应 `kv_lora_rank=512`、`qk_rope_head_dim=64`、`num_attention_heads=128`。这三个量分别是潜变量宽度、位置分支宽度和查询头数，不能把 512 当成头数，也不能因为 `num_key_value_heads=128` 就断定实现缓存了 128 份完整 K、V。
+[V3 报告 §2.1.1][V3-paper] 的 MLA 将内容 K、V 共同关联到低维 latent，另保留解耦的位置键。[固定配置][V3-config] 对应 `kv_lora_rank=512`、`qk_rope_head_dim=64`、`num_attention_heads=128`。这三个量分别是潜变量宽度、位置分支宽度和查询头数，不能把 512 当成头数，也不能因为 `num_key_value_heads=128` 就断定实现缓存了 128 份完整 K、V。反过来，[V4.1-Flash 固定配置][V41-config]（本仓库副本 `code/data/deepseek/v41.config.json` 第 29 行）的同名字段是 `num_key_value_heads=1`，也不能按字面断定 V4.1 是 MQA；它的 KV 来源要按 P26.4 的 CED、CSA2 和 SWA 分开读。
 
 对于这个配置，按“每 token、每层、缓存内容 latent 加共享位置键”的逻辑口径，元素数为：
 
@@ -256,7 +256,7 @@ python -m unittest discover -s tests -p 'test_deepseek_case.py' -v
 
 我们没有运行官方权重、训练、GPU 内核、质量 benchmark 或服务吞吐。本书输出不会将官方分数拷贝成“本书实测”。即使官方参考自测能跑通，也只说明它承诺的内容：其 README 明说自测使用未初始化权重，检查形状与 kernel 连接，**不验证真实数值质量**。[官方 inference README][V41-inference-readme]
 
-## P26.10 旧版第 9 章的直觉桥梁：保留有用内容，修正大而化之的结论
+## P26.10 架构直觉：保留有用内容，修正大而化之的结论
 
 []{#架构选择为什么开放式生成常用-decoder-only}
 []{#三种架构各自擅长什么}
