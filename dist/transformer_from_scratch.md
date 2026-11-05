@@ -5469,7 +5469,7 @@ P09 让我们看清了一次学习：取文本、错开一格、预测、评分�
 | 阶段 | 本实验做什么 | 数量与例子 |
 | --- | --- | --- |
 | 原始记录 | 10 条生成字符串，加一条重复变体、一条空白 | 12 条 |
-| 规范化 | 先做 Unicode NFC，再删除所有空白字符 | `" 春\n风 "` 变为 `"春风"` |
+| 规范化 | 先做 Unicode NFC（只统一等价字符的编码写法，不删空白），再删除所有空白字符 | `" 春\n风 "` 变为 `"春风"` |
 | 空文档过滤 | 规范化后为空就移除 | 移除 `blank` |
 | 全局精确去重 | 比较规范化后的整篇文本，保留输入顺序中的第一份 | `duplicate` 与 `d00` 相同，移除前者 |
 | 文档级划分 | 固定 seed=19 打乱唯一文档，再按 6/2/2 分配 | 训练 6、验证 2、测试 2 |
@@ -5633,13 +5633,7 @@ mean_loss = total_loss / total_targets if total_targets else None
 
 这里的 warmup 只是一个可核对的实验设置，不是“所有模型都必须两步预热”。峰值、步数、batch token 数、优化器与初始化共同影响训练。恢复到第 5 步之后，不能把学习率又从第 1 步开始，也不能不记录就把总预算从 12 改成 120；本程序会拒绝不同 horizon 的 checkpoint。
 
-### 混合精度不等于“所有张量都改成半精度”
-
-本实验用 **CPU float32**，没有 AMP，也没有 GradScaler。混合精度训练通常让适合的算子使用较低精度，部分归约或敏感操作保持较高精度；收益取决于设备、算子与形状，不保证每个小任务更快。
-
-FP16 的较小梯度可能下溢；loss scaling 在反向前放大 loss，更新前还原梯度。BF16 与 FP16 的数值范围不同，也不是只换名称就能复用所有设置。应检查有限 loss/梯度、与 float32 参考的偏差，并使用适合该设备和模型的 autocast/scaler 流程，而不是盲目调用 `model.half()`。若用了 GradScaler，其状态也属于恢复训练的一部分。[PyTorch 2.14 AMP 文档](https://docs.pytorch.org/docs/2.14/amp.html)
-
-GPU 混合精度、吞吐、显存与多卡恢复均为**未运行的扩展方向**，本章没有速度或显存节省实测。想扩展时先固定 GPU 型号、驱动、PyTorch/CUDA 版本、dtype、有效 batch tokens、预热和计时边界，再分别测正确性与性能；不能拿本章 CPU 的确定性结果替代 GPU 验证。
+混合精度是让适合的算子用较低精度、敏感运算保持较高精度，不是把所有张量都改成半精度（[PyTorch 2.14 AMP 文档](https://docs.pytorch.org/docs/2.14/amp.html)）；本章的 CPU float32 实验没有使用 AMP。
 
 ## P19.8 Checkpoint：不是一张权重照片，而是训练现场
 
@@ -5694,17 +5688,18 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练 CLI 返回清晰提示和退出码 2。
 
-在附录 H 所列环境下（单线程、float32、seed=7）的本书实测：
+在附录 H 所列环境下（单线程、float32、seed=7）的本书实测，数据版本指纹也列在附录 H：
 
 | 记录 | 结果 | 能说明什么 |
 | --- | --- | --- |
-| 数据版本 | `1b1a8d64d76a38761d8166a145550efdab89a852874994c19be8333947c75705` | 本次完整生成/处理契约的指纹 |
 | 训练器 | 单头 attention、宽度 12、dropout=0.2、2,040 参数 | 小型检查模型，不是生产模型 |
 | 优化器 | AdamW，betas=(0.9,0.999)，eps=1e-8，weight_decay=0.01 | 恢复测试确实包含有状态优化器 |
 | 数据消费 | 12 次更新、84 个有效目标 | 21 个目标重复 4 遍，不是 84 个不同知识点 |
 | 恢复一致性 | 第 3 步及第 5 步中断后，完整状态与连续运行逐项相等 | 包含参数、优化器、RNG、游标和 loss 轨迹 |
 | 验证均值 | 3.702012198 → 3.486805235，均为 7 个目标 | 仅这份玩具划分上的变化 |
 | 最终测试集 | 默认未评分 | 不用测试分数指导本演示 |
+
+2,040 个参数可以这样复算（单个 block，词表 18、块长 12、宽度 12、SwiGLU 中间维 24）：token embedding 18×12=216，位置 embedding 12×12=144，两个 RMSNorm 2×12=24，QKV 12×36=432，输出投影 12×12=144，SwiGLU 三个投影 3×12×24=864，输出头 12×18=216，合计 2,040。
 
 模型复用 P13 / S3 的 RMSNorm 与 SwiGLU，但为了让文档边界可逐格检查，另写了单头显式 attention 与文档内学习式位置 embedding。**它不是把 S3 的 cache 模型无缝升级成另一条主线**，也没有实现 RoPE、KV cache 或高效变长 attention kernel。此处关注数据契约，后续接入框架时再验证接口对应。
 
@@ -5794,7 +5789,7 @@ N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验�
 
 ![训练框架地图与 ZeRO 状态切分：数据和 tokenizer 进入模型，Trainer 控制更新；分片只改变持久状态的分布](assets/diagrams/p20-frameworks.svg)
 
-这里还有一条重要边界：本书之前的 miniGPT 是用来逐层解释机制的代码主线；本章换用 GPT2LMHeadModel，是学习成熟 API 的独立实验。两者没有自动共享权重。即使都叫 Transformer，也不能把旧 checkpoint 直接塞进新模型，然后宣称转换成功。
+这里还有一条重要边界：本书前面从 Baby-GPT 到 S5 的代码是用来逐层解释机制的主线；本章换用 GPT2LMHeadModel，是学习成熟 API 的独立实验。两者没有自动共享权重。即使都叫 Transformer，也不能把旧 checkpoint 直接塞进新模型，然后宣称转换成功。
 
 ## P20.2 config、model、tokenizer：三样东西不能混成一样
 
@@ -5868,7 +5863,7 @@ $$
 
 ### 一个真实发现的版本细节
 
-固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计**未 shift 的 labels 中非 -100 的数量**，作为 num_items_in_batch 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。
+固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计**未 shift 的 labels 中非 -100 的数量**，作为 num_items_in_batch 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。这个计数就是 loss 的分母，所以打印出的 loss 读数也同样变成正确值的 9/11。
 
 这不是说所有版本、所有模型都有同一个问题，而是本章用的组合需要明确约定。这里把首位本就不会被预测的标签也设为 -100，让框架计数和实际目标对齐。对应实现可核对 [4.51.3 Trainer 的 get_batch_samples 与 compute_loss 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)。
 
@@ -6060,50 +6055,9 @@ python code/21_training_frameworks.py --hf --output-dir /tmp/p20-checkpoint-demo
 
 分布式训练还要问：“这是一整份模型，还是某个 rank 的分片？”并行拓扑改变后是否需要转换？词表是否一并保存？模型实现的版本是否相同？例如 Megatron 的固定版说明区分与 TP/PP 布局绑定的旧格式及其他分布式格式，不能默认不同框架的 checkpoint 可以直接交换。
 
-## P20.10 多 GPU 选修：先写实验单，不在 CPU 假演示
+## P20.10 多 GPU 选修：本章未运行
 
-本章没有安装 DeepSpeed / Megatron，也没有可报告的多 GPU 运行、通信量实测、显存峰值或加速比。下面只是实验设计与配置阅读题，不是已经通过的运行命令。
-
-一个最小 ZeRO-2 配置片段可以先读成：
-
-```json
-{
-  "train_micro_batch_size_per_gpu": 1,
-  "gradient_accumulation_steps": 1,
-  "zero_optimization": {"stage": 2},
-  "bf16": {"enabled": false},
-  "fp16": {"enabled": false}
-}
-```
-
-它只说明每 rank 的 microbatch、累积次数、状态分片级别与未启用混合精度，**不是完整训练程序**。启动器模板形如：
-
-```text
-DeepSpeed：deepspeed --num_gpus=2 YOUR_GPU_TRAIN.py --deepspeed YOUR_DS_CONFIG.json
-Megatron：torchrun --nproc_per_node=2 YOUR_MEGATRON_ENTRY.py [与该入口一致的模型和数据参数]
-```
-
-大写项是待填写的占位符，不是本仓库文件。YOUR_GPU_TRAIN.py 必须自己解析配置、正确接入 DeepSpeed 或 HF Trainer；不能把本章强制 use_cpu=True 的 --hf 脚本塞进去冒充多卡训练。Megatron 入口、数据预处理和 flags 应来自选定 revision 的官方示例；仅把 --tensor-model-parallel-size=2 写在任意脚本后面没有意义。可从 [固定版官方仓库](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0) 的 examples 与训练参数说明开始。
-
-Megatron 还有一个可供选修的具体入口：[core_v0.12.0 的 run_simple_mcore_train_loop.py](https://github.com/NVIDIA/Megatron-LM/blob/core_v0.12.0/examples/run_simple_mcore_train_loop.py)。本章已读取该版本源码，确认它使用 MockGPTDataset、本地空 tokenizer、2 层模型、TP=2、PP=1，并运行 5 次更新。选好官方兼容依赖、进入该版本仓库后，待验证命令为：
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
-  examples/run_simple_mcore_train_loop.py
-```
-
-这条命令**未在本书环境执行**。需恰好暴露两张可用 CUDA GPU，因为该入口用可见 GPU 数初始化 world size，源码又把 TP 固定为 2；还会编译数据 helper，并在当前目录写 ckpt。应使用新的实验目录并先检查源码，不能直接覆盖已有检查点。它是理解 Megatron-Core 接线的入口，不是通用生产训练配方，也不自动证明保存了可恢复的优化器状态。
-
-动手前把下列内容保存成自己的实验单：
-
-1. 代码 tag / commit、PyTorch / CUDA / 驱动 / NCCL / DeepSpeed 或 Megatron 版本；与本章 CPU 依赖分开管理。
-2. 至少两张兼容 GPU 的型号、每卡显存、互联、CPU / RAM，跨机器时记录网络；是否真的支持计划使用的 BF16 / FP16 路径。
-3. 完整展开后的启动命令和配置，不只保存一张截断的终端截图；写明 DP / TP / PP / EP 的 rank 分组。
-4. 固定模型、tokenizer、数据、序列长度、有效 token 数、batch 与优化器；先用最小模型检查目标与梯度，再逐步扩张。
-5. 对比 DDP 与 ZeRO-2 时尽量只改变状态分片，分别记录持久状态估计、实测峰值分配 / 保留显存、通信和速度。
-6. warm-up、设备同步、重复次数、均值和波动；保存 checkpoint 后真正重启恢复一次。
-
-这份实验单的价值不在于把配置写得很长，而在于让别人知道结果能比较什么、不能比较什么。在条件未具备时停在“未测”，比把理论账本包装成实测更专业。
+本章没有安装 DeepSpeed / Megatron，也没有多 GPU 运行、通信量、显存峰值或加速比的实测。想动手时，可从固定版 [Megatron-LM core_v0.12.0](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0) 的 examples 开始，例如 [run_simple_mcore_train_loop.py](https://github.com/NVIDIA/Megatron-LM/blob/core_v0.12.0/examples/run_simple_mcore_train_loop.py)（TP=2，需恰好两张可见 CUDA GPU，本书未执行）；不能把本章强制 use_cpu=True 的 --hf 脚本塞进多卡启动器冒充多卡训练。动手时记录代码版本、硬件与完整启动配置，先用最小模型检查目标与梯度；对比 DDP 与 ZeRO-2 时只改变状态分片，并真正重启恢复一次 checkpoint。
 
 ## P20.11 练习、排错与验收
 
@@ -6119,7 +6073,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 1. config 改的是张量结构，不会替你训练或生成匹配权重，甚至会直接导致 shape 不兼容。结构说明与已学习参数是两个不同对象。
 2. 监督目标为 5+4=9。删去首列忽略后，模型内部 shift 的目标数仍是 9，但本例 Trainer 的外部计数变成 11，因为它统计未 shift 的非忽略标签。此时会把本例梯度缩小为正确值的 9/11。
 3. 所有权为 [3,2,2]，持久状态为 [48,32,32] bytes，合计 112 bytes。不能用 112/3 作为每个 rank 都安全的容量上界。
-4. tests/test_training_frameworks.py 实际执行八种语义变异：丢掉分片余数、提前切分梯度、提前切分参数、漏算 master weight、错移 CE 标签、恢复首位 BOS 计数、取消 optimizer.step、损坏恢复后的权重。前四种被独立手算账本发现；错移标签被独立 CE 参考识别；后三种被真实 Trainer 更新、非零变化和恢复 logits 断言识别。程序能运行或 loss 下降，都不能代替这些检查。
+4. 例如错移 CE 标签，会被独立 CE 参考发现；本章测试实际执行的语义变异清单见 `docs/testing.md`。程序能运行或 loss 下降，都不能代替这些检查。
 
 常见排错顺序：
 
@@ -6151,7 +6105,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 
 这其实是两道题。SFT（Supervised Fine-Tuning，有监督微调）规定从示范答案中学习什么；全量更新或 LoRA 决定怎样调整参数。SFT 不等于 LoRA，LoRA 也不只用于 SFT。换了训练方法，错误的标签依旧是错误的标签。
 
-读完本章，你应能给一段多轮对话逐 token 标出 loss，手算一个 LoRA 层，并用测试证明基础权重没有被偷偷更新。前置是 P02 的 tokenizer、P09 的交叉熵与梯度，以及 P19–P20 的数据和框架契约。不需要 GPU，也不下载模型。
+读完本章，你应能给一段多轮对话逐 token 标出 loss，手算一个 LoRA 层，并检查基础权重保持不变。前置是 P02 的 tokenizer、P09 的交叉熵与梯度，以及 P19–P20 的数据和框架契约。不需要 GPU，也不下载模型。
 
 配套 [code/22_sft_lora.py](../code/22_sft_lora.py) 分为标准库手算和真实 PyTorch CPU 更新两部分。**实验用随机初始化的微型 Transformer 学习 SFT 形式的目标，再冻结它继续训练 LoRA；不是对一个已有通用预训练模型做能力适配。** 这里的四条合成对话足以验证机械过程，不足以评价指令遵循、泛化或安全性。没有运行 HF SFTTrainer、PEFT、QLoRA 或任何大模型训练。
 
@@ -6172,9 +6126,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 
 这是一个明确的教学策略，不是 SFT 唯一合法的定义。有的任务训练整段文本，有的只训练最后一个回答，有的分别加权不同片段。关键是把选择写进数据与测试，不能仅凭类名里出现“SFT”就断言得到了 assistant-only loss。
 
-[TRL 0.18.2 的 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py) 展示了成熟训练入口如何处理数据和训练配置。这里引用它作为框架定位，不调用其中 API；更不把其他版本的参数名当成这个版本已经验证过的接口。
-
-版本阅读说明：P20 的 TRL 0.17.0 用于介绍训练框架与职责；本章固定 0.18.2，只查看 SFTTrainer 的数据处理和训练入口；P22 则固定 0.16.1，逐项拆解该版本 GRPO 的具体公式与配置。选择不同标签是为了分别固定这些来源快照，**不是推荐把三版混装，也不是声称三章使用同一套 TRL 环境**。这里没有执行 TRL，因此不作跨版本 API 兼容承诺；尤其不能把 P22 的样本标准差、稳定项、归约和 KL 估计约定推广到 0.18.2。实际运行的是本章独立 PyTorch 脚本；若要迁移到框架，需另选一个统一版本，重新核对模板、mask、配置与实际训练结果。
+[TRL 的 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py) 展示了成熟训练入口如何处理数据和训练配置。本章只引用它作框架定位，不运行；固定版本及 P20–P22 为何引用不同 TRL 版本，见附录 H。
 
 ## P21.2 对话模板：角色不是另一个输入通道
 
@@ -6225,7 +6177,7 @@ messages = [
 
 `generation_prompt` 与 `encode_chat` 共用消息编码逻辑。不能训练时用一种 role 标记、推理时随手换另一种，也不能多加一遍 BOS/EOS。
 
-[Transformers 4.51.3 的模板文档](https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating) 说明了模板与生成提示的关系，并提醒避免在模板已经加入特殊 token 后重复加入。本章只借助这些接口概念，不把手写模板称为 `apply_chat_template` 的实际运行结果。P20 已经验证过的 HF tokenizer 也没有被本章暗中改写。
+[Transformers 4.51.3 的模板文档](https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating) 说明了模板与生成提示的关系，并提醒避免在模板已经加入特殊 token 后重复加入。本章只借助这些接口概念，不把手写模板称为 `apply_chat_template` 的实际运行结果。
 
 ## P21.3 八个位置，只有两个评分点
 
@@ -6259,6 +6211,7 @@ $$
 
 $$
 \mathcal L=-\frac{\ln 0.5+\ln 0.25}{2}
+=\frac{(-\ln 0.5)+(-\ln 0.25)}{2}
 =\frac{0.69314718+1.38629436}{2}
 \approx1.03972077.
 $$
@@ -6317,7 +6270,7 @@ PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加 0�
 
 如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常。
 
-我们的 encoder 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
+我们的数据函数 `encode_chat` 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
 
 ## P21.5 全量更新与 LoRA：改整张表，还是加一条窄支路
 
@@ -6338,7 +6291,7 @@ $$
 
 可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是**这次更新**：`rank(BA)≤r`，还可能低于 r。
 
-这里是 [LoRA 原论文 v2](https://arxiv.org/abs/2106.09685v2) 的普通低秩更新及 alpha/r 缩放形式，不包含 DoRA、rsLoRA 或其他变体。PyTorch 的 Linear 接受行式 batch，所以实现写成先 `F.linear(x,A)` 再 `F.linear(...,B)`；不要因为记法切换就把 BA 的乘法顺序颠倒。
+这里是 [LoRA 原论文 v2](https://arxiv.org/abs/2106.09685v2) 的普通低秩更新及 alpha/r 缩放形式。PyTorch 的 Linear 接受行式 batch，所以实现写成先 `F.linear(x,A)` 再 `F.linear(...,B)`；不要因为记法切换就把 BA 的乘法顺序颠倒。
 
 ### 先数参数，再谈节省
 
@@ -6443,6 +6396,8 @@ _updates(model, batch, steps=24, lr=0.5)
 | 冻结基础参数 / 梯度 | 逐元素未变 / 全部为 None |
 | 合并前后 logits 最大差 | 约 7.15e-7 |
 
+第二阶段只再降约 0.0008：它从第一阶段终点 0.61146003 起步，只训练 q/v 投影上的 128 个 LoRA 参数（B 初始为零），参数最大变化约 0.036，远小于第一阶段的约 0.766；本章没有另做实验区分这几个因素各自的作用。
+
 训练 loss 的下降证明这个目标在这批数据上被优化，不证明模型会回答新问题。脚本显式输出 `heldout_quality_evaluated=false` 与 `hf_peft_qlora_run=false`，避免把未测项目混进“通过”的结果。
 
 ### 运行方式
@@ -6544,7 +6499,7 @@ LoRA 不是数据审校器，也不能保证不遗忘既有能力。SFT 通过�
 
 使用 P21.6 的 W0、A、B、x，算出输出与合并权重；若忘记 alpha/r，结果还能一样吗？
 
-**参考答案：** 输出 `[19.5,0]`，合并权重 `[[7,2,15],[2,5,2]]`。忘记系数 2 会得到错误输出 `[10.5,3]`。矩阵 oracle 直接检查手算答案；实际删掉缩放的变异代码会被拒绝，不只是口头说“应该测”。
+**参考答案：** 输出 `[19.5,0]`，合并权重 `[[7,2,15],[2,5,2]]`。忘记系数 2 会得到错误输出 `[10.5,3]`。矩阵 oracle 直接检查手算答案。
 
 ### 题 6：梯度到哪里
 
@@ -6723,6 +6678,8 @@ DPO 的推导把 KL 正则化奖励最大化与特定偏好模型联系起来，
 | A | 0.6 / 0.2 | 0.4 / 0.4 | ln 3 ≈ 1.098612 | 0.549306 | 0.455746 |
 | B | 0.2 / 0.5 | 0.1 / 0.5 | ln 2 ≈ 0.693147 | 0.346574 | 0.534800 |
 
+代码输入的是对数概率：A 为 ln 0.6≈−0.510826 / ln 0.2≈−1.609438，参考 ln 0.4≈−0.916291 / −0.916291；B 为 ln 0.2≈−1.609438 / ln 0.5≈−0.693147，参考 ln 0.1≈−2.302585 / −0.693147。相对 margin 是两组差之差，例如 A：(−0.510826+1.609438)−0=1.098612。
+
 batch 对两对样本取平均，结果约 0.495273。B 的 chosen 概率仍小于 rejected，但相对参考已经改善，所以 z 仍为正。如果当前策略和参考完全相同，每对 loss 都是 ln 2≈0.693147，而不是零。
 
 对应的核心代码只有几行：
@@ -6895,11 +6852,7 @@ GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我�
 
 ## P22.8 接到 TRL：固定版本配置阅读，明确未运行
 
-本节核对的是 **TRL 0.16.1** 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，核验日期见附录 H。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。
-
-**为什么相邻章节引用的 TRL 版本不一样？** [P20](#p20-frameworks) 用 [0.17.0 官方总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 建立框架与训练入口的地图；[P21](#p21-sft) 用 [0.18.2 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py) 说明 SFT 训练器的职责。本章则选择 **0.16.1 作为固定的历史 GRPO 实现切片**，逐项核对奖励标准化、KL 估计和 loss 归约，再与手写教学变体对照。选择这个较早标签是为了固定具体的比较对象，不是推荐退回旧环境。
-
-这三个版本号属于三处资料引用，**不是同一套训练环境，不是一条逐章升级或降级的安装路线，也没有经过跨版本兼容性验证**。下面对 0.16.1 行为的结论只适用于所链接的源码；本章没有比较另外两版的相同函数，因此不推断它们的 GRPO 行为一定相同或一定不同。三个章节均未运行 TRL，P20 的真实框架实验是另行锁定的 Transformers / Accelerate 实验。
+本节核对 TRL 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，只读未运行；固定版本、核验日期，以及 P20–P22 为何引用不同 TRL 版本，见附录 H。
 
 下面只是一份**未执行的配置示意**，不包含模型下载、Trainer 构造或 train 调用：
 
@@ -6945,7 +6898,7 @@ grpo_config = GRPOConfig(
 
 尤其不能预期 TRL 与教学脚本逐数相同。[该版本 GRPOTrainer 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_trainer.py) 的具体实现使用组内 `std` 默认修正，即样本标准差，分母为 G−1；奖励标准化稳定项为 10⁻⁴；loss 按全 batch 的有效 token 数归约，并使用采样 KL 估计。本章则采用总体标准差、10⁻⁸、每答案均权、精确条件 KL。**名字相同不保证变体相同，源代码与版本才是复现账本的一部分。**
 
-未来要运行 TRL，应新建独立环境锁定整套依赖，不要为这段未运行配置改变 P20 已验证的环境。至少保存：完整版本、随机种子、数据和模板、采样参数、每组奖励、mask、旧策略保存时点、有效长度、KL 的方向与估计方式、参数更新证据。只有真正跑完，才能把 NOT RUN 改成 EXECUTED。
+未来要运行 TRL，应新建独立环境锁定整套依赖，不要为这段未运行配置改变 P20 已验证的环境。至少保存：完整版本、随机种子、数据和模板、采样参数、每组奖励、mask、旧策略保存时点、有效长度、KL 的方向与估计方式、参数更新证据。
 
 ## P22.9 奖励投机：学会拿分，不等于学会任务
 
@@ -6985,15 +6938,17 @@ grpo_config = GRPOConfig(
 
 测试通过说明这份微型实现满足所声明的契约，不说明 RLHF 安全性、真实人类偏好或大模型能力已被验证。
 
-本章可以带走的一句话是：**偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。** 下一章会把这一框架接到推理预算、MTP 和投机解码，并继续区分训练目标与推理时计算。
-
 ## P22.11 延伸阅读：on-policy 蒸馏与多教师合并（MOPD） {#p22.11-mopd}
 
 On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 token 打分，公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)用这种做法把多个领域的 RL 专家合并进一个模型，称为 Multi-Teacher On-Policy Distillation（MOPD）。
 
 ## P22.12 延伸阅读：Softmax Cancellation {#p22.12-softmax-cancellation}
 
-软目标交叉熵对学生 logits 的梯度是 $q-p$。学生接近老师时，这是两个几乎相等的数相减，浮点里有效位会大量抵消；[A Fix for Softmax and Cross-Entropy，arXiv:2610.31642](https://arxiv.org/abs/2610.31642) §3 给出从 logit 差出发、用 `log1p` 和 `expm1` 计算的修法。
+这篇论文已在 [P04 3.3a](#p04-softmax-collapse) 介绍；其 §3 讨论软目标交叉熵梯度 $q-p$ 的抵消与修法，本书不展开。
+
+## 本章小结
+
+本章可以带走的一句话是：**偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。** 下一章会把这一框架接到推理预算、MTP 和投机解码，并继续区分训练目标与推理时计算。
 
 
 ---
@@ -9373,14 +9328,17 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 | 08i | Python | 3.12.14 |
 | 08i | torch | 2.14.1+cpu |
 | 08i | 来源核验日 | 2026-10-19 |
+| 08i | 数据版本指纹（SHA-256） | `1b1a8d64d76a38761d8166a145550efdab89a852874994c19be8333947c75705` |
 | 08j | 实测日期 | 2026-10-19 |
 | 08j | 来源核验日期 | 2026-10-19 |
 | 08k | 实测日期 | 2026-10-19 |
 | 08k | 实测 PyTorch | 2.14.1+cpu |
 | 08k | 来源核验日期 | 2026-10-19 |
+| 08k | TRL 源码快照（只读，未执行） | 0.18.2 SFTTrainer；P20 引 0.17.0 官方总览，P22 引 0.16.1 GRPO 源码，分别固定资料快照，不是同一套环境，未作跨版本兼容验证 |
 | 08l | 实测日期 | 2026-10-19 |
 | 08l | 实测 PyTorch | 2.14.1+cpu |
 | 08l | TRL 源码核验日期 | 2026-10-19 |
+| 08l | TRL 源码快照（只读，未执行） | 0.16.1 DPOConfig / GRPOConfig / GRPOTrainer，作为固定的历史 GRPO 实现切片，不是推荐退回旧环境 |
 | 08m | 已验证环境 PyTorch | 2.14.1+cpu |
 | 08m | 跨版本核对截止 | 2026-10-19 |
 | 08m | 来源核验日期 | 2026-10-19 |

@@ -152,7 +152,7 @@ class Chapter08i(unittest.TestCase):
         # NFC first, then whitespace removal: a combining accent separated by a
         # space is NOT composed (the other order would give "é").
         self.assertEqual(clean("e \u0301"), "e\u0301")
-        self.assertIn("| 先做 Unicode NFC，再删除所有空白字符 |", self.text)
+        self.assertIn("| 先做 Unicode NFC（只统一等价字符的编码写法，不删空白），再删除所有空白字符 |", self.text)
 
 
 class Chapter09a(unittest.TestCase):
