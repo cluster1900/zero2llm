@@ -42,7 +42,7 @@ class Batch9TextTests(unittest.TestCase):
         self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
         self.assertIn("第九批验证", readme)
-        for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):
+        for path in ("README.md", "docs/expansion-outline.md"):
             body = (ROOT / path).read_text()
             self.assertIn("已实现", body)
             self.assertNotIn("P24–P26 本分支", body)

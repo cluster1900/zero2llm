@@ -691,7 +691,7 @@ cache），位置怎样旋转（RoPE），现代 Block
 换了哪些零件，注意力怎样省显存、提速度，以及 MoE
 怎样只让一部分参数参与计算。</li>
 <li><strong>训练与应用篇（P19–P24）</strong>：数据从哪里来，模型怎样练、怎样对齐，练完怎样量化和部署。</li>
-<li><strong>案例与综合篇（P25–P28）</strong>：用 Qwen3 和 DeepSeek
+<li><strong>案例与更新篇（P25–P28）</strong>：用 Qwen3 和 DeepSeek
 两个案例练习读配置和论文，再给自己的 miniGPT
 做一次体检；附录收集术语、数学和资料出处。</li>
 </ul>
@@ -703,11 +703,11 @@ alt="全书阅读路线" /></a>
 </figure>
 <p>路线图只说明先读什么、后读什么，不是完整工业模型的功能清单；书里的小模型也不会把每个组件都实现到生产级别。</p>
 <p>正文里经常出现“P12”“P27”这样的编号，它们是全书 29
-个单元的编号，原大纲 29
-个单元的内容已实现。为了不打乱已有章号和旧链接，后加的单元插在相邻两章之间，所以文件名会出现
+个单元的编号，每个编号对应一个章节文件。为了不打乱已有章号和旧链接，后加的单元插在相邻两章之间，所以文件名会出现
 <code>01a</code>、<code>07a</code>、<code>08a</code>–<code>08o</code>
 这样的写法。下表帮你从编号找到文件（都在 <code>chapters/</code>
-目录）：</p>
+目录）；章名照抄各章大标题，只去掉行首的 <code>#</code> 和行尾的
+<code>{#…}</code> 锚点：</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -725,147 +725,147 @@ alt="全书阅读路线" /></a>
 <tr>
 <td>P00</td>
 <td>00_preface.md</td>
-<td>前言与阅读指南</td>
+<td>前言与阅读指南：先看懂一小步，再搭起一个模型</td>
 </tr>
 <tr>
 <td>P01</td>
 <td>01_word_embedding.md</td>
-<td>第 1 章 词嵌入</td>
+<td>第1章：从编号到空间向量——词嵌入与几何直觉</td>
 </tr>
 <tr>
 <td>P02</td>
 <td>01a_tokenizer.md</td>
-<td>第 1A 章 Tokenizer</td>
+<td>第1A章：Tokenizer——从字符、字节到 BPE</td>
 </tr>
 <tr>
 <td>P03</td>
 <td>02_why_attention.md</td>
-<td>第 2 章 注意力的直觉</td>
+<td>第2章：注意力机制的直觉——为什么我们需要“注意力”？</td>
 </tr>
 <tr>
 <td>P04</td>
 <td>03_qkv_self_attention.md</td>
-<td>第 3 章 Q、K、V 与掩码</td>
+<td>第3章：拆解注意力三剑客——Q、K、V 与安全的掩码</td>
 </tr>
 <tr>
 <td>P05</td>
 <td>04_multi_head_attention.md</td>
-<td>第 4 章 多头注意力</td>
+<td>第4章：多头注意力（Multi-Head Attention）——给每个维度记一本账</td>
 </tr>
 <tr>
 <td>P06</td>
 <td>05_positional_encoding.md</td>
-<td>第 5 章 位置编码</td>
+<td>第 5 章：位置编码（Positional Encoding）——给词语发“座位号”</td>
 </tr>
 <tr>
 <td>P07</td>
 <td>06_residual_layernorm_ffn.md</td>
-<td>第 6 章 残差、层归一化与 FFN</td>
+<td>第 6 章：积木组件——残差连接、层归一化与前馈神经网络</td>
 </tr>
 <tr>
 <td>P08</td>
 <td>07_encoder_decoder.md</td>
-<td>第 7 章 编码器与解码器</td>
+<td>第 7 章：编码器与解码器——从文本理解到自回归生成</td>
 </tr>
 <tr>
 <td>P09</td>
 <td>07a_training_loop.md</td>
-<td>训练基础</td>
+<td>训练基础（P09）：让一次猜字变成一次学习</td>
 </tr>
 <tr>
 <td>P10</td>
 <td>08_baby_transformer.md</td>
-<td>第 8 章 Baby-GPT</td>
+<td>第8章：实战——手搭一个微型大语言模型（Baby-GPT）</td>
 </tr>
 <tr>
 <td>P11</td>
 <td>08a_kv_cache.md</td>
-<td>KV Cache</td>
+<td>生成优化（P11）：KV Cache，不再重复算历史</td>
 </tr>
 <tr>
 <td>P12</td>
 <td>08b_rope_yarn.md</td>
-<td>RoPE 与 YaRN</td>
+<td>旋转位置（P12）：RoPE 与 YaRN，能算更长不等于能读懂</td>
 </tr>
 <tr>
 <td>P13</td>
 <td>08c_modern_block.md</td>
-<td>现代 Block：RMSNorm 与 SwiGLU</td>
+<td>现代 Block（P13）：RMSNorm 与 SwiGLU</td>
 </tr>
 <tr>
 <td>P14</td>
 <td>08d_grouped_kv_mla.md</td>
-<td>MHA、MQA、GQA 与 MLA</td>
+<td>架构进阶（P14）：MHA、MQA、GQA 与 MLA</td>
 </tr>
 <tr>
 <td>P15</td>
 <td>08e_attention_systems.md</td>
-<td>FlashAttention、PagedAttention 与服务调度</td>
+<td>系统进阶（P15）：FlashAttention、PagedAttention 与服务调度</td>
 </tr>
 <tr>
 <td>P16</td>
 <td>08f_sparse_linear_attention.md</td>
-<td>滑动窗口、稀疏、混合与线性注意力</td>
+<td>架构进阶（P16）：滑动窗口、稀疏、混合与线性注意力</td>
 </tr>
 <tr>
 <td>P17</td>
 <td>08g_ced_architecture.md</td>
-<td>CED 的两条 KV 路径</td>
+<td>架构进阶（P17）：CED 的两条 KV 路径</td>
 </tr>
 <tr>
 <td>P18</td>
 <td>08h_moe.md</td>
-<td>MoE 的专家、路由与负载</td>
+<td>架构进阶（P18）：MoE 的专家、路由与负载</td>
 </tr>
 <tr>
 <td>P19</td>
 <td>08i_pretraining_pipeline.md</td>
-<td>预训练数据流水线</td>
+<td>预训练（P19）：从三首诗到可恢复的数据流水线</td>
 </tr>
 <tr>
 <td>P20</td>
 <td>08j_training_frameworks.md</td>
-<td>训练框架</td>
+<td>训练进阶（P20）：从手写循环到训练框架</td>
 </tr>
 <tr>
 <td>P21</td>
 <td>08k_sft_lora.md</td>
-<td>SFT 与 LoRA</td>
+<td>指令微调（P21）：对话数据、SFT 与 LoRA</td>
 </tr>
 <tr>
 <td>P22</td>
 <td>08l_preference_optimization.md</td>
-<td>RLHF、DPO 与 GRPO</td>
+<td>训练进阶（P22）：RLHF、DPO 与 GRPO</td>
 </tr>
 <tr>
 <td>P23</td>
 <td>08m_reasoning_mtp.md</td>
-<td>推理模型、MTP 与投机解码</td>
+<td>训练与应用（P23）：推理模型、MTP 与投机解码</td>
 </tr>
 <tr>
 <td>P24</td>
 <td>08n_quantized_serving.md</td>
-<td>量化与推理框架</td>
+<td>训练与应用（P24）：量化与推理框架实战</td>
 </tr>
 <tr>
 <td>P25</td>
 <td>08o_qwen3_case.md</td>
-<td>Qwen3 案例</td>
+<td>模型案例（P25）：Qwen3，读配置而不是背参数表</td>
 </tr>
 <tr>
 <td>P26</td>
 <td>09_modern_llms.md</td>
-<td>DeepSeek 案例</td>
+<td>模型案例（P26）：DeepSeek 的跨版本证据地图</td>
 </tr>
 <tr>
 <td>P27</td>
 <td>09a_minigpt_healthcheck.md</td>
-<td>综合实验：miniGPT 体检</td>
+<td>综合实验（P27）：给自己的 miniGPT 做体检</td>
 </tr>
 <tr>
 <td>P28</td>
 <td>10_appendix.md</td>
-<td>附录：术语、数学与证据更新</td>
+<td>附录：术语、数学与证据更新（P28）</td>
 </tr>
 </tbody>
 </table></div>

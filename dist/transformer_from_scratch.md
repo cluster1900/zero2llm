@@ -89,45 +89,45 @@ python3 -m venv .venv
 
 - **架构与推理篇（P11–P18）**：生成时怎样不重复计算（KV cache），位置怎样旋转（RoPE），现代 Block 换了哪些零件，注意力怎样省显存、提速度，以及 MoE 怎样只让一部分参数参与计算。
 - **训练与应用篇（P19–P24）**：数据从哪里来，模型怎样练、怎样对齐，练完怎样量化和部署。
-- **案例与综合篇（P25–P28）**：用 Qwen3 和 DeepSeek 两个案例练习读配置和论文，再给自己的 miniGPT 做一次体检；附录收集术语、数学和资料出处。
+- **案例与更新篇（P25–P28）**：用 Qwen3 和 DeepSeek 两个案例练习读配置和论文，再给自己的 miniGPT 做一次体检；附录收集术语、数学和资料出处。
 
 ![全书阅读路线](assets/diagrams/batch1_route.svg)
 
 路线图只说明先读什么、后读什么，不是完整工业模型的功能清单；书里的小模型也不会把每个组件都实现到生产级别。
 
-正文里经常出现“P12”“P27”这样的编号，它们是全书 29 个单元的编号，原大纲 29 个单元的内容已实现。为了不打乱已有章号和旧链接，后加的单元插在相邻两章之间，所以文件名会出现 `01a`、`07a`、`08a`–`08o` 这样的写法。下表帮你从编号找到文件（都在 `chapters/` 目录）：
+正文里经常出现“P12”“P27”这样的编号，它们是全书 29 个单元的编号，每个编号对应一个章节文件。为了不打乱已有章号和旧链接，后加的单元插在相邻两章之间，所以文件名会出现 `01a`、`07a`、`08a`–`08o` 这样的写法。下表帮你从编号找到文件（都在 `chapters/` 目录）；章名照抄各章大标题，只去掉行首的 `#` 和行尾的 `{#…}` 锚点：
 
 | 编号 | 文件 | 章名 |
 | --- | --- | --- |
-| P00 | 00_preface.md | 前言与阅读指南 |
-| P01 | 01_word_embedding.md | 第 1 章 词嵌入 |
-| P02 | 01a_tokenizer.md | 第 1A 章 Tokenizer |
-| P03 | 02_why_attention.md | 第 2 章 注意力的直觉 |
-| P04 | 03_qkv_self_attention.md | 第 3 章 Q、K、V 与掩码 |
-| P05 | 04_multi_head_attention.md | 第 4 章 多头注意力 |
-| P06 | 05_positional_encoding.md | 第 5 章 位置编码 |
-| P07 | 06_residual_layernorm_ffn.md | 第 6 章 残差、层归一化与 FFN |
-| P08 | 07_encoder_decoder.md | 第 7 章 编码器与解码器 |
-| P09 | 07a_training_loop.md | 训练基础 |
-| P10 | 08_baby_transformer.md | 第 8 章 Baby-GPT |
-| P11 | 08a_kv_cache.md | KV Cache |
-| P12 | 08b_rope_yarn.md | RoPE 与 YaRN |
-| P13 | 08c_modern_block.md | 现代 Block：RMSNorm 与 SwiGLU |
-| P14 | 08d_grouped_kv_mla.md | MHA、MQA、GQA 与 MLA |
-| P15 | 08e_attention_systems.md | FlashAttention、PagedAttention 与服务调度 |
-| P16 | 08f_sparse_linear_attention.md | 滑动窗口、稀疏、混合与线性注意力 |
-| P17 | 08g_ced_architecture.md | CED 的两条 KV 路径 |
-| P18 | 08h_moe.md | MoE 的专家、路由与负载 |
-| P19 | 08i_pretraining_pipeline.md | 预训练数据流水线 |
-| P20 | 08j_training_frameworks.md | 训练框架 |
-| P21 | 08k_sft_lora.md | SFT 与 LoRA |
-| P22 | 08l_preference_optimization.md | RLHF、DPO 与 GRPO |
-| P23 | 08m_reasoning_mtp.md | 推理模型、MTP 与投机解码 |
-| P24 | 08n_quantized_serving.md | 量化与推理框架 |
-| P25 | 08o_qwen3_case.md | Qwen3 案例 |
-| P26 | 09_modern_llms.md | DeepSeek 案例 |
-| P27 | 09a_minigpt_healthcheck.md | 综合实验：miniGPT 体检 |
-| P28 | 10_appendix.md | 附录：术语、数学与证据更新 |
+| P00 | 00_preface.md | 前言与阅读指南：先看懂一小步，再搭起一个模型 |
+| P01 | 01_word_embedding.md | 第1章：从编号到空间向量——词嵌入与几何直觉 |
+| P02 | 01a_tokenizer.md | 第1A章：Tokenizer——从字符、字节到 BPE |
+| P03 | 02_why_attention.md | 第2章：注意力机制的直觉——为什么我们需要“注意力”？ |
+| P04 | 03_qkv_self_attention.md | 第3章：拆解注意力三剑客——Q、K、V 与安全的掩码 |
+| P05 | 04_multi_head_attention.md | 第4章：多头注意力（Multi-Head Attention）——给每个维度记一本账 |
+| P06 | 05_positional_encoding.md | 第 5 章：位置编码（Positional Encoding）——给词语发“座位号” |
+| P07 | 06_residual_layernorm_ffn.md | 第 6 章：积木组件——残差连接、层归一化与前馈神经网络 |
+| P08 | 07_encoder_decoder.md | 第 7 章：编码器与解码器——从文本理解到自回归生成 |
+| P09 | 07a_training_loop.md | 训练基础（P09）：让一次猜字变成一次学习 |
+| P10 | 08_baby_transformer.md | 第8章：实战——手搭一个微型大语言模型（Baby-GPT） |
+| P11 | 08a_kv_cache.md | 生成优化（P11）：KV Cache，不再重复算历史 |
+| P12 | 08b_rope_yarn.md | 旋转位置（P12）：RoPE 与 YaRN，能算更长不等于能读懂 |
+| P13 | 08c_modern_block.md | 现代 Block（P13）：RMSNorm 与 SwiGLU |
+| P14 | 08d_grouped_kv_mla.md | 架构进阶（P14）：MHA、MQA、GQA 与 MLA |
+| P15 | 08e_attention_systems.md | 系统进阶（P15）：FlashAttention、PagedAttention 与服务调度 |
+| P16 | 08f_sparse_linear_attention.md | 架构进阶（P16）：滑动窗口、稀疏、混合与线性注意力 |
+| P17 | 08g_ced_architecture.md | 架构进阶（P17）：CED 的两条 KV 路径 |
+| P18 | 08h_moe.md | 架构进阶（P18）：MoE 的专家、路由与负载 |
+| P19 | 08i_pretraining_pipeline.md | 预训练（P19）：从三首诗到可恢复的数据流水线 |
+| P20 | 08j_training_frameworks.md | 训练进阶（P20）：从手写循环到训练框架 |
+| P21 | 08k_sft_lora.md | 指令微调（P21）：对话数据、SFT 与 LoRA |
+| P22 | 08l_preference_optimization.md | 训练进阶（P22）：RLHF、DPO 与 GRPO |
+| P23 | 08m_reasoning_mtp.md | 训练与应用（P23）：推理模型、MTP 与投机解码 |
+| P24 | 08n_quantized_serving.md | 训练与应用（P24）：量化与推理框架实战 |
+| P25 | 08o_qwen3_case.md | 模型案例（P25）：Qwen3，读配置而不是背参数表 |
+| P26 | 09_modern_llms.md | 模型案例（P26）：DeepSeek 的跨版本证据地图 |
+| P27 | 09a_minigpt_healthcheck.md | 综合实验（P27）：给自己的 miniGPT 做体检 |
+| P28 | 10_appendix.md | 附录：术语、数学与证据更新（P28） |
 
 ## 0.6 开始前的三个自测
 
