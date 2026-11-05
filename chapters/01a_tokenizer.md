@@ -140,6 +140,7 @@ text = raw.decode('utf-8')
 ```bash
 python3 code/08_byte_bpe.py
 python3 -m unittest discover -s tests -p 'test_foundations.py' -v
+python3 -m unittest discover -s tests -p 'test_optional_tokenizer.py' -v
 ```
 
 训练语料是 `banana banana`、`banana bandana` 和 `你好，你好！`。请求最多 20 次合并，但语料提前没有相邻对可合并，因此实际词表大小为 275，即 256 个基础字节加 19 个新 token。实测输出中的计数如下：

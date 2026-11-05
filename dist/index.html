@@ -1359,7 +1359,8 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a h
 <p>在仓库根目录执行：</p>
 <div class="sourceCode" id="cb12"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/08_byte_bpe.py</span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_foundations.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_foundations.py&#39;</span> <span class="at">-v</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_optional_tokenizer.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>训练语料是 <code>banana banana</code>、<code>banana bandana</code> 和
 <code>你好，你好！</code>。请求最多 20
 次合并，但语料提前没有相邻对可合并，因此实际词表大小为 275，即 256
@@ -17795,7 +17796,8 @@ HTTP 200 也只说明能打开，不说明内容支持当前句子。</p>
 <p>维护记录至少包含：日期、对象/revision、主张、证据路径、验证命令、环境、通过/失败/跳过、限制、对应
 PR。既往正常浏览器检查属于既往 head，不能复制到新
 head。源代码、README、章节状态、HTML/EPUB
-与验证报告应同批更新；旧的来源与验证记录作为历史保留。</p>
+与验证报告应同批更新；旧的来源与版本信息集中保留在<a
+href="#p28.h-版本与来源">附录 H</a>。</p>
 <h2 id="p28.f-自测校验与最后一步">附录 F：自测、校验与最后一步</h2>
 <h3 id="f.0-平均值与一步更新速查">F.0 平均值与一步更新速查</h3>
 <p>文档平均与 token 平均使用不同分母：<span class="math inline">\(\bar
@@ -17830,7 +17832,9 @@ hash。6）对本书而言待核实；若官方论文确有该结果，可另标
 <p>仓库根目录的 <code>python -m unittest discover -s tests -v</code>
 检查示例与契约，<code>python scripts/check_book.py</code>
 检查已生成制品的资源/链接，<code>npm run check:layout</code>
-检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当批验证记录为准，不在这里保留会迅速过时的全书总数。</p>
+检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当前
+CI 运行结果为准，运行环境版本见<a href="#p28.h-版本与来源">附录
+H</a>，不在这里保留会迅速过时的全书总数。</p>
 <p>学习的终点不是背熟每个缩写，而是能说清：<strong>我改了什么，为什么这样改，哪些证据支持它，还有什么没有验证。</strong></p>
 <h2 id="p28.g-本页原始来源与版本">附录 G：本页原始来源与版本</h2>
 <p>来源校验把长度和摘要同时锁定。对固定配置字节串计算 SHA-256，并记录

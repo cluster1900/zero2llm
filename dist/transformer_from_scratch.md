@@ -433,6 +433,7 @@ text = raw.decode('utf-8')
 ```bash
 python3 code/08_byte_bpe.py
 python3 -m unittest discover -s tests -p 'test_foundations.py' -v
+python3 -m unittest discover -s tests -p 'test_optional_tokenizer.py' -v
 ```
 
 训练语料是 `banana banana`、`banana bandana` 和 `你好，你好！`。请求最多 20 次合并，但语料提前没有相邻对可合并，因此实际词表大小为 275，即 256 个基础字节加 19 个新 token。实测输出中的计数如下：
@@ -9270,7 +9271,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 链接打不开时，先记录日期与错误，判断是临时网络问题、页面迁移还是 revision 删除。优先找同一官方仓库的固定文件或同一论文版本；保留原URL、替代URL和变更原因。只能找到二手转载时把状态降为待核实，不用转载给原主张重新背书。外链 HTTP 200 也只说明能打开，不说明内容支持当前句子。
 
-维护记录至少包含：日期、对象/revision、主张、证据路径、验证命令、环境、通过/失败/跳过、限制、对应 PR。既往正常浏览器检查属于既往 head，不能复制到新 head。源代码、README、章节状态、HTML/EPUB 与验证报告应同批更新；旧的来源与验证记录作为历史保留。
+维护记录至少包含：日期、对象/revision、主张、证据路径、验证命令、环境、通过/失败/跳过、限制、对应 PR。既往正常浏览器检查属于既往 head，不能复制到新 head。源代码、README、章节状态、HTML/EPUB 与验证报告应同批更新；旧的来源与版本信息集中保留在[附录 H](#p28.h-版本与来源)。
 
 ## 附录 F：自测、校验与最后一步 {#p28.f-自测校验与最后一步}
 
@@ -9287,7 +9288,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 **答案。** 1）1536 字节，只是 payload 翻倍，不能推出速度。2）相同；减最大值后指数安全，直接指数可能溢出。3）3.5 与 3。4）$w'=-3$、$L'=18$，大步长使本例更差。5）该固定实现使用显式 128，需核对代码；等长不等于等字节，仍需 hash。6）对本书而言待核实；若官方论文确有该结果，可另标作者报告，必须给硬件、软件、输入长度/batch、比较基线与计时方法，不能写本书复现。
 
-仓库根目录的 `python -m unittest discover -s tests -v` 检查示例与契约，`python scripts/check_book.py` 检查已生成制品的资源/链接，`npm run check:layout` 检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当批验证记录为准，不在这里保留会迅速过时的全书总数。
+仓库根目录的 `python -m unittest discover -s tests -v` 检查示例与契约，`python scripts/check_book.py` 检查已生成制品的资源/链接，`npm run check:layout` 检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当前 CI 运行结果为准，运行环境版本见[附录 H](#p28.h-版本与来源)，不在这里保留会迅速过时的全书总数。
 
 学习的终点不是背熟每个缩写，而是能说清：**我改了什么，为什么这样改，哪些证据支持它，还有什么没有验证。**
 
