@@ -6236,9 +6236,9 @@ q、k 当作固定的内容向量；真实 q、k
 由上下文产生，不能据此说整个模型输出只由距离决定。</p>
 <p>这个性质也让“搬动”缓存里的 key 变得便宜：已经转到位置 p 的 key，再乘
 <span class="math inline">\(R(q)R(p)^{-1}\)</span> 就等于直接转到位置
-q，不必重算。P11.10 的 <a
-href="#p11.10-cache-engineering"><code>repos</code>
-操作</a>正是这样压紧被删内容留下的空位；但它只改位置，改不掉 K/V
+q，不必重算。P11.10 的 <a href="#p11.10-cache-engineering">KV
+编辑</a>正是这样用 RoPE 旋转把保留的 key
+挪到新位置，压紧被删内容留下的空位；但它只改位置，改不掉 K/V
 内容里已经混入的上下文。</p>
 <p>令 q=[1,2]、k=[3,4]、θ=1，设 Δ=n−m。直接代入会得到：</p>
 <pre class="text"><code>q · R(Δ)k

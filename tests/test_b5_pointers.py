@@ -84,6 +84,33 @@ class Removed(unittest.TestCase):
                 with self.subTest(file=p.name, script=name):
                     self.assertNotIn(name.removesuffix(".py"), text)
 
+    def test_readme_and_dist_do_not_name_removed_code(self):
+        files = [ROOT / "README.md", ROOT / "dist/transformer_from_scratch.md",
+                 ROOT / "dist/transformer_from_scratch.html", ROOT / "dist/index.html"]
+        for f in files:
+            text = f.read_text(encoding="utf-8")
+            for name in REMOVED_CODE:
+                with self.subTest(file=f.name, script=name):
+                    self.assertNotIn(name.removesuffix(".py"), text)
+
+    def test_echo_diagram_gone_everywhere(self):
+        self.assertEqual(sorted(str(p.relative_to(ROOT)) for p in ROOT.rglob("echo_loss*")
+                                if ".git" not in p.parts), [])
+
+    def test_softmax_fix_only_in_pointer_in_ch03(self):
+        text = read("03_qkv_self_attention.md")
+        self.assertEqual(text.count("arxiv.org/abs/2610.31642"), 1)
+        self.assertNotIn("jonbarron.info/softmaxfix", text)
+
+    def test_ch08f_verification_sentence(self):
+        text = read("08f_sparse_linear_attention.md")
+        self.assertIn("上述原始来源与官方入口核验于 2026-10-19。CPU 实验只验证数学表达", text)
+        self.assertNotIn("MSA 除外", text)
+
+    def test_ch08b_cache_edit_sentence(self):
+        self.assertIn("P11.10 的 [KV 编辑](#p11.10-cache-engineering)正是这样用 RoPE 旋转把保留的 key 挪到新位置，压紧被删内容留下的空位；但它只改位置，改不掉 K/V 内容里已经混入的上下文。", read("08b_rope_yarn.md"))
+        self.assertNotIn("`repos`", read("08b_rope_yarn.md"))
+
     def test_appendix_records_gone(self):
         text = read("10_appendix.md")
         for gone in ("### E.4 前沿跟踪记录", "ECHO", "[softmax-fix]", "[akv]", "Slingshot"):
