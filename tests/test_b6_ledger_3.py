@@ -122,118 +122,128 @@ MOVED_B2 = {
  ]
 }
 
+# Wu 2026-11-05 17:10/17:12：独立核对句与运行/跳过说明全部搬入 docs/testing.md。
+MOVED_R4 = {
+ "03_qkv_self_attention.md": [
+  "测试同时验证“全序列带因果 mask”与“逐个前缀重算最后位置”一致，避免只看上三角权重为零就认为端到端一定正确。这里没有 dropout，模型参数固定，以浮点容差比较。"
+ ],
+ "07_encoder_decoder.md": [
+  "打印到两位的百分数可能有舍入误差，测试用未舍入值检查行和。"
+ ],
+ "08_baby_transformer.md": [
+  "测试在临时目录保存后加载，对同一批输入比较所有 logits。"
+ ],
+ "08a_kv_cache.md": [
+  "float32 的运算顺序可能因为矩阵大小不同而有微小舍入差；测试使用明确的 `atol/rtol`，不是要求逐位相同，也不是放宽到“都能生成一句诗”。"
+ ],
+ "08c_modern_block.md": [
+  "`norm_walkthrough()` 产生表中的原始张量；测试独立使用两种平方根公式核对，不是拿同一个实现与自己比较。",
+  "测试把同一串 token 分成 `[12]`、12 次单 token、`[3,5,4]` 和 `[11,1]`，拼接每块 logits，与同权重的完整前向逐项比较。B>1、float32 和 float64 都覆盖。"
+ ],
+ "08d_grouped_kv_mla.md": [
+  "测试把 S3 的同一份 state_dict 装入这个边界模型，逐项检查参数、logits、K/V 完全一致。",
+  "测试因此另写一个不调用演示函数内部步骤的标量循环参考：独立列出输入和权重，用 sin/cos 手算位置 0、1、2 的旋转，拼成 4 维 Q/K，直接点积除以 2，再对可见前缀做 Softmax 和 value 加权。两条实现各自对齐这个参考，并逐项核对旋转后位置键。"
+ ],
+ "08e_attention_systems.md": [
+  "测试检查失败后 A/B 数据和所有权完全不变。"
+ ],
+ "08f_sparse_linear_attention.md": [
+  "测试核对最终张量的实际存储，不把整个脚本说成“常数内存”。",
+  "本章的测试逐 batch、逐 query、逐历史位置用 Python 标量和 `math.exp` 重新算权重，不调用主实现的 φ、mask、矩阵乘法或状态递推。两个路径分别对齐它，而不是只互相对齐。"
+ ],
+ "08i_pretraining_pipeline.md": [
+  "测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变。"
+ ],
+ "08j_training_frameworks.md": [
+  "测试要求“陌生词”得到 [2,1,3]，也要求保存后加载的词表和固定句子 ID 不变。这比只检查“tokenizer.json 文件存在”更有意义。"
+ ],
+ "08k_sft_lora.md": [
+  "这些数值由测试独立写死，用来检查 autograd，而不是仅比较两个使用同一段代码的模型。",
+  "测试在缺少 PyTorch 时会明确跳过真实训练相关部分。",
+  "测试用无 site-packages 的独立进程实际核对。",
+  "测试分别检查手算矩阵和整个模型的 logits。float64 小整数例子得到精确对齐；float32 整模因乘法顺序不同，按 `atol=2e-6、rtol=2e-5` 检查。这里验证的是数值等价，不是实测推理加速。"
+ ],
+ "08m_reasoning_mtp.md": [
+  "测试既检查这个数值，也检查梯度，不只判断 loss 是否“看起来正常”。",
+  "测试使用固定种子、小张量、float64 对照，同时比较 logits 与 K/V，而不是宣称任意硬件精度都能逐位相同。"
+ ],
+ "08l_preference_optimization.md": [
+  "测试不仅比较 loss，还逐元素检查梯度：无效位置应为零，有效位置应等于“目标指示值减去该 token 的概率”。修改被排除位置的 logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。",
+  "测试中 PyTorch 项会明确跳过，标准库项仍执行。"
+ ],
+ "09_modern_llms.md": [
+  "测试除比较两路，还直接用 `exp(-2)、exp(-1)、1` 对手工展开后的值 `[4,6]、[-1,3]、[4,0]` 求加权平均，避免两条路径共享同一个错位后一起通过。",
+  "测试枚举各组末位置作为独立 oracle。",
+  "测试用“由输出 feature 编号反推输入坐标”的独立公式检查每个元素，而不是只检查 shape。"
+ ],
+ "07a_training_loop.md": [
+  "测试仍运行标量部分，只跳过张量部分。"
+ ],
+ "08g_ced_architecture.md": [
+  "测试对此做了“干预”，不只检查变量名：把第一层 decoder 的 local V 投影放大三倍，重新计算。结果应当是：encoder-derived global banks 保持不变，第二层 decoder 的 local cache 和最终输出改变。如果 global bank 也被改变了，说明路径很可能接回了 decoder 自己。"
+ ],
+ "08h_moe.md": [
+  "在 78x 的手算测试里，x=[1,0]、router 第一列为 [0,log2,log4]、第二列为 0。令损失为输出各维之和，router 第一列梯度为 `[0,-20,+20]`：权重变化会在 10x 与 100x 间重新分配。输入第一维梯度为 78+20log2，第二维为 78。测试把这些字面算式与 autograd 对齐，没有拿生产 dispatch 函数自己验证自己。"
+ ],
+ "05_positional_encoding.md": [
+  "回归测试只有在**已安装且版本为 PyTorch 2.14.x** 时才运行张量实验。本批验证环境为 PyTorch 2.14.1+cpu，CPU；测试不需要 GPU。"
+ ]
+}
+
 # 全书守卫：以“测试”为叙述主语的句子（测试会/还/另/再/把/用/检查/核对…）不得留在章节正文，
 # 除非列入 NARRATION_ALLOWLIST。每项注明状态：decided-kept（非测试叙述）或 pending Wu decision（评审边界项，待 Wu 决定）。
 NARRATION = re.compile(r"测试(?:会|还|另|再|把|用|检查|核对|核验|验证|同时|使用|对|逐|分别|先|要求|既|不仅|除|枚举|独立|因此|也|将|确认|写|只|中|里|做|让|构建|封锁|刻意|故意|固定|仍|在|进一步|直接|放大|改变|容差|因缺)|由[^。；]{0,30}测试|与测试核对|的测试逐")
 NARRATION_ALLOWLIST = [
-    ("03_qkv_self_attention.md", "测试同时验证“全序列带因果 mask”与“逐个前缀重算最后位置”一致，避免只看上三角权重为零就认为端到端一定正确。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("05_positional_encoding.md", "回归测试只有在**已安装且版本为 PyTorch 2.14.x** 时才运行张量实验。",
-     "pending Wu decision", "run/skip note (same class as 07a L146)"),
-    ("07_encoder_decoder.md", "打印到两位的百分数可能有舍入误差，测试用未舍入值检查行和。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("07a_training_loop.md", "缺失或不兼容版本时它解释原因并退出，不自动安装；测试仍运行标量部分，只跳过张量部分。",
-     "pending Wu decision", "run/skip note (same class as 07a L146)"),
     ("07a_training_loop.md", "测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU 数值差异，而不容许学习率改变造成的偏移。",
-     "pending Wu decision", "tolerance statement (independent-check class)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
     ("07a_training_loop.md", "### 参考答案与可执行测试对应",
      "decided-kept", "heading of the self-test answer section, not narration"),
-    ("08_baby_transformer.md", "测试在临时目录保存后加载，对同一批输入比较所有 logits。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08a_kv_cache.md", "float32 的运算顺序可能因为矩阵大小不同而有微小舍入差；测试使用明确的 `atol/rtol`，不是要求逐位相同，也不是放宽到“都能生成一句诗”。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
     ("08b_rope_yarn.md", "浮点 cos(π/2) 未必严格等于 0，因此测试使用小容差，不要求每一位相等。",
-     "pending Wu decision", "tolerance statement (independent-check class)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
     ("08b_rope_yarn.md", "- **直接外推**：仍用 pθ，不改变转速；测试会出现训练未覆盖的相对距离。",
      "decided-kept", "测试 means test/inference time, not the repository tests"),
     ("08b_rope_yarn.md", "不同硬件/数值库末位可能有差异，测试对记录值使用明确的 CPU 容差。",
-     "pending Wu decision", "tolerance statement (independent-check class)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
     ("08b_rope_yarn.md", "纯旋转的范数测试还能原样用吗？",
      "decided-kept", "exercise question"),
-    ("08c_modern_block.md", "`norm_walkthrough()` 产生表中的原始张量；测试独立使用两种平方根公式核对，不是拿同一个实现与自己比较。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
     ("08c_modern_block.md", "半精度测试只验证这个局部数值策略，整模型消融仍在 CPU float32 下运行。",
-     "pending Wu decision", "scope statement"),
-    ("08c_modern_block.md", "测试把同一串 token 分成 `[12]`、12 次单 token、`[3,5,4]` 和 `[11,1]`，拼接每块 logits，与同权重的完整前向逐项比较。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: scope statement"),
     ("08c_modern_block.md", "测试容差为 atol=3e-6、rtol=1e-5。",
-     "pending Wu decision", "tolerance statement (independent-check class)"),
-    ("08d_grouped_kv_mla.md", "测试把 S3 的同一份 state_dict 装入这个边界模型，逐项检查参数、logits、K/V 完全一致。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08d_grouped_kv_mla.md", "测试因此另写一个不调用演示函数内部步骤的标量循环参考：独立列出输入和权重，用 sin/cos 手算位置 0、1、2 的旋转，拼成 4 维 Q/K，直接点积除以 2，再对可见前缀做 Softmax 和 value 加权。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08e_attention_systems.md", "测试检查失败后 A/B 数据和所有权完全不变。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08f_sparse_linear_attention.md", "测试核对最终张量的实际存储，不把整个脚本说成“常数内存”。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08f_sparse_linear_attention.md", "本章的测试逐 batch、逐 query、逐历史位置用 Python 标量和 `math.exp` 重新算权重，不调用主实现的 φ、mask、矩阵乘法或状态递推。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08g_ced_architecture.md", "测试对此做了“干预”，不只检查变量名：把第一层 decoder 的 local V 投影放大三倍，重新计算。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
     ("08g_ced_architecture.md", "如果完整路径和缓存路径共用一个错误 mask，两条路径可能同时看未来，对齐测试仍然会通过。",
      "decided-kept", "conceptual argument (a shared wrong mask makes alignment pass), not a report of what the tests do"),
     ("08g_ced_architecture.md", "测试放大第一层 decoder 的 local V 后，global bank 也确实不变。",
-     "pending Wu decision", "self-test answer that names a test (08h L342 of this class was moved)"),
-    ("08h_moe.md", "在 78x 的手算测试里，x=[1,0]、router 第一列为 [0,log2,log4]、第二列为 0。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08h_moe.md", "测试把这些字面算式与 autograd 对齐，没有拿生产 dispatch 函数自己验证自己。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: self-test answer that names a test (08h L342 of this class was moved)"),
     ("08h_moe.md", "浮点末位可能随环境变化，判定依据是测试容差，而非逐字复制日志。",
-     "pending Wu decision", "tolerance statement (independent-check class)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
     ("08h_moe.md", "该测试同时检查部分丢弃与 capacity=0。",
-     "pending Wu decision", "self-test answer that names a test (08h L342 of this class was moved)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: self-test answer that names a test (08h L342 of this class was moved)"),
     ("08h_moe.md", "见手算路由测试中五 token 的 [5,5,0,0] 断言。",
-     "pending Wu decision", "self-test answer that names a test (08h L342 of this class was moved)"),
-    ("08i_pretraining_pipeline.md", "测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08j_training_frameworks.md", "测试要求“陌生词”得到 [2,1,3]，也要求保存后加载的词表和固定句子 ID 不变。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08k_sft_lora.md", "这些数值由测试独立写死，用来检查 autograd，而不是仅比较两个使用同一段代码的模型。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08k_sft_lora.md", "测试在缺少 PyTorch 时会明确跳过真实训练相关部分。",
-     "pending Wu decision", "run/skip note (same class as 07a L146)"),
-    ("08k_sft_lora.md", "测试分别检查手算矩阵和整个模型的 logits。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: self-test answer that names a test (08h L342 of this class was moved)"),
     ("08k_sft_lora.md", "对应 `test_truncation_exact_fit_and_all_boundaries`，测试逐一遍历边界，不只抽查 14。",
-     "pending Wu decision", "self-test answer that names a test (08h L342 of this class was moved)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: self-test answer that names a test (08h L342 of this class was moved)"),
     ("08k_sft_lora.md", "另一个测试验证 user 内容虽然不被当成标签，仍可通过上下文影响 loss。",
-     "pending Wu decision", "self-test answer that names a test (08h L342 of this class was moved)"),
-    ("08k_sft_lora.md", "默认命令明确输出 NOT RUN，缺 Torch 的 `--train` 以退出码 2 结束；测试用无 site-packages 的独立进程实际核对。",
-     "pending Wu decision", "run/skip note (same class as 07a L146)"),
-    ("08l_preference_optimization.md", "测试不仅比较 loss，还逐元素检查梯度：无效位置应为零，有效位置应等于“目标指示值减去该 token 的概率”。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08l_preference_optimization.md", "可用 `python -S` 模拟不加载第三方包；测试中 PyTorch 项会明确跳过，标准库项仍执行。",
-     "pending Wu decision", "run/skip note (same class as 07a L146)"),
-    ("08m_reasoning_mtp.md", "测试既检查这个数值，也检查梯度，不只判断 loss 是否“看起来正常”。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("08m_reasoning_mtp.md", "测试使用固定种子、小张量、float64 对照，同时比较 logits 与 K/V，而不是宣称任意硬件精度都能逐位相同。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("09_modern_llms.md", "** 测试除比较两路，还直接用 `exp(-2)、exp(-1)、1` 对手工展开后的值 `[4,6]、[-1,3]、[4,0]` 求加权平均，避免两条路径共享同一个错位后一起通过。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("09_modern_llms.md", "测试枚举各组末位置作为独立 oracle。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
-    ("09_modern_llms.md", "** 测试用“由输出 feature 编号反推输入坐标”的独立公式检查每个元素，而不是只检查 shape。",
-     "pending Wu decision", "independent-check method sentence (review's ~20 list)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: self-test answer that names a test (08h L342 of this class was moved)"),
     ("09_modern_llms.md", "测试直接把缺字段字典送给 extractor 时才得到 unknown，保护解析语义。",
-     "pending Wu decision", "self-test answer that names a test (08h L342 of this class was moved)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: self-test answer that names a test (08h L342 of this class was moved)"),
     ("09a_minigpt_healthcheck.md", "下面是 [`code/28_minigpt_healthcheck.py`](../code/28_minigpt_healthcheck.py) 中 `cache_equivalence` 的前 14 行（第 120–133 行），原样摘录，由 `scripts/sync_code_excerpts.py` 从源码生成并由测试锁定：",
-     "pending Wu decision", "09a healthcheck: tests are the teaching subject (review boundary item)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: 09a healthcheck: tests are the teaching subject (review boundary item)"),
     ("09a_minigpt_healthcheck.md", "这里检查的是**干预**，而非注意力图的形状：如果程序画出一个正确的 mask，却没有真的把它用进计算，干预测试仍会失败。",
-     "pending Wu decision", "09a healthcheck: tests are the teaching subject (review boundary item)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: 09a healthcheck: tests are the teaching subject (review boundary item)"),
     ("09a_minigpt_healthcheck.md", "测试只让最后一层的位置 5 偷看位置 6。",
-     "pending Wu decision", "09a healthcheck: tests are the teaching subject (review boundary item)"),
+     "decided-kept", "Wu 2026-11-05 17:10 keep: 09a healthcheck: tests are the teaching subject (review boundary item)"),
     ("09a_minigpt_healthcheck.md", "数值测试进一步遍历每一个切点，并用 float64 检查。",
-     "pending Wu decision", "09a healthcheck: tests are the teaching subject (review boundary item)"),
+     "decided-kept", "Wu 2026-11-05 17:10 keep: 09a healthcheck: tests are the teaching subject (review boundary item)"),
     ("09a_minigpt_healthcheck.md", "测试改变 `[15,15]`，本次 logits 仍完全相同，但 checkpoint 的状态已经不忠实，往返检查必须报警。",
-     "pending Wu decision", "09a healthcheck: tests are the teaching subject (review boundary item)"),
+     "decided-kept", "Wu 2026-11-05 17:10 keep: 09a healthcheck: tests are the teaching subject (review boundary item)"),
     ("09a_minigpt_healthcheck.md", "测试使用没有自定义还原方法、没有执行副作用的普通字典子类，确认限制型反序列化会拒绝未允许的对象，而不是用危险载荷演示风险。",
-     "pending Wu decision", "09a healthcheck: tests are the teaching subject (review boundary item)"),
+     "decided-kept", "Wu 2026-11-05 17:10 keep: 09a healthcheck: tests are the teaching subject (review boundary item)"),
     ("09a_minigpt_healthcheck.md", "S2 的 RoPE 也必须使用连续位置，且旧 K 不应被再次旋转，相关数学与缓存契约仍由 P12 的原测试覆盖。",
-     "pending Wu decision", "09a healthcheck: tests are the teaching subject (review boundary item)"),
+     "decided-kept", "Wu 2026-11-05 17:12 keep: 09a healthcheck: tests are the teaching subject (review boundary item)"),
     ("09a_minigpt_healthcheck.md", "7. 测试因缺 Torch 跳过、负例因导入失败退出、负例输出有限但偏离 oracle，哪一种才是本章想看到的负例证据？",
      "decided-kept", "exercise question"),
     ("10_appendix.md", "公式手算、自测与固定配置证据由仓库测试核对；本页不宣布任何未运行硬件的性能。",
-     "pending Wu decision", "overview scope statement (review boundary item)"),
+     "decided-kept", "Wu 2026-11-05 17:10 keep: overview scope statement (review boundary item)"),
 ]
 
 
@@ -414,10 +424,21 @@ class B6LedgerMoveGroup3Test(unittest.TestCase):
                     self.assertEqual(doc.count(p), 1)
                     self.assertNotIn(p, body)
 
+    def test_r4_moved_per_wu_rulings(self):
+        doc = TESTING.read_text(encoding="utf-8")
+        for name, paras in MOVED_R4.items():
+            body = (CHAPTERS / name).read_text(encoding="utf-8")
+            with self.subTest(chapter=name):
+                self.assertEqual(body.count(RUN) + body.count(RUN_ALL), 1)
+            for p in paras:
+                with self.subTest(chapter=name, para=p[:30]):
+                    self.assertEqual(doc.count(p), 1)
+                    self.assertNotIn(p, body)
+
     def test_book_has_no_unlisted_test_narration(self):
         allowed = {}
         for name, sent, status, reason in NARRATION_ALLOWLIST:
-            self.assertIn(status, ("decided-kept", "pending Wu decision"))
+            self.assertEqual(status, "decided-kept")
             self.assertTrue(reason)
             allowed.setdefault(name, []).append(sent)
         for path in sorted(CHAPTERS.glob("*.md")):

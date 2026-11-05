@@ -169,7 +169,7 @@ mean_loss = total_loss / total_targets if total_targets else None
 
 `tensor_loss` 返回可求导的零与 `count=0`；统计均值返回 `None`，表示**没有可评分样本**，不是模型获得了完美的零损失。训练器直接跳过这种行，不执行 backward、optimizer.step、学习率推进或 token 计数。
 
-为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变。
+为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。
 
 还要分清“框架替我们移位”和“已经手工移位”。本章的 `tensor_loss` 接受已对齐的 next-token labels，**不再移位**。Transformers 某些 causal-LM 接口则接收与输入同排的 labels，在模型内部移位；其 v4.51.3 的 language-modeling collator 在 `mlm=False` 时采用输入同排、padding 忽略的约定。换框架时必须核对具体模型，不能把这两种契约叠加使用。[官方 Data Collator 文档](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)
 

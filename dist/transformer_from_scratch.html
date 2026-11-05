@@ -2273,9 +2273,7 @@ token，将它接到前缀，再继续。这里的步骤依赖无法凭“矩阵
 cache 会减少重复计算，却不会让未知的未来 token
 提前成为已知输入。本章不提前实现缓存。</p>
 <p>因果性可以用一个反事实小实验验证：保持前几个输入不变，任意修改最后一个
-token，早于它的输出应保持不变。相反，双向无掩码注意力通常会变化。测试同时验证“全序列带因果
-mask”与“逐个前缀重算最后位置”一致，避免只看上三角权重为零就认为端到端一定正确。这里没有
-dropout，模型参数固定，以浮点容差比较。</p>
+token，早于它的输出应保持不变。相反，双向无掩码注意力通常会变化。</p>
 <h2 id="运行观察和自测">3.7 运行、观察和自测</h2>
 <p>在 CPU 环境安装仓库锁定的 PyTorch 后运行：</p>
 <div class="sourceCode" id="cb23"><pre
@@ -3503,9 +3501,6 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb42-1"><a href=
 +1；它将连续数值量化成 10 档，细节请看数值表。</p>
 <p>例如同为 d6 的小正数，字符图里可能显示为 <code>=</code> 或
 <code>+</code>，不必与四舍五入到两位的小数表一一对应。两种显示方式都不应替代原始数值。</p>
-<p>回归测试只有在<strong>已安装且版本为 PyTorch 2.14.x</strong>
-时才运行张量实验。本批验证环境为 PyTorch 2.14.1+cpu，CPU；测试不需要
-GPU。</p>
 <h2 id="自测先预测再运行">5.9 自测：先预测，再运行</h2>
 <ol type="1">
 <li>无 mask、无位置的双向注意力，把三个 token 按 <code>[2,1,0]</code>
@@ -4599,8 +4594,7 @@ class="math inline">\(e^{-\infty} =
 class="math inline">\(j\le
 i\)</span>，再只对这些分数归一化，最后给未来位置补精确的
 0。脚本把可见前缀送入稳定 Softmax；表中的禁止分数实际写成负无穷，不使用
-<code>-1e9</code>
-冒充。打印到两位的百分数可能有舍入误差，测试用未舍入值检查行和。</p>
+<code>-1e9</code> 冒充。</p>
 <h2 id="cross-attention查询来自目标资料来自源句">7.4
 Cross-attention：查询来自目标，资料来自源句</h2>
 <p>图书馆类比里，写作者提出问题，原文资料提供标签和内容。这个类比只帮助区分信息来源：Q/K/V
@@ -4870,6 +4864,8 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb56-1"><a href=
 <p>本章无 PyTorch/GPU 依赖。回归覆盖三步 mask
 数值、标签错位、温度数表、低温唯一最大项、EOS、最大新增数、零预算、固定
 seed 及非法输入。</p>
+<p>运行上面的测试命令，末尾应显示 <code>OK</code>；本章相关的测试分类见
+<code>docs/testing.md</code>。</p>
 <h3 id="先回答六个问题">先回答六个问题</h3>
 <ol type="1">
 <li>原文 3 个位置、目标 2 个位置，cross-attention
@@ -5150,7 +5146,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb61-1"><a href=
 <span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/11_training_loop.py <span class="at">--steps</span> 40 <span class="at">--seeds</span> 7 7 11</span>
 <span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_training_loop.py <span class="at">-v</span></span></code></pre></div>
 <p>第一条只用标准库；第二条需要稳定版 PyTorch
-<strong>2.14.x</strong>。缺失或不兼容版本时它解释原因并退出，不自动安装；测试仍运行标量部分，只跳过张量部分。已配置仓库环境可把
+<strong>2.14.x</strong>。缺失或不兼容版本时它解释原因并退出，不自动安装。已配置仓库环境可把
 <code>python</code> 换成 <code>.venv/bin/python</code>。</p>
 <p>运行本章测试文件，末尾应显示
 <code>OK</code>；测试分类、计数与错误版本清单见
@@ -5709,8 +5705,7 @@ API，负温度也走贪心，新的调用建议只用 0 或正数。温度为�
 S0/S1，必须复用完全相同的权重、配置和词表。配套
 <code>save_checkpoint(path, model)</code>
 保存配置、参数与字符顺序；<code>load_checkpoint(path)</code> 在 CPU
-创建对应模型并恢复权重。测试在临时目录保存后加载，对同一批输入比较所有
-logits。</p>
+创建对应模型并恢复权重。</p>
 <p><code>main()</code> 只训练并打印结果，不会写
 checkpoint；文件名以数字开头，也不能直接
 <code>import 07_baby_gpt</code>。在仓库根目录这样调用：</p>
@@ -5990,8 +5985,7 @@ cache。</li>
 <li>错误边界：train 模式、空输入、超过位置上限、错误
 batch/层数/头维、不同模型或更新权重后的旧缓存。</li>
 </ul>
-<p>float32 的运算顺序可能因为矩阵大小不同而有微小舍入差；测试使用明确的
-<code>atol/rtol</code>，不是要求逐位相同，也不是放宽到“都能生成一句诗”。脚本打印最大绝对误差，超出容差时必须排查位置、mask、拼接维度或参数是否相同。</p>
+<p>脚本打印最大绝对误差，超出容差时必须排查位置、mask、拼接维度或参数是否相同。</p>
 <p><code>KVCache</code>
 的容器不可重赋字段，但其中的张量仍可被调用者修改。因此约定缓存张量只读，不承诺
 Python 的 frozen dataclass 能深度冻结 Tensor。它不是持久化
@@ -6891,8 +6885,7 @@ class="math inline">\(5=1+2^2\)</span>。RMSNorm 不是“LN
 不是整条向量共用一个数。LN 在 γ 不同或 β
 非零时，其最终输出也不必保持均值
 0，不能把“标准化后的中间量”与“可学习仿射变换后的输出”混为一谈。</p>
-<p><code>norm_walkthrough()</code>
-产生表中的原始张量；测试独立使用两种平方根公式核对，不是拿同一个实现与自己比较。</p>
+<p><code>norm_walkthrough()</code> 产生表中的原始张量。</p>
 <h2 id="p13.3-ε-是数值约定不是可省略的装饰">P13.3 ε
 是数值约定，不是可省略的装饰</h2>
 <p>若 x 全为 0，直接除以 RMS 会出现 0/0。加上正数 ε 后，分母至少是
@@ -7274,10 +7267,7 @@ LayerNorm，两条路径会计算不同的模型。</p>
 <p>S3 直接复用 S2 的 <code>cached_forward</code>。这个函数访问当前 Block
 的 <code>ln1</code>、<code>ln2</code> 和
 <code>mlp</code>，因此自然调用被替换后的模块；没有另写一份旧 FFN 藏在
-decode 分支里。测试把同一串 token 分成 <code>[12]</code>、12 次单
-token、<code>[3,5,4]</code> 和 <code>[11,1]</code>，拼接每块
-logits，与同权重的完整前向逐项比较。B&gt;1、float32 和 float64
-都覆盖。</p>
+decode 分支里。</p>
 <p>在表 P13-4 更新后的模型上，用长度 5 的块重放同一输入，本机实测三行
 float32 最大 logit 误差均小于
 1e-6；末位可随硬件与算子实现变化，不作逐位快照。测试容差为
@@ -7552,10 +7542,9 @@ kernel 可以避免某些显式复制，但本章没有实现或测速这种 ker
 的归一化/FFN、最终归一化和输出层，替换各层
 <code>.attn</code>。新模型仍返回
 <code>(logits, loss)</code>，训练代码不需要另造一种损失。</p>
-<p>在 Hkv=Hq 的边界，投影形状和算法都退回 MHA。测试把 S3 的同一份
-state_dict 装入这个边界模型，逐项检查参数、logits、K/V
-完全一致。<strong>不同 Hkv 的随机模型不能用来宣称质量相同；这里证明的是
-MHA 边界，以及各模型自身 full/cache 的一致性。</strong></p>
+<p>在 Hkv=Hq 的边界，投影形状和算法都退回 MHA。<strong>不同 Hkv
+的随机模型不能用来宣称质量相同；这里证明的是 MHA 边界，以及各模型自身
+full/cache 的一致性。</strong></p>
 <p>GQA 的缓存不能直接交给 P12 的 MHA 缓存函数。P12 校验的是 Hq 个 KV
 头，S4 必须校验 Hkv。源码专门定义 <code>GroupedCache</code> 和自己的
 <code>cached_forward</code>，保留三个规则：</p>
@@ -7754,10 +7743,7 @@ v5，§2.1.2</a></p>
 <li>先显式展开各头的内容 K/V，再做注意力。</li>
 <li>不把展开的内容 K/V 当作缓存，只使用潜变量计算打分和加权结果。</li>
 </ol>
-<p>对同一组低秩参数，这两种括号位置的结果应当只差浮点舍入，但两条路径相等仍不足以证明算对：它们可能一起忘记位置项，或一起用了错误的缩放分母。测试因此另写一个不调用演示函数内部步骤的标量循环参考：独立列出输入和权重，用
-sin/cos 手算位置 0、1、2 的旋转，拼成 4 维 Q/K，直接点积除以
-2，再对可见前缀做 Softmax 和 value
-加权。两条实现各自对齐这个参考，并逐项核对旋转后位置键。</p>
+<p>对同一组低秩参数，这两种括号位置的结果应当只差浮点舍入，但两条路径相等仍不足以证明算对：它们可能一起忘记位置项，或一起用了错误的缩放分母。</p>
 <p>本函数为核对而同时保留两条路径的张量，<strong>它本身并不是一段峰值内存优化实现</strong>。</p>
 <h2 id="p14.10-rope-位置项为什么单独算">P14.10 RoPE
 位置项为什么单独算</h2>
@@ -8315,8 +8301,7 @@ v1，§4.4</a></p>
 3 块，共 12 槽位，空 3
 个。分页不是“所有浪费严格等于零”；块越大、越小也有不同管理和访问开销。</p>
 <p>池容量不足时，<code>append()</code> 会在改变块表和引用计数前报告
-<code>MemoryError</code>。测试检查失败后 A/B
-数据和所有权完全不变。这里没有实现 GPU 抢占、交换到 CPU
+<code>MemoryError</code>。这里没有实现 GPU 抢占、交换到 CPU
 或重计算恢复；不能把异常提示当成完整服务系统的容错方案。</p>
 <h2 id="p15.11-prefix-caching复用的是同一段计算历史">P15.11 Prefix
 caching：复用的是同一段计算历史</h2>
@@ -9051,8 +9036,7 @@ y_{T-1}=\frac{a}{a+(T-1)b}
 0。三者并没有被要求使用相同核或相同存储量，那正是实验改变的因素。</p>
 <p>状态只含 S 的 2×1 个数和 z 的 2 个数，float64 每数 8 字节，共
 <code>(2×1+2)×8=32</code>。这不包含输入、输出、模型参数、Python 对象或
-autograd
-保存的中间状态。测试核对最终张量的实际存储，不把整个脚本说成“常数内存”。</p>
+autograd 保存的中间状态。</p>
 <p><strong>能得出的结论</strong>：此固定宽度、未训练的 ELU+1
 核在这组输入上，随着非零干扰权重累积，T=64
 已不满足预设检索误差标准；状态大小不随 T 变，并不保证检索质量不变。</p>
@@ -9144,10 +9128,7 @@ CPU 开销，不是生产优化。</li>
 padding。先把这些语义补齐并测试，才可以谈替换真实层。</li>
 </ul>
 <h2 id="p16.11-为什么要有独立参考">P16.11 为什么要有独立参考</h2>
-<p>“并行=递推”还不够：两者可能一起漏掉分母。本章的测试逐 batch、逐
-query、逐历史位置用 Python 标量和 <code>math.exp</code>
-重新算权重，不调用主实现的
-φ、mask、矩阵乘法或状态递推。两个路径分别对齐它，而不是只互相对齐。</p>
+<p>“并行=递推”还不够：两者可能一起漏掉分母。</p>
 <p>运行本章测试文件，末尾应显示
 <code>OK</code>；测试分类、计数与错误版本清单见
 <code>docs/testing.md</code>。</p>
@@ -9567,10 +9548,6 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb119-1"><a 
 <span id="cb119-4"><a href="#cb119-4" aria-hidden="true" tabindex="-1"></a>h <span class="op">=</span> h <span class="op">+</span> attention(q, global_kv[i], offset) <span class="op">+</span> attention(q, kv, offset, window)</span></code></pre></div>
 <p>h 每经过一层就改变。于是第二层 local V
 会跟着第一层的处理改变，而提前准备的 global V 不会。</p>
-<p>测试对此做了“干预”，不只检查变量名：把第一层 decoder 的 local V
-投影放大三倍，重新计算。结果应当是：encoder-derived global banks
-保持不变，第二层 decoder 的 local cache 和最终输出改变。如果 global bank
-也被改变了，说明路径很可能接回了 decoder 自己。</p>
 <h2 id="p17.10-形状和绝对位置必须一起记">P17.10
 形状和绝对位置必须一起记</h2>
 <p>默认例子 B=1、N=6、D=2、W=3。这里 D 始终是向量宽度；后文用 L_e、L_d
@@ -10120,12 +10097,6 @@ router 梯度为 0。</li>
 router，不能把“空专家没有直接任务梯度”误说成“对应 router
 行永远没有梯度”。</li>
 </ol>
-<p>在 78x 的手算测试里，x=[1,0]、router 第一列为 [0,log2,log4]、第二列为
-0。令损失为输出各维之和，router 第一列梯度为
-<code>[0,-20,+20]</code>：权重变化会在 10x 与 100x
-间重新分配。输入第一维梯度为 78+20log2，第二维为
-78。测试把这些字面算式与 autograd 对齐，没有拿生产 dispatch
-函数自己验证自己。</p>
 <p>“今天没收到梯度”不等于“永远不会变化”：其他 batch
 可能路由到它，优化器的历史动量、权重衰减和梯度清理方式也会影响实际更新。</p>
 <h2 id="p18.8-顺着代码走一次">P18.8 顺着代码走一次</h2>
@@ -10725,8 +10696,7 @@ id="全部标签都忽略时不能只想到除零">全部标签都忽略时，�
 <code>None</code>，表示<strong>没有可评分样本</strong>，不是模型获得了完美的零损失。训练器直接跳过这种行，不执行
 backward、optimizer.step、学习率推进或 token 计数。</p>
 <p>为什么连 <code>optimizer.step()</code> 也要跳过？AdamW
-有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全
-PAD 行，验证整个状态不变。</p>
+有动量状态和权重衰减，零梯度不保证参数不变。</p>
 <p>还要分清“框架替我们移位”和“已经手工移位”。本章的
 <code>tensor_loss</code> 接受已对齐的 next-token
 labels，<strong>不再移位</strong>。Transformers 某些 causal-LM
@@ -11214,9 +11184,7 @@ attention_mask[1] = [1, 1, 1, 1, 1, 0]</code></pre>
 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding
 行号必须一致；把两个相同大小但 ID
 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。</p>
-<p>unknown 词会变成 ID 1。测试要求“陌生词”得到
-[2,1,3]，也要求保存后加载的词表和固定句子 ID
-不变。这比只检查“tokenizer.json 文件存在”更有意义。</p>
+<p>unknown 词会变成 ID 1。</p>
 <h2 id="p20.3-框架已经-shift-了就不要再-shift-一遍">P20.3 框架已经 shift
 了，就不要再 shift 一遍</h2>
 <p>GPT2LMHeadModel 接受 labels 后会在内部完成 causal language modeling
@@ -12124,9 +12092,7 @@ y=\begin{bmatrix}19.5\\0\end{bmatrix}.
 A}=\begin{bmatrix}8&amp;-4&amp;2\end{bmatrix},\quad
 \frac{\partial L}{\partial x}=\begin{bmatrix}9\\7\\17\end{bmatrix}.
 \]</span></p>
-<p>这些数值由测试独立写死，用来检查
-autograd，而不是仅比较两个使用同一段代码的模型。W0 的梯度为
-None，因为它被显式冻结。输入 x
+<p>W0 的梯度为 None，因为它被显式冻结。输入 x
 仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。</p>
 <h3 id="为什么初始-b-为零不代表学习卡死">为什么初始 B
 为零，不代表学习卡死</h3>
@@ -12235,8 +12201,7 @@ benchmark；其他平台可能有末位浮点差异。</p>
 <div class="sourceCode" id="cb148"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb148-1"><a href="#cb148-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/22_sft_lora.py</span>
 <span id="cb148-2"><a href="#cb148-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
-<p>测试在缺少 PyTorch 时会明确跳过真实训练相关部分。默认脚本打印
-<code>training: NOT RUN</code>；它不会因为输出了 loss
+<p>默认脚本打印 <code>training: NOT RUN</code>；它不会因为输出了 loss
 手算数字，就假装跑过训练。</p>
 <p>已经安装全书基础依赖后，执行真实 CPU 更新：</p>
 <div class="sourceCode" id="cb149"><pre
@@ -12263,10 +12228,6 @@ Linear</strong>，保留原来的 bias，不改原 adapter
 或基础层。调用两次也各自从同一个原始 W0 出发，不会把 BA
 重复加两遍。合并后的模型不再额外执行 adapter
 支路；若既改了原权重又保留支路，更新就会被算两次。</p>
-<p>测试分别检查手算矩阵和整个模型的 logits。float64
-小整数例子得到精确对齐；float32 整模因乘法顺序不同，按
-<code>atol=2e-6、rtol=2e-5</code>
-检查。这里验证的是数值等价，不是实测推理加速。</p>
 <p>实际保存 adapter 时，还需要记录基础 checkpoint
 的精确版本、目标层名、rank/alpha、tokenizer/template、额外训练的
 embedding 或其他模块。只有 A/B
@@ -12372,8 +12333,7 @@ all-ignored 测试。</p>
 <p>默认 CLI 打印了手算 loss，能说 SFT 训练通过了吗？LoRA 的训练 loss
 更低，能说 LoRA 比全量微调更好吗？</p>
 <p><strong>参考答案：</strong> 都不能。默认命令明确输出 NOT RUN，缺
-Torch 的 <code>--train</code> 以退出码 2 结束；测试用无 site-packages
-的独立进程实际核对。LoRA
+Torch 的 <code>--train</code> 以退出码 2 结束。LoRA
 是从全量阶段终点继续训练同一批数据，不是同起点对比；报告明确没有
 held-out 质量评估。</p>
 <p>运行本章测试文件，末尾应显示
@@ -12702,10 +12662,6 @@ padding、有至少一个 prompt token 和一个答案 token 的输入，遇到�
 padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 tokenizer
 拼接边界，调用方还要保证 chosen / rejected 共用同一 prompt
 和一致的结束规则。</p>
-<p>测试不仅比较
-loss，还逐元素检查梯度：无效位置应为零，有效位置应等于“目标指示值减去该
-token 的概率”。修改被排除位置的
-logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。</p>
 <h2 id="p22.6-grpo同一道题先比较一组答案">P22.6
 GRPO：同一道题，先比较一组答案</h2>
 <p><a href="https://arxiv.org/html/2402.03300v3#S4.SS1">DeepSeekMath
@@ -12800,8 +12756,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb155-1"><a href
 <span id="cb155-8"><a href="#cb155-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_preference_optimization.py <span class="at">-v</span></span></code></pre></div>
 <p>缺少 PyTorch 时默认手算正常退出；显式请求 <code>--torch</code> 会打印
 <code>SKIP</code> 并以状态码 2 退出，不能把“没有运行”当成训练成功。可用
-<code>python -S</code> 模拟不加载第三方包；测试中 PyTorch
-项会明确跳过，标准库项仍执行。</p>
+<code>python -S</code> 模拟不加载第三方包。</p>
 <h3 id="一个非常小但真实更新的策略">一个非常小，但真实更新的策略</h3>
 <p>问题只有 “1+1=?” 和 “2+1=?”；答案动作都为 [“2”, “我猜是 0”,
 “3”]。每题各有三个可训练 logits，共六个 float64
@@ -13393,8 +13348,7 @@ L=\frac{-\log(3/6)-\log(2/6)}{2}
 \]</span></p>
 <p>对第一个位置的 logits，梯度是 <code>(概率 − one_hot)/2</code>，即
 <code>[1/12,1/6,-1/4]</code>。第二个有效位置为
-<code>[1/4,-1/3,1/12]</code>；忽略位置的三个梯度全为
-0。测试既检查这个数值，也检查梯度，不只判断 loss 是否“看起来正常”。</p>
+<code>[1/4,-1/3,1/12]</code>；忽略位置的三个梯度全为 0。</p>
 <h3 id="三种-mask-不要混用">三种 mask 不要混用</h3>
 <p><code>future_labels</code> 接受三个可选输入，形状都是 [B,T]：</p>
 <ul>
@@ -13473,8 +13427,7 @@ token 都等于目标在这个正确前缀上的
 argmax。第一次不匹配时，改用同一位置的目标 argmax 并停止本轮。全接受时的
 bonus 也在正确前缀上计算。因此下一轮仍从相同的已提交前缀开始。</p>
 <p>这是数学算法的不变量。实际浮点矩阵运算的分块顺序可能产生微小误差；近乎并列的
-logits 可能因此改变 argmax。测试使用固定种子、小张量、float64
-对照，同时比较 logits 与 K/V，而不是宣称任意硬件精度都能逐位相同。</p>
+logits 可能因此改变 argmax。</p>
 <h2 id="p23.8-kv-cache-最容易错的地方最后一个-token-还没喂进去">P23.8 KV
 cache 最容易错的地方：最后一个 token 还没喂进去</h2>
 <p>生成一个 token 和把它送进模型，是两件事。为避免每轮为了
@@ -15739,10 +15692,7 @@ W_V=\begin{bmatrix}2&amp;0\\1&amp;3\end{bmatrix}.
 <code>[-2,-1,0]</code>，输出约 <code>[2.776358,1.274369]</code>。</p>
 <p>这里检查的是线性代数恒等式与位置分支没有丢失；它省略 V3 的多头、query
 低秩投影、归一化、真实 RoPE 生成和训练权重。<strong>小实验正确不等于完整
-MLA 内核正确。</strong> 测试除比较两路，还直接用
-<code>exp(-2)、exp(-1)、1</code> 对手工展开后的值
-<code>[4,6]、[-1,3]、[4,0]</code>
-求加权平均，避免两条路径共享同一个错位后一起通过。</p>
+MLA 内核正确。</strong></p>
 <h3 id="实验-b选择-bias-不该污染混合权重">实验 B：选择 bias
 不该污染混合权重</h3>
 <p>假设三个专家的 sigmoid 后分数为 <code>[3/4,1/2,1/4]</code>，选择 bias
@@ -15803,7 +15753,7 @@ compressor 权重、计算 sparse indexer 或调用 GPU kernel。50 与 580
 <p>因果性还有一个边界：ratio=2 时，原始位置 0 到来后还没有完整组；位置 1
 到来后才有第一组。<code>completed_entries(q,r)=(q+1)//r</code>，不能向上取整让第一组在位置
 0 就可见。组的代表位置或 RoPE 位置，与组内所有 token
-是否已经到齐，是两个不同问题。测试枚举各组末位置作为独立 oracle。</p>
+是否已经到齐，是两个不同问题。</p>
 <h3 id="实验-d九个视觉位置如何变一个">实验
 D：九个视觉位置如何变一个</h3>
 <p>用 <code>grid[y][x][c]=100y+10x+c</code> 构造 6×6×2 特征。按 3×3
@@ -15812,9 +15762,7 @@ D：九个视觉位置如何变一个</h3>
  1,11,21,101,111,121,201,211,221]</code></pre>
 <p>如果把通道放到最内层，会得到另一个看起来同样是 <code>[4,18]</code>
 的张量，却无法与 projector
-的输入通道对齐。<strong>形状对，不等于坐标对。</strong> 测试用“由输出
-feature 编号反推输入坐标”的独立公式检查每个元素，而不是只检查
-shape。</p>
+的输入通道对齐。<strong>形状对，不等于坐标对。</strong></p>
 <p>4×5×2 的输入会补成 6×6×2，再输出 4×18；原来 40 个数都应保留，另有 32
 个填充零。它不是把 3×3 邻域求平均，不能用平均池化来替换这一步。</p>
 <h2 id="p26.9-运行可验证结果和失败边界">P26.9

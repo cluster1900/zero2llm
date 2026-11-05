@@ -143,7 +143,7 @@ python code/11_training_loop.py --steps 40 --seeds 7 7 11
 python -m unittest discover -s tests -p test_training_loop.py -v
 ```
 
-第一条只用标准库；第二条需要稳定版 PyTorch **2.14.x**。缺失或不兼容版本时它解释原因并退出，不自动安装；测试仍运行标量部分，只跳过张量部分。已配置仓库环境可把 `python` 换成 `.venv/bin/python`。
+第一条只用标准库；第二条需要稳定版 PyTorch **2.14.x**。缺失或不兼容版本时它解释原因并退出，不自动安装。已配置仓库环境可把 `python` 换成 `.venv/bin/python`。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 

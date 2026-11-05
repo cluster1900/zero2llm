@@ -268,7 +268,6 @@ python -m unittest discover -s tests -p 'test_positions.py' -v
 
 例如同为 d6 的小正数，字符图里可能显示为 `=` 或 `+`，不必与四舍五入到两位的小数表一一对应。两种显示方式都不应替代原始数值。
 
-回归测试只有在**已安装且版本为 PyTorch 2.14.x** 时才运行张量实验。本批验证环境为 PyTorch 2.14.1+cpu，CPU；测试不需要 GPU。
 
 ## 5.9 自测：先预测，再运行
 

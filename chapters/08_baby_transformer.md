@@ -201,7 +201,7 @@ S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位�
 
 ## 8.7 保存再加载：基线必须能回来
 
-只有 loss 日志不够。后续要比较 S0/S1，必须复用完全相同的权重、配置和词表。配套 `save_checkpoint(path, model)` 保存配置、参数与字符顺序；`load_checkpoint(path)` 在 CPU 创建对应模型并恢复权重。测试在临时目录保存后加载，对同一批输入比较所有 logits。
+只有 loss 日志不够。后续要比较 S0/S1，必须复用完全相同的权重、配置和词表。配套 `save_checkpoint(path, model)` 保存配置、参数与字符顺序；`load_checkpoint(path)` 在 CPU 创建对应模型并恢复权重。
 
 `main()` 只训练并打印结果，不会写 checkpoint；文件名以数字开头，也不能直接 `import 07_baby_gpt`。在仓库根目录这样调用：
 

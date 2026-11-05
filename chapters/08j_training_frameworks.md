@@ -78,7 +78,7 @@ attention_mask[1] = [1, 1, 1, 1, 1, 0]
 
 因此 input_ids 的形状为 [B,T]=[2,6]。模型输出 logits 的形状是 [B,T,V]=[2,6,12]：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
 
-unknown 词会变成 ID 1。测试要求“陌生词”得到 [2,1,3]，也要求保存后加载的词表和固定句子 ID 不变。这比只检查“tokenizer.json 文件存在”更有意义。
+unknown 词会变成 ID 1。
 
 ## P20.3 框架已经 shift 了，就不要再 shift 一遍
 
