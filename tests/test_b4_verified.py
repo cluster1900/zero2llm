@@ -8,6 +8,8 @@ import json
 import os
 import pathlib
 import re
+import subprocess
+import sys
 import runpy
 import tempfile
 import unittest
@@ -97,15 +99,31 @@ class BabyGptCheckpointSnippet(unittest.TestCase):
 class RopeQueryTable(unittest.TestCase):
     @unittest.skipUnless(has_torch(), "torch required")
     def test_t64_row_matches_rerun(self):
-        import torch
-        torch.set_num_threads(1)
-        ns = runpy.run_path(str(CODE / "13_rope.py"))
-        result = ns["length_experiment"](seed=2026)
+        # Fresh interpreter: the result must not depend on torch state left by earlier tests.
+        script = (
+            "import json, runpy, sys, torch\n"
+            "torch.set_num_threads(1)\n"
+            "ns = runpy.run_path(sys.argv[1])\n"
+            "print(json.dumps(ns['length_experiment'](seed=2026)['rows']))\n"
+        )
+        env = dict(os.environ, OMP_NUM_THREADS="1")
+        out = subprocess.run([sys.executable, "-c", script, str(CODE / "13_rope.py")],
+                             capture_output=True, text=True, env=env, check=True).stdout
+        rows = json.loads(out.strip().splitlines()[-1])
         text = read("08b_rope_yarn.md")
         table = text.split("### 表 P12-6", 1)[1].split("\n\n", 2)[1]
-        for row in result["rows"]:
-            line = f"| {row['length']} | {row['count']} | {row['loss_sum']:.3f} | {row['mean_ce']:.6f} |"
-            self.assertIn(line, table)
+        stated = {}
+        for line in table.splitlines()[2:]:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            stated[int(cells[0])] = (int(cells[1]), float(cells[2]), float(cells[3]))
+        self.assertEqual(sorted(stated), [row["length"] for row in rows])
+        for row in rows:
+            count, loss_sum, mean_ce = stated[row["length"]]
+            with self.subTest(length=row["length"]):
+                self.assertEqual(count, row["count"])
+                # Table shows 3 / 6 decimals; allow last-digit rounding noise only.
+                self.assertLessEqual(abs(row["loss_sum"] - loss_sum), 1.5e-3)
+                self.assertLessEqual(abs(row["mean_ce"] - mean_ce), 1.5e-6)
         self.assertIn("| 64 | 512 | 594.219 | 1.160584 |", table)
 
 
