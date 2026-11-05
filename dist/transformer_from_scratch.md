@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-11-05
+% 2026-11-06
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -3077,7 +3077,7 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 2. 5、6。重新从 0 开始会查错位置嵌入。
 3. 3840 字节。不是总内存，也不是 `cat` 时的峰值。
 4. 不需要；提示最后位置的 logits 已可选首字。选出后才将它作为后续 decode 输入。
-5. 传 `cache=None`；`generate_cached` 自动为每次调用创建空缓存。参数更新后旧缓存无效。实现核对参数对象身份、版本、dtype 与 device，包含 `assign=True` 替换参数的情况；不支持通过 `.data` 等方式故意绕过 PyTorch 版本跟踪。
+5. 传 `cache=None`；`generate_cached` 自动为每次调用创建空缓存。参数更新或替换后，旧缓存会被拒绝。
 6. 不算，需比较每个位置完整 logits；也不能，因为旧 K/V 的位置与上下文没有重新计算。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
@@ -3147,7 +3147,7 @@ b' = a sinφ + b cosφ
 
 以第二行为例：第一坐标是 3×0−4×1=−4；第二坐标是 3×1+4×0=3。浮点 cos(π/2) 未必严格等于 0，因此测试使用小容差，不要求每一位相等。
 
-为什么长度不变？把 a'²+b'² 展开，交叉项互相抵消，剩下 `(a²+b²)(cos²φ+sin²φ)=a²+b²`。这不是“训练出来大致如此”，而是旋转公式的性质。源码 `rotation_walkthrough()` 用 float64 生成上表，`test_rotation_matches_independent_float64_matrix_and_preserves_tail` 还用独立的 2×2 矩阵验证实现，防止完整前向与缓存路径一起写错却互相对齐。
+为什么长度不变？把 a'²+b'² 展开，交叉项互相抵消，剩下 `(a²+b²)(cos²φ+sin²φ)=a²+b²`。这不是“训练出来大致如此”，而是旋转公式的性质。源码 `rotation_walkthrough()` 用 float64 生成上表；本章另用独立的 2×2 矩阵核对实现，防止完整前向与缓存路径一起写错却互相对齐。
 
 ## P12.3 为什么位置差会进入注意力分数
 
@@ -3302,7 +3302,7 @@ RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：
 
 论文定义的 ramp γ 从 0 过渡到 1，混合式为 `θ′=(1−γ)θ/s+γθ`；因此 γ=0 对应完全插值，γ=1 对应不改频率，方向不要写反。论文 v2 的 §3.2 用 α、β 作为两端阈值：`r<α` 时 γ=0，`r>β` 时 γ=1，中间线性过渡；该节针对 LLaMA 系列给出的经验取值是 **α=1、β=32**。这不是所有模型的默认值，论文明确说应按具体情况调节。
 
-另一部分是注意力温度：把 `softmax(QKᵀ/√d)` 改为 `softmax(QKᵀ/(t√d))`。若 Q 和 K 各乘 a=√(1/t)，点积会乘 **a²**，不是 a。论文对 LLaMA 系列给出的经验关系是 `a=1+0.1 ln(s)`，不能当成所有模型通用的常数。这个缩放会改变 Q/K 的长度；P12.2 的“范数不变”只适用于未附加幅度缩放的纯旋转。
+另一部分是注意力温度：把 `softmax(QKᵀ/√d)` 改为 `softmax(QKᵀ/(t√d))`。若 Q 和 K 各乘 a=√(1/t)，点积会乘 **a²**，不是 a。s>1 时 a>1，即 t<1，logits 被放大，注意力分布变得更尖。论文对 LLaMA 系列给出的经验关系是 `a=1+0.1 ln(s)`，不能当成所有模型通用的常数。这个缩放会改变 Q/K 的长度；P12.2 的“范数不变”只适用于未附加幅度缩放的纯旋转。
 
 频段插值与注意力缩放构成这里介绍的 YaRN 核心。训练和长文本评估仍需另外说明，本章没有做论文规模的微调。不要把本章普通 RoPE 的 CPU 结果标成“YaRN 复现”。
 
@@ -4038,6 +4038,8 @@ Rank example: 3 -> 2, Frobenius error=1.0
 | 请求调度 | continuous batching | 哪些请求参加下一轮计算 | 不会消除同一请求的自回归依赖 |
 | 跨请求复用 | prefix caching | 哪段已算出的共同前缀 KV 可以复用 | 不是查到相似句子就能复用答案 |
 
+本章的「块」有三种意思，分别出现在三层：FlashAttention 的计算分块（一次注意力内部的 query/key 块）、PagedAttention 的 KV 物理块（固定 token 数的存储页）、调度器的 chunked prefill 分块（把一个 prompt 拆成多轮）。后文按上下文写明是哪一种。
+
 PagedAttention 有配合分页布局读取 KV 的注意力计算方式；块管理器负责分配、引用计数等生命周期。为了看清职责，本章把它们放在内存这一层讲，但不能把真实 PagedAttention 简化成“只有一个 Python 字典”。[PagedAttention 原论文 v1，§4](https://arxiv.org/html/2309.06180v1#S4)
 
 ![注意力服务的计算、KV 存储与请求调度三个层次；共享尾块在写入时复制](assets/diagrams/p15-attention-systems.svg)
@@ -4064,7 +4066,7 @@ O = P V
 
 GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 N×N 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 O(N²d)，不是 O(Nd)。[FlashAttention 原论文（arXiv 2205.14135v2），§3](https://arxiv.org/pdf/2205.14135v2)
 
-这还涉及 GPU 内核融合、线程组织、反向传播重计算等。本章只实现其中容易手算的**前向归一化递推**。Python 列表复制、解释器开销、输入 mask 都与真实 GPU kernel 不同，不能用本脚本的运行时间或进程内存证明 FlashAttention 的收益。
+这还涉及 GPU 内核融合、线程组织、反向传播重计算等。本章只实现其中容易手算的**前向归一化递推**。
 
 ## P15.3 先把形状缩到一个头
 
@@ -4295,11 +4297,9 @@ A 仍然是 `[10,20,30]`，B 是 `[10,20,30,40]`；完整前缀块 0 继续共�
 - `fork(source, target)`：已经知道整段历史完全相同，可以共享未满尾块，未来写入时 COW。
 - `share_prefix(source, target, tokens)`：由调用者先确认前缀兼容，只接收完整块边界。例如 b=2，来源长度 5，可以共享前 4 个 token；要求共享前 3 个会报错。
 
-完整块边界是这个教学 API 的简化契约，不是所有缓存系统只能这样设计。真实 APC 还需要前缀标识、查找、失效规则、淘汰策略以及正确的请求隔离；固定版本 vLLM 文档说明了块级缓存查找的设计。[vLLM 0.6.4 实现说明](https://docs.vllm.ai/en/v0.6.4/automatic_prefix_caching/details.html)
+完整块边界是这个教学 API 的简化契约，不是所有缓存系统只能这样设计。真实 APC 还需要前缀标识、查找、失效规则、淘汰策略以及正确的请求隔离；固定版本 vLLM 文档说明了块级缓存查找的设计（版本见本章末资料）。
 
-脚本没有实现这些查找和安全机制，也不会检查两个文本是否相同。它还没有“请求结束后仍保留的前缀缓存”引用：所有活跃请求释放后，物理块就释放了。因此不能把这个块表模拟当成可部署的 APC 服务。
-
-这里引用 0.6.4 是为了固定机制说明的文档快照，**不是说它是当前最新版或建议安装的版本**。本章不需要安装任何版本的 vLLM。
+脚本没有实现这些查找和安全机制，也不会检查两个文本是否相同。它还没有“请求结束后仍保留的前缀缓存”引用：所有活跃请求释放后，物理块就释放了。
 
 ## P15.12 Continuous batching：不要让空位等整桌结束
 
@@ -4324,7 +4324,7 @@ A 仍然是 `[10,20,30]`，B 是 `[10,20,30,40]`；完整前缀块 0 继续共�
 
 C 在 t=10 到达时，两槽仍被占用，所以连续 batch 也不是立刻开始。它到 t=20 才进入，两个输出时间为 30、40 ms；静态 batch 则是 50、60 ms。
 
-两种方法都完成 8 个输出 token。按这个人造观察窗口，静态是 `8/0.06≈133.333` tokens/s，连续是 `8/0.04=200` tokens/s。注意两个窗口不一样长：各自从 t=0 算到自己最后一个输出 token，静态 60 ms，连续 40 ms。**这些是固定轮时假设推出来的数字，不是 GPU 实测，也不是“连续 batch 一定快 1.5 倍”的结论。**
+两种方法都完成 8 个输出 token。按这个人造观察窗口，静态是 `8/0.06≈133.333` tokens/s，连续是 `8/0.04=200` tokens/s。注意两个窗口不一样长：各自从 t=0 算到自己最后一个输出 token，静态 60 ms，连续 40 ms。若同用 0–60 ms 窗口，两者都完成 8 个 token，都是 `8/0.06≈133.333` tokens/s；200 只是来自更短的 40 ms 窗口。
 
 真实 batch 大小会影响轮时，KV 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token 间隔可能变长。必须把每轮执行时间和排队一起看。
 
@@ -4424,18 +4424,9 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 这里 Q/K 等长，才使用简单的 `is_causal=True`；带缓存偏移的矩形 mask 不应不加分析地照抄。函数的 dropout 参数明确设为 0，不依赖外部模型的 eval 状态。脚本记录 profiler 中实际出现的 attention/flash 事件，再与本章 CPU 数值参考比较；“调用了 SDPA”本身不能证明走了期望后端。[PyTorch 固定源码 v2.5.1：SDPA 后端选择接口](https://github.com/pytorch/pytorch/blob/v2.5.1/torch/nn/attention/__init__.py)
 
-此固定源码链接用于接口背景，不是安装建议。本章另检查了附录 H 所列 torch 的 `sdpa_kernel` 和 `SDPBackend.FLASH_ATTENTION` 可导入，但无 GPU，因此没有验证其 GPU 支持条件。后端不支持或运行失败时会报告 skip/失败原因，不会悄悄退回数学后端然后宣称 GPU Flash 成功。
+本章另检查了附录 H 所列 torch 的 `sdpa_kernel` 和 `SDPBackend.FLASH_ATTENTION` 可导入，但无 GPU，因此没有验证其 GPU 支持条件。后端不支持或运行失败时会报告 skip/失败原因，不会悄悄退回数学后端然后宣称 GPU Flash 成功。
 
-要做真正的性能对比，还需要另外安排可复现基准：
-
-1. 固定模型 revision、tokenizer、dtype、采样策略，记录权重与 KV 是否量化。
-2. 固定 prompt/输出 token 长度分布、请求到达方式、并发以及前缀命中率；冷缓存与热缓存分开。
-3. 先预热，再重复多轮；GPU kernel 计时使用同步或正确的 CUDA event，避免只测到提交任务的时间。
-4. 同时报客户端 TTFT、TPOT、E2E、输出吞吐与失败请求；不能拿输入 token 吞吐冒充输出吞吐。
-5. 显存分别记录模型基线、KV payload、峰值 allocated/reserved 和工作区；重置峰值统计的时机要相同。
-6. 改一个因素再比，并核验 profiler 实际后端；保存硬件、软件版本和命令。微型 attention smoke 不能替代端到端服务基准。
-
-这是选修实验的记录清单，**不是本章已经跑出的服务性能报告**。
+要做真正的性能对比，需要另外安排可复现基准：固定模型 revision、dtype 和工作负载（长度分布、到达方式、并发、前缀命中率），预热后重复多轮并正确同步计时；同时报 TTFT、TPOT、E2E、输出吞吐和失败请求，分项记录显存，并用 profiler 核验实际后端。
 
 ## P15.17 自测题与参考答案
 
@@ -4571,7 +4562,7 @@ $$
 
 因此位置 0 不能在因果模型里“先收集整段未来，再广播给大家”。源码最后的 `& causal` 不能被删除。本函数只演示图样，不实现 Longformer 的独立全局投影或完整模型。
 
-“混合层”则是**不同层使用不同机制**：例如三层 SWA 后接一层全量注意力，或者把线性层与普通注意力层交替。它不同于在同一层给窗口加几列全局 key。若某些层仍读取全量历史，这些层的 KV 缓存仍会随 T 增长，不能把整个模型都按窗口大小计费。
+“混合层”则是**不同层使用不同机制**：例如三层 SWA 后接一层全量注意力，或者让线性层与普通注意力层按比例混合。它不同于在同一层给窗口加几列全局 key。若某些层仍读取全量历史，这些层的 KV 缓存仍会随 T 增长，不能把整个模型都按窗口大小计费。
 
 ## P16.5 稀疏选择不等于 MLA 压缩
 
@@ -4798,11 +4789,7 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 ## P17.2 哪些是已经核验的官方事实
 
-本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。本章核验了技术报告 v1（核验日期见附录 H），以及官方 Hugging Face 仓库的固定 revision：
-
-```text
-314113f8a7dadb388215396ba5fbee2c610a04d6
-```
+本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。核验所用的报告版本与仓库固定 revision 见本章末「资料与实现边界」。
 
 [技术报告 §2.1–2.2](https://arxiv.org/html/2609.19969v1#S2.SS1) 与 [固定版官方模型卡](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/README.md) 相互印证：语言主干为 40 层，分成 20 层 causal encoder 和 20 层 decoder；decoder global KV 来自 encoder 最终表示，而非各 decoder 层自己的表示。官方报告的激活参数口径是 **prefill 每 token 8B、decode 每 token 16B**。这是官方架构数据，**不是本书测得的速度、内存或质量结果，也不是模型总参数量**。
 
@@ -4810,7 +4797,7 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 - [固定版 config.json](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/config.json) 的 text_config 中，num_hidden_layers=40，sliding_window=128。
 - [固定版 inference/config.json](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/config.json) 使用 n_layers=40、window_size=128；kv_source_layers 为 [2,8,14,20]，索引从 0 开始。
-- 主干前两层只有 SWA；随后 18 个 encoder 层的压缩比是 2，20 个 decoder 层的压缩比是 1。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。[报告 §4.2.1](https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1)
+- 主干前两层只有 SWA；随后 18 个 encoder 层的压缩比是 2，20 个 decoder 层的压缩比是 1（报告 §2.3：压缩比为 1 即不压缩的 main KV）。配置数组末尾还包含额外预测层，不能把数组长度直接当成主干层数。[报告 §4.2.1](https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1)
 
 再向源码走一步：[固定版 inference/model.py](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py) 中，Attention._compress_kv 由指定 source 层产生 global latent，其他层读共享缓存；decoder 边界处下标 20 的层是 source，之后的 decoder 层复用它。每层的 _window_kv 仍从本层 attention 输入生成局部状态。真实路径还包括归一化、位置旋转、量化和 residual-stream mixing，不能将它们抹去后声称与生产张量逐项相同。
 
@@ -4867,7 +4854,7 @@ decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串
 
 replay（重放）就是重新运行一段历史的计算，用它恢复当前需要的状态。它不是把历史文字再生成一遍，也不是修改用户输入。
 
-设局部窗口 W 包含当前 token，每层最多再读取 W−1 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。
+设局部窗口 W 包含当前 token，每层最多再读取 W−1 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。
 
 [报告 §3.2.2](https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2) 的 Bounded Replay 只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 s、当前 query 为 i，局部可见范围变成：
 
@@ -4896,7 +4883,13 @@ $$
 | KV 量化 | 每个缓存数值怎样表示、占多少字节 | 数据流完全不变就一定无误差 |
 | P/D 服务分离 | 计算阶段怎样分配到设备与队列 | 模型已经采用 CED |
 
-[报告 §2.3](https://arxiv.org/html/2609.19969v1#S2.SS3) 与固定版模型卡把 CSA2 分成 Full、Reindex、Reuse 三种模式：Full 产生 global KV 并选择索引；Reindex 复用 global KV、重新选择索引；Reuse 连选择结果一起复用。它们仍保留本层 query 与 SWA 状态。这里的 Full 是 **CSA2 模式名**，不能理解成“取消因果约束的全注意力”。
+[报告 §2.3](https://arxiv.org/html/2609.19969v1#S2.SS3) 与固定版模型卡把 CSA2 分成三种模式：
+
+- **Full**：产生 global KV，并选择索引。
+- **Reindex**：复用前面层的 global KV，重新选择索引。
+- **Reuse**：global KV 和选择结果都复用。
+
+三种模式都保留本层 query 与 SWA 状态。这里的 Full 是 **CSA2 模式名**，不能理解成“取消因果约束的全注意力”。
 
 所以，CED 解释“资料从下半网络准备”，CSA2 进一步解释“哪些层共用资料和选取结果”。两者可以协同，但不应把所有缓存节省都归功于 CED。相关头数 / latent 概念见 [P14](#p14-grouped-kv)，局部与稀疏路径见 [P16](#p16-sparse-linear)。
 
@@ -4911,7 +4904,7 @@ ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两�
 3. decoder 本层输入产生 local K/V。
 4. 完整前向、增量缓存和近似后缀 replay 三条路径。
 
-它省略 tokenizer、词嵌入训练、输出词表和 loss，也省略生产的 MoE、压缩 latent / Z、CSA2 共享与 Top-K、层级索引器、RoPE / YaRN、RMSNorm、FFN、mHC、Engram、量化、视觉输入、DSpark 与 GPU kernel。因此输出是二维 hidden states，**不是语言模型 logits，不能用来评估语言质量**。
+它省略 tokenizer、词嵌入训练、输出词表和 loss，也省略生产的 MoE、压缩 latent / Z、CSA2 共享与 Top-K、层级索引器、RoPE / YaRN、RMSNorm、FFN、量化、视觉输入、其他生产组件与 GPU kernel。因此输出是二维 hidden states，**不是语言模型 logits，不能用来评估语言质量**。
 
 还有两项特意不同的数学约定：
 
@@ -4998,9 +4991,7 @@ h 每经过一层就改变。于是第二层 local V 会跟着第一层的处理
 
 代码用 KV.start 记录第一行的绝对位置，不能把缓存的行号 0 当成原序列的位置 0。增量输入 C 行时，位置项要从 offset 开始；注意力的比较也是 `key_position <= query_position`，而不是按本次小块的行号比较。
 
-当 W=1 时，不需要保留旧 local 行。切片要专门处理长度 0：Python 中 `-0` 等于 `0`，`tensor[:, -0:]` 会意外保留全部历史。tail_kv 使用 `size-n` 作为起点。
-
-缓存是调用者持有的快照，新请求传 None。增量调用不原地覆盖之前的快照，可以从同一个前缀分叉实验。它还记录模型身份和配置 / buffer 版本；常规原地改权重、换配置或换模型后会拒绝旧缓存。不要编辑缓存张量，也不要用 `.data` 或底层共享存储写入绕过版本跟踪；这里不承诺检测这些破坏。
+缓存是调用者持有的快照，新请求传 None；增量调用不覆盖旧快照，改权重、换配置或换模型后旧缓存会被拒绝。
 
 bounded 路径会把 approximate 标记保留到后续 decode。它记录“来自截断 replay 的状态”，不是错误大小；某些窗口或输入上误差恰好为零，也不能把来源标记擅自改成精确。
 
@@ -5084,6 +5075,11 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture
 
 记住这条主线即可：**CED 改变 decoder global KV 的来源；局部 SWA 仍有自己的逐层状态，所以需要 replay；有界 replay 是明确接受误差的取舍，不是免费的等价省算。** 本章已经用实际张量和反例验证这三件事，但没有复现官方训练、权重、服务系统或性能。
 
+## 资料与实现边界
+
+- [DeepSeek-V4.1-Flash 技术报告 v1（arXiv 2609.19969）](https://arxiv.org/html/2609.19969v1)：核验日期见附录 H。
+- 官方 Hugging Face 仓库 deepseek-ai/DeepSeek-V4.1-Flash，固定 revision `314113f8a7dadb388215396ba5fbee2c610a04d6`；本章引用的模型卡、config.json、inference/model.py 均为该 revision。
+
 
 ---
 
@@ -5162,7 +5158,7 @@ $$
 y_{routed}=\tfrac23\times100x+\tfrac13\times10x=70x.
 $$
 
-再加两个共享分支 3x 和 5x，得到 78x，而不是 74x。这个倍率实验只用来验算组合，不把线性倍率当成真正的专家能力；正式模块和另一组独立梯度测试都使用 SwiGLU。
+再加两个共享分支 3x 和 5x，得到 78x，而不是 74x（74x 是把两个共享分支取平均的错误算法：70+(3+5)/2）。这个倍率实验只用来验算组合，不把线性倍率当成真正的专家能力；正式模块和另一组独立梯度测试都使用 SwiGLU。
 
 ## P18.3 张量账本：先摊平，最后放回
 
@@ -5292,7 +5288,7 @@ A、B、C 例子设置 capacity=1 后，requested 仍是 `[2,2,1,1]`，accepted 
 2. top-k 组合权重通常让任务损失影响 router，但本章的 **top-1 加所选权重归一化**有特殊性：唯一权重恒为 1，所以该任务路径的 router 梯度为 0。
 3. 辅助损失通过全部 affinity 影响 router，不能把“空专家没有直接任务梯度”误说成“对应 router 行永远没有梯度”。
 
-在 78x 的手算例子里，x=[1,0]、router 第一列为 [0,log2,log4]、第二列为 0。令损失为输出各维之和，router 第一列梯度为 `[0,-20,+20]`：权重变化会在 10x 与 100x 间重新分配。输入第一维梯度为 78+20log2，第二维为 78。
+在 78x 的手算例子里，x=[1,0]、router 第一列为 [0,ln 2,ln 4]、第二列为 0。令损失为输出各维之和，router 第一列梯度为 `[0,-20,+20]`：权重变化会在 10x 与 100x 间重新分配。输入第一维梯度为 78+20 ln 2，第二维为 78。
 
 “今天没收到梯度”不等于“永远不会变化”：其他 batch 可能路由到它，优化器的历史动量、权重衰减和梯度清理方式也会影响实际更新。
 
@@ -5420,16 +5416,16 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 
 ### 参考答案与对应测试
 
-1. 权重为 4/7、3/7；三行共 3×2=6 次。见 `test_hand_route_weights_counts_aux_and_ties`。
-2. 总参数 136，激活预算 88，只覆盖 MoE 模块。见 `test_parameter_active_budget_and_fine_grained_example`。
+1. 权重为 4/7、3/7；三行共 3×2=6 次。见本章测试。
+2. 总参数 136，激活预算 88，只覆盖 MoE 模块。见本章测试。
 3. 专家总参数都是 192，每 token 专家参数都是 96；含 router 总参数分别为 200、208。见同一预算测试。
-4. A、C 都选下标 0、1 的专家，B 选下标 3、2 的专家；accepted=[1,1,1,1]，C 的路由贡献为零，共享和残差不因此删除。见 `test_capacity_fixed_order_no_renormalization_shared_survives`。
+4. A、C 都选下标 0、1 的专家，B 选下标 3、2 的专家；accepted=[1,1,1,1]，C 的路由贡献为零，共享和残差不因此删除。见本章测试。
 5. 3/7，不重新归一化；共享分支不受容量限制。该测试同时检查部分丢弃与 capacity=0。
 6. 不会。固定平局规则使每个 token 都选下标 0、1 的专家；损失仍可为 1。见手算路由测试中五 token 的 [5,5,0,0] 断言。
-7. 不能通过这条任务路径，唯一组合权重恒为 1，router 梯度为零；辅助项在测试的集中路由案例中提供非零梯度。见 `test_sparse_execution_empty_experts_and_top1_router_gradient`。
-8. [-0.1,+0.1,0,0]；更新 buffer 后必须重置缓存。见偏置方向测试与 `test_runtime_and_buffer_mutations_invalidate_cache`。
-9. 不能。见 `test_mutations_fail_independent_oracle_not_only_cache_agreement`。
-10. 2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见 `test_full_cache_alignment_each_mode_and_extreme_k`。
+7. 不能通过这条任务路径，唯一组合权重恒为 1，router 梯度为零；辅助项在测试的集中路由案例中提供非零梯度。见本章测试。
+8. [-0.1,+0.1,0,0]；更新 buffer 后必须重置缓存。见本章测试。
+9. 不能。见本章测试。
+10. 2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见本章测试。
 
 到这里，S0→S5 已经把“多保存一些参数”和“每 token 真正调用哪些参数”分开。接下来进入训练流水线：即使路由与缓存都正确，数据边界、去重、切分和预算没有处理好，也训练不出可靠的模型。
 
