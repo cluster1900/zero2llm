@@ -2237,7 +2237,7 @@ Kimi K3 报告（S29 §2.2）采用了这个做法。第 l 层有一个可学习
 
 ![经典 Transformer 完整宏观架构](assets/diagrams/transformer_full_architecture.svg)
 
-下图只描述经典 encoder-decoder，不是所有聊天模型共有的完整结构。归一化与残差在简图中省略，不表示它们消失了。
+下图只描述经典 encoder-decoder，不是所有聊天模型共有的完整结构。图 7-2 的前缀「`<BOS> 疑是地上`」与下面解码器简图的前缀「起始符 + 疑是」是同一句译文在不同生成步的快照：前者已多生成了「地上」两个字，后者正在预测「地」。归一化与残差在简图中省略，不表示它们消失了。
 
 ```mermaid
 flowchart TD
@@ -2871,10 +2871,14 @@ S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位�
 
 只有 loss 日志不够。后续要比较 S0/S1，必须复用完全相同的权重、配置和词表。配套 `save_checkpoint(path, model)` 保存配置、参数与字符顺序；`load_checkpoint(path)` 在 CPU 创建对应模型并恢复权重。测试在临时目录保存后加载，对同一批输入比较所有 logits。
 
+`main()` 只训练并打印结果，不会写 checkpoint；文件名以数字开头，也不能直接 `import 07_baby_gpt`。在仓库根目录这样调用：
+
 ```python
-# 在已导入本脚本的 Python 会话内；model 是你的 BabyGPT 实例。
-save_checkpoint("baby_gpt.pt", model)
-restored = load_checkpoint("baby_gpt.pt")
+import runpy
+ns = runpy.run_path("code/07_baby_gpt.py")  # 只定义函数和类，不执行 main()
+model = ns["BabyGPT"](vocab_size=ns["vocab_size"], d_model=48, num_heads=4, num_layers=2)  # 未训练的演示实例；main() 不返回模型，要存训练后的权重需在自己的训练循环里调用
+ns["save_checkpoint"]("baby_gpt.pt", model)
+restored = ns["load_checkpoint"]("baby_gpt.pt")
 restored.eval()
 ```
 
@@ -3105,7 +3109,7 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 - `drop(P)`（Eq. 4）：把集合 P 里的 KV 条目排除在以后的注意力之外。保留条目的位置编码不变，下一个 `append` 的位置编号也不变。实现上可以只在 mask 里把它们设成“不看”，就像 P11.4 的矩形 mask 多了几列“不看”。
 - `repos`（Eq. 5）：把保留下来的 r 个 key 按逻辑顺序改到位置 0…r−1，下一个 token 用位置 r。对 RoPE，把一个 key 从位置 p 挪到 q 只需 $K\leftarrow R(q)R(p)^{-1}K$；**V 原样不动**，因为 V 本来就没有旋转。为什么旋转一下就够，见 [P12.3](#p12-rope) 的相对位置性质。
 
-AKV 的接口在原来的 OpenAI 格式请求上加两个字段（[README](https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/README.md) 的 Quick Start 示例和字段表）：`"drop_message": {"4": [2]}` 表示处理完第 4 条消息后丢掉第 2 条消息的 KV，`"reposition": [4]` 表示处理完第 4 条后压紧位置。论文 Fig. 6 画的是另一种写法（`"cache": {"drop": …}`），本书以仓库 README 为准。
+AKV 的接口在原来的 OpenAI 格式请求上加两个字段（[README](https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/README.md) 的 Quick Start 示例和字段表）：`"drop_message": {"4": [2]}` 表示处理完下标 4 的消息后丢掉下标 2 的消息的 KV，`"reposition": [4]` 表示处理完下标 4 的消息后压紧位置。README 的消息下标从 0 开始数：示例里下标 2 是第一条工具结果 Record A，下标 4 是第二条工具结果 Record B。论文 Fig. 6 画的是另一种写法（`"cache": {"drop": …}`），本书以仓库 README 为准。
 
 **关键：drop + repos 不等于重新 prefill。** 保留下来的 token 当初算 K/V 时，是**看过**被删内容的。第 1 层的 K/V 只由 token 本身和位置决定，所以 repos 之后能和重算完全一样；但从第 2 层起，输入已经是混入了上下文的隐藏状态，被删内容的信息就留在保留 token 的 K/V 里。论文 §3.4 和 Fig. 5 说的正是这个“历史依赖”：同样的 token、同样的位置，操作顺序不同，缓存状态就不同；Fig. 1 也注明保留的 KV 仍可能带着被删历史的信息。
 
@@ -3385,7 +3389,7 @@ RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：
 | 8 | 512 | 0.535 | 0.001046 |
 | 16 | 512 | 1698.983 | 3.318326 |
 | 32 | 512 | 2015.841 | 3.937189 |
-| 64 | 512 | 594.219 | 1.160583 |
+| 64 | 512 | 594.219 | 1.160584 |
 
 该种子第一训练 batch 的 CE 为 2.338030，最后一个为 0.001039。训练日志是训练 batch，表格是独立测试样本，不能混写成同一组指标。CE 按自然对数计算。总和列保留三位小数；均值列和上面的训练 CE 保留本次本地运行打印的六位小数。均值由未舍入总和除以样本数得到，不应拿表中已舍入的总和再计算并要求末位一致。不同 CPU 或数值库可能有末位浮点差异，六位打印值不是跨机器逐位一致的承诺。
 
@@ -4423,7 +4427,7 @@ A 仍然是 `[10,20,30]`，B 是 `[10,20,30,40]`；完整前缀块 0 继续共�
 
 C 在 t=10 到达时，两槽仍被占用，所以连续 batch 也不是立刻开始。它到 t=20 才进入，两个输出时间为 30、40 ms；静态 batch 则是 50、60 ms。
 
-两种方法都完成 8 个输出 token。按这个人造观察窗口，静态是 `8/0.06≈133.333` tokens/s，连续是 `8/0.04=200` tokens/s。**这些是固定轮时假设推出来的数字，不是 GPU 实测，也不是“连续 batch 一定快 1.5 倍”的结论。**
+两种方法都完成 8 个输出 token。按这个人造观察窗口，静态是 `8/0.06≈133.333` tokens/s，连续是 `8/0.04=200` tokens/s。注意两个窗口不一样长：各自从 t=0 算到自己最后一个输出 token，静态 60 ms，连续 40 ms。**这些是固定轮时假设推出来的数字，不是 GPU 实测，也不是“连续 batch 一定快 1.5 倍”的结论。**
 
 真实 batch 大小会影响轮时，KV 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token 间隔可能变长。必须把每轮执行时间和排队一起看。
 
@@ -4899,7 +4903,7 @@ K3 的改法是 Eq.5：`g = g_min · Sigmoid(e^{A_h} z)`，`α = exp(g)`，`g_mi
 
 **Nemotron 3.5 Lightning（S31）。** 官方预训练文档给出 52 层：23 层 Mamba-2、6 层注意力、23 层 MoE。每个 MoE 层有 128 个路由专家，选 top-6，另加 1 个共享专家（NVIDIA 官方文档给出，厂商口径；本书未独立核验）。注意力层用 GQA，32 个头、2 个 KV 组。同一页说明，文档里的训练配方不是发布版 Base 的实际训练过程，两者只在训练配方上不同，层结构相同。Mamba-2 的原始来源是 [Dao 与 Gu，arXiv:2405.21060](https://arxiv.org/abs/2405.21060)。这里注意力只有 6 层，状态模型承担了大部分序列混合。
 
-**Muse Spark Open（S33）。** 它没有线性层，而是局部与全局注意力交替。HF 配置默认 `sliding_window=2048`，128 个 query 头配 16 个 KV 头（GQA，见 [P14](#p14-grouped-kv)）。每层是局部还是全局，由 `layer_types` 决定。文档只说它“未提供时自动生成”，没写出默认图样。本书没有读源码核对，这一点未验证。
+**Muse Spark Open（S33）。** 它没有线性层，而是局部与全局注意力混排。HF 配置默认 `sliding_window=2048`，128 个 query 头配 16 个 KV 头（GQA，见 [P14](#p14-grouped-kv)）。每层是局部还是全局，由 `layer_types` 决定。文档只说它“未提供时自动生成”；[固定提交的配置源码](https://github.com/huggingface/transformers/blob/d4804f9d76b8c071b993d813e9e87067b780cbee/src/transformers/models/muse_spark/configuration_muse_spark.py)给出的默认规则是：从最后一层往前数，每 4 层有 1 层全局（`full_attention`），其余是局部（`sliding_attention`）。默认 62 层时，全局层是第 1、5、…、61 层（从 0 数），共 16 层，局部 46 层。所以它不是一层局部、一层全局地严格交替，而是 3 局部 : 1 全局。
 
 三者的共同点是：便宜的层占多数，少量全局层负责精确检索。比例与具体部件各不相同，不能互相套用。
 
@@ -5606,7 +5610,7 @@ Kimi K3 报告（S29 §2.3，Eq.11）写成：
 
 S29 Table 1 的数字：隐藏宽度 7,168，latent 宽度 3584（0.5×），896 个路由专家，每 token 激活 16 个，2 个共享专家。896/16 = 56，就是报告说的稀疏度 56。RMSNorm 放在 W↑ 之前，是 K3 相对原始 LatentMoE 的改动（§2.3.1）。
 
-**负载均衡为什么要换。** 专家接近 10³ 个时，S29 说原来的定步长偏置更新不再好用。那条规则是 `b_j ← b_j + γ sign(ℓ̄ − ℓ_j)`，来自 DeepSeek-V3（[arXiv:2412.19437](https://arxiv.org/abs/2412.19437)）。γ 小就追得慢，γ 大就来回震荡。
+**负载均衡为什么要换。** 专家接近 10³ 个时，S29 说原来的定步长偏置更新不再好用。那条规则来自 DeepSeek-V3（[arXiv:2412.19437](https://arxiv.org/abs/2412.19437) §2.1.2），原文用文字描述：每步结束时，过载专家的偏置减 γ，欠载专家的偏置加 γ。写成公式 `b_j ← b_j + γ sign(ℓ̄ − ℓ_j)` 是 S29 的转写，不是 V3 原文的公式。γ 小就追得慢，γ 大就来回震荡。
 
 QB 的思路是：直接算出“让专家 j 正好接到 q 个 token”的偏置。设一批 m 个 token、n 个专家、每个选 k 个，目标负载 `q = mk/n`（Eq.14）：
 
@@ -7656,7 +7660,7 @@ P23.13 的 DFlash 一次并行写出整块草稿；EAGLE-4 走另一条路：**�
 | 草稿怎么产生 | 目标模型自带的多 token 头，常做成固定链 | 单层自回归草稿器，读目标多层隐藏状态 | 块扩散：一次并行出一整块（论文块长 16） | 沿用 EAGLE-3.1 单层归一化草稿器；读目标 **3 个分别归一化的隐藏状态 + token embedding**，输出再喂回下一步 |
 | 树还是链 | 多为固定链 | 动态树（EAGLE-2 风格） | 块（非自回归树） | **低并发动态树、高并发动态链**；每轮由代价模型改形状 |
 | 随 batch 怎么调 | 固定长度，大 batch 时验证窗浪费 | 主要按接受概率长树，不显式吃硬件代价 | 固定块长，大 batch 时可能起草过多 | 一次性测硬件上的起草／验证代价；每步比较期望收益与边际代价 |
-| 词表打分 | 完整 LM head | EAGLE-3 用截断草稿词表 | 视实现 | **低秩候选头**：先用 rank-128 投影给全部词表打分，再只对前 128 个候选用完整 LM head（Qwen3.8-27B 草稿词表 248320） |
+| 词表打分 | 完整 LM head | EAGLE-3 用截断草稿词表 | 视实现 | **低秩候选头**：先用 rank-128 投影给全部词表打分，再只对前 128 个候选用完整 LM head（目标 Qwen3.8-27B 的完整词表 248320，TP4 下每片 62080；不是截断词表） |
 | 长上下文 | 视目标 | 全上下文注意力成本随长度涨 | 视实现 | 草稿注意力滑窗 **4096**；草稿 KV **只追加不淘汰** |
 
 来源：EAGLE-4 论文 PDF（[eagle-hq/EAGLE-4@`3b96ef6`](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)，Preprint，无 arXiv 号）、[LightSeek / TokenSpeed 文](https://lightseek.org/blog/eagle-4.html)（2026-10-20）、[fal 技术解读](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20）；仓库许可证为 **源码可见**（`LicenseRef-Eagle-4-Source-Available`），不是 OSI 开源。代码包 `eagle-harness` 以插件形式接到 SGLang / vLLM / TokenSpeed；本书**不复制**其源码。
@@ -7689,7 +7693,7 @@ Algorithm 1（论文）每轮做三件事：① 每起草一层后看要不要�
 
 厂商报告的速度（不是本书测量）：LightSeek / TokenSpeed 文称 Qwen3.8-27B BF16、4×B300 TP4、单请求 temperature=1 时 750 tok/s，相对不投机 2.85×、相对模型自带 MTP 1.28×；agentic coding 采样负载约 3.0×。论文 Fig.1 / Hugging Face 卡在 temperature=0 的 SPEED-Bench 定性子集上报告 EAGLE-4 863.8 tok/s、3.59×（相对 Vanilla）。两组设定不同，不要混成一个数。fal 文说明已发布模型尚未包含多层草稿、MoE 草稿和 Latent ReLU。
 
-边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗 4096 与词表 248320 来自官方仓库文档／工具注释（`docs/known-limits.md`、`tools/bench_kernels.py`，提交 `3b96ef6`）。与 DFlash 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。
+边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗 4096 与词表 248320 来自官方仓库文档／工具注释（`docs/known-limits.md`、`tools/bench_kernels.py`，提交 `3b96ef6`）；248320 也是 Qwen3.8-27B config.json 里 text_config 的 `vocab_size`（[固定版本](https://huggingface.co/Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/config.json)）。与 DFlash 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。
 
 ## P23.16 延伸：FlashMap——用 flow map 一次写出有块内依赖的草稿 {#p23.16-flashmap}
 
@@ -7770,7 +7774,7 @@ P23.13 的 DFlash 一次前向写出整块草稿，但**块内各位置彼此独
 
 照片类比到这里就该停了。模型里的一点误差会经过矩阵乘法、注意力和多步生成继续传播，不能只凭“肉眼看起来差不多”判断。我们先用可手算的整数格子，再用真实的本地引擎把文件加载、量化、生成和流式响应串起来。
 
-配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。默认实验只用 Python 标准库、CPU、小数组，不下载权重。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
+配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。`25_quantized_serving.py` 的默认实验只用 Python 标准库、CPU、小数组，不下载权重；P24.13 的 `25b_mixed_bit.py` 另需 PyTorch（CPU 即可）。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
 
 ![量化把浮点数映射到整数格点；权重、激活和 KV 是三个独立对象；真实服务还要经过格式与内核检查，并正确处理流式边界](assets/diagrams/p24-quantization.svg)
 
@@ -8513,7 +8517,7 @@ False 比 True 多加的后缀（空行有意义）：
 
 此外还有上下文预算：`prompt token 数 + max_new_tokens` 不能超过选用的运行限额。模板中的角色边界、空 thinking 块、历史消息也属于 prompt；字符数不能代替 token 数。`context_budget(12,8,20)` 正好用完 20，`context_budget(12,9,20)` 必须拒绝。
 
-最后，**配置长度不等于能力保证**。两个 config 的 `max_position_embeddings` 都是 40960；对应模型卡描述的原生上下文是 32768。30B-A3B 的卡另外说明借助 YaRN 达到 131072，并解释 40960 默认值的预算安排。本地快照的 `rope_scaling=null`，本章没有启用或验证 YaRN，更不能从 40960 的字段宣布 131072 已经可用。[30B-A3B 长文本说明](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md#processing-long-texts)
+最后，**配置长度不等于能力保证**。两个 config 的 `max_position_embeddings` 都是 40960；对应模型卡描述的原生上下文是 32768。30B-A3B 的卡另外说明借助 YaRN 达到 131072，并解释 40960 默认值的预算安排。两个快照的 tokenizer_config.json 里 `model_max_length` 是 131072，这是 tokenizer 截断和长度警告用的上限，不是模型配置，也不证明模型能处理这么长。本地快照的 `rope_scaling=null`，本章没有启用或验证 YaRN，更不能从 40960 的字段宣布 131072 已经可用。[30B-A3B 长文本说明](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md#processing-long-texts)
 
 本章保存的 generation config 声明采样、temperature=0.6、top-p=0.95、top-k=20。官方卡对 non-thinking 推荐的是另一组采样设置；模板开关本身不会自动重写所有生成参数。不要把上一章用于严格对照的教学贪心解码直接包装成这里的推荐生产配置。
 
@@ -9393,11 +9397,11 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 
 定位时要问：是新 Q/K 的位置错了，还是旧 K 被二次旋转？是模型要求的绝对位置偏移，还是已经采用另一个明确设计的位置方案？不能只看到 cache error 就笼统怪罪精度。
 
-### 负例三：第二个用户接上了第一个用户的历史
+### 负例三：后一个请求接上了前一个请求的历史
 
-请求 A 的前三个 token 已经产生缓存。请求 B 应从空缓存开始，负例却把 A 的缓存传给 B 的完整输入。
+请求 A 是一批 2 条序列的前三个 token（形状 [2,3]），已经产生缓存。请求 B 是另一批 2 条、各 4 个 token 的输入（形状 [2,4]），应从空缓存开始，负例却把 A 的缓存传给 B 的完整输入。
 
-这一次模型对象相同、权重没变、batch 形状也相同，所以 owner 与版本检查可能全部通过。程序确实在计算一个合法的更长序列，只是**不是用户想要的那个请求**。
+这一次模型对象相同、权重没变、batch 大小也相同（都是 2，只是长度不同），所以 owner 与版本检查可能全部通过。程序确实在计算一个合法的更长序列，只是**不是用户想要的那个请求**。
 
 正确答案是 B 单独的完整前向；污染答案是“A 前缀+B”中 B 那些位置的输出。两者不同。缓存对象无法凭空猜到调用者的请求意图，服务层必须为每个独立请求明确传入 `None` 或自己的独立状态。
 

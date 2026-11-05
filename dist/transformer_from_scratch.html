@@ -4509,8 +4509,11 @@ class="book-diagram" width="646"
 alt="经典 Transformer 完整宏观架构" /></a>
 <figcaption>经典 Transformer 完整宏观架构</figcaption>
 </figure>
-<p>下图只描述经典
-encoder-decoder，不是所有聊天模型共有的完整结构。归一化与残差在简图中省略，不表示它们消失了。</p>
+<p>下图只描述经典 encoder-decoder，不是所有聊天模型共有的完整结构。图
+7-2
+的前缀「<code>&lt;BOS&gt; 疑是地上</code>」与下面解码器简图的前缀「起始符
++
+疑是」是同一句译文在不同生成步的快照：前者已多生成了「地上」两个字，后者正在预测「地」。归一化与残差在简图中省略，不表示它们消失了。</p>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-05.svg" title="点击查看原尺寸图"><img
 src="assets/rendered/flow-05.svg" class="book-diagram" width="256"
@@ -5841,11 +5844,16 @@ S0/S1，必须复用完全相同的权重、配置和词表。配套
 保存配置、参数与字符顺序；<code>load_checkpoint(path)</code> 在 CPU
 创建对应模型并恢复权重。测试在临时目录保存后加载，对同一批输入比较所有
 logits。</p>
+<p><code>main()</code> 只训练并打印结果，不会写
+checkpoint；文件名以数字开头，也不能直接
+<code>import 07_baby_gpt</code>。在仓库根目录这样调用：</p>
 <div class="sourceCode" id="cb69"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 在已导入本脚本的 Python 会话内；model 是你的 BabyGPT 实例。</span></span>
-<span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a>save_checkpoint(<span class="st">&quot;baby_gpt.pt&quot;</span>, model)</span>
-<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>restored <span class="op">=</span> load_checkpoint(<span class="st">&quot;baby_gpt.pt&quot;</span>)</span>
-<span id="cb69-4"><a href="#cb69-4" aria-hidden="true" tabindex="-1"></a>restored.<span class="bu">eval</span>()</span></code></pre></div>
+class="sourceCode python"><code class="sourceCode python"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> runpy</span>
+<span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a>ns <span class="op">=</span> runpy.run_path(<span class="st">&quot;code/07_baby_gpt.py&quot;</span>)  <span class="co"># 只定义函数和类，不执行 main()</span></span>
+<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> ns[<span class="st">&quot;BabyGPT&quot;</span>](vocab_size<span class="op">=</span>ns[<span class="st">&quot;vocab_size&quot;</span>], d_model<span class="op">=</span><span class="dv">48</span>, num_heads<span class="op">=</span><span class="dv">4</span>, num_layers<span class="op">=</span><span class="dv">2</span>)  <span class="co"># 未训练的演示实例；main() 不返回模型，要存训练后的权重需在自己的训练循环里调用</span></span>
+<span id="cb69-4"><a href="#cb69-4" aria-hidden="true" tabindex="-1"></a>ns[<span class="st">&quot;save_checkpoint&quot;</span>](<span class="st">&quot;baby_gpt.pt&quot;</span>, model)</span>
+<span id="cb69-5"><a href="#cb69-5" aria-hidden="true" tabindex="-1"></a>restored <span class="op">=</span> ns[<span class="st">&quot;load_checkpoint&quot;</span>](<span class="st">&quot;baby_gpt.pt&quot;</span>)</span>
+<span id="cb69-6"><a href="#cb69-6" aria-hidden="true" tabindex="-1"></a>restored.<span class="bu">eval</span>()</span></code></pre></div>
 <p>这里只提供<strong>推理基线恢复</strong>，不承诺训练中途精确续跑。续训通常还需
 optimizer 状态、随机数状态、数据采样位置与步数；不能将本 checkpoint 的
 round-trip 测试当成全部续训条件已经实现。</p>
@@ -6274,10 +6282,12 @@ R(q)R(p)^{-1}K\)</span>；<strong>V 原样不动</strong>，因为 V
 <p>AKV 的接口在原来的 OpenAI 格式请求上加两个字段（<a
 href="https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/README.md">README</a>
 的 Quick Start 示例和字段表）：<code>"drop_message": {"4": [2]}</code>
-表示处理完第 4 条消息后丢掉第 2 条消息的
-KV，<code>"reposition": [4]</code> 表示处理完第 4 条后压紧位置。论文
-Fig. 6 画的是另一种写法（<code>"cache": {"drop": …}</code>），本书以仓库
-README 为准。</p>
+表示处理完下标 4 的消息后丢掉下标 2 的消息的
+KV，<code>"reposition": [4]</code> 表示处理完下标 4
+的消息后压紧位置。README 的消息下标从 0 开始数：示例里下标 2
+是第一条工具结果 Record A，下标 4 是第二条工具结果 Record B。论文 Fig. 6
+画的是另一种写法（<code>"cache": {"drop": …}</code>），本书以仓库 README
+为准。</p>
 <p><strong>关键：drop + repos 不等于重新 prefill。</strong> 保留下来的
 token 当初算 K/V 时，是<strong>看过</strong>被删内容的。第 1 层的 K/V
 只由 token 本身和位置决定，所以 repos 之后能和重算完全一样；但从第 2
@@ -6928,7 +6938,7 @@ QUERY 损失账本</h3>
 <td>64</td>
 <td>512</td>
 <td>594.219</td>
-<td>1.160583</td>
+<td>1.160584</td>
 </tr>
 </tbody>
 </table></div>
@@ -8829,8 +8839,10 @@ batching
 t=20 才进入，两个输出时间为 30、40 ms；静态 batch 则是 50、60 ms。</p>
 <p>两种方法都完成 8 个输出 token。按这个人造观察窗口，静态是
 <code>8/0.06≈133.333</code> tokens/s，连续是 <code>8/0.04=200</code>
-tokens/s。<strong>这些是固定轮时假设推出来的数字，不是 GPU
-实测，也不是“连续 batch 一定快 1.5 倍”的结论。</strong></p>
+tokens/s。注意两个窗口不一样长：各自从 t=0 算到自己最后一个输出
+token，静态 60 ms，连续 40
+ms。<strong>这些是固定轮时假设推出来的数字，不是 GPU 实测，也不是“连续
+batch 一定快 1.5 倍”的结论。</strong></p>
 <p>真实 batch 大小会影响轮时，KV
 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token
 间隔可能变长。必须把每轮执行时间和排队一起看。</p>
@@ -9719,11 +9731,15 @@ KV 组。同一页说明，文档里的训练配方不是发布版 Base
 Gu，arXiv:2405.21060</a>。这里注意力只有 6
 层，状态模型承担了大部分序列混合。</p>
 <p><strong>Muse Spark Open（S33）。</strong>
-它没有线性层，而是局部与全局注意力交替。HF 配置默认
+它没有线性层，而是局部与全局注意力混排。HF 配置默认
 <code>sliding_window=2048</code>，128 个 query 头配 16 个 KV 头（GQA，见
 <a href="#p14-grouped-kv">P14</a>）。每层是局部还是全局，由
-<code>layer_types</code>
-决定。文档只说它“未提供时自动生成”，没写出默认图样。本书没有读源码核对，这一点未验证。</p>
+<code>layer_types</code> 决定。文档只说它“未提供时自动生成”；<a
+href="https://github.com/huggingface/transformers/blob/d4804f9d76b8c071b993d813e9e87067b780cbee/src/transformers/models/muse_spark/configuration_muse_spark.py">固定提交的配置源码</a>给出的默认规则是：从最后一层往前数，每
+4 层有 1
+层全局（<code>full_attention</code>），其余是局部（<code>sliding_attention</code>）。默认
+62 层时，全局层是第 1、5、…、61 层（从 0 数），共 16 层，局部 46
+层。所以它不是一层局部、一层全局地严格交替，而是 3 局部 : 1 全局。</p>
 <p>三者的共同点是：便宜的层占多数，少量全局层负责精确检索。比例与具体部件各不相同，不能互相套用。</p>
 <h2 id="资料与实现边界-2">资料与实现边界</h2>
 <ul>
@@ -10903,10 +10919,11 @@ href="https://arxiv.org/abs/2601.18089">LatentMoE，arXiv:2601.18089</a>
 56，就是报告说的稀疏度 56。RMSNorm 放在 W↑ 之前，是 K3 相对原始
 LatentMoE 的改动（§2.3.1）。</p>
 <p><strong>负载均衡为什么要换。</strong> 专家接近 10³ 个时，S29
-说原来的定步长偏置更新不再好用。那条规则是
-<code>b_j ← b_j + γ sign(ℓ̄ − ℓ_j)</code>，来自 DeepSeek-V3（<a
-href="https://arxiv.org/abs/2412.19437">arXiv:2412.19437</a>）。γ
-小就追得慢，γ 大就来回震荡。</p>
+说原来的定步长偏置更新不再好用。那条规则来自 DeepSeek-V3（<a
+href="https://arxiv.org/abs/2412.19437">arXiv:2412.19437</a>
+§2.1.2），原文用文字描述：每步结束时，过载专家的偏置减
+γ，欠载专家的偏置加 γ。写成公式 <code>b_j ← b_j + γ sign(ℓ̄ − ℓ_j)</code>
+是 S29 的转写，不是 V3 原文的公式。γ 小就追得慢，γ 大就来回震荡。</p>
 <p>QB 的思路是：直接算出“让专家 j 正好接到 q 个 token”的偏置。设一批 m
 个 token、n 个专家、每个选 k 个，目标负载
 <code>q = mk/n</code>（Eq.14）：</p>
@@ -14770,8 +14787,8 @@ EAGLE-4 怎么按代价选树或链</h2>
 <td>EAGLE-3 用截断草稿词表</td>
 <td>视实现</td>
 <td><strong>低秩候选头</strong>：先用 rank-128
-投影给全部词表打分，再只对前 128 个候选用完整 LM head（Qwen3.8-27B
-草稿词表 248320）</td>
+投影给全部词表打分，再只对前 128 个候选用完整 LM head（目标 Qwen3.8-27B
+的完整词表 248320，TP4 下每片 62080；不是截断词表）</td>
 </tr>
 <tr>
 <td>长上下文</td>
@@ -14850,7 +14867,10 @@ Vanilla）。两组设定不同，不要混成一个数。fal
 <p>边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗
 4096 与词表 248320
 来自官方仓库文档／工具注释（<code>docs/known-limits.md</code>、<code>tools/bench_kernels.py</code>，提交
-<code>3b96ef6</code>）。与 DFlash
+<code>3b96ef6</code>）；248320 也是 Qwen3.8-27B config.json 里
+text_config 的 <code>vocab_size</code>（<a
+href="https://huggingface.co/Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/config.json">固定版本</a>）。与
+DFlash
 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。</p>
 <h2 id="p23.16-flashmap">P23.16 延伸：FlashMap——用 flow map
 一次写出有块内依赖的草稿</h2>
@@ -15070,8 +15090,10 @@ href="https://arxiv.org/abs/2610.20503">ReaDy，arXiv:2610.20503</a>（混合线
 <p>照片类比到这里就该停了。模型里的一点误差会经过矩阵乘法、注意力和多步生成继续传播，不能只凭“肉眼看起来差不多”判断。我们先用可手算的整数格子，再用真实的本地引擎把文件加载、量化、生成和流式响应串起来。</p>
 <p>配套 <a
 href="code/25_quantized_serving.py">code/25_quantized_serving.py</a>，测试为
-<code>tests/test_quantized_serving.py</code>。默认实验只用 Python
-标准库、CPU、小数组，不下载权重。可选实战使用锁定的 llama.cpp
+<code>tests/test_quantized_serving.py</code>。<code>25_quantized_serving.py</code>
+的默认实验只用 Python 标准库、CPU、小数组，不下载权重；P24.13 的
+<code>25b_mixed_bit.py</code> 另需 PyTorch（CPU
+即可）。可选实战使用锁定的 llama.cpp
 和<strong>本地生成的未训练微型模型</strong>。其他框架是版本化选型导读，不是本书已经跑过的
 GPU 成绩。</p>
 <figure>
@@ -16599,7 +16621,10 @@ prompt；字符数不能代替 token 数。<code>context_budget(12,8,20)</code>
 <p>最后，<strong>配置长度不等于能力保证</strong>。两个 config 的
 <code>max_position_embeddings</code> 都是
 40960；对应模型卡描述的原生上下文是 32768。30B-A3B 的卡另外说明借助 YaRN
-达到 131072，并解释 40960 默认值的预算安排。本地快照的
+达到 131072，并解释 40960 默认值的预算安排。两个快照的
+tokenizer_config.json 里 <code>model_max_length</code> 是 131072，这是
+tokenizer
+截断和长度警告用的上限，不是模型配置，也不证明模型能处理这么长。本地快照的
 <code>rope_scaling=null</code>，本章没有启用或验证 YaRN，更不能从 40960
 的字段宣布 131072 已经可用。<a
 href="https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md#processing-long-texts">30B-A3B
@@ -18579,10 +18604,12 @@ mask。第一块仍然正常，因此只测 prefill 看不出问题；第二块�
 被二次旋转？是模型要求的绝对位置偏移，还是已经采用另一个明确设计的位置方案？不能只看到
 cache error 就笼统怪罪精度。</p>
 <h3
-id="负例三第二个用户接上了第一个用户的历史">负例三：第二个用户接上了第一个用户的历史</h3>
-<p>请求 A 的前三个 token 已经产生缓存。请求 B 应从空缓存开始，负例却把 A
-的缓存传给 B 的完整输入。</p>
-<p>这一次模型对象相同、权重没变、batch 形状也相同，所以 owner
+id="负例三后一个请求接上了前一个请求的历史">负例三：后一个请求接上了前一个请求的历史</h3>
+<p>请求 A 是一批 2 条序列的前三个 token（形状
+[2,3]），已经产生缓存。请求 B 是另一批 2 条、各 4 个 token 的输入（形状
+[2,4]），应从空缓存开始，负例却把 A 的缓存传给 B 的完整输入。</p>
+<p>这一次模型对象相同、权重没变、batch 大小也相同（都是
+2，只是长度不同），所以 owner
 与版本检查可能全部通过。程序确实在计算一个合法的更长序列，只是<strong>不是用户想要的那个请求</strong>。</p>
 <p>正确答案是 B 单独的完整前向；污染答案是“A 前缀+B”中 B
 那些位置的输出。两者不同。缓存对象无法凭空猜到调用者的请求意图，服务层必须为每个独立请求明确传入

@@ -201,10 +201,14 @@ S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位�
 
 只有 loss 日志不够。后续要比较 S0/S1，必须复用完全相同的权重、配置和词表。配套 `save_checkpoint(path, model)` 保存配置、参数与字符顺序；`load_checkpoint(path)` 在 CPU 创建对应模型并恢复权重。测试在临时目录保存后加载，对同一批输入比较所有 logits。
 
+`main()` 只训练并打印结果，不会写 checkpoint；文件名以数字开头，也不能直接 `import 07_baby_gpt`。在仓库根目录这样调用：
+
 ```python
-# 在已导入本脚本的 Python 会话内；model 是你的 BabyGPT 实例。
-save_checkpoint("baby_gpt.pt", model)
-restored = load_checkpoint("baby_gpt.pt")
+import runpy
+ns = runpy.run_path("code/07_baby_gpt.py")  # 只定义函数和类，不执行 main()
+model = ns["BabyGPT"](vocab_size=ns["vocab_size"], d_model=48, num_heads=4, num_layers=2)  # 未训练的演示实例；main() 不返回模型，要存训练后的权重需在自己的训练循环里调用
+ns["save_checkpoint"]("baby_gpt.pt", model)
+restored = ns["load_checkpoint"]("baby_gpt.pt")
 restored.eval()
 ```
 

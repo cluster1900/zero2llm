@@ -4,7 +4,7 @@
 
 照片类比到这里就该停了。模型里的一点误差会经过矩阵乘法、注意力和多步生成继续传播，不能只凭“肉眼看起来差不多”判断。我们先用可手算的整数格子，再用真实的本地引擎把文件加载、量化、生成和流式响应串起来。
 
-配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。默认实验只用 Python 标准库、CPU、小数组，不下载权重。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
+配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。`25_quantized_serving.py` 的默认实验只用 Python 标准库、CPU、小数组，不下载权重；P24.13 的 `25b_mixed_bit.py` 另需 PyTorch（CPU 即可）。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
 
 ![量化把浮点数映射到整数格点；权重、激活和 KV 是三个独立对象；真实服务还要经过格式与内核检查，并正确处理流式边界](assets/diagrams/p24-quantization.svg)
 

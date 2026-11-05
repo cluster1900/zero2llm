@@ -340,7 +340,7 @@ def negative_controls(base, tokens):
             raise AssertionError(f'{name} survived the equivalence oracle')
         rows.append({'name': name, 'caught': True, 'max_logit_error': delta,
                      'before_error': before_split})
-    # Same model/shape/weight signature, WRONG request history: owner checks cannot
+    # Same model/weight signature and batch size (lengths differ), WRONG request history: owner checks cannot
     # know which prompt the caller intended. No forgery or signature bypass here.
     _, stale = good(base, tokens[:, :3], None)
     other = (tokens[:, :4] + 7) % base.config.vocab_size
