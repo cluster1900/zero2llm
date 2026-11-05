@@ -13262,10 +13262,10 @@ MTP：在同一位置多问几个未来问题</h2>
 <p>普通 next-token prediction 在位置 t 的隐藏向量 h_t 上，预测下一个
 token x_{t+1}。S6 的教学旁路另外增加独立线性 head，用<strong>同一个
 h_t</strong> 预测 x_{t+2}、x_{t+3}……。</p>
-<p>设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon h：</p>
+<p>设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon j：</p>
 <p><span class="math display">\[
 z_t^{(1)}=W_1h_t,\qquad
-z_t^{(h)}=W_hh_t\quad(h=2,\ldots,D+1).
+z_t^{(j)}=W_jh_t\quad(j=2,\ldots,D+1).
 \]</span></p>
 <p>主 head 是 S5 原来的 head，不是再复制一个。h_t
 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token
@@ -13286,7 +13286,7 @@ ID，不是它们的数值大小。</p>
 </thead>
 <tbody>
 <tr>
-<td>主 head：h=1</td>
+<td>主 head：j=1</td>
 <td>2</td>
 <td>3</td>
 <td>4</td>
@@ -13294,7 +13294,7 @@ ID，不是它们的数值大小。</p>
 <td>忽略</td>
 </tr>
 <tr>
-<td>旁路下标 0 的 head：h=2</td>
+<td>旁路下标 0 的 head：j=2</td>
 <td>3</td>
 <td>4</td>
 <td>5</td>
@@ -13302,7 +13302,7 @@ ID，不是它们的数值大小。</p>
 <td>忽略</td>
 </tr>
 <tr>
-<td>旁路下标 1 的 head：h=3</td>
+<td>旁路下标 1 的 head：j=3</td>
 <td>4</td>
 <td>5</td>
 <td>忽略</td>
@@ -13361,18 +13361,18 @@ head，是为了用最小改动看清标签对齐和梯度。多个 head
 从同一前缀预测未来边际结果，也不等于它们已经正确建模了“先生成第一个草稿，再条件于它生成第二个”的联合链条。</p>
 <h2 id="p23.5-损失先算哪些格再决定怎么平均">P23.5
 损失：先算哪些格，再决定怎么平均</h2>
-<p>对 horizon h 的有效位置集合 M_h，本章定义：</p>
+<p>对 horizon j 的有效位置集合 M_j，本章定义：</p>
 <p><span class="math display">\[
-L_h=-\frac{1}{|M_h|}\sum_{(b,t)\in M_h}
-\log\operatorname{softmax}(z_{b,t}^{(h)})[x_{b,t+h}].
+L_j=-\frac{1}{|M_j|}\sum_{(b,t)\in M_j}
+\log\operatorname{softmax}(z_{b,t}^{(j)})[x_{b,t+j}].
 \]</span></p>
-<p>若 M_h 为空，令
-L_h=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到
+<p>若 M_j 为空，令
+L_j=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到
 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。</p>
 <p>S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 D 个额外 head
 的损失取平均：</p>
 <p><span class="math display">\[
-L=L_1+\frac{\lambda}{D}\sum_{h=2}^{D+1}L_h+L_{MoE}\quad(D&gt;0).
+L=L_1+\frac{\lambda}{D}\sum_{j=2}^{D+1}L_j+L_{MoE}\quad(D&gt;0).
 \]</span></p>
 <p>D=0 时省略中间项；L_MoE 是 S5
 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon
@@ -13396,10 +13396,10 @@ L=\frac{-\log(3/6)-\log(2/6)}{2}
 <p><code>future_labels</code> 接受三个可选输入，形状都是 [B,T]：</p>
 <ul>
 <li><code>valid</code>：这个 token 是否真实存在，而不是 padding。跨度 t
-到 t+h 中的<strong>每个位置</strong>都必须有效。</li>
+到 t+j 中的<strong>每个位置</strong>都必须有效。</li>
 <li><code>segments</code>：文档段编号。跨度中所有位置必须属于同一段，不能跨边界预测；即使编号后来又重复，也不能跳过中间另一段。</li>
 <li><code>supervise</code>：哪些目标位置应计入损失，例如只监督 assistant
-token。检查的是 t+h，<strong>不是 t</strong>。最后一个 prompt token
+token。检查的是 t+j，<strong>不是 t</strong>。最后一个 prompt token
 预测第一个 assistant token 正是合法监督。</li>
 </ul>
 <p>重要边界：这些是<strong>标签 mask，不是 attention mask</strong>。S5
@@ -13669,9 +13669,6 @@ head。检查
 <p>运行本章测试文件，末尾应显示
 <code>OK</code>；测试分类、计数与错误版本清单见
 <code>docs/testing.md</code>。</p>
-<p>读完本章，应能清楚说出：<strong>推理能力要靠任务评估，MTP
-是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。</strong>
-把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。</p>
 <h2 id="p23.13-延伸阅读更便宜的草稿">P23.13 延伸阅读：更便宜的草稿</h2>
 <p>P23.7
 的验收规则不关心草稿从哪来：只要每轮都由目标模型贪心验收，输出就等于普通贪心。所以草稿可以换成更便宜或更准的方法，例如一次并行写出整块草稿的
@@ -13715,6 +13712,10 @@ A，草稿验证和随机采样校正的原始依据。本章实现仅为贪心�
 href="https://arxiv.org/html/2609.19969v1">DeepSeek-V4.1-Flash，arXiv:2609.19969v1</a>：§2.4.3，仅用于核对
 DSpark 与 V3 MTP 的差异；不把不同版本的训练方案拼接成一个实现。</li>
 </ul>
+<h2 id="本章小结-1">本章小结</h2>
+<p>读完本章，应能清楚说出：<strong>推理能力要靠任务评估，MTP
+是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。</strong>
+把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。</p>
 <hr />
 <h1 id="p24-quantization">训练与应用（P24）：量化与推理框架实战</h1>
 <p>你想把一张大照片带到手机里，可以降低每个像素的精度，也可以换一个更会安排工作的相册程序。前者改变存储的数值，后者改变怎样读取、计算和展示。<strong>量化与推理框架也是两层问题：装得下，不等于算得快；接口能返回文字，不等于模型质量没有变化。</strong></p>
@@ -14599,9 +14600,6 @@ scale；其他元数据另算。</li>
 <li>不应；这是不完整响应。length
 表示生成因预算被截断，不证明内容已经自然写完。</li>
 </ol>
-<p>你现在得到的不是一个“装上就万能”的工具名单，而是一条可检查的链：<strong>数值规则
-→ 格式与架构 → 设备内核 → 服务边界 →
-同条件评估</strong>。后面读真实模型配置时，继续沿这条链检查，不要让模型名替代证据。</p>
 <h2 id="p24.13-延伸阅读混合位宽-gguf">P24.13 延伸阅读：混合位宽
 GGUF</h2>
 <p>P24.7 说过 GGUF
@@ -14621,6 +14619,10 @@ scale（<a href="https://arxiv.org/abs/2310.10537">MX
 E4M3 scale（<a
 href="https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html">Transformer
 Engine NVFP4 文档</a>）。</p>
+<h2 id="本章小结-2">本章小结</h2>
+<p>你现在得到的不是一个“装上就万能”的工具名单，而是一条可检查的链：<strong>数值规则
+→ 格式与架构 → 设备内核 → 服务边界 →
+同条件评估</strong>。后面读真实模型配置时，继续沿这条链检查，不要让模型名替代证据。</p>
 <hr />
 <h1 id="p25-qwen3">模型案例（P25）：Qwen3，读配置而不是背参数表</h1>
 <p>拿到一张汽车宣传单，你能知道它叫“小型车”，却不能因此确定轮胎尺寸、座位数和油箱容量。模型名里的
@@ -15059,7 +15061,8 @@ token。为了显示清楚，上面排版有说明行。</p>
 tokenizer 标成“special”；<code>skip_special_tokens</code> 不能代替明确的
 reasoning 解析。</p>
 <p>另一个容易混淆的字段是 BOS：模型配置含
-<code>bos_token_id=151643</code>，但 tokenizer 配置的
+<code>bos_token_id=151643</code>（固定 tokenizer 配置中这个 ID 就是
+<code>&lt;|endoftext|&gt;</code>），但 tokenizer 配置的
 <code>bos_token</code> 为
 null、<code>add_bos_token=false</code>。不能看见前者就手工往每段对话前重复加
 BOS。具体输入应遵循所选 tokenizer 与模板的处理规则。<a
@@ -15106,10 +15109,10 @@ prompt；字符数不能代替 token 数。<code>context_budget(12,8,20)</code>
 正好用完 20，<code>context_budget(12,9,20)</code> 必须拒绝。</p>
 <p>最后，<strong>配置长度不等于能力保证</strong>。两个 config 的
 <code>max_position_embeddings</code> 都是
-40960；对应模型卡描述的原生上下文是 32768。30B-A3B 的卡另外说明借助 YaRN
-达到 131072，并解释 40960 默认值的预算安排。两个快照的
-tokenizer_config.json 里 <code>model_max_length</code> 是 131072，这是
-tokenizer
+40960；对应模型卡描述的原生上下文是 32768，两者相差 40960 − 32768 =
+8192。30B-A3B 的卡另外说明借助 YaRN 达到 131072，并解释 40960
+默认值的预算安排。两个快照的 tokenizer_config.json 里
+<code>model_max_length</code> 是 131072，这是 tokenizer
 截断和长度警告用的上限，不是模型配置，也不证明模型能处理这么长。本地快照的
 <code>rope_scaling=null</code>，本章没有启用或验证 YaRN，更不能从 40960
 的字段宣布 131072 已经可用。<a
@@ -15230,14 +15233,15 @@ MiB；都不含权重和临时内存。见
 2312。见
 <code>test_exercise_tiny_actual_named_shapes_and_unique_counts</code>。</li>
 </ol>
-<p>读完本章，应能把“Qwen3 用了 GQA 和
-MoE”改写为更有信息量的句子：<strong>这份完整 revision 的 dense／MoE
-checkpoint，按这些配置和实现证据使用了这些组件；我们只在这个小型、可复算的范围内验证过它们。</strong>
-这也是阅读下一个模型案例时应保留的习惯。</p>
 <h2 id="p25.14-config-compare">P25.14 延伸阅读：读其他模型的配置</h2>
 <p>读其他模型时，可以照本章的方法逐字段对照官方配置或报告，例如<a
 href="https://arxiv.org/abs/2607.24653">Kimi K3
 技术报告，arXiv:2607.24653</a>的 Table 1。</p>
+<h2 id="本章小结-3">本章小结</h2>
+<p>读完本章，应能把“Qwen3 用了 GQA 和
+MoE”改写为更有信息量的句子：<strong>这份完整 revision 的 dense／MoE
+checkpoint，按这些配置和实现证据使用了这些组件；我们只在这个小型、可复算的范围内验证过它们。</strong>
+这也是阅读下一个模型案例时应保留的习惯。</p>
 <hr />
 <h1 id="p26-deepseek">模型案例（P26）：DeepSeek 的跨版本证据地图</h1>
 <p><span

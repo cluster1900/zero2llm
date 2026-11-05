@@ -85,11 +85,11 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 
 普通 next-token prediction 在位置 t 的隐藏向量 h_t 上，预测下一个 token x_{t+1}。S6 的教学旁路另外增加独立线性 head，用**同一个 h_t** 预测 x_{t+2}、x_{t+3}……。
 
-设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon h：
+设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon j：
 
 $$
 z_t^{(1)}=W_1h_t,\qquad
-z_t^{(h)}=W_hh_t\quad(h=2,\ldots,D+1).
+z_t^{(j)}=W_jh_t\quad(j=2,\ldots,D+1).
 $$
 
 主 head 是 S5 原来的 head，不是再复制一个。h_t 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 h_t。
@@ -100,9 +100,9 @@ $$
 
 | 隐藏位置的输入 token | 1 | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- | --- |
-| 主 head：h=1 | 2 | 3 | 4 | 5 | 忽略 |
-| 旁路下标 0 的 head：h=2 | 3 | 4 | 5 | 忽略 | 忽略 |
-| 旁路下标 1 的 head：h=3 | 4 | 5 | 忽略 | 忽略 | 忽略 |
+| 主 head：j=1 | 2 | 3 | 4 | 5 | 忽略 |
+| 旁路下标 0 的 head：j=2 | 3 | 4 | 5 | 忽略 | 忽略 |
+| 旁路下标 1 的 head：j=3 | 4 | 5 | 忽略 | 忽略 | 忽略 |
 
 最后几格不是“答案是 0”，而是窗口里已经没有对应标签。实现使用 `-100` 表示**不计损失**。不要 `roll` 后忘记遮住尾部，否则最后一个位置会被要求预测窗口开头，制造不存在的循环文本。
 
@@ -126,19 +126,19 @@ S6 没有实现那条串行结构，也没有复现其权重共享、训练规�
 
 ## P23.5 损失：先算哪些格，再决定怎么平均
 
-对 horizon h 的有效位置集合 M_h，本章定义：
+对 horizon j 的有效位置集合 M_j，本章定义：
 
 $$
-L_h=-\frac{1}{|M_h|}\sum_{(b,t)\in M_h}
-\log\operatorname{softmax}(z_{b,t}^{(h)})[x_{b,t+h}].
+L_j=-\frac{1}{|M_j|}\sum_{(b,t)\in M_j}
+\log\operatorname{softmax}(z_{b,t}^{(j)})[x_{b,t+j}].
 $$
 
-若 M_h 为空，令 L_h=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。
+若 M_j 为空，令 L_j=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。
 
 S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 D 个额外 head 的损失取平均：
 
 $$
-L=L_1+\frac{\lambda}{D}\sum_{h=2}^{D+1}L_h+L_{MoE}\quad(D>0).
+L=L_1+\frac{\lambda}{D}\sum_{j=2}^{D+1}L_j+L_{MoE}\quad(D>0).
 $$
 
 D=0 时省略中间项；L_MoE 是 S5 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon 没有标签时，其 CE 为零，但**整项训练损失未必为零**，因为 MoE 辅助项可能仍存在。把所有 horizon 的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。
@@ -158,9 +158,9 @@ $$
 
 `future_labels` 接受三个可选输入，形状都是 [B,T]：
 
-- `valid`：这个 token 是否真实存在，而不是 padding。跨度 t 到 t+h 中的**每个位置**都必须有效。
+- `valid`：这个 token 是否真实存在，而不是 padding。跨度 t 到 t+j 中的**每个位置**都必须有效。
 - `segments`：文档段编号。跨度中所有位置必须属于同一段，不能跨边界预测；即使编号后来又重复，也不能跳过中间另一段。
-- `supervise`：哪些目标位置应计入损失，例如只监督 assistant token。检查的是 t+h，**不是 t**。最后一个 prompt token 预测第一个 assistant token 正是合法监督。
+- `supervise`：哪些目标位置应计入损失，例如只监督 assistant token。检查的是 t+j，**不是 t**。最后一个 prompt token 预测第一个 assistant token 正是合法监督。
 
 重要边界：这些是**标签 mask，不是 attention mask**。S5 的主干仍是普通因果注意力；给两篇文档编号不会自动禁止后一篇读取前一篇。需要隔离上下文时，本示例用不同样本行，不声称实现了 packed block-diagonal attention。教学 MoE 的负载辅助项也没有改成只统计有效标签，所以应使用无 padding 的等长小样本，或单独定义并验证完整的 padding 处理。
 
@@ -327,8 +327,6 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
-读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
-
 ## P23.13 延伸阅读：更便宜的草稿
 
 P23.7 的验收规则不关心草稿从哪来：只要每轮都由目标模型贪心验收，输出就等于普通贪心。所以草稿可以换成更便宜或更准的方法，例如一次并行写出整块草稿的 [DFlash，arXiv:2602.06036](https://arxiv.org/abs/2602.06036)、按逐位置置信度截断草稿的 [DSpark，arXiv:2607.05147](https://arxiv.org/abs/2607.05147)，以及沿预测距离递归、复用主干最后一层的 [ECHO，arXiv:2610.24766](https://arxiv.org/abs/2610.24766)。
@@ -353,3 +351,7 @@ batch 小时解码受内存带宽限制，多验证几个草稿位置几乎不�
 - [DeepSeek-V3 Technical Report，arXiv:2412.19437v2](https://arxiv.org/html/2412.19437v2)：§2.2，串行 MTP 模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。
 - [Fast Inference from Transformers via Speculative Decoding，arXiv:2211.17192v2](https://arxiv.org/html/2211.17192v2)：§2 与附录 A，草稿验证和随机采样校正的原始依据。本章实现仅为贪心。
 - [DeepSeek-V4.1-Flash，arXiv:2609.19969v1](https://arxiv.org/html/2609.19969v1)：§2.4.3，仅用于核对 DSpark 与 V3 MTP 的差异；不把不同版本的训练方案拼接成一个实现。
+
+## 本章小结
+
+读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
