@@ -937,9 +937,9 @@ Embedding：把编号换成一行数字</h2>
 class="math inline">\(V\)</span> 行、<span
 class="math inline">\(D\)</span> 列。<span
 class="math inline">\(V\)</span> 是词表大小，<span
-class="math inline">\(D\)</span> 是向量宽度。第 <span
-class="math inline">\(i\)</span> 个 token 的向量就是第 <span
-class="math inline">\(i\)</span> 行：</p>
+class="math inline">\(D\)</span> 是向量宽度。下标 <span
+class="math inline">\(i\)</span> 的 token 的向量就是下标 <span
+class="math inline">\(i\)</span> 的行：</p>
 <p><span class="math display">\[\mathrm{embedding}(i)=E_i\]</span></p>
 <p>一个教学例子：</p>
 <div class="sourceCode" id="cb3"><pre
@@ -2185,8 +2185,8 @@ Cross-Entropy，arXiv:2610.31642</a> §1–§2，本书不展开。</p>
 两类掩码：不能看未来，不要看补位</h2>
 <p>把多句话放入同一批时，短句常用 padding
 补到相同长度。这些补位不是正文，不能成为有信息的键。自回归语言模型还要遵守
-causal mask：第 i 行只能看 <span class="math inline">\(j\le i\)</span>
-的位置。</p>
+causal mask：下标 i 的行只能看 <span class="math inline">\(j\le
+i\)</span> 的位置。</p>
 <p>以长度 4、实际只有前两个 token 的句子为例，本书把 query
 补位也禁用：</p>
 <div class="table-wrapper"><table>
@@ -2559,7 +2559,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb25-1"><a h
 <p><code>reshape</code> 把一个长度为 <span
 class="math inline">\(D\)</span>
 的特征轴拆成两个轴，元素总数必须相同；<code>transpose(1, 2)</code>
-则交换第 1 和第 2 根轴，轴从 0
+则交换下标 1 和下标 2 的轴，轴从 0
 开始编号。这两种操作<strong>不能互相替代</strong>。</p>
 <p>用整数给元素编号最容易看清。以下数字只用于追踪位置，不代表真实词向量：</p>
 <div class="sourceCode" id="cb26"><pre
@@ -2955,8 +2955,8 @@ mask：一个告诉模型位置，一个限制哪些内容可见。</p>
 <tbody>
 <tr>
 <td style="text-align: left;">可学习绝对位置</td>
-<td style="text-align: left;">“我坐在第 <span
-class="math inline">\(pos\)</span> 个座位”</td>
+<td style="text-align: left;">“我坐在下标 <span
+class="math inline">\(pos\)</span> 的座位”</td>
 <td style="text-align: left;">一张 <span
 class="math inline">\([L_{max},D]\)</span>
 参数表，按位置查行，再与词向量相加</td>
@@ -3021,7 +3021,7 @@ class="math inline">\(T\)</span> 的数字，便于观察这些取舍。</p>
 <p>本章位置从 0 开始，<span
 class="math inline">\(D=d_{model}\)</span>。公式中的 <span
 class="math inline">\(i\)</span>
-是<strong>第几对维度</strong>，不是已经乘过 2 的列号：</p>
+是<strong>维度对的下标</strong>，不是已经乘过 2 的列号：</p>
 <p><span
 class="math display">\[PE_{(pos,2i)}=\sin\left(\frac{pos}{10000^{2i/D}}\right),\]</span></p>
 <p><span
@@ -3457,7 +3457,7 @@ class="math inline">\([12,8]\)</span>，且前 8
 行与原来的表相同。公式不依赖当前句长。</li>
 <li><strong>实现是否允许？</strong> 如果模型只预存了 8 行位置表、8 格
 mask 或有限缓存，即使采用正弦，也可能先在实现处越界。可学习表若只有 8
-行，直接查第 8 行就超出索引范围；预分配 12
+行，直接查下标 8 的行就超出索引范围；预分配 12
 行可以避免越界，却不代表新行已经训练好。</li>
 <li><strong>任务质量是否保持？</strong> 训练只见过 8-token
 的依赖模式，12-token
@@ -6288,8 +6288,8 @@ RoPE 说成一个自动削弱远距离内容的开关。</p>
 <p>设每个头宽度为 d，实际旋转的前 r 个坐标称为
 <code>rotary_dim</code>。r 必须为正偶数，且不超过 d。本章默认
 r=d；部分旋转时，后面 d−r 个坐标保持原样。</p>
-<p>我们使用相邻配对：<code>(x0,x1)、(x2,x3)、…</code>。对第 i 对，i 从 0
-开始：</p>
+<p>我们使用相邻配对：<code>(x0,x1)、(x2,x3)、…</code>。对下标 i 的对，i
+从 0 开始：</p>
 <pre class="text"><code>θ_i = base^(−2i/r)
 φ_i(p) = p × θ_i</code></pre>
 <p><code>base=10000</code> 是本例的设定，不是所有模型统一的常数。r=8
@@ -7460,9 +7460,10 @@ query 头分成 3
 </table></div>
 <p>因此映射是 <code>[0,0,1,1]</code>，不是
 <code>[0,1,0,1]</code>。两种排列都能得到合法张量形状，但对应不同的权重组织方式，不能混用。</p>
-<p>不用随机数也能抓住这个错误。设只有一个历史位置，KV 头 0 的 V 是
-<code>[10,11]</code>，KV 头 1 的 V 是 <code>[20,21]</code>。只有一个可见
-key 时，Softmax 权重必为 1。四个头的输出就必须依次为：</p>
+<p>不用随机数也能抓住这个错误。设只有一个历史位置，下标 0 的 KV 头的 V
+是 <code>[10,11]</code>，下标 1 的 KV 头的 V 是
+<code>[20,21]</code>。只有一个可见 key 时，Softmax 权重必为
+1。四个头的输出就必须依次为：</p>
 <pre class="text"><code>头 0：[10,11]
 头 1：[10,11]
 头 2：[20,21]
@@ -7839,7 +7840,7 @@ logits，也不是质量或吞吐排行榜。</p>
 <code>docs/testing.md</code>。</p>
 <h2 id="p14.12-自测题与参考答案">P14.12 自测题与参考答案</h2>
 <ol type="1">
-<li>Hq=8、Hkv=2 时，query 头 5 使用哪一个 KV 头？还能输出 8
+<li>Hq=8、Hkv=2 时，下标 5 的 query 头使用哪一个 KV 头？还能输出 8
 个头吗？</li>
 <li>Hq=4、Hkv=3 为什么被本实现拒绝？MQA 的 query 头数是不是 1？</li>
 <li>P=3、C=2、Hq=4、Hkv=2、B=1、d=12 时，Q、紧凑 K 缓存和 scores
@@ -9290,7 +9291,7 @@ href="https://arxiv.org/html/2609.19969v1#S4.SS2.SSS1">报告
 <p>再向源码走一步：<a
 href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/resolve/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/model.py">固定版
 inference/model.py</a> 中，Attention._compress_kv 由指定 source 层产生
-global latent，其他层读共享缓存；decoder 边界的第 20 号层是
+global latent，其他层读共享缓存；decoder 边界处下标 20 的层是
 source，之后的 decoder 层复用它。每层的 _window_kv 仍从本层 attention
 输入生成局部状态。真实路径还包括归一化、位置旋转、量化和 residual-stream
 mixing，不能将它们抹去后声称与生产张量逐项相同。</p>
@@ -9849,8 +9850,8 @@ affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生
 </tr>
 </tbody>
 </table></div>
-<p>A 选择的原始概率和为 0.7，所以不是“0.4 倍专家 0 加 0.3 倍专家
-1”，而是 4/7 与 3/7。C 的平局不随机打破。</p>
+<p>A 选择的原始概率和为 0.7，所以不是“0.4 倍下标 0 的专家加 0.3 倍下标 1
+的专家”，而是 4/7 与 3/7。C 的平局不随机打破。</p>
 <p>请求负载是 <code>[2,2,1,1]</code>，总和 6=N×k。它数的是
 <strong>token—专家分配次数</strong>，不是不同 token
 的数量，也不包括共享专家。一个 token
@@ -9858,7 +9859,7 @@ affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生
 <h3 id="再把输出算成一个具体数字">再把输出算成一个具体数字</h3>
 <p>为了单独检查组合规则，暂时不用
 SwiGLU，把三个专家换成简单倍率：F0(x)=x，F1(x)=10x，F2(x)=100x。令
-affinity 比例为 1:2:4，top-2 选专家 2 和 1，归一化权重为 2/3 和
+affinity 比例为 1:2:4，top-2 选下标 2 和 1 的专家，归一化权重为 2/3 和
 1/3：</p>
 <p><span class="math display">\[
 y_{routed}=\tfrac23\times100x+\tfrac13\times10x=70x.
@@ -9925,9 +9926,9 @@ SwiGLU。</p>
 token；<strong>combine</strong> 是把结果送回 token
 原位置并加权。它们不能只做 reshape：同一个 token
 可能出现在多个专家的小批次中，结果要相加，而不是覆盖。</p>
-<p>例如上面的 A、B、C：专家 0 收 A、C；专家 1 收 A、C；专家 2 收 B；专家
-3 收 B。专家 0 的两个输出再分别回到 A、C 的位置。并没有把 A 的结果交给
-C。</p>
+<p>例如上面的 A、B、C：下标 0 的专家收 A、C；下标 1 的专家收 A、C；下标
+2 的专家收 B；下标 3 的专家收 B。下标 0 的专家的两个输出再分别回到 A、C
+的位置。并没有把 A 的结果交给 C。</p>
 <h2 id="p18.4-专家多了参数和计算怎样算">P18.4
 专家多了，参数和计算怎样算</h2>
 <p>沿用 P13 的无 bias SwiGLU，中间宽度为 d_f
@@ -10034,17 +10035,17 @@ CE，不把 CE+辅助项直接拿去算 perplexity。</p>
 <p>在 A、B、C 的例子里，f=[1/3,1/3,1/6,1/6]，平均
 p=[0.3,0.3,0.2,0.2]，所以未乘系数的 L_aux=16/15≈1.066667。</p>
 <p>不要把“辅助损失等于 1”读成“硬路由已均衡”。例如四个专家的 p 都等于
-1/4，在我们的固定平局规则下，所有 token 都选
-0、1，计数仍失衡，但上述辅助项恰好也是
+1/4，在我们的固定平局规则下，所有 token 都选下标 0、1
+的专家，计数仍失衡，但上述辅助项恰好也是
 1。应同时查看计数、概率和训练效果。</p>
 <h3
 id="办法二偏置式均衡改变选择而不篡改组合权重">办法二：偏置式均衡，改变选择而不篡改组合权重</h3>
 <p>为每个专家保存一个不通过梯度学习的 balancing bias
 b_e。<strong>只在选择时</strong>使用 p_e+b_e；组合时仍按未加 bias 的原始
 p 归一化。</p>
-<p>以 1:2:4 的 affinity 为例，若给专家 1 加 0.5，它可以排到专家 2
-前面，但同样选中 1、2 时，权重仍为 1/3、2/3。不是把加过 0.5
-的分数再当成输出权重。</p>
+<p>以 1:2:4 的 affinity 为例，若给下标 1 的专家加 0.5，它可以排到下标 2
+的专家前面，但同样选中下标 1、2 的专家时，权重仍为 1/3、2/3。不是把加过
+0.5 的分数再当成输出权重。</p>
 <p>一步训练结束后，本章演示以下显式更新：超出平均请求负载的专家减小
 bias，低于平均的增加 bias，相等则不变。例子 <code>[4,0,2,2]</code>
 的平均为 2，更新步长 0.1 时，bias 增量为
@@ -10072,8 +10073,9 @@ capacity，表示每个专家在本次调用最多接受多少次分配。顺序
 <code>[2,2,1,1]</code>，accepted 变成 <code>[1,1,1,1]</code>。C
 的两个路由分支都被拒绝，共享分支仍能输出。</p>
 <p>再看部分丢弃：第一行 p=[0.5,0.1,0.4]，第二行
-p=[0.4,0.3,0.3]，k=2、capacity=1。第一行占用了专家 0 和 2；第二行本来选
-0、1，但只剩专家 1 被接受，所以其路由权重总和是 <strong>3/7，而不是
+p=[0.4,0.3,0.3]，k=2、capacity=1。第一行占用了下标 0 和 2
+的专家；第二行本来选下标 0、1 的专家，但只剩下标 1
+的专家被接受，所以其路由权重总和是 <strong>3/7，而不是
 1</strong>。这是本实验的语义，不代表它是最佳训练策略。</p>
 <h3 id="为什么-s5-语言模型明确禁止这个选项">为什么 S5
 语言模型明确禁止这个选项</h3>
@@ -10249,7 +10251,7 @@ token 激活预算各多少？是整模型参数吗？</li>
 4，专家参数预算保持什么？包含 router 后还严格相等吗？</li>
 <li>A、B、C 的请求计数为何是 [2,2,1,1]？capacity=1 后计数和 C
 的路由贡献怎样变？</li>
-<li>部分丢弃例子第二行只保留专家 1，权重应为 1 还是
+<li>部分丢弃例子第二行只保留下标 1 的专家，权重应为 1 还是
 3/7？共享分支受不受影响？</li>
 <li>所有 token 的四个 affinity 都是 1/4，top-2 的硬负载会均匀吗？L_aux=1
 能证明均衡吗？</li>
@@ -10270,12 +10272,12 @@ cache 能否继续用？</li>
 <code>test_parameter_active_budget_and_fine_grained_example</code>。</li>
 <li>专家总参数都是 192，每 token 专家参数都是 96；含 router 总参数分别为
 200、208。见同一预算测试。</li>
-<li>A、C 都选 0、1，B 选 3、2；accepted=[1,1,1,1]，C
-的路由贡献为零，共享和残差不因此删除。见
+<li>A、C 都选下标 0、1 的专家，B 选下标 3、2
+的专家；accepted=[1,1,1,1]，C 的路由贡献为零，共享和残差不因此删除。见
 <code>test_capacity_fixed_order_no_renormalization_shared_survives</code>。</li>
 <li>3/7，不重新归一化；共享分支不受容量限制。该测试同时检查部分丢弃与
 capacity=0。</li>
-<li>不会。固定平局规则使每个 token 都选 0、1；损失仍可为
+<li>不会。固定平局规则使每个 token 都选下标 0、1 的专家；损失仍可为
 1。见手算路由测试中五 token 的 [5,5,0,0] 断言。</li>
 <li>不能通过这条任务路径，唯一组合权重恒为 1，router
 梯度为零；辅助项在测试的集中路由案例中提供非零梯度。见
@@ -10590,7 +10592,7 @@ embedding。</p>
 </table></div>
 <p>行长 T=8，模型输入是 <code>[B,T]</code>，输出 logits 是
 <code>[B,T,V]</code>，这里 B=1、V=18。位置 ID 在每篇 BOS 重置为
-0；整箱中的“第 4 格”不是文档 B 的第 4 个位置。</p>
+0；整箱中的“下标 4 的格”不是文档 B 中下标 4 的位置。</p>
 <p>本章的布尔 attention mask 中，<code>True</code>
 表示<strong>允许</strong>，不是“挡住”：</p>
 <pre class="text"><code>允许(i,j) = i、j 属于同一个非 PAD 文档，并且 j &lt;= i</code></pre>
@@ -13261,7 +13263,7 @@ ID，不是它们的数值大小。</p>
 <td>忽略</td>
 </tr>
 <tr>
-<td>旁路 head 0：h=2</td>
+<td>旁路下标 0 的 head：h=2</td>
 <td>3</td>
 <td>4</td>
 <td>5</td>
@@ -13269,7 +13271,7 @@ ID，不是它们的数值大小。</p>
 <td>忽略</td>
 </tr>
 <tr>
-<td>旁路 head 1：h=3</td>
+<td>旁路下标 1 的 head：h=3</td>
 <td>4</td>
 <td>5</td>
 <td>忽略</td>
@@ -13349,8 +13351,9 @@ MoE 辅助项可能仍存在。把所有 horizon
 <h3
 id="两个有效位置手算交叉熵与梯度">两个有效位置，手算交叉熵与梯度</h3>
 <p>假设三分类概率在第一个有效位置为
-<code>[1/6,2/6,3/6]</code>，标签是类别 2；另一个有效位置为
-<code>[3/6,2/6,1/6]</code>，标签是类别 1。两者中间有一个忽略位置：</p>
+<code>[1/6,2/6,3/6]</code>，标签是下标 2 的类别；另一个有效位置为
+<code>[3/6,2/6,1/6]</code>，标签是下标 1
+的类别。两者中间有一个忽略位置：</p>
 <p><span class="math display">\[
 L=\frac{-\log(3/6)-\log(2/6)}{2}
 =\frac{\log 2+\log 3}{2}.
@@ -13483,9 +13486,9 @@ token。此时 cache 恰好装着 prompt，第一个新 token 成为 pending。<
 prompt。以位置编号从 0 开始：</p>
 <ul>
 <li><code>verify[0]</code> 是“看到 3 后”的 logits，预测
-4，用来验证草稿第 0 项。</li>
+4，用来验证草稿下标 0 的项。</li>
 <li><code>verify[1]</code> 是“看到 4 后”的 logits，预测
-5，用来验证草稿第 1 项；9 错了。</li>
+5，用来验证草稿下标 1 的项；9 错了。</li>
 <li>后面的行使用了错误草稿前缀，不能继续提交。</li>
 </ul>
 <p>接受 4，修正为 5 后，tokens 成为 <code>[1,2,3,4,5]</code>。cache
@@ -13624,8 +13627,8 @@ assistant，应不应该监督？应检查目标位置；若跨度穿过 padding
 <li>p=[0.6,0.4]、q=[0.2,0.8] 时，拒绝的概率质量如何补回？0.4 全补到
 A；这是数学例子，不是随机采样实现。检查
 <code>test_hand_sampling_correction_is_math_only_not_a_sampler_claim</code>。</li>
-<li>草稿第一个位置应该用哪个 head？是主 head，后面才是旁路 head
-0、1。固定种子下前缀 <code>[1,2,5]</code> 的三个提案为
+<li>草稿第一个位置应该用哪个 head？是主 head，后面才是旁路下标 0、1 的
+head。固定种子下前缀 <code>[1,2,5]</code> 的三个提案为
 <code>[6,0,9]</code>，limit=1、2、3 分别取前一、二、三项；不能跳过主
 head。检查
 <code>test_fixed_seed_draft_head_to_position_scalar_oracle</code>，并用
@@ -14862,7 +14865,7 @@ href="#p18-moe">S5 教学 MoE</a> 默认的共享专家设置照搬进来。</p>
 <li>只计算选中专家，把结果按重新归一化的权重相加。</li>
 </ol>
 <p>手算一个更小的例子：4 个专家的 logits 为
-<code>[2,1,-1,0]</code>，取前 2 个，则选择专家 0、1；混合权重等于
+<code>[2,1,-1,0]</code>，取前 2 个，则选择下标 0、1 的专家；混合权重等于
 <code>[exp(2),exp(1)]</code> 再归一化，约为
 <code>[0.731059,0.268941]</code>。不能直接拿全体 softmax
 的前两项相加，因为它们的和小于 1。</p>
@@ -15170,11 +15173,11 @@ d=128、Hq=16，输出为 2048；O 再映回 1024。见
 <code>test_exact_real_parameter_totals_independent_hand_arithmetic</code>。</li>
 <li><strong>30B-A3B 应该再加宽度 6144 的 dense FFN 吗？</strong>
 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成
-4，并排除零基第 1 层后，只有第 3 层是 MoE。见
+4，并排除下标 1 的层后，只有下标 3 的层是 MoE。见
 <code>test_mixed_sparse_layer_selection_no_unused_dense_mlp_count</code>。</li>
 <li><strong>四个专家 logits 为
-<code>[2,1,-1,0]</code>、top-k=2，实际调用谁？</strong> 仅专家
-0、1，权重重新归一化约为 0.731059、0.268941。见
+<code>[2,1,-1,0]</code>、top-k=2，实际调用谁？</strong> 仅下标 0、1
+的专家，权重重新归一化约为 0.731059、0.268941。见
 <code>test_sparse_moe_dispatch_and_selected_probability_hand_oracle</code>。</li>
 <li><strong>BF16、单条 4096-token
 序列，两个真实配置的缓存谁大？</strong> dense 为 448 MiB，MoE 为 384
@@ -15482,7 +15485,8 @@ href="https://arxiv.org/html/2609.19969v1">报告 §2.3.1</a></p>
 <li><code>n_layers=40</code>，<code>window_size=128</code>。</li>
 <li>global KV source 为 <code>[2,8,14,20]</code>。</li>
 <li>index source 为 <code>[2,8,14,20,24,28,32,36]</code>。</li>
-<li>前 2 层只有 SWA；第 2–19 层压缩比为 2；第 20–39 层为 1。</li>
+<li>前 2 层只有 SWA；下标 2–19 的层压缩比为 2；下标 20–39 的层为
+1。</li>
 <li>压缩比数组总长 <strong>43</strong>，尾部 3
 项对应额外预测模块，不能因此宣布“主干有 43 层”。</li>
 </ul>
@@ -15705,7 +15709,8 @@ MLA 内核正确。</strong></p>
 不该污染混合权重</h3>
 <p>假设三个专家的 sigmoid 后分数为 <code>[3/4,1/2,1/4]</code>，选择 bias
 为 <code>[-1,0,1]</code>，选两个专家。选择用的分数是
-<code>[-1/4,1/2,5/4]</code>，所以选中专家 <strong>2、1</strong>。</p>
+<code>[-1/4,1/2,5/4]</code>，所以选中下标 <strong>2、1</strong>
+的专家。</p>
 <p>但混合权重来自原始分数，因此是 <code>(1/4)/(3/4)=1/3</code> 与
 <code>(1/2)/(3/4)=2/3</code>。让专家输出分别为
 <code>[2,0]、[0,4]、[6,2]</code>，共享输出为 <code>[1,-1]</code>，教学
@@ -15981,7 +15986,7 @@ href="#p19-pretraining">P19</a>
 <ol type="1">
 <li>删掉 V3 快照中的 <code>kv_lora_rank</code> 后直接运行，会先遇到
 unknown，还是校验错误？为什么这两种机制都需要？</li>
-<li>为什么 V4.1 的 43 项压缩数组只得到 40 行主干调度？第 25 层的 KV
+<li>为什么 V4.1 的 43 项压缩数组只得到 40 行主干调度？下标 25 的层的 KV
 与索引分别来自哪里？</li>
 <li>ratio=2 时，query 位置 0、1、2
 各能看见几个完整压缩组？把向下取整改成向上取整错在哪里？</li>
@@ -15999,8 +16004,8 @@ unknown，还是校验错误？为什么这两种机制都需要？</li>
 <li>先触发 SHA-256 不匹配；它保护离线快照。测试直接把缺字段字典送给
 extractor 时才得到
 unknown，保护解析语义。两者分别回答“文件是否是那份”和“字段是否已知”。</li>
-<li><code>n_layers=40</code> 是主干边界，尾部三项另属额外模块。第 25
-层是 Reuse：KV 来自 20，最近索引来自 24，本层 SWA 仍是 25。</li>
+<li><code>n_layers=40</code> 是主干边界，尾部三项另属额外模块。下标 25
+的层是 Reuse：KV 来自 20，最近索引来自 24，本层 SWA 仍是 25。</li>
 <li>分别为
 0、1、1；向上取整让尚未收齐的组提前进入历史，违反因果可见性。</li>
 <li>不变，仍为 <code>[3,7/3]</code>；scale=2.5 时为
@@ -16800,7 +16805,7 @@ tril</h3>
 <td>看见</td>
 </tr>
 <tr>
-<td>第 0 行，错误 tril</td>
+<td>下标 0 的行，错误 tril</td>
 <td>看见</td>
 <td>遮住</td>
 <td>遮住</td>
@@ -16808,7 +16813,7 @@ tril</h3>
 <td>遮住</td>
 </tr>
 <tr>
-<td>第 1 行，错误 tril</td>
+<td>下标 1 的行，错误 tril</td>
 <td>看见</td>
 <td>看见</td>
 <td>遮住</td>
@@ -17419,8 +17424,8 @@ class="math inline">\(D=32=H_q d\)</span>；这是这个小 GQA
 </tr>
 </tbody>
 </table></div>
-<p>Q 的第 0、1 头共享 KV 第 0 头；Q 第 2、3 头共享 KV 第 1
-头。对单层未展开 K+V，float32 payload 是 <span
+<p>Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 KV 下标 1
+的头。对单层未展开 K+V，float32 payload 是 <span
 class="math inline">\(2\times96\times4=768\)</span>
 字节，不是分数矩阵的大小。这里不包含 allocator、索引、量化 scale
 或工作区，详见 <a
