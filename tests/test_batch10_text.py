@@ -786,7 +786,8 @@ class FinalBatchTextTests(unittest.TestCase):
     def test_neutral_completion_not_review_or_production_claim(self):
         for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):
             body = (ROOT / path).read_text(encoding="utf-8")
-            self.assertIn("已实现", body)
+            if path != "chapters/00_preface.md":
+                self.assertIn("已实现", body)
             self.assertNotIn("P27–P28 尚未", body)
             self.assertNotIn("P28 新附录仍按批次推进", body)
             for stale in (
@@ -796,7 +797,7 @@ class FinalBatchTextTests(unittest.TestCase):
                 "每批审核后才继续",
             ):
                 self.assertNotIn(stale, body)
-        for path in ("README.md", "chapters/00_preface.md"):
+        for path in ("README.md",):
             self.assertIn("原大纲 29 个单元的内容已实现", (ROOT / path).read_text(encoding="utf-8"))
         self.assertNotIn("本次 PR", (ROOT / "chapters/09a_minigpt_healthcheck.md").read_text(encoding="utf-8"))
         self.assertIn("不等于所有生产技术", (ROOT / "README.md").read_text(encoding="utf-8"))

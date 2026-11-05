@@ -1,4 +1,5 @@
 import pathlib
+import re
 import unittest
 
 PREFACE = pathlib.Path(__file__).resolve().parents[1] / "chapters" / "00_preface.md"
@@ -16,6 +17,26 @@ class PrefaceWordingTests(unittest.TestCase):
         for phrase in OLD_PHRASES:
             with self.subTest(phrase=phrase):
                 self.assertNotIn(phrase, text)
+
+
+    def test_route_table_matches_chapter_titles(self):
+        # bot-hub #123 B1：「P 编号 → 文件 → 章名」表逐行对照真实文件与大标题。
+        # 章名规则：取文件首行，去掉行首「# 」和行尾 {#…} 锚点，其余逐字一致。
+        chapters = PREFACE.parent
+        rows = re.findall(r"^\| (P\d\d) \| (\S+\.md) \| (.+?) \|$", PREFACE.read_text(encoding="utf-8"), re.M)
+        self.assertEqual([r[0] for r in rows], [f"P{i:02d}" for i in range(29)])
+        # 有序比较：表的行序 = 文件名排序 = P00–P28 阅读顺序，交换两行文件也会失败。
+        self.assertEqual([r[1] for r in rows], sorted(p.name for p in chapters.glob("*.md")))
+        for pnum, name, title in rows:
+            with self.subTest(pnum=pnum, file=name):
+                path = chapters / name
+                self.assertTrue(path.is_file())
+                first = path.read_text(encoding="utf-8").splitlines()[0]
+                self.assertTrue(first.startswith("# "))
+                expected = re.sub(r"\s*\{#[^}]*\}\s*$", "", first[2:]).strip()
+                self.assertEqual(title, expected)
+                for found in re.findall(r"（(P\d\d)）", expected):
+                    self.assertEqual(found, pnum)
 
 
 if __name__ == "__main__":
