@@ -406,7 +406,7 @@ grpo_config = GRPOConfig(
 
 ## P22.11 延伸：on-policy 蒸馏与多教师合并（MOPD） {#p22.11-mopd}
 
-**先看动机。** 普通蒸馏是 off-policy 的：老师先写好答案，学生照着做 SFT。学生自己生成时，一旦走到老师没写过的前缀，就没人教了。On-policy 蒸馏反过来：让学生自己采样，再请老师给学生写下的**每一个 token** 打分。这个思路的公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)，K3 报告的 §4.1.3 引用了它。
+**先看动机。** 常见的蒸馏是 off-policy 的：经典做法（[Hinton 等，2015](https://arxiv.org/abs/1503.02531)）让学生在固定数据上拟合老师的软概率分布；大模型里也常让老师先写好答案，学生照着做 SFT。两种做法里的前缀都不是学生自己生成的。学生自己生成时，一旦走到老师没写过的前缀，就没人教了。On-policy 蒸馏反过来：让学生自己采样，再请老师给学生写下的**每一个 token** 打分。这个思路的公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)，K3 报告的 §4.1.3 引用了它。
 
 **Kimi K3（S29 §4.1）。** 先做 SFT。再按三个领域（通用任务、通用 agent、编程 agent）各训一个 RL 专家。每个领域又分 low、high、max 三档推理强度，共 9 个专家。最后用 MOPD 把它们合进一个模型。领域 d、强度 e 的样本，由对应的那位老师打分。逐 token 奖励是 Eq.15：
 

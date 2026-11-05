@@ -43,7 +43,7 @@ python3 code/08_byte_bpe.py
 python3 -m unittest discover -s tests -v
 ```
 
-第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行回归测试。本批在 Python 3.12 上验证。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
+第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、700 多条测试都会执行，其中大多与本章无关。CI 在 Python 3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；第 27 章（09a）报告的实测数字来自 Python 3.13.5、PyTorch 2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
 
 > [!TIP]
 > **选修：Hugging Face 对照实验。** 只想理解算法，可以跳过。想比较真实分词库时，新建虚拟环境，再安装 `requirements-tokenizer.txt` 中固定的 `tokenizers==0.21.4`，运行 `code/09_hf_tokenizer.py`。它仍只用 CPU 和本地合成语料，不下载语言模型。安装依赖需要网络，安装完成后的实验不需要网络。

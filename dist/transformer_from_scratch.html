@@ -599,8 +599,11 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> code/08_byte_bpe.py</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-v</span></span></code></pre></div>
 <p>第一条确认你使用的是哪个
-Python；接下来两条运行例子；最后一条运行回归测试。本批在 Python 3.12
-上验证。找不到文件时先确认终端当前目录是仓库根目录，而不是
+Python；接下来两条运行例子；最后一条运行<strong>全书</strong>的回归测试：<code>tests/</code>
+下所有测试文件、700 多条测试都会执行，其中大多与本章无关。CI 在 Python
+3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；第 27
+章（09a）报告的实测数字来自 Python 3.13.5、PyTorch
+2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是
 <code>chapters/</code>。</p>
 <div class="tip">
 <div class="title">
@@ -960,7 +963,8 @@ class="math inline">\(E\)</span>，也会选中同一行。实际程序通常直
 的存储也不是“免费”的：整张表依然有 <span class="math inline">\(V\times
 D\)</span> 个数。</p>
 <p><strong>这张表是谁写的？</strong>
-在神经网络里，它通常和其他权重一样初始化，然后通过训练损失的梯度更新。当前预测错了，训练过程就调整相关参数；反复见到数据后，向量可能编码有用的语言规律。维度并不天然叫“甜度”“性别”或“情绪”，也不能保证某一维单独对应一个人类概念。</p>
+在神经网络里，它通常和其他权重一样初始化，然后通过训练损失的梯度更新。只要模型给正确答案的概率还没到
+1，损失就有非零梯度，训练过程据此调整相关参数；反复见到数据后，向量可能编码有用的语言规律。维度并不天然叫“甜度”“性别”或“情绪”，也不能保证某一维单独对应一个人类概念。</p>
 <h2 id="用水果坐标建立直觉但不把类比当模型">1.3
 用水果坐标建立直觉，但不把类比当模型</h2>
 <p>为了看懂几何，我们暂时手工指定三个维度：甜度、脆度、价格。这不是训练得到的
@@ -1054,7 +1058,8 @@ b)/(\|a\|\|b\|)=50/(5\times10)=1\)</span>。</li>
 </ul>
 <p>它们方向完全相同，但长度不同，所以距离不是 0。点积是
 50，也没有被限制在 -1 到 1
-之间。<strong>只有把两个向量都归一化成单位长度后，点积才等于余弦相似度。</strong></p>
+之间。<strong>把两个向量都归一化成单位长度后，点积就等于余弦相似度</strong>（严格说，只要两个长度的乘积为
+1 即可）。</p>
 <p>一般地：</p>
 <p><span class="math display">\[a\cdot b=\sum_{j=1}^{D}a_j b_j,\qquad
 \|a\|=\sqrt{\sum_{j=1}^{D}a_j^2},\qquad
@@ -1123,9 +1128,12 @@ ID？</strong></p>
 <p>本章核验日期：2026-10-18。查表接口可参阅 <a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html">PyTorch
 2.14 的 Embedding 文档</a>；本章必修代码不依赖
-PyTorch。关于向量关系的原始研究，可读 <a
+PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 <a
+href="https://aclanthology.org/N13-1090/">Linguistic Regularities in
+Continuous Space Word Representations（NAACL 2013）</a>；同组的 <a
 href="https://arxiv.org/abs/1310.4546">Distributed Representations of
-Words and Phrases and their Compositionality</a>。</p>
+Words and Phrases and their Compositionality</a>
+主要讲负采样与短语向量，也可一并阅读。</p>
 <hr />
 <h1 id="第1A章-Tokenizer-从字符-字节到-BPE">第1A章：Tokenizer——从字符、字节到
 BPE</h1>
@@ -1546,7 +1554,8 @@ class="math inline">\(h_t\)</span>，它的基本关系是：</p>
 href="https://arxiv.org/abs/1211.5063">Pascanu 等人的 RNN
 训练研究</a>。</p>
 <p>LSTM
-等门控循环结构通过控制信息的保留和更新来缓解困难。因此，比较时应说“长距离依赖可能更难学”，而不是把
+等门控循环结构通过控制信息的保留和更新，主要缓解梯度消失；梯度爆炸通常另靠梯度裁剪处理（同见
+Pascanu 等人的研究）。因此，比较时应说“长距离依赖可能更难学”，而不是把
 RNN/LSTM 描述成必然失忆。</p>
 <p>还有一个相关但不同的问题：如果整个输入最终只留下一份固定宽度的摘要，后面的任务就只能从这份摘要取信息。早期神经机器翻译的注意力方法允许解码器按需要读取不同位置的编码结果，而不只依赖单一摘要；它仍然可以和
 RNN 一起使用。参见 <a href="https://arxiv.org/abs/1409.0473">Bahdanau
@@ -1799,8 +1808,9 @@ class="math display">\[0.4\times0+0.2\times1+0.4\times2=1\]</span></p>
 的概率认为‘它’是动物”，或“动物这个词对最终答案负有 60%
 的因果责任”，都不是从该权重自动得到的结论。</p>
 <p>相关研究也并非只有一句口号。<a
-href="https://aclanthology.org/N19-1357/">Jain 与 Wallace
-的实验</a>展示了所研究模型中，注意力分布与其他重要性指标不一致、不同分布却产生相近预测等现象；<a
+href="https://aclanthology.org/N19-1357/">Jain 与 Wallace 的实验</a>在
+BiLSTM
+加注意力的文本分类等模型上发现，注意力权重与梯度等其他重要性指标的相关性往往较弱，而且换成差别很大的注意力分布，预测也可能几乎不变；<a
 href="https://aclanthology.org/D19-1002/">Wiegreffe 与 Pinter
 的后续讨论</a>指出，能否把注意力当作解释，还取决于解释的定义、模型整体和检验方式。它们不应被简化成“所有注意力图都能解释模型”或“所有注意力图都没有价值”。</p>
 <p>如果想研究一个具体预测为什么改变，需要先明确要解释的输出，再设计对照或干预，例如修改输入、控制某个内部量，并观察结果如何变化。删掉一个词也会改变句子和其他表示，所以一次删除实验本身仍不是完整的因果证明。<strong>本章的要求更简单：可以把权重图当作线索，但不要把线索直接当成结论。</strong></p>
@@ -2930,8 +2940,8 @@ class="math inline">\(D=8\)</span>
 <hr />
 <h2 id="自测遮住答案再读一遍账本">4.7 自测：遮住答案再读一遍账本</h2>
 <ol type="1">
-<li><span class="math inline">\(B=2,T=5,D=12,H=3\)</span> 时，分头后的
-Q、分数表和拼接结果分别是什么形状？</li>
+<li><span class="math inline">\(B=2,T=5,D=12,H=3\)</span>
+时，分头并换轴后的 Q、分数表和拼接结果分别是什么形状？</li>
 <li>为什么 <code>reshape(B,H,T,d_h)</code> 不能直接替代“先拆成
 <code>[B,T,H,d_h]</code>，再换轴”？</li>
 <li>标准 MHA 从 2 个头改成 4 个头，固定 <span
@@ -3078,7 +3088,7 @@ style="text-align: left;">有不同实现；距离可被分桶或截断，不一
 </table></div>
 <p>原版 Transformer
 对固定正弦与可学习绝对位置都做过实验；论文报告二者在所测翻译设置下效果接近，不能把正弦写成唯一正确答案。[来源
-1，§3.5、表 3(E)]</p>
+1，§3.5；表 3(E) 见 §6.2]</p>
 <p>可学习表与词表类似，但索引不同：词向量用 token ID
 查表，位置向量用位置索引查表。例如 <span
 class="math inline">\(L_{max}=8,D=8\)</span> 时，位置表有 <span
@@ -4293,7 +4303,7 @@ encoder-decoder 的 cross-attention。三种架构的差别留到下一章。</p
 </tr>
 </tbody>
 </table></div>
-<p>上一章手写 MHA 使用无 bias 的投影，计数是 <span
+<p>第 4 章手写 MHA 使用无 bias 的投影，计数是 <span
 class="math inline">\(4D^2\)</span>；这里 PyTorch MHA
 启用了偏置，所以多出 <span
 class="math inline">\(4D\)</span>。比较参数量必须先统一这些条件。本块的
@@ -6995,9 +7005,10 @@ key8/9。</li>
 <li><a href="https://arxiv.org/abs/2104.09864">RoFormer / RoPE
 论文，arXiv:2104.09864</a>：Q/K
 旋转与相对位置点积的原始来源；本章二维数值是独立手算与脚本生成。</li>
-<li><a href="https://arxiv.org/html/2309.00071v2">YaRN 论文
-v2，arXiv:2309.00071v2</a>：这里固定版本解释
-PI、分频段插值、注意力温度和动态缩放缓存问题，不将论文的模型规模与训练成绩当成本仓库复现。</li>
+<li><a href="https://arxiv.org/abs/2306.15595">Position Interpolation
+论文（Chen 等），arXiv:2306.15595</a>：位置插值 PI 的原始来源。</li>
+<li><a href="https://arxiv.org/html/2309.00071v2">YaRN 论文 v2（Peng
+等），arXiv:2309.00071v2</a>：这里固定版本解释分频段插值、注意力温度和动态缩放缓存问题，不将论文的模型规模与训练成绩当成本仓库复现。</li>
 <li>所有 CPU 实验数字来自本仓库 <code>code/13_rope.py</code>
 的上述明确配置；没有把论文指标移植成自己的结果。</li>
 </ul>
@@ -7161,7 +7172,10 @@ class="math display">\[\sqrt{\operatorname{mean}(x^2)+\epsilon}\ \ne\
 <h3 id="低精度为什么先升到-float32">低精度为什么先升到 float32</h3>
 <p>float16 能表示 40000 左右的数，但它的平方已经远超 float16
 范围。错误地先在 float16 中平方，之后再转换
-float32，已经救不回无穷了。源码先转换，再做平方、均值和倒平方根：</p>
+float32，已经救不回无穷了。bfloat16 的情况不同：它的指数位与 float32
+相同，最大约 3.4×10³⁸，40000 的平方不会溢出；源码同样把它升到
+float32，是因为 bfloat16 只有 8 位有效尾数，平方和均值在 float32
+中更精确。源码先转换，再做平方、均值和倒平方根：</p>
 <div class="sourceCode" id="cb84"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a>work <span class="op">=</span> x.<span class="bu">float</span>() <span class="cf">if</span> x.dtype <span class="kw">in</span> (torch.float16, torch.bfloat16) <span class="cf">else</span> x</span>
 <span id="cb84-2"><a href="#cb84-2" aria-hidden="true" tabindex="-1"></a>inv_rms <span class="op">=</span> torch.rsqrt(work.square().mean(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>) <span class="op">+</span> <span class="va">self</span>.eps)</span>
@@ -8581,9 +8595,10 @@ exp(10002)。减去最大值后，最大指数是 exp(0)=1。输入 Q/K/V
 <code>1e-12</code>。这是这组小输入的数值检查，不是任意长度、任意 dtype
 都具有相同误差的证明。</p>
 <p>只有 full/block 相等还不够：两条路径可能一起忘记
-√d。测试另外使用标准库 Decimal 的 <strong>65 位精度独立参考</strong>，逐
-query 直接算点积、指数和归一化，不调用生产实现的输入辅助函数、Softmax 或
-block 更新。手算的 6 又提供了更容易人工核验的锚点。</p>
+√d。测试另外使用标准库 Decimal 的 <strong>65
+位十进制有效数字精度独立参考</strong>，逐 query
+直接算点积、指数和归一化，不调用生产实现的输入辅助函数、Softmax 或 block
+更新。手算的 6 又提供了更容易人工核验的锚点。</p>
 <p>这与 GQA 的区别也很重要：GQA 改变 KV 头的组织方式；在线 Softmax
 只是计算同一组 Q/K/V 的方式。不能用这章的数值等价实验证明任意 MHA 改 GQA
 都不损失质量。</p>
@@ -9633,7 +9648,9 @@ indexer，所以测到的只是“按块挑”带来的损失：</p>
 <li><code>block_scores</code>：一个 query 的逐 token
 分数按块取最大值，最后不满一块的部分用 −∞ 填充。</li>
 <li><code>select_blocks</code>：组内各头的块分数取平均，每组选 top-(k−1)
-个远处块，再加上局部块。</li>
+个其余块，再加上局部块。脚本把整段的最后一块（下标
+n−1）固定当作局部块，相当于只模拟位于序列末尾的那个 query；它对全部 key
+打分，没有因果掩码。</li>
 <li><code>token_recall</code>：每个头精确前 16 个 key
 中，有多少落在被选中的块里。T=4096、B_k=128 的随机例子里，k=1/4/16
 时召回分别为 0.008/0.250/0.836，读取的 key 数分别少 32×/8×/2×。</li>
@@ -10957,7 +10974,11 @@ loss 低，不等于别的领域好。</li>
 <p>本实验只生成“春风”“月明山水”“光”这样的玩具字符串。每条
 <code>Document</code> 都记录
 <code>uid</code>、<code>text</code>、<code>source</code>、<code>provenance</code>。<code>generated-for-this-book</code>
-明确表示<strong>这份语料是在本章内生成的</strong>，不是某个外部数据集的许可证，也不是对任意网页加上此标签就获得授权。程序拒绝其他来源标签，只是限定演示的输入范围；它没有能力验证别人填写的标签是否真实。</p>
+明确表示<strong>这份语料是在本章内生成的</strong>，不是某个外部数据集的许可证，也不是对任意网页加上此标签就获得授权。程序只检查
+<code>provenance</code> 字段，值不是
+<code>generated-for-this-book</code>
+就报错，只是限定演示的输入范围；<code>source</code>
+字段不做检查，只用于后面的配比账本。它没有能力验证别人填写的标签是否真实。</p>
 <h2 id="p19.2-先清洗和去重再划分我们自己的小语料">P19.2
 先清洗和去重，再划分我们自己的小语料</h2>
 <p>先看一份完整的清洗账本，而不是只看最后剩下几条：</p>
@@ -10982,7 +11003,7 @@ loss 低，不等于别的领域好。</li>
 </tr>
 <tr>
 <td>规范化</td>
-<td>Unicode NFC；删除所有空白字符</td>
+<td>先做 Unicode NFC，再删除所有空白字符</td>
 <td><code>" 春\n风 "</code> 变为 <code>"春风"</code></td>
 </tr>
 <tr>
@@ -12192,8 +12213,10 @@ TP、PP、EP：切的不是同一条轴</h2>
 <p><strong>Tensor
 parallel，张量并行（TP）：</strong>把一层里的张量运算分给多个设备。例如线性层
 Y=XW，可以按 W 的输出列拆成
-W_1、W_2，两个设备算出部分输出；后续运算按布局拼接或归约。拆行的方式则需要合并部分和。它不是让两个
-rank
+W_1、W_2，两个设备各算出一部分输出列，需要完整输出时把它们拼接起来；若按
+W 的输入行拆，每个设备得到的是同形状的部分和，要用 all-reduce
+相加。Megatron 的 MLP
+把两者配对：第一层按列拆、第二层按行拆，中间不通信。它不是让两个 rank
 各读不同样本，而是合作完成同一层的计算。通信经常落在层内，互联条件很重要。<a
 href="https://arxiv.org/abs/1909.08053">Megatron-LM 原始论文</a></p>
 <p><strong>Pipeline
@@ -12949,7 +12972,9 @@ bit”也不表示整个训练进程只占 <code>参数数×0.5</code>
 <p>本章只运行普通 float32 LoRA，没有 bitsandbytes、NF4
 kernel、量化训练或 GPU 内存测量。普通 LoRA
 的合并等式，也不能直接推出“量化、反量化、合并、再量化”全过程零误差。</p>
-<p>P24 将进一步讲
+<p>注意 QLoRA 的 NF4 不是 scale 加 zero-point 的仿射量化：它的 16
+个码值取自标准正态分布的分位数，每块只存一个 absmax 缩放常数。P24
+将进一步讲一般的
 scale、zero-point、group、量化误差，以及推理格式和框架选择。<strong>这是后续阅读边界，不是本章已经完成的功能。</strong>
 不要为了这个章节临时安装 GPU
 依赖，更不要把本文几十毫秒级的小矩阵算术换算成真实大模型所需显存。</p>
@@ -13729,9 +13754,10 @@ token
 和投机解码，并继续区分训练目标与推理时计算。</p>
 <h2 id="p22.11-mopd">P22.11 延伸：on-policy
 蒸馏与多教师合并（MOPD）</h2>
-<p><strong>先看动机。</strong> 普通蒸馏是 off-policy
-的：老师先写好答案，学生照着做
-SFT。学生自己生成时，一旦走到老师没写过的前缀，就没人教了。On-policy
+<p><strong>先看动机。</strong> 常见的蒸馏是 off-policy 的：经典做法（<a
+href="https://arxiv.org/abs/1503.02531">Hinton
+等，2015</a>）让学生在固定数据上拟合老师的软概率分布；大模型里也常让老师先写好答案，学生照着做
+SFT。两种做法里的前缀都不是学生自己生成的。学生自己生成时，一旦走到老师没写过的前缀，就没人教了。On-policy
 蒸馏反过来：让学生自己采样，再请老师给学生写下的<strong>每一个
 token</strong> 打分。这个思路的公开讲解见 <a
 href="https://thinkingmachines.ai/blog/on-policy-distillation/">Thinking
@@ -18903,8 +18929,8 @@ dtype。把首个出错位置保存下来，比抄十屏日志更有用。</p>
 <h2 id="p27.13-自测能解释失败比记住-pass-更重要">P27.13
 自测：能解释失败，比记住 PASS 更重要</h2>
 <p>这里只保留本章新增的综合判断；矩形 mask 的手算见 <a
-href="#p11.1-重算发生在哪里">P11 KV cache</a>，MoE 的 N×k 负载记账见 <a
-href="#p18-moe">P18</a>，独立手算 oracle 见上文 P27.7。</p>
+href="#p11.4-矩形-mask最容易写错的两行">P11.4</a>，MoE 的 N×k 负载记账见
+<a href="#p18-moe">P18</a>，独立手算 oracle 见上文 P27.7。</p>
 <ol type="1">
 <li>S0 和 S1 为什么必须用同一组权重？固定随机种子是否足够？</li>
 <li>GQA 把本次缓存从 4096 字节降到 2048 字节，是否证明进程内存或 GPU

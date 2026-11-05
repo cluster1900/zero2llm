@@ -293,7 +293,8 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_rope.py' -v
 来源核验日期：2026-10-19。
 
 - [RoFormer / RoPE 论文，arXiv:2104.09864](https://arxiv.org/abs/2104.09864)：Q/K 旋转与相对位置点积的原始来源；本章二维数值是独立手算与脚本生成。
-- [YaRN 论文 v2，arXiv:2309.00071v2](https://arxiv.org/html/2309.00071v2)：这里固定版本解释 PI、分频段插值、注意力温度和动态缩放缓存问题，不将论文的模型规模与训练成绩当成本仓库复现。
+- [Position Interpolation 论文（Chen 等），arXiv:2306.15595](https://arxiv.org/abs/2306.15595)：位置插值 PI 的原始来源。
+- [YaRN 论文 v2（Peng 等），arXiv:2309.00071v2](https://arxiv.org/html/2309.00071v2)：这里固定版本解释分频段插值、注意力温度和动态缩放缓存问题，不将论文的模型规模与训练成绩当成本仓库复现。
 - 所有 CPU 实验数字来自本仓库 `code/13_rope.py` 的上述明确配置；没有把论文指标移植成自己的结果。
 
 S2 已把“位置在哪里进入模型”和“缓存该保存什么”说明白。接下来 P13 一次只换一个部件，理解 RMSNorm 与 SwiGLU；P14 再处理共享 KV 头与压缩，而不是把 RoPE、GQA 和 MLA 都叫作“节省缓存的同一种技巧”。

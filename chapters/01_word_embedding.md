@@ -41,7 +41,7 @@ vectors = [embedding_table[i] for i in token_ids]
 
 用 one-hot 行向量乘 $E$，也会选中同一行。实际程序通常直接按 ID 查表，避免创建一个很长、几乎全为 0 的数组。稠密 embedding 的存储也不是“免费”的：整张表依然有 $V\times D$ 个数。
 
-**这张表是谁写的？** 在神经网络里，它通常和其他权重一样初始化，然后通过训练损失的梯度更新。当前预测错了，训练过程就调整相关参数；反复见到数据后，向量可能编码有用的语言规律。维度并不天然叫“甜度”“性别”或“情绪”，也不能保证某一维单独对应一个人类概念。
+**这张表是谁写的？** 在神经网络里，它通常和其他权重一样初始化，然后通过训练损失的梯度更新。只要模型给正确答案的概率还没到 1，损失就有非零梯度，训练过程据此调整相关参数；反复见到数据后，向量可能编码有用的语言规律。维度并不天然叫“甜度”“性别”或“情绪”，也不能保证某一维单独对应一个人类概念。
 
 ## 1.3 用水果坐标建立直觉，但不把类比当模型
 
@@ -71,7 +71,7 @@ vectors = [embedding_table[i] for i in token_ids]
 - 欧氏距离：$\|a-b\|=\sqrt{(-3)^2+(-4)^2}=5$。
 - 余弦相似度：$\cos\theta=(a\cdot b)/(\|a\|\|b\|)=50/(5\times10)=1$。
 
-它们方向完全相同，但长度不同，所以距离不是 0。点积是 50，也没有被限制在 -1 到 1 之间。**只有把两个向量都归一化成单位长度后，点积才等于余弦相似度。**
+它们方向完全相同，但长度不同，所以距离不是 0。点积是 50，也没有被限制在 -1 到 1 之间。**把两个向量都归一化成单位长度后，点积就等于余弦相似度**（严格说，只要两个长度的乘积为 1 即可）。
 
 一般地：
 
@@ -140,4 +140,4 @@ $$[9,8,7]-[1,8,5]+[1,-8,5]=[9,-8,7]$$
 
 参考答案：不会，只要映射一致，仍能查到原来那行；点积 50、距离 5；不能，数学上没有定义，本书抛出 `ValueError`；不能这样保证。现实系统通常由 tokenizer 把未知整词拆成已知子词或字节等单位，然后查它们的向量。**这就是下一章要补上的环节：文本怎样变成那些 ID？**
 
-本章核验日期：2026-10-18。查表接口可参阅 [PyTorch 2.14 的 Embedding 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)；本章必修代码不依赖 PyTorch。关于向量关系的原始研究，可读 [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546)。
+本章核验日期：2026-10-18。查表接口可参阅 [PyTorch 2.14 的 Embedding 文档](https://docs.pytorch.org/docs/2.14/generated/torch.nn.Embedding.html)；本章必修代码不依赖 PyTorch。向量类比关系最早见于 Mikolov、Yih 与 Zweig 的 [Linguistic Regularities in Continuous Space Word Representations（NAACL 2013）](https://aclanthology.org/N13-1090/)；同组的 [Distributed Representations of Words and Phrases and their Compositionality](https://arxiv.org/abs/1310.4546) 主要讲负采样与短语向量，也可一并阅读。
