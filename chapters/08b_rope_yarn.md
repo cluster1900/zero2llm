@@ -132,7 +132,7 @@ float64 输入用 float64 计算角度；float16/bfloat16 先转 float32 计算�
 | 旋转后 Q、K | 各 [2,4,12,4] | 形状不变，V 不变 |
 | scores | [2,4,12,12] | QKᵀ / √4，再加因果 mask |
 | Attention 输出 | [2,12,16] | 对 V 加权、拼头、输出投影 |
-| logits | [2,12,17] | 各 Block 后接归一化和词表分类头 |
+| logits | [2,12,17] | 最后一个 Block 之后做一次 `ln_f`，再接词表分类头 |
 
 `RopeGPT(config).forward(idx, targets=None)` 返回 `(logits,loss)`。传入右移标签时 loss 是所有位置的平均交叉熵；没有标签时 loss 为 None。LayerNorm 和 GELU 没有偷偷替换，KV 头也没有共享。后两章在这份基线上分别做 S3、S4。
 
