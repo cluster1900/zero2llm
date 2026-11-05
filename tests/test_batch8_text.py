@@ -41,12 +41,17 @@ class Batch8TextTests(unittest.TestCase):
             self.assertGreaterEqual(sum(bool(re.search(r"[\u4e00-\u9fff]", x)) for x in labels), 4)
 
     def test_separate_trl_source_snapshots_are_explained(self):
+        # G6 ruling 7/10: the three TRL snapshots are explained once in Appendix H.
+        appendix = (ROOT / "chapters" / "10_appendix.md").read_text()
         for chapter in ("08k_sft_lora.md", "08l_preference_optimization.md"):
             text = (ROOT / "chapters" / chapter).read_text()
-            for version in ("0.16.1", "0.17.0", "0.18.2"):
-                self.assertIn(version, text)
-            self.assertIn("环境", text)
-            self.assertIn("版本", text)
+            self.assertEqual(text.count("P20–P22 为何引用不同 TRL 版本，见附录 H。"), 1)
+            row = next(r for r in appendix.splitlines() if r.startswith("| %s | TRL 源码快照（只读，未执行） |" % chapter[:3]))
+            self.assertEqual(appendix.count(row), 1)
+        h = appendix[appendix.index("| 08k | TRL 源码快照"):]
+        for version in ("0.16.1", "0.17.0", "0.18.2"):
+            self.assertIn(version, h)
+        self.assertIn("不是同一套环境", h)
 
     def test_progress_and_supported_math_delimiters(self):
         readme = (ROOT / "README.md").read_text()
