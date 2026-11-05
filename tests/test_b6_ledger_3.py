@@ -462,7 +462,7 @@ class B6LedgerMoveGroup3Test(unittest.TestCase):
 
     def test_b2_dangling_fixes(self):
         ch = lambda n: (CHAPTERS / n).read_text(encoding="utf-8")
-        self.assertIn("9. 不能。见 `test_mutations_fail_independent_oracle_not_only_cache_agreement`。", ch("08h_moe.md"))
+        self.assertIn("9. 不能。见本章测试。", ch("08h_moe.md"))
         self.assertIn("脚本用标准库生成这些数值。这个例子是直接优化", ch("07a_training_loop.md"))
         self.assertIn("它便于人工检查。", ch("08k_sft_lora.md"))
         self.assertIn("第二条会执行标准库测试。脚本默认", ch("08j_training_frameworks.md"))
