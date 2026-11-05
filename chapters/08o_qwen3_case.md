@@ -139,7 +139,7 @@ $$
 3. 因为 `norm_topk_prob=true`，把这 8 项重新归一化到和为 1。
 4. 只计算选中专家，把结果按重新归一化的权重相加。
 
-手算一个更小的例子：4 个专家的 logits 为 `[2,1,-1,0]`，取前 2 个，则选择专家 0、1；混合权重等于 `[exp(2),exp(1)]` 再归一化，约为 `[0.731059,0.268941]`。不能直接拿全体 softmax 的前两项相加，因为它们的和小于 1。
+手算一个更小的例子：4 个专家的 logits 为 `[2,1,-1,0]`，取前 2 个，则选择下标 0、1 的专家；混合权重等于 `[exp(2),exp(1)]` 再归一化，约为 `[0.731059,0.268941]`。不能直接拿全体 softmax 的前两项相加，因为它们的和小于 1。
 
 我们的实现采用“选中 logits 再 softmax”，在正常有限数值下与上述归一化等价；相等 logits 用较小专家 ID 优先，只是为了教学可复现，**不是官方 `topk` 对 ties 的契约**。没有实现路由辅助训练损失、专家容量丢弃或跨 GPU 分发，也不把这种实现称为官方性能复刻。
 
@@ -320,8 +320,8 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 1. **0.6B 的 Q 投影输出为什么不是 1024？** 因为显式 d=128、Hq=16，输出为 2048；O 再映回 1024。见 `test_exercise_explicit_head_width_and_qk_norm_weights`。
 2. **Q norm 是否有 16×128 个 gain？** 没有，本快照只有 128 个，按最后一维归一化、跨头共享。对应同一形状测试及 `test_exercise_qk_norm_and_split_half_rotation_hand_reference`。
 3. **0.6B 的输入／输出 embedding 是否应该计算两遍？** 不应，绑定后唯一架构参数为 596,049,920。见 `test_exact_real_parameter_totals_independent_hand_arithmetic`。
-4. **30B-A3B 应该再加宽度 6144 的 dense FFN 吗？** 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成 4，并排除零基第 1 层后，只有第 3 层是 MoE。见 `test_mixed_sparse_layer_selection_no_unused_dense_mlp_count`。
-5. **四个专家 logits 为 `[2,1,-1,0]`、top-k=2，实际调用谁？** 仅专家 0、1，权重重新归一化约为 0.731059、0.268941。见 `test_sparse_moe_dispatch_and_selected_probability_hand_oracle`。
+4. **30B-A3B 应该再加宽度 6144 的 dense FFN 吗？** 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成 4，并排除零基下标 1 的层后，只有下标 3 的层是 MoE。见 `test_mixed_sparse_layer_selection_no_unused_dense_mlp_count`。
+5. **四个专家 logits 为 `[2,1,-1,0]`、top-k=2，实际调用谁？** 仅下标 0、1 的专家，权重重新归一化约为 0.731059、0.268941。见 `test_sparse_moe_dispatch_and_selected_probability_hand_oracle`。
 6. **BF16、单条 4096-token 序列，两个真实配置的缓存谁大？** dense 为 448 MiB，MoE 为 384 MiB；都不含权重和临时内存。见 `test_exercise_cache_bytes_and_head_ratio`。
 7. **`enable_thinking=False` 和在文本里写 `/no_think` 相同吗？** 不同。前者改变模板后缀；后者是保留给模型解释的软提示。见 `test_exercise_official_template_not_naive_concatenation`。
 8. **额度为 3、没有闭合思考标签时，是否已经有答案？** 不能这样认定；本练习记答案长度 0。闭合标记也占总输出额度。见 `test_exercise_budget_counts_closure_and_missing_answer`。

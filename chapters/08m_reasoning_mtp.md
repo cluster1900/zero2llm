@@ -101,8 +101,8 @@ $$
 | 隐藏位置的输入 token | 1 | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- | --- |
 | 主 head：h=1 | 2 | 3 | 4 | 5 | 忽略 |
-| 旁路 head 0：h=2 | 3 | 4 | 5 | 忽略 | 忽略 |
-| 旁路 head 1：h=3 | 4 | 5 | 忽略 | 忽略 | 忽略 |
+| 旁路下标 0 的 head：h=2 | 3 | 4 | 5 | 忽略 | 忽略 |
+| 旁路下标 1 的 head：h=3 | 4 | 5 | 忽略 | 忽略 | 忽略 |
 
 最后几格不是“答案是 0”，而是窗口里已经没有对应标签。实现使用 `-100` 表示**不计损失**。不要 `roll` 后忘记遮住尾部，否则最后一个位置会被要求预测窗口开头，制造不存在的循环文本。
 
@@ -145,7 +145,7 @@ D=0 时省略中间项；L_MoE 是 S5 已有且已乘系数的负载辅助项，
 
 ### 两个有效位置，手算交叉熵与梯度
 
-假设三分类概率在第一个有效位置为 `[1/6,2/6,3/6]`，标签是类别 2；另一个有效位置为 `[3/6,2/6,1/6]`，标签是类别 1。两者中间有一个忽略位置：
+假设三分类概率在第一个有效位置为 `[1/6,2/6,3/6]`，标签是下标 2 的类别；另一个有效位置为 `[3/6,2/6,1/6]`，标签是下标 1 的类别。两者中间有一个忽略位置：
 
 $$
 L=\frac{-\log(3/6)-\log(2/6)}{2}
@@ -230,8 +230,8 @@ $$
 
 目标调用一次，新增输入是 **`[3,4,9,8]`**，而不是重复输入 prompt。以位置编号从 0 开始：
 
-- `verify[0]` 是“看到 3 后”的 logits，预测 4，用来验证草稿第 0 项。
-- `verify[1]` 是“看到 4 后”的 logits，预测 5，用来验证草稿第 1 项；9 错了。
+- `verify[0]` 是“看到 3 后”的 logits，预测 4，用来验证草稿下标 0 的项。
+- `verify[1]` 是“看到 4 后”的 logits，预测 5，用来验证草稿下标 1 的项；9 错了。
 - 后面的行使用了错误草稿前缀，不能继续提交。
 
 接受 4，修正为 5 后，tokens 成为 `[1,2,3,4,5]`。cache 应裁成 `[1,2,3,4]`，pending 是 `[5]`。不能留下 9 的 K/V，也不能提前把 5 当作已经存在的 cache 位置。
@@ -323,7 +323,7 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 7. 只剩一个输出名额，能否再提交三个草稿与一个 bonus？不能；草稿长度降为 0，只生成一个 token。EOS 也不能越过。检查 `test_short_empty_drafts_and_budget_boundaries` 与 `test_eos_prompt_first_accepted_corrected_rejected_and_bonus`。
 8. 预算 2 的 999+1 是什么临时答案？是 0；预算 3 完成后才得到 1000。预算曲线为什么不是语言模型能力曲线？它来自已写好的竖式算法与固定六题。检查 `test_arithmetic_curve_and_carry_by_independent_integer_oracle`。
 9. p=[0.6,0.4]、q=[0.2,0.8] 时，拒绝的概率质量如何补回？0.4 全补到 A；这是数学例子，不是随机采样实现。检查 `test_hand_sampling_correction_is_math_only_not_a_sampler_claim`。
-10. 草稿第一个位置应该用哪个 head？是主 head，后面才是旁路 head 0、1。固定种子下前缀 `[1,2,5]` 的三个提案为 `[6,0,9]`，limit=1、2、3 分别取前一、二、三项；不能跳过主 head。检查 `test_fixed_seed_draft_head_to_position_scalar_oracle`，并用 `test_cli_pins_documented_outputs_and_actual_cost_counters` 固定正文演示的输出与成本计数。
+10. 草稿第一个位置应该用哪个 head？是主 head，后面才是旁路下标 0、1 的 head。固定种子下前缀 `[1,2,5]` 的三个提案为 `[6,0,9]`，limit=1、2、3 分别取前一、二、三项；不能跳过主 head。检查 `test_fixed_seed_draft_head_to_position_scalar_oracle`，并用 `test_cli_pins_documented_outputs_and_actual_cost_counters` 固定正文演示的输出与成本计数。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
