@@ -226,7 +226,7 @@ ReLU 的规则是 $\max(0,z)$：正数保留，负数变零。它会随着输入
            ▼  Linear 1: 展开联想 (膨胀 4 倍!)
      隐层思考特征 (维度 4 * d_model, 如 2048)
            │
-           ▼  Activation: 过滤杂念 (非线性思维跃迁)
+           ▼  Activation: 过滤杂念 (非线性)
      激活后特征 (维度 2048)
            │
            ▼  Linear 2: 降维总结 (浓缩回原状)
@@ -354,7 +354,7 @@ x = self.ln2(x + self.ffn(x))
 
 `TransformerBlock(16,4)` 保持原调用方式，默认仍为 Pre-LN。传入 `[T,T]` 的 `mask` 时，本书约定 `1/True=可见`；在调用 PyTorch `nn.MultiheadAttention` 前转成 `mask==0`，因为该 API 的布尔 mask 使用 `True=禁止`。
 
-不传 mask 就是双向注意力；需要因果约束时，要传入包含对角线的下三角可见矩阵。本章只演示有可见键的普通序列，不把它冒充上一批 `attention_core.py` 的完整 padding/全禁用行契约，也没有实现 encoder-decoder 的 cross-attention。三种架构的差别留到下一章。
+不传 mask 就是双向注意力；需要因果约束时，要传入包含对角线的下三角可见矩阵。本章只演示有可见键的普通序列，不把它冒充第 3 章 `attention_core.py` 的完整 padding/全禁用行契约，也没有实现 encoder-decoder 的 cross-attention。三种架构的差别留到下一章。
 
 ### 表 6-7：这个教学 Block 的完整参数量
 
@@ -445,4 +445,4 @@ Pre-LN zero-sublayer identity max error=0.000000
 
 ## 6.9 延伸阅读：AttnRes {#p07-attnres}
 
-6.1 的残差把每层输出都以权重 1 相加。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把它换成沿深度方向的注意力：每层用一个可学习的 pseudo-query，对 embedding 和此前各层的输出做加权平均；[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)采用了这个做法。
+6.1 的残差把每个子层的增量 $F_i$ 都以权重 1 相加。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把它换成沿深度方向的注意力：每层用一个可学习的 pseudo-query，对 embedding 和此前各层的输出做加权平均；[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)采用了这个做法。

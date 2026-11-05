@@ -24,7 +24,7 @@
     "height": 383
   },
   "flow-02": {
-    "width": 310.3984375,
+    "width": 304.046875,
     "height": 213
   },
   "attention_mechanism": {
@@ -36,8 +36,8 @@
     "height": 385
   },
   "flow-04": {
-    "width": 218.015625,
-    "height": 412
+    "width": 324,
+    "height": 439
   },
   "multi_head_attention": {
     "width": 850,
