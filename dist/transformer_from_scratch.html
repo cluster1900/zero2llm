@@ -4406,6 +4406,7 @@ class="book-diagram" width="646"
 alt="经典 Transformer 完整宏观架构" /></a>
 <figcaption>经典 Transformer 完整宏观架构</figcaption>
 </figure>
+<p>图中编码器各位置互相可见，但 padding 仍要屏蔽，见表 7-1。</p>
 <p>下图只描述经典 encoder-decoder，不是所有聊天模型共有的完整结构。图
 7-2
 的前缀「<code>&lt;BOS&gt; 疑是地上</code>」与下面解码器简图的前缀「起始符
@@ -5184,9 +5185,8 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb61-1"><a href=
 个预测位置，<strong>包含重复，不等于 1280
 个独立样本</strong>。每次运行重新初始化模型与优化器，同时固定 Python
 抽样 RNG 和 PyTorch 种子，并开启确定性算法。</p>
-<p>下面是附录 H 所列环境下的复核记录，显示到六位小数。seed 11
-保留后值采用独立审核环境的 4.397413730…，四舍五入为 4.397414；本地复跑为
-4.397413254…，相差一个 float32 ULP。测试对表值使用绝对容差
+<p>下面是附录 H
+所列环境下的复核记录，显示到六位小数。测试对表值使用绝对容差
 1e-6，容纳舍入和这一级 CPU
 数值差异，而不容许学习率改变造成的偏移。训练/保留 loss
 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：</p>
@@ -5295,40 +5295,19 @@ loss 和生成片段一起看，再核对数据来源，才不会被“出口成
 是否关闭 Dropout？当前 BabyGPT 切换模式为什么可能没有数值变化？</li>
 <li>把同诗重叠窗口分到训练和验证有什么问题？本实验整首保留后，为什么仍不能据此声称通用语言能力或证明过拟合？</li>
 </ol>
-<h3 id="参考答案与可执行测试对应">参考答案与可执行测试对应</h3>
+<h3 id="参考答案-4">参考答案</h3>
 <ol type="1">
-<li>x=<code>[7,1,9]</code>，y=<code>[1,9,3]</code>；不能。当前格合法地能看见自己，错误任务变成复制。对应
-<code>test_shift_and_wrong_shift_mutation</code> 与
-<code>test_copy_cheat_is_not_next_token_skill</code>，错误标签会被拒绝，而作弊低
-loss 会被实际计算出来。</li>
-<li>0.836988217。交叉熵是各题负对数的均值，不是概率均值的负对数。对应
-<code>test_hand_calculated_cross_entropy</code> 与
-<code>test_reduction_and_autograd_match_handcalc</code>。</li>
+<li>x=<code>[7,1,9]</code>，y=<code>[1,9,3]</code>；不能。当前格合法地能看见自己，错误任务变成复制。</li>
+<li>0.836988217。交叉熵是各题负对数的均值，不是概率均值的负对数。</li>
 <li>梯度 <code>[-0.25,0.25]</code>，更新后
-<code>[1.123612289,-0.025]</code>；两题取 mean 时每题梯度除以 2。对应
-<code>test_gradient_finite_difference_and_update</code> 与
-<code>test_reduction_and_autograd_match_handcalc</code>。</li>
+<code>[1.123612289,-0.025]</code>；两题取 mean 时每题梯度除以 2。</li>
 <li>梯度累加成两倍；下一批前调用
-<code>optimizer.zero_grad(set_to_none=True)</code>。对应
-<code>test_gradient_accumulation_and_clear</code>；<code>test_train_step_rejects_zero_grad_omission_numerically</code>
-另跑不清零的错误循环，确认其参数偏离正确参考，避免仅靠搜一行源码“证明正确”。</li>
-<li>两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。对应
-<code>test_eval_no_grad_and_restore_mode</code>：用真实
-<code>evaluate</code> 前向的 pre-hook 确认 <code>training=False</code>
-与 <code>is_grad_enabled=False</code>，另检查权重不变、模式恢复，并用
-Dropout
-对照。<code>test_evaluate_unequal_documents_token_weighted</code> 使用 1
-个与 4 个目标的不等长文档，核对 token 加权 3.4，而不是文档均值
-2.5。</li>
+<code>optimizer.zero_grad(set_to_none=True)</code>。</li>
+<li>两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。</li>
 <li>重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23
 个留出目标未在训练标签中出现，4 个共有标点的 loss
 反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本章未演示过拟合。下一章
-S0 更只是同语料记忆。对应
-<code>test_split_and_leakage_mutation</code>：将训练文档混入保留集合会报错；<code>test_fixed_seed_repeat_and_heldout_report</code>
-检查重复运行；<code>test_40_step_snapshots_and_label_strata</code>
-固定种子 7/11 的 40 步结果、实际学习率、19/23
-计数、共有组下降方向及两组重组合，不断言“训练必能改善整体保留
-loss”。</li>
+S0 更只是同语料记忆。</li>
 </ol>
 <h2 id="p09.8-来源与边界">P09.8 来源与边界</h2>
 <p>来源核验日期见附录 H。API 依据锁定为 PyTorch 2.14
@@ -5724,9 +5703,9 @@ dropout，因此两种模式对当前层的数值本身没有随机开关；生�
 <p>它没有接回“明月光”，而是转入另一首诗。这个反例说明本次训练不保证任意提示都能接回原文；单个反例也不能证明模型内部完全没有学到任何词关系。不要将“背诵
 vs 理解”写成可由一条输出解决的哲学判定。</p>
 <p>S0 的停止条件是新增字符数，没有训练 <code>&lt;EOS&gt;</code>。句号和
-EOS 不是同一回事：生成句号不会自动停。温度 0 是贪心；为兼容旧
-API，负温度也走贪心，新的调用建议只用 0 或正数。温度为正时按概率采样，1
-是原分布，0.2 放大分数差，2 缩小分数差；都不是正确率旋钮。</p>
+EOS 不是同一回事：生成句号不会自动停。温度 0 是贪心；温度应取 0
+或正数。温度为正时按概率采样，1 是原分布，0.2 放大分数差，2
+缩小分数差；都不是正确率旋钮。</p>
 <p>S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位置重新编号为
 0–127。这是一个明确的<strong>滑窗重算策略</strong>，不是无限上下文，也不能与沿用旧绝对位置的缓存结果直接比较。P11
 的缓存演示到容量上限就报错，不伪装成同一滑窗策略。</p>
@@ -5767,7 +5746,7 @@ shift，监督目标一共多少个？直接拼接后会多出什么？</li>
 <li>改掉输入后两个字符，因果模型前面位置的 logits 应该变化吗？只看
 argmax 是否足够？</li>
 </ol>
-<h3 id="参考答案-4">参考答案</h3>
+<h3 id="参考答案-5">参考答案</h3>
 <ol type="1">
 <li><code>[2,5,57]</code>。每个 batch、每个位置都给整个词表打分。</li>
 <li>3×23=69。拼成 72 字会有 71
@@ -6118,7 +6097,7 @@ cache 吗？</li>
 <li>缓存与完整前向生成相同贪心 token 就算验证通过吗？删最老缓存能重现 S0
 的超长滑窗吗？</li>
 </ol>
-<h3 id="参考答案-5">参考答案</h3>
+<h3 id="参考答案-6">参考答案</h3>
 <ol type="1">
 <li><code>[2,5]</code>；第二行能看 5
 个。矩形可见性由绝对位置比较得到。</li>
@@ -9748,7 +9727,7 @@ decoder_layers 改成 2，追踪第一层位置 1 的误差会流向哪里。</l
 <li>如果把本实验换成真正的 CSA2，你需要新增哪些缓存、source
 映射和索引有效性测试？为什么不能只把类名改成 CSA2？</li>
 </ol>
-<h3 id="参考答案-6">参考答案</h3>
+<h3 id="参考答案-7">参考答案</h3>
 <ol type="1">
 <li>R=min(6,8)=6，整个输入都在 replay 范围内；两层 encoder 与两层
 decoder 共计 6×4=24 次 block visits，和完整路径相同。</li>
@@ -11025,7 +11004,7 @@ mask，修好了哪条边界，又漏了哪条？</li>
 <li>若把短文档采样概率提高一倍，原始文档数、有效 token
 比例和独立信息量会不会都提高一倍？</li>
 </ol>
-<h3 id="参考答案-7">参考答案</h3>
+<h3 id="参考答案-8">参考答案</h3>
 <ol type="1">
 <li>B 的三个输入位置变成四个，增加一个输入与一个有效目标。两篇共 8
 个真实输入，刚好装满；目标为 3+3=6
@@ -11694,7 +11673,7 @@ next-token 目标数有什么不同？</li>
 <li>为本章代码故意制造一个错误，说明哪条测试应该发现它。只让 loss
 下降，能否作为验收？</li>
 </ol>
-<h3 id="参考答案-8">参考答案</h3>
+<h3 id="参考答案-9">参考答案</h3>
 <ol type="1">
 <li>config 改的是张量结构，不会替你训练或生成匹配权重，甚至会直接导致
 shape 不兼容。结构说明与已学习参数是两个不同对象。</li>
@@ -14580,7 +14559,7 @@ TPOT 是多少？如果只知道有三个 SSE 块，能否这样算？</li>
 <li>服务只返回部分文字后连接结束，没有终止事件，应显示“完成”吗？<code>finish_reason=length</code>
 又说明什么？</li>
 </ol>
-<h3 id="参考答案-9">参考答案</h3>
+<h3 id="参考答案-10">参考答案</h3>
 <ol type="1">
 <li>码为 0、2、127；恢复为 0、0.5、31.75。40
 超过可表示范围，发生饱和截断。</li>
@@ -17251,7 +17230,7 @@ batch，为何仍可能发生请求缓存污染？</li>
 <li>测试因缺 Torch 跳过、负例因导入失败退出、负例输出有限但偏离
 oracle，哪一种才是本章想看到的负例证据？</li>
 </ol>
-<h3 id="参考答案-10">参考答案</h3>
+<h3 id="参考答案-11">参考答案</h3>
 <ol type="1">
 <li>缓存改变计算安排，不应同时改变模型；同一对象最直接。不同架构消耗随机数的顺序不同，仅种子相同不足以保证对应张量相同。</li>
 <li>不能。只核算 KV 张量载荷，不含权重、临时张量、分配器等。</li>

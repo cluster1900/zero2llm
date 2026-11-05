@@ -22,7 +22,15 @@ G3=[
 ("chapters/07a_training_loop.md","AdamW 学习率 0.003、40 次更新。","AdamW 学习率 0.003（weight_decay 用 PyTorch 默认值 0.01）、40 次更新。"),
 ("chapters/08_baby_transformer.md","| 春眠 | `春眠落头黄风白望入落欲一日依疑，床` | `春眠不觉晓，处处闻啼鸟。夜来风雨声` |\n","| 春眠 | `春眠落头黄风白望入落欲一日依疑，床` | `春眠不觉晓，处处闻啼鸟。夜来风雨声` |\n\n温度 0 是贪心解码。未训练时“床前”“白日”之后的续写恰好相同，不是表格贴错。\n"),
 ]
-CHANGED = RULINGS + G3
+G3_RULINGS=[
+("chapters/07a_training_loop.md","显示到六位小数。seed 11 保留后值采用独立审核环境的 4.397413730…","显示到六位小数。测试对表值使用绝对容差 1e-6"),
+("chapters/07a_training_loop.md","### 参考答案与可执行测试对应","### 参考答案\n\n1. x=`[7,1,9]`，y=`[1,9,3]`；不能。当前格合法地能看见自己，错误任务变成复制。\n2. 0.836988217。交叉熵是各题负对数的均值，不是概率均值的负对数。\n"),
+("chapters/07a_training_loop.md","下一批前调用 `optimizer.zero_grad(set_to_none=True)`。对应","4. 梯度累加成两倍；下一批前调用 `optimizer.zero_grad(set_to_none=True)`。\n5. 两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。\n"),
+("chapters/07a_training_loop.md","本章未演示过拟合。下一章 S0 更只是同语料记忆。对应","本章未演示过拟合。下一章 S0 更只是同语料记忆。\n"),
+("chapters/08_baby_transformer.md","温度 0 是贪心；为兼容旧 API，负温度也走贪心，新的调用建议只用 0 或正数。","温度 0 是贪心；温度应取 0 或正数。"),
+("chapters/07_encoder_decoder.md","transformer_full_architecture.svg)\n\n下图只描述","transformer_full_architecture.svg)\n\n图中编码器各位置互相可见，但 padding 仍要屏蔽，见表 7-1。\n\n下图只描述"),
+]
+CHANGED = RULINGS + G3 + G3_RULINGS
 
 
 class TestB11Group3(unittest.TestCase):
@@ -39,6 +47,14 @@ class TestB11Group3(unittest.TestCase):
         self.assertNotIn("思维跃迁", (ROOT / "chapters/06_residual_layernorm_ffn.md").read_text(encoding="utf-8"))
         self.assertNotIn("p17-ced", (ROOT / "chapters/07_encoder_decoder.md").read_text(encoding="utf-8"))
         self.assertNotIn("Q=[1,2,4]", (ROOT / "chapters/07_encoder_decoder.md").read_text(encoding="utf-8"))
+
+    def test_07a_answers_have_no_test_names(self):
+        body = (ROOT / "chapters/07a_training_loop.md").read_text(encoding="utf-8")
+        tail = body[body.index("### 参考答案\n"):]
+        tail = tail[:tail.index("\n## ")] if "\n## " in tail else tail
+        self.assertEqual(tail.count("test_"), 0)
+        self.assertEqual(tail.count("对应 `"), 0)
+        self.assertNotIn("负温度", (ROOT / "chapters/08_baby_transformer.md").read_text(encoding="utf-8"))
 
     def test_rendered_scaling_node(self):
         svg = (ROOT / "dist/assets/rendered/flow-04.svg").read_text(encoding="utf-8")

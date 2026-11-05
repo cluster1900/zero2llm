@@ -149,7 +149,7 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 
 教学配置是 CPU 单线程、`d_model=16`、4 头、1 层、最大位置 32、B=4、T=8、AdamW 学习率 0.003（weight_decay 用 PyTorch 默认值 0.01）、40 次更新。每次从两首训练诗随机取 4 个窗口；共消费 40×4×8=1280 个预测位置，**包含重复，不等于 1280 个独立样本**。每次运行重新初始化模型与优化器，同时固定 Python 抽样 RNG 和 PyTorch 种子，并开启确定性算法。
 
-下面是附录 H 所列环境下的复核记录，显示到六位小数。seed 11 保留后值采用独立审核环境的 4.397413730…，四舍五入为 4.397414；本地复跑为 4.397413254…，相差一个 float32 ULP。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU 数值差异，而不容许学习率改变造成的偏移。训练/保留 loss 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：
+下面是附录 H 所列环境下的复核记录，显示到六位小数。测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU 数值差异，而不容许学习率改变造成的偏移。训练/保留 loss 都用整首诗的所有下一字位置评分，和训练时长度 8 的随机窗口口径不同：
 
 | 运行 | 首 batch loss | 训练文档 loss 前→后 | 保留文档 loss 前→后 |
 | --- | --- | --- | --- |
@@ -185,14 +185,14 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 5. `eval()` 是否关闭 autograd？`no_grad()` 是否关闭 Dropout？当前 BabyGPT 切换模式为什么可能没有数值变化？
 6. 把同诗重叠窗口分到训练和验证有什么问题？本实验整首保留后，为什么仍不能据此声称通用语言能力或证明过拟合？
 
-### 参考答案与可执行测试对应
+### 参考答案
 
-1. x=`[7,1,9]`，y=`[1,9,3]`；不能。当前格合法地能看见自己，错误任务变成复制。对应 `test_shift_and_wrong_shift_mutation` 与 `test_copy_cheat_is_not_next_token_skill`，错误标签会被拒绝，而作弊低 loss 会被实际计算出来。
-2. 0.836988217。交叉熵是各题负对数的均值，不是概率均值的负对数。对应 `test_hand_calculated_cross_entropy` 与 `test_reduction_and_autograd_match_handcalc`。
-3. 梯度 `[-0.25,0.25]`，更新后 `[1.123612289,-0.025]`；两题取 mean 时每题梯度除以 2。对应 `test_gradient_finite_difference_and_update` 与 `test_reduction_and_autograd_match_handcalc`。
-4. 梯度累加成两倍；下一批前调用 `optimizer.zero_grad(set_to_none=True)`。对应 `test_gradient_accumulation_and_clear`；`test_train_step_rejects_zero_grad_omission_numerically` 另跑不清零的错误循环，确认其参数偏离正确参考，避免仅靠搜一行源码“证明正确”。
-5. 两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。对应 `test_eval_no_grad_and_restore_mode`：用真实 `evaluate` 前向的 pre-hook 确认 `training=False` 与 `is_grad_enabled=False`，另检查权重不变、模式恢复，并用 Dropout 对照。`test_evaluate_unequal_documents_token_weighted` 使用 1 个与 4 个目标的不等长文档，核对 token 加权 3.4，而不是文档均值 2.5。
-6. 重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23 个留出目标未在训练标签中出现，4 个共有标点的 loss 反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本章未演示过拟合。下一章 S0 更只是同语料记忆。对应 `test_split_and_leakage_mutation`：将训练文档混入保留集合会报错；`test_fixed_seed_repeat_and_heldout_report` 检查重复运行；`test_40_step_snapshots_and_label_strata` 固定种子 7/11 的 40 步结果、实际学习率、19/23 计数、共有组下降方向及两组重组合，不断言“训练必能改善整体保留 loss”。
+1. x=`[7,1,9]`，y=`[1,9,3]`；不能。当前格合法地能看见自己，错误任务变成复制。
+2. 0.836988217。交叉熵是各题负对数的均值，不是概率均值的负对数。
+3. 梯度 `[-0.25,0.25]`，更新后 `[1.123612289,-0.025]`；两题取 mean 时每题梯度除以 2。
+4. 梯度累加成两倍；下一批前调用 `optimizer.zero_grad(set_to_none=True)`。
+5. 两者都不会替代另一方；BabyGPT 无 Dropout/BatchNorm。
+6. 重叠来源使验证不独立。本实验只有一首保留诗、全语料词表且体裁单一；19/23 个留出目标未在训练标签中出现，4 个共有标点的 loss 反而下降。总体上升主要来自标签分布不匹配，不能证明过拟合，本章未演示过拟合。下一章 S0 更只是同语料记忆。
 
 ## P09.8 来源与边界
 

@@ -24,6 +24,8 @@
 
 ![经典 Transformer 完整宏观架构](assets/diagrams/transformer_full_architecture.svg)
 
+图中编码器各位置互相可见，但 padding 仍要屏蔽，见表 7-1。
+
 下图只描述经典 encoder-decoder，不是所有聊天模型共有的完整结构。图 7-2 的前缀「`<BOS> 疑是地上`」与下面解码器简图的前缀「起始符 + 疑是」是同一句译文在不同生成步的快照：前者已多生成了「地上」两个字，后者正在预测「地」。归一化与残差在简图中省略，不表示它们消失了。
 
 ```mermaid

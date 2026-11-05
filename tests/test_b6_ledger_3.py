@@ -196,8 +196,6 @@ NARRATION_ALLOWLIST = [
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (restored after review r5)"),
     ("07a_training_loop.md", "测试对表值使用绝对容差 1e-6，容纳舍入和这一级 CPU 数值差异，而不容许学习率改变造成的偏移。",
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
-    ("07a_training_loop.md", "### 参考答案与可执行测试对应",
-     "decided-kept", "heading of the self-test answer section, not narration"),
     ("08b_rope_yarn.md", "浮点 cos(π/2) 未必严格等于 0，因此测试使用小容差，不要求每一位相等。",
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
     ("08b_rope_yarn.md", "- **直接外推**：仍用 pθ，不改变转速；测试会出现训练未覆盖的相对距离。",
