@@ -33,7 +33,7 @@
 
 ![训练框架地图与 ZeRO 状态切分：数据和 tokenizer 进入模型，Trainer 控制更新；分片只改变持久状态的分布](assets/diagrams/p20-frameworks.svg)
 
-这里还有一条重要边界：本书之前的 miniGPT 是用来逐层解释机制的代码主线；本章换用 GPT2LMHeadModel，是学习成熟 API 的独立实验。两者没有自动共享权重。即使都叫 Transformer，也不能把旧 checkpoint 直接塞进新模型，然后宣称转换成功。
+这里还有一条重要边界：本书前面从 Baby-GPT 到 S5 的代码是用来逐层解释机制的主线；本章换用 GPT2LMHeadModel，是学习成熟 API 的独立实验。两者没有自动共享权重。即使都叫 Transformer，也不能把旧 checkpoint 直接塞进新模型，然后宣称转换成功。
 
 ## P20.2 config、model、tokenizer：三样东西不能混成一样
 
@@ -107,7 +107,7 @@ $$
 
 ### 一个真实发现的版本细节
 
-固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计**未 shift 的 labels 中非 -100 的数量**，作为 num_items_in_batch 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。
+固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计**未 shift 的 labels 中非 -100 的数量**，作为 num_items_in_batch 传给模型。若保留两行首位 BOS 标签，这个数是 11，而真正参与 next-token loss 的目标只有 9，梯度会被错误缩小为本例正确值的 9/11。这个计数就是 loss 的分母，所以打印出的 loss 读数也同样变成正确值的 9/11。
 
 这不是说所有版本、所有模型都有同一个问题，而是本章用的组合需要明确约定。这里把首位本就不会被预测的标签也设为 -100，让框架计数和实际目标对齐。对应实现可核对 [4.51.3 Trainer 的 get_batch_samples 与 compute_loss 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)。
 
@@ -299,50 +299,9 @@ python code/21_training_frameworks.py --hf --output-dir /tmp/p20-checkpoint-demo
 
 分布式训练还要问：“这是一整份模型，还是某个 rank 的分片？”并行拓扑改变后是否需要转换？词表是否一并保存？模型实现的版本是否相同？例如 Megatron 的固定版说明区分与 TP/PP 布局绑定的旧格式及其他分布式格式，不能默认不同框架的 checkpoint 可以直接交换。
 
-## P20.10 多 GPU 选修：先写实验单，不在 CPU 假演示
+## P20.10 多 GPU 选修：本章未运行
 
-本章没有安装 DeepSpeed / Megatron，也没有可报告的多 GPU 运行、通信量实测、显存峰值或加速比。下面只是实验设计与配置阅读题，不是已经通过的运行命令。
-
-一个最小 ZeRO-2 配置片段可以先读成：
-
-```json
-{
-  "train_micro_batch_size_per_gpu": 1,
-  "gradient_accumulation_steps": 1,
-  "zero_optimization": {"stage": 2},
-  "bf16": {"enabled": false},
-  "fp16": {"enabled": false}
-}
-```
-
-它只说明每 rank 的 microbatch、累积次数、状态分片级别与未启用混合精度，**不是完整训练程序**。启动器模板形如：
-
-```text
-DeepSpeed：deepspeed --num_gpus=2 YOUR_GPU_TRAIN.py --deepspeed YOUR_DS_CONFIG.json
-Megatron：torchrun --nproc_per_node=2 YOUR_MEGATRON_ENTRY.py [与该入口一致的模型和数据参数]
-```
-
-大写项是待填写的占位符，不是本仓库文件。YOUR_GPU_TRAIN.py 必须自己解析配置、正确接入 DeepSpeed 或 HF Trainer；不能把本章强制 use_cpu=True 的 --hf 脚本塞进去冒充多卡训练。Megatron 入口、数据预处理和 flags 应来自选定 revision 的官方示例；仅把 --tensor-model-parallel-size=2 写在任意脚本后面没有意义。可从 [固定版官方仓库](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0) 的 examples 与训练参数说明开始。
-
-Megatron 还有一个可供选修的具体入口：[core_v0.12.0 的 run_simple_mcore_train_loop.py](https://github.com/NVIDIA/Megatron-LM/blob/core_v0.12.0/examples/run_simple_mcore_train_loop.py)。本章已读取该版本源码，确认它使用 MockGPTDataset、本地空 tokenizer、2 层模型、TP=2、PP=1，并运行 5 次更新。选好官方兼容依赖、进入该版本仓库后，待验证命令为：
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
-  examples/run_simple_mcore_train_loop.py
-```
-
-这条命令**未在本书环境执行**。需恰好暴露两张可用 CUDA GPU，因为该入口用可见 GPU 数初始化 world size，源码又把 TP 固定为 2；还会编译数据 helper，并在当前目录写 ckpt。应使用新的实验目录并先检查源码，不能直接覆盖已有检查点。它是理解 Megatron-Core 接线的入口，不是通用生产训练配方，也不自动证明保存了可恢复的优化器状态。
-
-动手前把下列内容保存成自己的实验单：
-
-1. 代码 tag / commit、PyTorch / CUDA / 驱动 / NCCL / DeepSpeed 或 Megatron 版本；与本章 CPU 依赖分开管理。
-2. 至少两张兼容 GPU 的型号、每卡显存、互联、CPU / RAM，跨机器时记录网络；是否真的支持计划使用的 BF16 / FP16 路径。
-3. 完整展开后的启动命令和配置，不只保存一张截断的终端截图；写明 DP / TP / PP / EP 的 rank 分组。
-4. 固定模型、tokenizer、数据、序列长度、有效 token 数、batch 与优化器；先用最小模型检查目标与梯度，再逐步扩张。
-5. 对比 DDP 与 ZeRO-2 时尽量只改变状态分片，分别记录持久状态估计、实测峰值分配 / 保留显存、通信和速度。
-6. warm-up、设备同步、重复次数、均值和波动；保存 checkpoint 后真正重启恢复一次。
-
-这份实验单的价值不在于把配置写得很长，而在于让别人知道结果能比较什么、不能比较什么。在条件未具备时停在“未测”，比把理论账本包装成实测更专业。
+本章没有安装 DeepSpeed / Megatron，也没有多 GPU 运行、通信量、显存峰值或加速比的实测。想动手时，可从固定版 [Megatron-LM core_v0.12.0](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0) 的 examples 开始，例如 [run_simple_mcore_train_loop.py](https://github.com/NVIDIA/Megatron-LM/blob/core_v0.12.0/examples/run_simple_mcore_train_loop.py)（TP=2，需恰好两张可见 CUDA GPU，本书未执行）；不能把本章强制 use_cpu=True 的 --hf 脚本塞进多卡启动器冒充多卡训练。动手时记录代码版本、硬件与完整启动配置，先用最小模型检查目标与梯度；对比 DDP 与 ZeRO-2 时只改变状态分片，并真正重启恢复一次 checkpoint。
 
 ## P20.11 练习、排错与验收
 
@@ -358,7 +317,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 1. config 改的是张量结构，不会替你训练或生成匹配权重，甚至会直接导致 shape 不兼容。结构说明与已学习参数是两个不同对象。
 2. 监督目标为 5+4=9。删去首列忽略后，模型内部 shift 的目标数仍是 9，但本例 Trainer 的外部计数变成 11，因为它统计未 shift 的非忽略标签。此时会把本例梯度缩小为正确值的 9/11。
 3. 所有权为 [3,2,2]，持久状态为 [48,32,32] bytes，合计 112 bytes。不能用 112/3 作为每个 rank 都安全的容量上界。
-4. tests/test_training_frameworks.py 实际执行八种语义变异：丢掉分片余数、提前切分梯度、提前切分参数、漏算 master weight、错移 CE 标签、恢复首位 BOS 计数、取消 optimizer.step、损坏恢复后的权重。前四种被独立手算账本发现；错移标签被独立 CE 参考识别；后三种被真实 Trainer 更新、非零变化和恢复 logits 断言识别。程序能运行或 loss 下降，都不能代替这些检查。
+4. 例如错移 CE 标签，会被独立 CE 参考发现；本章测试实际执行的语义变异清单见 `docs/testing.md`。程序能运行或 loss 下降，都不能代替这些检查。
 
 常见排错顺序：
 
