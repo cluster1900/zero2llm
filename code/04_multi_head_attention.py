@@ -19,7 +19,7 @@ class SimpleMultiHeadAttention(nn.Module):
         """
         参数说明（初学者通俗版）：
         - d_model: 词向量的总维度（每个词身上有多少个特征指标，比如 8）
-        - num_heads: 头数（我们要分成几个专家分队，比如 2）
+        - num_heads: 头数（我们要分成几个分队，比如 2）
         - head_dim: 每个分队分到多少个特征指标 = d_model / num_heads = 8 / 2 = 4
         """
         super().__init__()
@@ -143,7 +143,7 @@ def main():
     print("=" * 65)
     words = ["机器", "学习", "真", "酷"]
     for h in range(num_heads):
-        print(f"\n--- 专家头 {h+1} 的注意力权重矩阵 ---")
+        print(f"\n--- 头 {h+1} 的注意力权重矩阵 ---")
         header = f"{'':<8}" + "".join([f"{w:>8}" for w in words])
         print(header)
         for i in range(seq_len):
