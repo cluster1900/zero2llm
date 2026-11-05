@@ -260,12 +260,12 @@ def cosine_similarity(vec_a, vec_b):
 
 ```bash
 python3 code/01_vector_similarity.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_foundations.py' -v
 ```
 
 脚本会打印上面的水果数值，并按余弦排序给出结论。如果你把一个向量放大两倍，余弦应保持不变，但点积不会保持不变。
 
-运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 ## 1.6 向量加减能做什么，不能做什么？
 
@@ -432,7 +432,7 @@ text = raw.decode('utf-8')
 
 ```bash
 python3 code/08_byte_bpe.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_foundations.py' -v
 ```
 
 训练语料是 `banana banana`、`banana bandana` 和 `你好，你好！`。请求最多 20 次合并，但语料提前没有相邻对可合并，因此实际词表大小为 275，即 256 个基础字节加 19 个新 token。实测输出中的计数如下：
@@ -447,7 +447,7 @@ python3 -m unittest discover -s tests -v
 
 把整句训练文本合成一个 token，可以让训练集看起来非常短，却没有证明它对新文本也有效。第三行从未出现在训练语料中，仍然可编码和恢复，但几乎没有合并收益。这正好提醒我们：**能编码、token 少、模型理解得好，是三个不同的问题。**
 
-运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 实现优先让你能读懂，反复扫描语料会很慢，不能拿它直接训练大规模词表。
 
@@ -994,12 +994,12 @@ weights = torch.softmax(safe, dim=-1).masked_fill(~allowed, 0.0)
 ```bash
 python3 code/02_manual_attention.py
 python3 code/03_scaled_dot_product.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_attention.py' -v
 ```
 
 脚本 03 有缩放对照、掩码、官方 SDPA 对照及 padding/因果扰动实验。固定随机种子只是让例子可重现，不构成效果评测；官方实现的输出按容差检查，不要求跨平台逐位相等。不需要 GPU、模型权重或网络推理服务。
 
-运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 自测：
 
@@ -1296,7 +1296,7 @@ $$1\times8\times1024^2\times4\ \text{bytes}=32\ \text{MiB}$$
 
 ```bash
 python3 code/04_multi_head_attention.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_attention.py' -v
 ```
 
 示例使用小尺寸输入打印形状和各头的权重。阅读时先把日志对照表 4-1，再看权重：同一个 query 的哪一行、哪一个头、对哪些 key 求和？不要只因为数字看起来合理，就认定实现正确。
@@ -2386,12 +2386,12 @@ if chosen == eos:
 
 ```bash
 python3 code/10_generation_loop.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_generation.py' -v
 ```
 
 本章无 PyTorch/GPU 依赖。回归覆盖三步 mask 数值、标签错位、温度数表、低温唯一最大项、EOS、最大新增数、零预算、固定 seed 及非法输入。
 
-运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 ### 先回答六个问题
 

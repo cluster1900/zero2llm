@@ -207,12 +207,12 @@ weights = torch.softmax(safe, dim=-1).masked_fill(~allowed, 0.0)
 ```bash
 python3 code/02_manual_attention.py
 python3 code/03_scaled_dot_product.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_attention.py' -v
 ```
 
 脚本 03 有缩放对照、掩码、官方 SDPA 对照及 padding/因果扰动实验。固定随机种子只是让例子可重现，不构成效果评测；官方实现的输出按容差检查，不要求跨平台逐位相等。不需要 GPU、模型权重或网络推理服务。
 
-运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 自测：
 

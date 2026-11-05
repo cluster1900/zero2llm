@@ -274,7 +274,7 @@ $$1\times8\times1024^2\times4\ \text{bytes}=32\ \text{MiB}$$
 
 ```bash
 python3 code/04_multi_head_attention.py
-python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -p 'test_attention.py' -v
 ```
 
 示例使用小尺寸输入打印形状和各头的权重。阅读时先把日志对照表 4-1，再看权重：同一个 query 的哪一行、哪一个头、对哪些 key 求和？不要只因为数字看起来合理，就认定实现正确。
