@@ -41,7 +41,7 @@ class Batch9TextTests(unittest.TestCase):
         self.assertIn("29 个章节文件", readme)
         self.assertIn("28 个配套代码实验", readme)
         self.assertIn("P27–P28", readme)
-        self.assertIn("第九批验证", readme)
+        self.assertIn("[P24–P26 验证记录](docs/batch9-validation.md)", readme)
         for path in ("README.md", "chapters/00_preface.md", "docs/expansion-outline.md"):
             body = (ROOT / path).read_text()
             if path != "chapters/00_preface.md":

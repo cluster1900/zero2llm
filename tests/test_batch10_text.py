@@ -299,7 +299,7 @@ class FinalBatchTextTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         canonical_scripts = set(re.findall(r"\]\((code/[0-9][0-9]_[^)]+\.py)\)", readme))
         self.assertEqual(len(canonical_scripts), 28)
-        for marker in ("29 个章节文件", "28 个配套代码实验", "P27–P28", "第十批验证"):
+        for marker in ("29 个章节文件", "28 个配套代码实验", "P27–P28", "[P27–P28 验证记录](docs/batch10-validation.md)"):
             self.assertIn(marker, readme)
         for link in re.findall(r"\]\(((?:chapters|code|docs)/[^)#]+)(?:#[^)]*)?\)", readme):
             self.assertTrue((ROOT / link).is_file(), link)
@@ -798,7 +798,7 @@ class FinalBatchTextTests(unittest.TestCase):
             ):
                 self.assertNotIn(stale, body)
         for path in ("README.md",):
-            self.assertIn("原大纲 29 个单元的内容已实现", (ROOT / path).read_text(encoding="utf-8"))
+            self.assertIn("P00–P28 全部 29 个单元的正文与配套实验均已实现", (ROOT / path).read_text(encoding="utf-8"))
         self.assertNotIn("本次 PR", (ROOT / "chapters/09a_minigpt_healthcheck.md").read_text(encoding="utf-8"))
         self.assertIn("不等于所有生产技术", (ROOT / "README.md").read_text(encoding="utf-8"))
 

@@ -25,7 +25,7 @@ class Batch4TextTests(unittest.TestCase):
         readme = (ROOT/'README.md').read_text()
         numbered_scripts = list((ROOT/'code').glob('[0-9][0-9]_*.py'))
         self.assertIn(f'{len(numbered_scripts)} 个配套代码实验', readme)
-        self.assertIn('[第四批记录](docs/batch4-validation.md)', readme)
+        self.assertIn('[P09–P11 验证记录](docs/batch4-validation.md)', readme)
         for filename, prefix in [('07a_training_loop.md', 'P09'), ('08a_kv_cache.md', 'P11')]:
             headings = re.findall(r'^## (.+)$', (ROOT/'chapters'/filename).read_text(), re.M)
             numbered = [h for h in headings if re.match(r'(?:P\d+\.\d+|\d+\.)\s', h)]

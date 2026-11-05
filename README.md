@@ -12,26 +12,38 @@
 
 ---
 
-## 前沿大模型扩展（已完成）
+## 这本书讲什么
 
-[扩展大纲](docs/expansion-outline.md) 已在 [PR #1](https://github.com/cluster1900/zero2llm/pull/1) 审核通过，按 [bot-hub #14](https://github.com/cluster1900/bot-hub/issues/14) 每批 2–3 个单元完成（第一至第十批）。
+这本书用 CPU 上能跑完的例子，把 Transformer 从词嵌入、Tokenizer/BPE 和注意力，讲到位置编码、残差、LayerNorm/FFN 和生成循环，再讲到可以训练、可以对照的教学模型。P00–P28 全部 29 个单元的正文与配套实验均已实现。配套有 29 个章节文件（含前言、第 1A 章与附录）、28 个编号示例脚本，以及共享模块 attention_core.py；HTML / EPUB 与源码同步更新。这些小尺寸 CPU 实验不等于所有生产技术或 GPU 性能都已复现。
 
-2026-10-25 的前沿补充（[bot-hub #28](https://github.com/cluster1900/bot-hub/issues/28)：混合线性注意力、AttnRes、新 MoE 细节；[bot-hub #29](https://github.com/cluster1900/bot-hub/issues/29)：MOPD、推理预算、草稿模型、MXFP4/NVFP4）已写入大纲对应单元的“前沿补充”条目和资料索引 S29–S33；正文与实验已实现，随 v1.14.0（2026-10-26）发布。
+主线：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP（S0–S6）。
 
-- **P00–P02 正文与示例已实现（[PR #2](https://github.com/cluster1900/zero2llm/pull/2)）**：P00 阅读指南、P01 词嵌入、P02 Tokenizer/BPE；CPU 字节 BPE、HF Tokenizers 0.21.4 对照与回归测试。
-- **当前可读**：29 个章节文件（含前言、插入的第 1A 章与附录），28 个编号示例脚本及共享 attention_core.py 辅助模块；HTML / EPUB 随源码同步更新。公开站点与 Release 在合并/发布前仍可能是旧版。
-- **P03–P05 正文与 CPU 示例已实现**：注意力动机、QKV/稳定 Softmax/掩码、多头张量账本；因果性、padding/全 mask 行、形状与参考实现回归。验收记录见[第二批验证](docs/batch2-validation.md)。
-- **P06–P08 正文与 CPU 示例已实现**：位置编码、残差/LayerNorm/FFN、三类架构与生成循环；保留手算表，增加数值、自测和变异回归。见[第三批验证](docs/batch3-validation.md)。
-- **P09–P11 正文与 CPU 示例已实现**：训练最小闭环、Baby-GPT S0 基线和 S1 KV cache；训练/留出边界、checkpoint、完整/增量 logits 对齐与内存账。见[第四批验证](docs/batch4-validation.md)。
-- **P12–P14 正文与 CPU 示例已实现**：S2 RoPE 与长上下文边界、S3 RMSNorm/SwiGLU、S4 GQA 与独立 MLA 小矩阵；各阶段全量/增量对齐、数值和参数/缓存账。YaRN 是论文机制导读，不宣称完整复现其训练。见[第五批验证](docs/batch5-validation.md)。
-- **P15–P17 正文与独立 CPU 实验已实现**：分块在线 Softmax、分页缓存与调度账本，SWA / 线性递推，以及官方 CED 数据流的教学模型。三个实验不改变 S4 主线，不代表 CUDA kernel、生产服务或真实 DeepSeek 权重复现。见[第六批验证](docs/batch6-validation.md)。
-- **P18–P20 正文与 CPU 实验已实现**：S5 教学 MoE、预训练数据与恢复训练、Transformers 小模型 CPU 对照与分片内存账本；TRL/DeepSpeed/Megatron 的角色及未运行多卡边界另行说明。见[第七批验证](docs/batch7-validation.md)。
-- **P21–P23 正文与 CPU 实验已实现**：对话 SFT / assistant-only loss / LoRA，DPO / GRPO 手算与策略更新，以及 S6 教学 MTP、可验证预算和草稿验证。教学模型、框架配置与真实生产训练严格区分。见[第八批验证](docs/batch8-validation.md)。
-- **P24–P26 正文与 CPU 实验已实现**：量化与推理框架路线、固定 revision 的 Qwen3 配置案例，以及 DeepSeek V3/R1/V4.1 的组件与证据地图。官方报告、教学实验和未运行硬件路线分别标明，见[第九批验证](docs/batch9-validation.md)。实现与验证范围见记录，审核和发布状态以对应 PR / Release 为准。
-- **P27–P28 正文与综合 CPU 体检已实现**：S0–S6 的同配置验证、checkpoint 边界、负例与单变量报告；附录汇总术语/数学/证据更新流程。原 P00–P28 大纲的内容已覆盖，不等于所有生产技术或 GPU 性能都已复现。见[第十批验证](docs/batch10-validation.md)，审核/发布状态仍以 PR 和 Release 为准。
-- **已实现的教学主线**：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP。原大纲 29 个单元的内容已实现；旧文件名和锚点保留，审核和发布以 PR / Release 为准。#28/#29 等前沿补充也已实现，见各章延伸小节。
+## 怎么读
 
-为保持旧链接，Tokenizer 插为第 1A 章；P09/P11 分别以 07a/08a 文件插入，P12–P14 以 08b/08c/08d 插入，P15–P17 以 08e/08f/08g 插入，P18–P20 以 08h/08i/08j 插入，P21–P23 以 08k/08l/08m 插入，P24/P25 以 08n/08o 插入；P26 改写旧第 9 章案例并保留旧文件名与锚点，P27 插为 09a，P28 保留附录旧链接，不重编号旧第 8–10 章。验证条件和结果见[首批记录](docs/batch1-validation.md)、[第二批记录](docs/batch2-validation.md)、[第三批记录](docs/batch3-validation.md)、[第四批记录](docs/batch4-validation.md)、[第五批记录](docs/batch5-validation.md)、[第六批记录](docs/batch6-validation.md)、[第七批记录](docs/batch7-validation.md)、[第八批记录](docs/batch8-validation.md)、[第九批记录](docs/batch9-validation.md)与[第十批记录](docs/batch10-validation.md)。
+**基础篇（P00–P10）是主线，建议按顺序读**：从词嵌入、Tokenizer 和注意力一路走到训练闭环，最后亲手搭出一个能训练、能续写的 Baby-GPT。之后三段都从这个小模型出发，可以按兴趣挑读：
+
+- **架构与推理篇（P11–P18）**：KV cache、RoPE、RMSNorm / SwiGLU、GQA 与 MLA、分块注意力与分页调度、稀疏与线性注意力、CED 架构，以及 MoE。
+- **训练与应用篇（P19–P24）**：预训练数据与恢复训练、训练框架、SFT / LoRA、DPO / GRPO、推理与 MTP、量化与部署。
+- **案例与更新篇（P25–P28）**：Qwen3 与 DeepSeek 两个案例、miniGPT 综合体检，以及术语、数学与资料出处的附录。
+
+下方目录表中的 P 编号与前言一致；完整的阅读顺序和路线图见[前言 0.5 节](chapters/00_preface.md)。
+
+## 怎么跑
+
+先做下方的「CPU 快速验证」，再用「P27 一条命令做综合体检」把 S0–S6 放到同一配置里核对。
+
+想核对某个单元的运行环境与结果，看对应的验证记录：
+
+- P00–P02：[P00–P02 验证记录](docs/batch1-validation.md)
+- P03–P05：[P03–P05 验证记录](docs/batch2-validation.md)
+- P06–P08：[P06–P08 验证记录](docs/batch3-validation.md)
+- P09–P11：[P09–P11 验证记录](docs/batch4-validation.md)
+- P12–P14：[P12–P14 验证记录](docs/batch5-validation.md)
+- P15–P17：[P15–P17 验证记录](docs/batch6-validation.md)
+- P18–P20：[P18–P20 验证记录](docs/batch7-validation.md)
+- P21–P23：[P21–P23 验证记录](docs/batch8-validation.md)
+- P24–P26：[P24–P26 验证记录](docs/batch9-validation.md)
+- P27–P28：[P27–P28 验证记录](docs/batch10-validation.md)
 
 ## 📖 当前版本目录导航
 
@@ -73,9 +85,9 @@
 
 ## 💻 28 个配套代码实验（含可选框架对照）
 
-历史第二批验证了当时的 9 个编号示例；当前共有 28 个，最新执行环境与结果见[第十批记录](docs/batch10-validation.md)。
+共 28 个编号实验，最新一次全量执行的环境与结果见[综合体检验证记录](docs/batch10-validation.md)。
 
-原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。首批新增第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10、16 个，以及第 21 个的默认账本、第 22/23 个的默认手算模式只依赖标准库；第 3～7、12～15、17～19、24 个需要 PyTorch；第 11 个的 --scalar-only、第 20 个的 --data-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4；第 21 个 --hf 对照另需 requirements-frameworks.txt 中固定的依赖；第 22 个 --train 和第 23 个 --torch 才运行真实 PyTorch CPU 更新，默认手算退出成功不等于训练已运行。第 25/27 个默认实验只依赖标准库，固定配置与证据文件随仓库提供；第 26 个默认同样只用标准库，`--torch` 可选小尺寸探针另需 PyTorch 与 Jinja2；它不加载官方模型权重。第 28 个综合体检需要 CPU PyTorch，缺依赖会明确说明，不把空跑记为通过。llama.cpp 等外部框架不作为默认 Python 测试的隐含依赖。
+原有第 1～7 个实验的验证环境为 Python 3.12 与 PyTorch 2.14.1。第 8、9 个实验在 Python 3.12.14 上运行验证。第 1、2、8、10、16 个，以及第 21 个的默认账本、第 22/23 个的默认手算模式只依赖标准库；第 3～7、12～15、17～19、24 个需要 PyTorch；第 11 个的 --scalar-only、第 20 个的 --data-only 为标准库，其完整训练实验需要 PyTorch；第 9 个选修需要单独安装 tokenizers==0.21.4；第 21 个 --hf 对照另需 requirements-frameworks.txt 中固定的依赖；第 22 个 --train 和第 23 个 --torch 才运行真实 PyTorch CPU 更新，默认手算退出成功不等于训练已运行。第 25/27 个默认实验只依赖标准库，固定配置与证据文件随仓库提供；第 26 个默认同样只用标准库，`--torch` 可选小尺寸探针另需 PyTorch 与 Jinja2；它不加载官方模型权重。第 28 个综合体检需要 CPU PyTorch，缺依赖会明确说明，不把空跑记为通过。llama.cpp 等外部框架不作为默认 Python 测试的隐含依赖。
 
 1. **[`code/01_vector_similarity.py`](code/01_vector_similarity.py)**：纯 Python 手写向量内积与余弦相似度，验证水果空间距离与国王-女王向量平移。
 2. **[`code/02_manual_attention.py`](code/02_manual_attention.py)**：纯 Python 零依赖手算 3 个字（“我”、“爱”、“学”）在注意力机制内部经历的每一步数字变化。
@@ -151,7 +163,7 @@ python3 -m venv .venv-frameworks
 .venv-frameworks/bin/python -m unittest discover -s tests -v
 ```
 
-默认运行 code21 只检验标准库内存账本；只有 --hf 真正执行框架对照。依赖缺少或版本不符会明确跳过，不能把跳过当作通过。DeepSpeed/Megatron 多卡、CUDA 和 TRL 后训练没有在本批运行。
+默认运行 code21 只检验标准库内存账本；只有 --hf 真正执行框架对照。依赖缺少或版本不符会明确跳过，不能把跳过当作通过。DeepSpeed/Megatron 多卡、CUDA 和 TRL 后训练没有在本书中运行。
 
 ### 快速运行代码：
 
@@ -217,7 +229,7 @@ npm run check         # 单独检查已有成品
 npm run check:layout  # 检查手机、平板、横屏下的图表尺寸，输出预览截图
 ```
 
-若构建机不能启动 Chromium，可使用受限静态构建路径（需要支持 `alerts` 的 Pandoc；本批使用 3.9，及本地完整 Git 历史）：
+若构建机不能启动 Chromium，可使用受限静态构建路径（需要支持 `alerts` 的 Pandoc；已验证 3.9，及本地完整 Git 历史）：
 
 ```bash
 .venv/bin/python -m pip install -r requirements-build-static.txt
@@ -253,4 +265,4 @@ Mermaid 图必须提供 `accTitle` 和 `accDescr`；渲染错误、缺图或内�
 也可以在推送到 `main` 的提交消息中加入 `[refresh-release]`，显式更新 `v1.0.0` 的下载文件。
 工作流不会移动旧标签；Release 说明会标出本次阅读文件对应的提交，并用新的附件链接替换旧 ZIP 链接。
 
-构建环境提示：本书要求 **Pandoc 3.9 或更新版本**，已验证版本为 **3.9**。[官方 3.9 发布记录](https://pandoc.org/releases.html#pandoc-3.9-2026-02-03)说明该版本加入 Pandoc Markdown 的 `+alerts` 支持；3.5 不支持该组合，独立审核也已复现失败。新版本仍须重跑产物/布局检查，不假定任意系统自带版本均兼容。
+构建环境提示：本书要求 **Pandoc 3.9 或更新版本**，已验证版本为 **3.9**。[官方 3.9 发布记录](https://pandoc.org/releases.html#pandoc-3.9-2026-02-03)说明该版本加入 Pandoc Markdown 的 `+alerts` 支持；3.5 不支持该组合，构建会失败。新版本仍须重跑产物/布局检查，不假定任意系统自带版本均兼容。

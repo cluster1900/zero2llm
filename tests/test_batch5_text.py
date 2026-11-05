@@ -54,7 +54,7 @@ class Batch5TextTests(unittest.TestCase):
         for link in re.findall(r'\]\(((?:chapters|code|docs)/[^)#]+)(?:#[^)]*)?\)', readme):
             self.assertTrue((ROOT / link).is_file(), link)
         self.assertIn('P27–P28', readme)
-        self.assertIn('第五批验证', readme)
+        self.assertIn('[P12–P14 验证记录](docs/batch5-validation.md)', readme)
 
     def test_scope_and_source_links(self):
         outline = (ROOT / 'docs/expansion-outline.md').read_text()
