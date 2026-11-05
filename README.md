@@ -14,7 +14,9 @@
 
 ## 这本书讲什么
 
-这本书用 CPU 上能跑完的例子，把 Transformer 从词嵌入、Tokenizer/BPE 和注意力，讲到位置编码、残差、LayerNorm/FFN 和生成循环，再讲到可以训练、可以对照的教学模型。P00–P28 全部 29 个单元的正文与配套实验均已实现。配套有 29 个章节文件（含前言、第 1A 章与附录）、28 个编号示例脚本，以及共享模块 attention_core.py；HTML / EPUB 与源码同步更新。这些小尺寸 CPU 实验不等于所有生产技术或 GPU 性能都已复现。
+这本书用 CPU 上能跑完的例子，把 Transformer 从词嵌入、Tokenizer/BPE 和注意力，讲到位置编码、残差、LayerNorm/FFN 和生成循环，再讲到可以训练、可以对照的教学模型。全书共 29 个章节文件（含前言、第 1A 章与附录），其中 26 章在下方目录表里配有可运行的代码实验，合计 28 个编号示例脚本和共享模块 attention_core.py；附录配有标准库回归测试。边界也写在明处：YaRN 是论文机制导读，不宣称完整复现其训练；P15–P17 的三个实验（分块注意力与分页调度、稀疏与线性注意力、CED）不代表 CUDA kernel、生产服务或真实 DeepSeek 权重复现；教学模型、框架配置与真实生产训练严格区分。这些小尺寸 CPU 实验不等于所有生产技术或 GPU 性能都已复现。
+
+HTML / EPUB 随源码同步更新；[在线阅读](https://cluster1900.github.io/zero2llm/)站点和 Release 下载文件可能晚于仓库源码，仍是旧版。
 
 主线：Baby-GPT → KV cache → RoPE → RMSNorm / SwiGLU → GQA → MoE → 教学 MTP（S0–S6）。
 
@@ -26,7 +28,7 @@
 - **训练与应用篇（P19–P24）**：预训练数据与恢复训练、训练框架、SFT / LoRA、DPO / GRPO、推理与 MTP、量化与部署。
 - **案例与更新篇（P25–P28）**：Qwen3 与 DeepSeek 两个案例、miniGPT 综合体检，以及术语、数学与资料出处的附录。
 
-下方目录表中的 P 编号与前言一致；完整的阅读顺序和路线图见[前言 0.5 节](chapters/00_preface.md)。
+下方目录表沿用章节文件的编号；每章对应的 P 编号、阅读顺序和路线图见[前言 0.5 节](chapters/00_preface.md)的对照表。
 
 ## 怎么跑
 
