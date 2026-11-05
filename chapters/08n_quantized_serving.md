@@ -203,7 +203,7 @@ $$
 | 第 1 维 | 0.5608533946 | 0.5623972551 |
 | 第 2 维 | 0.4222089296 | 0.4242680323 |
 
-最大绝对差约 0.00205910，MSE 约 0.00000331170。测试另用独立标量 softmax 与加权求和核对基线，而不是调用同一个 attention 函数两次宣布正确。
+最大绝对差约 0.00205910，MSE 约 0.00000331170。
 
 这只是单 query、单头、小前缀的机制实验；**没有实现量化 cache 的追加、分页或实际整数 attention 内核**。真实框架还要说明：K/V 是否分别有 scale，按张量、通道还是 token 定尺度，已有 cache 会不会重算尺度，以及被量化的值怎样交给后端。不能把本表误差外推到十万 token。
 
@@ -343,7 +343,7 @@ data: [DONE]
 
 ```
 
-本章的 `sse_data` 先用增量 UTF-8 解码器把字节接起来，再按 LF/CRLF 行与空行组装事件。`collect_completion` 才解析 JSON、提取文本并处理结束信号。测试把中文和 emoji 的每一个字节切开，也枚举所有单次切分位置。
+本章的 `sse_data` 先用增量 UTF-8 解码器把字节接起来，再按 LF/CRLF 行与空行组装事件。`collect_completion` 才解析 JSON、提取文本并处理结束信号。
 
 | 边界 | 本章处理 |
 | --- | --- |
@@ -377,7 +377,7 @@ $$
 \mathrm{TPOT}=\frac{t_N-t_1}{N-1}\quad(N>1).
 $$
 
-开始于 10.0 秒，token 到达于 10.2、10.3、10.6 秒，TTFT≈0.2 秒，TPOT≈0.2 秒。N=0 时两者缺失，N=1 时 TPOT 缺失，不写 0 假装更快。`token_latencies` 用这个手算表测试。
+开始于 10.0 秒，token 到达于 10.2、10.3、10.6 秒，TTFT≈0.2 秒，TPOT≈0.2 秒。N=0 时两者缺失，N=1 时 TPOT 缺失，不写 0 假装更快。
 
 **只有 SSE content 事件时间时，应称首内容事件延迟／事件间隔，不冒充逐 token 延迟。** 角色或 usage 事件也不是第一输出 token。本章真实 smoke 只检查协议与结果，没有记录逐 token 时钟，因此不报告 TTFT/TPOT 实测数字。
 
@@ -404,7 +404,7 @@ python code/25_quantized_serving.py
 python -m unittest discover -s tests -p 'test_quantized_serving.py' -v
 ```
 
-默认测试验证独立有理数格点 oracle、手算表、组尾与行边界、整数累加、校准漂移、独立 attention、UTF-8/SSE 和文件生成。它还真正改写并执行七种错误实现：漏减零点、把舍入改成截断、整数点积漏减零点、丢组尾、上下文比较差一位、漏检查 `[DONE]`、每个网络块单独解码 UTF-8。另外八项实际变异覆盖对称/仿射全零 scale、全负校准不含零、最大误差符号、未完成 SSE 事件、丢弃多行 data 换行，以及 tool_calls/error 的拒绝逻辑；加上附录批次的非对齐 GGUF 格式 fixture 回归，合计十六项。异常分支采用完整事件与精确错误原因，避免被后续“不完整”检查偶然拦截。正确基线先通过，错误变体再被同一行为断言抓住。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
 提供已准备好的引擎后，可选真实测试：
 
@@ -412,8 +412,6 @@ python -m unittest discover -s tests -p 'test_quantized_serving.py' -v
 P24_LLAMA_BIN=/tmp/p24-engine/build/bin \
   python -m unittest discover -s tests -p 'test_quantized_serving.py' -v
 ```
-
-默认 36 个测试中，35 个运行、1 个真实引擎测试跳过；本次提供 b5046 后，36 个全部实际通过。跳过不等于已运行。
 
 ### 自测题
 

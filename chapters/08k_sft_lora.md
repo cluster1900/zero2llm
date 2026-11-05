@@ -126,7 +126,7 @@ $$
 2. **attention padding mask**：有效 query 不读取补齐用的 PAD key。
 3. **label mask**：指定哪些 next-token 目标进入 loss。
 
-system/user 的 attention mask 仍为 1，它们是有效上下文；labels 设为 -100 只意味着“不要求模型预测这些 token”。代码测试会发现：这些忽略目标对应的 logits 没有直接 loss 梯度，但 user 字符的 embedding 仍可能通过注意力影响 assistant 预测，因此收到梯度。
+system/user 的 attention mask 仍为 1，它们是有效上下文；labels 设为 -100 只意味着“不要求模型预测这些 token”。这些忽略目标对应的 logits 没有直接 loss 梯度，但 user 字符的 embedding 仍可能通过注意力影响 assistant 预测，因此收到梯度。
 
 所以“忽略用户 loss”与“冻结用户表示”不是一回事。也不要把系统提示全部藏起来，却以为自己实现了 assistant-only loss。
 
@@ -144,7 +144,7 @@ system/user 的 attention mask 仍为 1，它们是有效上下文；labels 设�
 
 有效标签位于 12、13、19、20，分别是“红、EOS、蓝、EOS”。对应评分 logits 位于 11、12、18、19。第一轮 assistant 正文的表示也会成为下一轮的上下文；这是 teacher forcing，不是模型先生成了第一轮答案再继续训练。
 
-`ChatRow.assistant_spans` 用左闭右开区间保存 `[12,14)` 与 `[19,21)`，包含答案和 EOS，但不包含 assistant role header。它便于人工检查；测试还使用手写的完整标签序列对照，避免实现与测试都照抄同一个错误 span。
+`ChatRow.assistant_spans` 用左闭右开区间保存 `[12,14)` 与 `[19,21)`，包含答案和 EOS，但不包含 assistant role header。它便于人工检查。
 
 ### EOS 是一个需要学习的目标
 
@@ -243,7 +243,7 @@ $$
 \frac{\partial L}{\partial x}=\begin{bmatrix}9\\7\\17\end{bmatrix}.
 $$
 
-这些数值由测试独立写死，用来检查 autograd，而不是仅比较两个使用同一段代码的模型。W0 的梯度为 None，因为它被显式冻结。输入 x 仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。
+W0 的梯度为 None，因为它被显式冻结。输入 x 仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。
 
 ### 为什么初始 B 为零，不代表学习卡死
 
@@ -307,7 +307,7 @@ python code/22_sft_lora.py
 python -m unittest discover -s tests -p 'test_sft_lora.py' -v
 ```
 
-测试在缺少 PyTorch 时会明确跳过真实训练相关部分。默认脚本打印 `training: NOT RUN`；它不会因为输出了 loss 手算数字，就假装跑过训练。
+默认脚本打印 `training: NOT RUN`；它不会因为输出了 loss 手算数字，就假装跑过训练。
 
 已经安装全书基础依赖后，执行真实 CPU 更新：
 
@@ -334,7 +334,7 @@ $$
 
 代码的 `merged()` 返回一个**新的普通 Linear**，保留原来的 bias，不改原 adapter 或基础层。调用两次也各自从同一个原始 W0 出发，不会把 BA 重复加两遍。合并后的模型不再额外执行 adapter 支路；若既改了原权重又保留支路，更新就会被算两次。
 
-测试分别检查手算矩阵和整个模型的 logits。float64 小整数例子得到精确对齐；float32 整模因乘法顺序不同，按 `atol=2e-6、rtol=2e-5` 检查。这里验证的是数值等价，不是实测推理加速。
+float64 小整数例子得到精确对齐；float32 整模因乘法顺序不同，按 `atol=2e-6、rtol=2e-5` 检查。这里验证的是数值等价，不是实测推理加速。
 
 实际保存 adapter 时，还需要记录基础 checkpoint 的精确版本、目标层名、rank/alpha、tokenizer/template、额外训练的 embedding 或其他模块。只有 A/B 文件并不等于一个独立完整模型。**本章没有实现 adapter 保存/重载或跨框架转换**，不声称这条部署链已经通过测试。
 
@@ -415,7 +415,7 @@ B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽
 
 默认 CLI 打印了手算 loss，能说 SFT 训练通过了吗？LoRA 的训练 loss 更低，能说 LoRA 比全量微调更好吗？
 
-**参考答案：** 都不能。默认命令明确输出 NOT RUN，缺 Torch 的 `--train` 以退出码 2 结束；测试用无 site-packages 的独立进程实际核对。LoRA 是从全量阶段终点继续训练同一批数据，不是同起点对比；报告明确没有 held-out 质量评估。
+**参考答案：** 都不能。默认命令明确输出 NOT RUN，缺 Torch 的 `--train` 以退出码 2 结束。LoRA 是从全量阶段终点继续训练同一批数据，不是同起点对比；报告明确没有 held-out 质量评估。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 

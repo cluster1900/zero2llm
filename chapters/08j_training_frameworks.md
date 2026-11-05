@@ -78,7 +78,7 @@ attention_mask[1] = [1, 1, 1, 1, 1, 0]
 
 因此 input_ids 的形状为 [B,T]=[2,6]。模型输出 logits 的形状是 [B,T,V]=[2,6,12]：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
 
-unknown 词会变成 ID 1。测试要求“陌生词”得到 [2,1,3]，也要求保存后加载的词表和固定句子 ID 不变。这比只检查“tokenizer.json 文件存在”更有意义。
+unknown 词会变成 ID 1。
 
 ## P20.3 框架已经 shift 了，就不要再 shift 一遍
 
@@ -103,7 +103,7 @@ $$
 
 其中有效集合 $\mathcal V$ 只包含下一位置标签不是 -100 的预测位置，N 是这些位置的数量。本例第一行 5 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。
 
-代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。测试还用 Python 标量循环、稳定的指数求和独立算一次，避免两个实现都复制同一个索引错误。
+代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。
 
 ### 一个真实发现的版本细节
 
@@ -156,7 +156,7 @@ python code/21_training_frameworks.py
 python -m unittest discover -s tests -p 'test_training_frameworks.py' -v
 ```
 
-第二条会执行标准库测试；若可选包缺失或版本不在本章验证组合中，HF 测试会明确显示 skipped。脚本默认也明确打印 HF smoke: NOT RUN，必须加 --hf 才会真正训练。
+第二条会执行标准库测试。脚本默认也明确打印 HF smoke: NOT RUN，必须加 --hf 才会真正训练。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 

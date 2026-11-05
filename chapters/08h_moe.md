@@ -203,7 +203,7 @@ A、B、C 例子设置 capacity=1 后，requested 仍是 `[2,2,1,1]`，accepted 
 2. top-k 组合权重通常让任务损失影响 router，但本章的 **top-1 加所选权重归一化**有特殊性：唯一权重恒为 1，所以该任务路径的 router 梯度为 0。
 3. 辅助损失通过全部 affinity 影响 router，不能把“空专家没有直接任务梯度”误说成“对应 router 行永远没有梯度”。
 
-在 78x 的手算测试里，x=[1,0]、router 第一列为 [0,log2,log4]、第二列为 0。令损失为输出各维之和，router 第一列梯度为 `[0,-20,+20]`：权重变化会在 10x 与 100x 间重新分配。输入第一维梯度为 78+20log2，第二维为 78。测试把这些字面算式与 autograd 对齐，没有拿生产 dispatch 函数自己验证自己。
+在 78x 的手算例子里，x=[1,0]、router 第一列为 [0,log2,log4]、第二列为 0。令损失为输出各维之和，router 第一列梯度为 `[0,-20,+20]`：权重变化会在 10x 与 100x 间重新分配。输入第一维梯度为 78+20log2，第二维为 78。
 
 “今天没收到梯度”不等于“永远不会变化”：其他 batch 可能路由到它，优化器的历史动量、权重衰减和梯度清理方式也会影响实际更新。
 
@@ -339,7 +339,7 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 6. 不会。固定平局规则使每个 token 都选 0、1；损失仍可为 1。见手算路由测试中五 token 的 [5,5,0,0] 断言。
 7. 不能通过这条任务路径，唯一组合权重恒为 1，router 梯度为零；辅助项在测试的集中路由案例中提供非零梯度。见 `test_sparse_execution_empty_experts_and_top1_router_gradient`。
 8. [-0.1,+0.1,0,0]；更新 buffer 后必须重置缓存。见偏置方向测试与 `test_runtime_and_buffer_mutations_invalidate_cache`。
-9. 不能。测试还用独立标量输出/梯度参考、78x 手算和故意注入的错误验证判据。见 `test_mutations_fail_independent_oracle_not_only_cache_agreement`。
+9. 不能。见 `test_mutations_fail_independent_oracle_not_only_cache_agreement`。
 10. 2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见 `test_full_cache_alignment_each_mode_and_extreme_k`。
 
 到这里，S0→S5 已经把“多保存一些参数”和“每 token 真正调用哪些参数”分开。接下来进入训练流水线：即使路由与缓存都正确，数据边界、去重、切分和预算没有处理好，也训练不出可靠的模型。

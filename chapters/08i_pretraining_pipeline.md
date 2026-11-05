@@ -128,8 +128,6 @@ P09 为复用三首诗的字符词表，提前知道了保留诗歌的字符。�
 
 PAD 查询整行都不可见，直接对全是负无穷的分数做 softmax 会产生不定义的结果。本实现先识别全禁用行，使用安全的临时零分数，再把禁止位置权重乘为零，使其 attention 输出精确为零；最终 PAD logits 也置零。这不是让 PAD 读取任意文档来“凑一个可见项”。
 
-测试还做了更直观的核对：关闭 dropout 后，把 A、B 一起 packing 得到的真实位置 logits，应与分别单独处理的结果接近；只改 A 的字，B 的输出应完全不变。
-
 ## P19.5 Loss：每道有效小题一票，不是每箱一票
 
 下面给五个有效目标指定一组**人为设计、未训练得来**的正确答案概率。忽略位置没有 loss，不是“loss 等于零后也算进分母”。
@@ -146,7 +144,7 @@ PAD 查询整行都不可见，直接对全是负无穷的分数做 softmax 会�
 
 总 loss 是 `9 × ln(2) = 6.238324625`，有效目标数是 5，平均是 **1.247664925**。不是除以 8，也不是只除以正文字符数 3。
 
-脚本没有把概率直接塞给 `cross_entropy`。它构造完整 18 类 logits：其他 17 类分数为 0，目标类分数设为 `ln(17p/(1-p))`，softmax 后的目标概率才恰好为 p。标准库的 `scalar_loss` 用稳定 log-sum-exp 独立计算，tensor 测试再与 `torch.nn.functional.cross_entropy(..., reduction="sum")` 比较，并核对忽略位置梯度为零。
+脚本没有把概率直接塞给 `cross_entropy`。它构造完整 18 类 logits：其他 17 类分数为 0，目标类分数设为 `ln(17p/(1-p))`，softmax 后的目标概率才恰好为 p。标准库的 `scalar_loss` 用稳定 log-sum-exp 独立计算。
 
 为什么不能平均文档均值？A 有 3 个目标，均值为 `4ln(2)/3 ≈ 0.924196241`；B 有 2 个，均值为 `5ln(2)/2 ≈ 1.732867951`。正确合并方式是：
 
@@ -171,7 +169,7 @@ mean_loss = total_loss / total_targets if total_targets else None
 
 `tensor_loss` 返回可求导的零与 `count=0`；统计均值返回 `None`，表示**没有可评分样本**，不是模型获得了完美的零损失。训练器直接跳过这种行，不执行 backward、optimizer.step、学习率推进或 token 计数。
 
-为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。测试先做两步真实更新，再喂全 PAD 行，验证整个状态不变。
+为什么连 `optimizer.step()` 也要跳过？AdamW 有动量状态和权重衰减，零梯度不保证参数不变。
 
 还要分清“框架替我们移位”和“已经手工移位”。本章的 `tensor_loss` 接受已对齐的 next-token labels，**不再移位**。Transformers 某些 causal-LM 接口则接收与输入同排的 labels，在模型内部移位；其 v4.51.3 的 language-modeling collator 在 `mlm=False` 时采用输入同排、padding 忽略的约定。换框架时必须核对具体模型，不能把这两种契约叠加使用。[官方 Data Collator 文档](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)
 

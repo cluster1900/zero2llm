@@ -117,7 +117,7 @@ $$
 
 另一种实现可能把相邻维度 0/1、2/3 配对。它们都能表达旋转位置机制，但权重布局、旋转方式和 checkpoint 转换必须一致；不能把一种公式塞进另一种布局，再仅凭“都叫 RoPE”认定兼容。
 
-缓存时保存已经做过位置旋转的 K 和原始投影 V。追加 chunk 的位置从旧缓存长度开始，旧 K 不能再旋转一次；这些正是后面的独立数值测试检查的地方。
+缓存时保存已经做过位置旋转的 K 和原始投影 V。追加 chunk 的位置从旧缓存长度开始，旧 K 不能再旋转一次。
 
 ## P25.5 SwiGLU 与专家：激活少，不代表存储少
 
@@ -225,7 +225,7 @@ False 比 True 多加的后缀（空行有意义）：
 
 ```
 
-注意 True 的模板**没有预先写入 `<think>`**。False 则把一个空 thinking 块作为 assistant 的前缀放进 prompt；这部分已属于输入，不是后来生成的输出 token。为了显示清楚，上面排版有说明行；精确换行由模板 golden 测试比对。
+注意 True 的模板**没有预先写入 `<think>`**。False 则把一个空 thinking 块作为 assistant 的前缀放进 prompt；这部分已属于输入，不是后来生成的输出 token。为了显示清楚，上面排版有说明行。
 
 两份快照的 added-token 元数据都给出 `<think>` 为 ID 151667、`</think>` 为 151668；它们的 `special` 标记是 false。带尖括号的保留文本，不一定就被 tokenizer 标成“special”；`skip_special_tokens` 不能代替明确的 reasoning 解析。
 
@@ -235,7 +235,7 @@ False 比 True 多加的后缀（空行有意义）：
 
 ## P25.9 Thinking、non-thinking、预算是三件事 {#p25.9-thinking-budget}
 
-对这两个 checkpoint，模型卡描述了硬开关 `enable_thinking`，以及在启用 thinking 时使用 `/think`、`/no_think` 的软提示机制。**软提示是给模型的文本，不是模板解析器里的另一个布尔开关。** 测试会确认：在 user 文本里加 `/no_think`，模板仍保留这段文本，不自动追加 False 的空块。[0.6B 固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)
+对这两个 checkpoint，模型卡描述了硬开关 `enable_thinking`，以及在启用 thinking 时使用 `/think`、`/no_think` 的软提示机制。**软提示是给模型的文本，不是模板解析器里的另一个布尔开关。**[0.6B 固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)
 
 至于“想多久”，又是预算问题。`max_new_tokens` 限制整个新生成序列，包括思考、闭合标记、最终答案等；它不是“答案最多多少 token”，也不会自动给答案另留一份额度。`completion_budget` 只是对已经得到的 ID 记账，不会迫使模型结束思考，更不是推理预算控制器。
 
@@ -271,11 +271,10 @@ python code/26_qwen3_case.py
 # 仓库基线 PyTorch/Jinja2：执行随机小模型和模板路径。
 OMP_NUM_THREADS=1 python code/26_qwen3_case.py --torch
 
-# 分开报告标准库、模板与数值测试；跳过不是通过。
 OMP_NUM_THREADS=1 python -m unittest discover -s tests -p test_qwen3_case.py -v
 ```
 
-默认输出为每项组件附上带完整 revision 的 source URL，并打印本章精确参数和缓存数字。程序无网络请求；测试还封锁网络与可选依赖，确认标准库路径仍可完成。
+默认输出为每项组件附上带完整 revision 的 source URL，并打印本章精确参数和缓存数字。程序无网络请求。
 
 `--torch` 使用 CPU、PyTorch `2.14.1+cpu`、Jinja2 `3.1.6`、种子 250、单线程、float64。缺少 PyTorch 或 Jinja2 时给出安装 `requirements.txt` 的提示并以状态 2 退出；不是“只打印配置就算可选实验通过”。本章没有额外安装 Transformers，也不修改仓库的依赖锁定。
 
@@ -295,18 +294,11 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 
 ## P25.11 为什么这次不是让两个错误实现互相作证
 
-测试分成四层：
+本章的数值结论不靠两份实现互相比对：结构与数值以独立的标量参考为准，另可与官方实现对照，避免两份实现共享同一个错误而一起通过；分层做法与变体清单见 `docs/testing.md`。
 
-1. **来源与算术。** 固定仓库、完整 revision、关键哈希；用独立手写乘法表达式检查真实参数总数，用明确字节数检查两份真实 KV 预算。修改快照或 revision 必须失败。另把 `hidden_size` 的 1024 改为 1025：字节数不变、JSON 仍合法，也必须得到精确的文件完整性错误，才能证明不是只有长度检查在起作用。
-2. **实际结构。** 用 `named_parameters()` 比对微型模型所有名字、形状、绑定去重后的总数；不是只比较两个计数公式。
-3. **独立数值。** Python 标量 oracle 从每个权重元素出发，自己做线性层、RMSNorm、split-half RoPE、因果注意力、SwiGLU 和专家混合，不调用生产 helper 或 tensor matmul。它同时对照 dense/MoE 的最终 logits 与每层真实 K/V。测试把所有 Q/K、input/post-attention 和最终 norm gain 用独立种子 251 均匀抽到 `[0.5,1.5)`，每个模块都不同；否则全为 1 的初始化会掩盖用错同宽度 norm 的错误。这只改变测试样本，不改变生产代码的初始化。
-4. **行为与反例。** 比较任意分块与完整前缀，改未来 token 后确认过去输出保持因果独立。dense 使用零误差检查；MoE 仅允许绝对误差 `1e-12`、相对误差 0，因为未来路由可以改变某专家的 minibatch 形状，进而使 CPU 矩阵乘法末位出现舍入差异，并非放宽注意力掩码规则。还检查 sparse dispatch 真正只调用选中的专家，以及坏缓存、预算边界和 non-thinking 下控制 ID 也计入答案段的约定。
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
-还实际执行 **16 个偏离本练习契约的变体**，并要求独立断言能抓住它们：重复计算绑定 head、用 D/Hq 代替显式 d、漏掉 QK norm 参数、漏计闭合 token、把未闭合思考误作答案、错排 GQA 头、丢失缓存 offset、错用相邻 RoPE 配对、跳过 Q norm、取消选中权重归一化、计算全部专家、再次旋转旧 K、K 错用 Q 的 norm gain、交换 input/post-attention norm、最终输出错用层内 norm、在多个闭合标签下改用最后一个作为分界（偏离本练习的首个闭合约定，并非官方做法错误）。三种 norm 错接是形状仍合法的真实源码替换，独立标量参考和可选官方参考都在 dense／MoE 两条路径上拒绝它们。不是在注释里列出错误后就算“做过负例”。
-
-此外，利用已有的独立环境，实际运行了可选官方参照测试 `test_random_tiny_official_dense_and_moe_shapes_logits_and_cache`：Transformers 4.51.3、PyTorch 2.14.1+cpu、CPU float32、种子 89、eager attention，分别构造官方随机 tiny dense／MoE 模型，严格加载同一套微型随机参数。同样先用种子 251 将所有 norm gain 独立抽到 `[0.5,1.5)`，再把这整套权重加载到官方模型。两者参数数目匹配，logits 与逐层 K/V 在 `atol=rtol=3e-6` 下通过；不以全一 gain 或某次误差恰好为零作为等价证据。测试不调用 `from_pretrained`，没有下载模型或 tokenizer；缺少这组独立环境时明确跳过，不能算通过。本次共发现 28 项测试：仓库基线环境 26 项通过、2 项官方参考测试明确跳过；无 PyTorch/Jinja2 的标准库环境 14 项通过、14 项明确跳过；独立官方环境 28 项全部通过。
-
-这个交叉检查只验证小型结构和数值路径，不表示已经加载或运行上述真实 checkpoint。
+本章的数值对照只验证小型结构和数值路径，不表示已经加载或运行上述真实 checkpoint。
 
 这些检查能证明这份教学代码在已覆盖条件下符合我们明确写出的数学规则，**不能证明真实 checkpoint 的输出质量、GPU 性能、长上下文可靠性或 reasoning 能力**。
 
