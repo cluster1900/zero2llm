@@ -144,7 +144,7 @@ PAD 查询整行都不可见，直接对全是负无穷的分数做 softmax 会�
 
 总 loss 是 `9 × ln(2) = 6.238324625`，有效目标数是 5，平均是 **1.247664925**。不是除以 8，也不是只除以正文字符数 3。
 
-脚本没有把概率直接塞给 `cross_entropy`。它构造完整 18 类 logits：其他 17 类分数为 0，目标类分数设为 `ln(17p/(1-p))`，softmax 后的目标概率才恰好为 p。标准库的 `scalar_loss` 用稳定 log-sum-exp 独立计算，tensor 测试再与 `torch.nn.functional.cross_entropy(..., reduction="sum")` 比较，并核对忽略位置梯度为零。
+脚本没有把概率直接塞给 `cross_entropy`。它构造完整 18 类 logits：其他 17 类分数为 0，目标类分数设为 `ln(17p/(1-p))`，softmax 后的目标概率才恰好为 p。标准库的 `scalar_loss` 用稳定 log-sum-exp 独立计算。
 
 为什么不能平均文档均值？A 有 3 个目标，均值为 `4ln(2)/3 ≈ 0.924196241`；B 有 2 个，均值为 `5ln(2)/2 ≈ 1.732867951`。正确合并方式是：
 

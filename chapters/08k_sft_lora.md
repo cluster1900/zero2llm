@@ -126,7 +126,7 @@ $$
 2. **attention padding mask**：有效 query 不读取补齐用的 PAD key。
 3. **label mask**：指定哪些 next-token 目标进入 loss。
 
-system/user 的 attention mask 仍为 1，它们是有效上下文；labels 设为 -100 只意味着“不要求模型预测这些 token”。代码测试会发现：这些忽略目标对应的 logits 没有直接 loss 梯度，但 user 字符的 embedding 仍可能通过注意力影响 assistant 预测，因此收到梯度。
+system/user 的 attention mask 仍为 1，它们是有效上下文；labels 设为 -100 只意味着“不要求模型预测这些 token”。这些忽略目标对应的 logits 没有直接 loss 梯度，但 user 字符的 embedding 仍可能通过注意力影响 assistant 预测，因此收到梯度。
 
 所以“忽略用户 loss”与“冻结用户表示”不是一回事。也不要把系统提示全部藏起来，却以为自己实现了 assistant-only loss。
 

@@ -7003,8 +7003,7 @@ down.weight = [[1, 0], [0,1]]</code></pre>
 <p>down 是单位矩阵，所以输出恰好是
 <code>[-0.806824,7.046377]</code>。如果误用 sigmoid 而不是
 SiLU，第一项会变成正数；如果误把两路相加，也不会得到表中的结果。<code>gate_walkthrough()</code>
-打印每一层，测试把最终结果独立写成 <code>-3/(1+e)</code> 和
-<code>8/(1+exp(-2))</code> 核对。</p>
+打印每一层。</p>
 <h2 id="p13.5-为什么不能把两种-ffn-都设置为-4d-宽">P13.5
 为什么不能把两种 FFN 都设置为 4D 宽</h2>
 <p>先全部关闭 bias，GELU FFN 有两个矩阵，参数数是：</p>
@@ -7053,8 +7052,7 @@ M=2H/3；当 H=4D 时，M≈8D/3。这种收窄门控 FFN 的比较思路也出�
 <code>multiple_of</code>，要重新报告真实误差。</p>
 <p>有 bias 时也别忘了数：GELU 多 H+D，SwiGLU 多 2M+D。上述宽度对应 18672
 与 18736，不再严格相等，相差
-64。源码的计数函数包含这两种情况，测试再用真实 <code>numel()</code>
-交叉检查。参数数相同也不等于峰值激活内存、执行时间或训练质量相同：门控要保留额外支路中间量，kernel
+64。源码的计数函数包含这两种情况。参数数相同也不等于峰值激活内存、执行时间或训练质量相同：门控要保留额外支路中间量，kernel
 和硬件的实现也不同。</p>
 <h2 id="p13.6-s2-不被悄悄改写s3-有明确配置">P13.6 S2 不被悄悄改写，S3
 有明确配置</h2>
@@ -8175,11 +8173,7 @@ exp(10002)。减去最大值后，最大指数是 exp(0)=1。输入 Q/K/V
 <code>1.11e-16</code>，检查阈值为
 <code>1e-12</code>。这是这组小输入的数值检查，不是任意长度、任意 dtype
 都具有相同误差的证明。</p>
-<p>只有 full/block 相等还不够：两条路径可能一起忘记
-√d。测试另外使用标准库 Decimal 的 <strong>65
-位十进制有效数字精度独立参考</strong>，逐 query
-直接算点积、指数和归一化，不调用生产实现的输入辅助函数、Softmax 或 block
-更新。手算的 6 又提供了更容易人工核验的锚点。</p>
+<p>只有 full/block 相等还不够：两条路径可能一起忘记 √d。</p>
 <p>这与 GQA 的区别也很重要：GQA 改变 KV 头的组织方式；在线 Softmax
 只是计算同一组 Q/K/V 的方式。不能用这章的数值等价实验证明任意 MHA 改 GQA
 都不损失质量。</p>
@@ -8796,8 +8790,7 @@ C×C 三角形代替。</p>
 \]</span></p>
 <p>区间长度最多是 <code>1+L×(W−1)</code>。逐位置
 FFN、归一化和残差不增加新的跨位置边。代码
-<code>receptive_positions()</code>
-逐层合并可达集合，测试再用上面的闭式表达核验。</p>
+<code>receptive_positions()</code> 逐层合并可达集合。</p>
 <p><strong>结构上存在一条路径，不等于信息一定被学会、保留或准确检索。</strong>
 远处原始 K/V
 已经不在当前层的窗口中；传来的只是中间隐藏表示。也不能把理论可达长度当成实测的长上下文能力。</p>
@@ -10705,9 +10698,7 @@ loss，不是“loss 等于零后也算进分母”。</p>
 <p>脚本没有把概率直接塞给 <code>cross_entropy</code>。它构造完整 18 类
 logits：其他 17 类分数为 0，目标类分数设为
 <code>ln(17p/(1-p))</code>，softmax 后的目标概率才恰好为 p。标准库的
-<code>scalar_loss</code> 用稳定 log-sum-exp 独立计算，tensor 测试再与
-<code>torch.nn.functional.cross_entropy(..., reduction="sum")</code>
-比较，并核对忽略位置梯度为零。</p>
+<code>scalar_loss</code> 用稳定 log-sum-exp 独立计算。</p>
 <p>为什么不能平均文档均值？A 有 3 个目标，均值为
 <code>4ln(2)/3 ≈ 0.924196241</code>；B 有 2 个，均值为
 <code>5ln(2)/2 ≈ 1.732867951</code>。正确合并方式是：</p>
@@ -12004,10 +11995,9 @@ PAD key。</li>
 loss。</li>
 </ol>
 <p>system/user 的 attention mask 仍为 1，它们是有效上下文；labels 设为
--100 只意味着“不要求模型预测这些
-token”。代码测试会发现：这些忽略目标对应的 logits 没有直接 loss 梯度，但
-user 字符的 embedding 仍可能通过注意力影响 assistant
-预测，因此收到梯度。</p>
+-100 只意味着“不要求模型预测这些 token”。这些忽略目标对应的 logits
+没有直接 loss 梯度，但 user 字符的 embedding 仍可能通过注意力影响
+assistant 预测，因此收到梯度。</p>
 <p>所以“忽略用户
 loss”与“冻结用户表示”不是一回事。也不要把系统提示全部藏起来，却以为自己实现了
 assistant-only loss。</p>
@@ -17003,8 +16993,7 @@ href="https://arxiv.org/abs/2401.06066v1">DeepSeekMoE v1</a></p>
 <code>[0,1]</code>、<code>[3,2]</code>、<code>[0,1]</code>，对应权重
 <code>[4/7,3/7]</code>、<code>[4/7,3/7]</code>、<code>[1/2,1/2]</code>；负载为
 <code>[2,2,1,1]</code>。平局按较小专家 ID 先选，答案可直接逐行核对。</p>
-<p>测试再把 router 权重全部置零，强制所有 token 选择专家 0、1，负载应为
-<code>[16,16,0,0]</code>。未被选中的专家梯度可以是
+<p>MoE 中未被选中的专家梯度可以是
 <code>None</code>，这不是自动判错的理由；但主干、主 head
 与实际参与计算的路径不能整体断掉。有限梯度检查要理解稀疏计算，不能对所有参数一刀切要求非空。</p>
 <p>主线 MoE 不按每个 chunk 的容量丢弃
