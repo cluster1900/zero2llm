@@ -450,7 +450,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 ## 资料与实现边界
 
-核验日：2026-10-19。以下只用论文或官方资料：
+核验日见附录 H。以下只用论文或官方资料：
 
 - [FlashAttention 原论文（arXiv 2205.14135v2）](https://arxiv.org/pdf/2205.14135v2)：IO-aware tiling、在线归一化与精确注意力的边界；本章未实现其 GPU 前反向 kernel。
 - [PagedAttention 原论文 v1](https://arxiv.org/html/2309.06180v1)：块表、非连续 KV、共享和写时复制、请求调度；本章只模拟单线程所有权和逻辑读取。

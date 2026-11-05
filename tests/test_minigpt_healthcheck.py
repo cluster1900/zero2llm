@@ -163,8 +163,11 @@ runpy.run_path(sys.argv[1], run_name='__main__')
     def test_reading_contract_and_chinese_svg(self):
         body = (ROOT / 'chapters/09a_minigpt_healthcheck.md').read_text()
         for text in ('{#p27-healthcheck}', '../code/28_minigpt_healthcheck.py', '自测', '模型卡',
-                     '--mtp', '--json', '2026-10-20', '不是', '4096', '2048'):
+                     '--mtp', '--json', '附录 H', '不是', '4096', '2048'):
             self.assertIn(text, body)
+        appendix = (ROOT / 'chapters/10_appendix.md').read_text().split('## 附录 H：', 1)[1]
+        for row in ('| 09a | 来源核验日 | 2026-10-20 |', '| 09a | 重新运行日期 | 2026-10-30 |'):
+            self.assertIn(row, appendix)
         self.assertNotIn('](../tests/', body)
         svg = ET.parse(ROOT / 'assets/diagrams/p27-healthcheck.svg')
         ns = {'s': 'http://www.w3.org/2000/svg'}

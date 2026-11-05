@@ -423,7 +423,7 @@ B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽
 
 SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 A/B 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
 
-来源按 **2026-10-19** 核验，固定版本而非追随 latest：
+来源按附录 H 所列日期核验，固定版本而非追随 latest：
 
 - [Transformers 4.51.3 chat templates](https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating)：模板、生成前缀、特殊 token 重复的注意事项。
 - [TRL 0.18.2 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py)：框架职责参照，未在本章运行。

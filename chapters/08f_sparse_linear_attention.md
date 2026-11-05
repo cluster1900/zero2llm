@@ -286,4 +286,4 @@ P16.4 的固定窗口是事先定好看哪里。[MiniMax Sparse Attention，arXi
 - [Transformers are RNNs，ICML 2020 定稿，PMLR 119:5156–5165](https://proceedings.mlr.press/v119/katharopoulos20a.html)：正特征核、因果归一化和递推的原始依据，不把其他新架构混入该公式。
 - [FLA 官方实现入口](https://github.com/fla-org/flash-linear-attention)：动态仓库链接，仅作选读；不是本章固定算法或性能证据。
 
-上述原始来源与官方入口核验于 2026-10-19。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
+上述原始来源与官方入口的核验日期见附录 H。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。

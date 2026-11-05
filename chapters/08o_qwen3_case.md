@@ -10,7 +10,7 @@
 
 ## P25.1 先把研究对象钉住
 
-核对日期为 **2026-10-19**。本章研究的是 2025 年首发路线的两个混合 thinking / non-thinking 文本 checkpoint，**不是**名字中带 `Instruct-2507`、`Thinking-2507` 的后续版本，也不是 Qwen3-Next、视觉模型或整个 Qwen3 家族。
+核对日期见附录 H。本章研究的是 2025 年首发路线的两个混合 thinking / non-thinking 文本 checkpoint，**不是**名字中带 `Instruct-2507`、`Thinking-2507` 的后续版本，也不是 Qwen3-Next、视觉模型或整个 Qwen3 家族。
 
 | 对象 | 官方仓库 | 本章锁定的完整 revision |
 | --- | --- | --- |

@@ -60,10 +60,12 @@ class Preface(unittest.TestCase):
         ci_torch = re.search(r"torch==([\d.]+)", ci).group(1)
         hc = read("09a_minigpt_healthcheck.md")
         unit = re.search(r"^# .*（(P\d+)）", hc, re.M).group(1)
-        py, tv = re.search(r"Python (3\.\d+\.\d+)、PyTorch ([\w.+]+)、", hc).groups()
         self.assertIn(
-            f"CI 在 Python {ci_py} 加 PyTorch {ci_torch}（CPU 版）上运行这条命令；"
-            f"{unit}（09a）报告的实测数字来自 Python {py}、PyTorch {tv}。", self.pre)
+            f"CI 运行这条命令的环境与 {unit}（09a）报告实测数字的环境都列在附录 H。", self.pre)
+        appendix = read("10_appendix.md").split("## 附录 H：", 1)[1]
+        self.assertIn(f"| 00 | CI 环境 | Python {ci_py}、PyTorch {ci_torch}（CPU 版） |", appendix)
+        self.assertRegex(appendix, r"\| 09a \| 重新运行 Python \| 3\.\d+\.\d+ \|")
+        self.assertRegex(appendix, r"\| 09a \| 重新运行 PyTorch \| [\w.+]+ \|")
         self.assertNotIn("第 27 章", self.pre)
 
 

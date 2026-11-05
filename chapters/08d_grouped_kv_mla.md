@@ -317,7 +317,7 @@ Rank example: 3 -> 2, Frobenius error=1.0
 ## 资料与实现边界
 
 - [GQA 原论文 v3](https://arxiv.org/html/2305.13245v3)：核验 MHA/MQA/GQA 边界及分组均值初始化、继续预训练的区别。
-- [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日 2026-10-19。
+- [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日见附录 H。
 - [DeepSeek-V3 技术报告 v2，§2.1.1](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1)：核验 MLA 的联合内容压缩、解耦位置项与缩放维度。
 - [DeepSeek-V3 官方推理源码](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py)：核验内容/位置缓存分离的实现入口；动态链接核验日见附录 H。
 

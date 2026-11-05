@@ -104,7 +104,7 @@ class Removed(unittest.TestCase):
 
     def test_ch08f_verification_sentence(self):
         text = read("08f_sparse_linear_attention.md")
-        self.assertIn("上述原始来源与官方入口核验于 2026-10-19。CPU 实验只验证数学表达", text)
+        self.assertIn("上述原始来源与官方入口的核验日期见附录 H。CPU 实验只验证数学表达", text)
         self.assertNotIn("MSA 除外", text)
 
     def test_ch08b_cache_edit_sentence(self):
@@ -120,7 +120,7 @@ class Removed(unittest.TestCase):
         srcs = read("08m_reasoning_mtp.md").split("## 资料版本与复现边界", 1)[1]
         for gone in ("DFlash", "ECHO", "EAGLE-4", "FlashMap", "LK losses", "Nemotron"):
             self.assertNotIn(gone, srcs)
-        self.assertIn("核验日期：2026-10-19。以下固定论文版本", srcs)
+        self.assertIn("核验日期见附录 H。以下固定论文版本", srcs)
 
 
 if __name__ == "__main__":

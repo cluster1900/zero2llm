@@ -47,7 +47,7 @@ python3 code/08_byte_bpe.py
 python3 -m unittest discover -s tests -v
 ```
 
-第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、600 多条测试都会执行，其中大多与上面两个例子无关。CI 在 Python 3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；P27（09a）报告的实测数字来自 Python 3.13.5、PyTorch 2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
+第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、600 多条测试都会执行，其中大多与上面两个例子无关。CI 运行这条命令的环境与 P27（09a）报告实测数字的环境都列在附录 H。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
 
 > [!TIP]
 > **选修：Hugging Face 对照实验。** 只想理解算法，可以跳过。想比较真实分词库时，新建虚拟环境，再安装 `requirements-tokenizer.txt` 中固定的 `tokenizers==0.21.4`，运行 `code/09_hf_tokenizer.py`。它仍只用 CPU 和本地合成语料，不下载语言模型。安装依赖需要网络，安装完成后的实验不需要网络。
@@ -3375,7 +3375,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_rope.py' -v
 
 ## P12.12 来源与下一步
 
-来源核验日期：2026-10-19。
+来源核验日期见附录 H。
 
 - [RoFormer / RoPE 论文，arXiv:2104.09864](https://arxiv.org/abs/2104.09864)：Q/K 旋转与相对位置点积的原始来源；本章二维数值是独立手算与脚本生成。
 - [Position Interpolation 论文（Chen 等），arXiv:2306.15595](https://arxiv.org/abs/2306.15595)：位置插值 PI 的原始来源。
@@ -3661,7 +3661,7 @@ P13.4 的 SwiGLU 两个因子都没有上界，两个大坐标相乘就是离群
 4. [PyTorch 2.14 RMSNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.RMSNorm.html)：公式与 epsilon 计算类型；本代码始终显式指定 ε。
 5. [PyTorch 2.14 SiLU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.SiLU.html)：SiLU 的逐元素定义。
 
-来源核对日期：2026-10-19。实际实验由固定依赖环境运行；其它设备或库版本的最后几位可能不同，应先核对配置与测试，而不是把表中的舍入值当作所有环境的逐位承诺。
+来源核对日期见附录 H。实际实验由固定依赖环境运行；其它设备或库版本的最后几位可能不同，应先核对配置与测试，而不是把表中的舍入值当作所有环境的逐位承诺。
 
 
 ---
@@ -3985,7 +3985,7 @@ Rank example: 3 -> 2, Frobenius error=1.0
 ## 资料与实现边界
 
 - [GQA 原论文 v3](https://arxiv.org/html/2305.13245v3)：核验 MHA/MQA/GQA 边界及分组均值初始化、继续预训练的区别。
-- [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日 2026-10-19。
+- [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日见附录 H。
 - [DeepSeek-V3 技术报告 v2，§2.1.1](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1)：核验 MLA 的联合内容压缩、解耦位置项与缩放维度。
 - [DeepSeek-V3 官方推理源码](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py)：核验内容/位置缓存分离的实现入口；动态链接核验日见附录 H。
 
@@ -4446,7 +4446,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 ## 资料与实现边界
 
-核验日：2026-10-19。以下只用论文或官方资料：
+核验日见附录 H。以下只用论文或官方资料：
 
 - [FlashAttention 原论文（arXiv 2205.14135v2）](https://arxiv.org/pdf/2205.14135v2)：IO-aware tiling、在线归一化与精确注意力的边界；本章未实现其 GPU 前反向 kernel。
 - [PagedAttention 原论文 v1](https://arxiv.org/html/2309.06180v1)：块表、非连续 KV、共享和写时复制、请求调度；本章只模拟单线程所有权和逻辑读取。
@@ -4746,7 +4746,7 @@ P16.4 的固定窗口是事先定好看哪里。[MiniMax Sparse Attention，arXi
 - [Transformers are RNNs，ICML 2020 定稿，PMLR 119:5156–5165](https://proceedings.mlr.press/v119/katharopoulos20a.html)：正特征核、因果归一化和递推的原始依据，不把其他新架构混入该公式。
 - [FLA 官方实现入口](https://github.com/fla-org/flash-linear-attention)：动态仓库链接，仅作选读；不是本章固定算法或性能证据。
 
-上述原始来源与官方入口核验于 2026-10-19。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
+上述原始来源与官方入口的核验日期见附录 H。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
 
 
 ---
@@ -4777,7 +4777,7 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 ## P17.2 哪些是已经核验的官方事实
 
-本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。2026-10-19 核验了技术报告 v1，以及官方 Hugging Face 仓库的固定 revision：
+本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。本章核验了技术报告 v1（核验日期见附录 H），以及官方 Hugging Face 仓库的固定 revision：
 
 ```text
 314113f8a7dadb388215396ba5fbee2c610a04d6
@@ -5377,10 +5377,10 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 
 ## P18.11 和官方资料对照：学机制，不冒充复现
 
-本章于 2026-10-19 核验以下固定论文版本，并沿用大纲来源编号：
+本章核验以下固定论文版本（核验日期见附录 H）：
 
-- **S19：** [DeepSeekMoE，arXiv 2401.06066v1，§3.1–3.3](https://arxiv.org/html/2401.06066v1#S3)。它讨论细粒度专家、共享专家隔离与负载均衡。共享专家始终执行，细分专家时要同时调整激活数量，不能只比较专家数。该版本公式（9）–（11）的 Softmax gating 不应被自动改写为本章的 selected renormalization。
-- **S09：** [DeepSeek-V3 官方仓库](https://github.com/deepseek-ai/DeepSeek-V3) 所链接的 [技术报告 arXiv 2412.19437v2，§2.1.2](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2)。V3 使用 Sigmoid affinity、所选 affinity 归一化、只影响选择的均衡偏置，并保留很小的序列级辅助项；报告明确说明训练和推理不丢弃 token。因此 “auxiliary-loss-free” 不能解释成全模型绝对没有任何辅助损失，也不能把本章容量丢弃示例说成 V3 的做法。
+- [DeepSeekMoE，arXiv 2401.06066v1，§3.1–3.3](https://arxiv.org/html/2401.06066v1#S3)。它讨论细粒度专家、共享专家隔离与负载均衡。共享专家始终执行，细分专家时要同时调整激活数量，不能只比较专家数。该版本公式（9）–（11）的 Softmax gating 不应被自动改写为本章的 selected renormalization。
+- [DeepSeek-V3 官方仓库](https://github.com/deepseek-ai/DeepSeek-V3) 所链接的 [技术报告 arXiv 2412.19437v2，§2.1.2](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2)。V3 使用 Sigmoid affinity、所选 affinity 归一化、只影响选择的均衡偏置，并保留很小的序列级辅助项；报告明确说明训练和推理不丢弃 token。因此 “auxiliary-loss-free” 不能解释成全模型绝对没有任何辅助损失，也不能把本章容量丢弃示例说成 V3 的做法。
 
 本书 S5 使用 Softmax affinity、单进程逐专家 dispatch、可分开观察的 batch 辅助项或偏置模式。没有复现 V3 的 Sigmoid 路由、节点限制、分布式均衡、FP8、通信 kernel、训练数据或官方权重。引用生产系统的设计动机，不意味着继承其性能和质量结论。
 
@@ -5737,7 +5737,7 @@ N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验�
 - [PyTorch 保存与加载教程](https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html)：本章核验时为 2.14 教程，动态入口；模型与优化器状态的区别。
 - [Transformers v4.51.3：Data Collator](https://huggingface.co/docs/transformers/v4.51.3/en/main_classes/data_collator)：固定版本的标签与 padding 契约。本章没有安装或调用 Transformers。
 
-来源核验日：2026-10-19。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。
+来源核验日见附录 H。原始论文结论、官方接口说明与本书 CPU 实测是三种证据，不应相互冒充。
 
 
 ---
@@ -5919,8 +5919,6 @@ python3.12 -m venv /tmp/zero2llm-frameworks
 官方 CPU wheel 的平台列表见 [PyTorch 官方索引](https://download.pytorch.org/whl/cpu/torch/)。若平台没有匹配 wheel，不要从不明镜像拼装包；可以先完成标准库部分，再选择官方支持的环境。
 
 本章锁定 torch 2.14.1（本次 wheel 带 +cpu）、transformers 4.51.3、accelerate 1.6.0、tokenizers 0.21.4、huggingface-hub 0.30.2、safetensors 0.5.3。它是**已验证的教学组合，不是最新版推荐，也不代表任意跨版本组合都兼容**。requirements-frameworks.txt 锁定附加框架包，PyTorch 单独从官方 CPU 源安装，避免意外引入 CUDA 大包。正式归档环境还应保存完整 pip freeze、Python 版本和平台信息，因为只锁直接依赖不等于锁了全部传递依赖。
-
-本次验证为节省重复安装空间，使用独立 /tmp/zero2llm-p20-venv，并只读复用原环境的 Torch / Tokenizers 路径；新增包写入独立环境，核对原环境版本未变。上面的干净环境命令是读者的安装路线，不要求复刻这个路径优化。
 
 缺少可选包或版本不符时，--hf 输出 SKIP 并返回退出码 2；它不会临时联网补下载。满足版本但出现真正的运行错误时，程序正常报错，而不是吞掉异常并说“兼容性跳过”。
 
@@ -6118,7 +6116,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --standalone --nproc_per_node=2 \
 
 ## 资料与版本边界
 
-核验日期：2026-10-19。以下优先固定官方版本或原始论文；资料中的大规模结果不算作本书复现。
+核验日期见附录 H。以下优先固定官方版本或原始论文；资料中的大规模结果不算作本书复现。
 
 - [Transformers 4.51.3 Trainer](https://huggingface.co/docs/transformers/v4.51.3/en/trainer)、[GPT-2 API](https://huggingface.co/docs/transformers/v4.51.3/en/model_doc/gpt2)、[对应 Trainer 源码](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/trainer.py)：对象职责、标签计数与保存逻辑。本章实际运行此版本。
 - [Transformers 4.51.3 PyPI 元数据](https://pypi.org/pypi/transformers/4.51.3/json)、[Accelerate 1.6.0 PyPI 元数据](https://pypi.org/pypi/accelerate/1.6.0/json)：附加依赖选择；实际锁定项见 requirements-frameworks.txt。
@@ -6555,7 +6553,7 @@ B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽
 
 SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 A/B 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
 
-来源按 **2026-10-19** 核验，固定版本而非追随 latest：
+来源按附录 H 所列日期核验，固定版本而非追随 latest：
 
 - [Transformers 4.51.3 chat templates](https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating)：模板、生成前缀、特殊 token 重复的注意事项。
 - [TRL 0.18.2 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py)：框架职责参照，未在本章运行。
@@ -6880,7 +6878,7 @@ GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我�
 
 ## P22.8 接到 TRL：固定版本配置阅读，明确未运行
 
-本节核对的是 **TRL 0.16.1** 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，核验日期为 2026-10-19。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。
+本节核对的是 **TRL 0.16.1** 的 [DPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/dpo_config.py) 与 [GRPOConfig 源码](https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py)，核验日期见附录 H。这是固定版本接口导读，不是对当前最新版的描述，也不是与本仓库依赖组合的兼容性证明。
 
 **为什么相邻章节引用的 TRL 版本不一样？** [P20](#p20-frameworks) 用 [0.17.0 官方总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 建立框架与训练入口的地图；[P21](#p21-sft) 用 [0.18.2 SFTTrainer 源码](https://github.com/huggingface/trl/blob/v0.18.2/trl/trainer/sft_trainer.py) 说明 SFT 训练器的职责。本章则选择 **0.16.1 作为固定的历史 GRPO 实现切片**，逐项核对奖励标准化、KL 估计和 loss 归约，再与手写教学变体对照。选择这个较早标签是为了固定具体的比较对象，不是推荐退回旧环境。
 
@@ -7332,7 +7330,7 @@ batch 小时解码受内存带宽限制，多验证几个草稿位置几乎不�
 
 ## 资料版本与复现边界
 
-核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
+核验日期见附录 H。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
 
 - [DeepSeek-R1，arXiv:2501.12948v1](https://arxiv.org/html/2501.12948v1)：§2.2–2.4，Zero／冷启动／RL／数据筛选／SFT／蒸馏的区别。
 - [DeepSeek-V3 Technical Report，arXiv:2412.19437v2](https://arxiv.org/html/2412.19437v2)：§2.2，串行 MTP 模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。
@@ -7572,7 +7570,7 @@ GGUF 可以把模型元数据、tokenizer 信息、张量名、形状、类型�
 
 ## P24.8 四类工具，按工作负载选，不按热度选
 
-下表是**固定历史版本**的定位与检查路线，核验日为 **2026-10-19**，不是“这些旧版本是当前生产推荐”，也不保证后续模型被它们支持。
+下表是**固定历史版本**的定位与检查路线，核验日见附录 H，不是“这些旧版本是当前生产推荐”，也不保证后续模型被它们支持。
 
 | 工具与锁定版本 | 本章关注的用途 | 需要逐项核对的兼容性 | 本书实际验证 |
 | --- | --- | --- | --- |
@@ -7806,7 +7804,7 @@ FP4 块格式让每一小块元素共享一个 scale，块越小，异常值影�
 
 ## P25.1 先把研究对象钉住
 
-核对日期为 **2026-10-19**。本章研究的是 2025 年首发路线的两个混合 thinking / non-thinking 文本 checkpoint，**不是**名字中带 `Instruct-2507`、`Thinking-2507` 的后续版本，也不是 Qwen3-Next、视觉模型或整个 Qwen3 家族。
+核对日期见附录 H。本章研究的是 2025 年首发路线的两个混合 thinking / non-thinking 文本 checkpoint，**不是**名字中带 `Instruct-2507`、`Thinking-2507` 的后续版本，也不是 Qwen3-Next、视觉模型或整个 Qwen3 家族。
 
 | 对象 | 官方仓库 | 本章锁定的完整 revision |
 | --- | --- | --- |
@@ -8152,7 +8150,7 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 3. **本书做了什么？** 提取字段、运行小矩阵、验证坐标，还是跑了真实权重？只有实际运行的部分才能叫本书实验结果。
 4. **哪里仍未知？** 缺字段不等于功能不存在，参考实现也不等于线上部署实现。
 
-本章核查日期为 **2026-10-19**。以下是官方模型 API 当日返回、随后实际读取配置的固定提交，不是 `main` 别名；后来发布的新模型不自动继承本章结论。
+本章核查日期见附录 H。以下是官方模型 API 当日返回、随后实际读取配置的固定提交，不是 `main` 别名；后来发布的新模型不自动继承本章结论。
 
 | 本章代号 | 官方仓库 | 固定 revision |
 | --- | --- | --- |
@@ -8935,7 +8933,7 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 - 第 341–342 行：只有通过上面两道检查，才写入 `caught: True`。
 - `before_split` 在循环前第 328–330 行算出：用正确的 `s1.cached_forward`（`good`）在同一 3+5 分段上前向，再与完整前向 `expected` 取最大绝对差；它就是图中的灰色 “before” 柱。
 
-2026-10-30 重新运行（下列负例数字与 P27.10 计时均于该日实测，非复制此前运行），Python 3.13.5、PyTorch 2.14.1+cpu、单线程、seed=270，按上述固定输入运行：
+在附录 H 所列日期与环境下重新运行（下列负例数字与 P27.10 计时均于该日实测，非复制此前运行），单线程、seed=270，按上述固定输入运行：
 
 | 负例 | 最大绝对 logit 差异，约 | 判定 |
 | --- | --- | --- |
@@ -9007,7 +9005,7 @@ S5 比 S4 参数少，是因为这里故意选择了很窄的专家，并非“M
 
 ![CPU 计时：full/cache × first/later 的 median，误差线为 min–max](assets/diagrams/p27/cpu_timing.svg)
 
-图中普通／缓存 prompt 中位数为 0.237／0.289 ms，后续每 token 前向中位数为 0.222／0.328 ms，误差线为 min–max（2026-10-30 本机单次 CPU 重新运行）。**这里缓存更慢**，并不推翻它减少重复计算的原理：短序列、小矩阵下，Python 检查、拼接缓存和函数开销可能占主导。
+图中普通／缓存 prompt 中位数为 0.237／0.289 ms，后续每 token 前向中位数为 0.222／0.328 ms，误差线为 min–max（本机单次 CPU 重新运行，日期见附录 H）。**这里缓存更慢**，并不推翻它减少重复计算的原理：短序列、小矩阵下，Python 检查、拼接缓存和函数开销可能占主导。
 
 若选做 GPU 基准，另建记录，至少写清设备型号、驱动／框架版本、dtype、模型与 tokenizer revision、B/T、输出长度、并发、实际后端、预热、同步位置、重复次数与波动。不要用本章的“无 GPU”结果填那张表的已测栏。
 
@@ -9078,7 +9076,7 @@ miniGPT 的升级，是让每个变化都有明确的**输入、状态、参照�
 
 ### 固定来源与核验范围
 
-本章来源核验日为 **2026-10-20**。下面只用原始论文的固定版本和官方版本化 API 文档说明机制；本章 CPU 数字来自本仓库实际执行，不借用论文性能数字。
+本章来源核验日见附录 H。下面只用原始论文的固定版本和官方版本化 API 文档说明机制；本章 CPU 数字来自本仓库实际执行，不借用论文性能数字。
 
 - [Attention Is All You Need v7](https://arxiv.org/abs/1706.03762v7)：因果 attention、基础模块。
 - [RoFormer v1](https://arxiv.org/abs/2104.09864v1)：旋转位置的原始定义。
@@ -9311,11 +9309,12 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 ## 附录 H：版本与来源 {#p28.h-版本与来源}
 
-下表保留从正文移出的日期与版本。种子、线程数、dtype 和数值结果仍在原章。正在讲授的库版本锁定留在原处，不计入本表。既有测试钉住的日期句仍留在原章，不重复计入本表。
+下表保留从正文移出的日期与版本。种子、线程数、dtype 和数值结果仍在原章。正在讲授的库版本锁定留在原处，不计入本表。
 
 | 章 | 内容 | 版本 / 日期 |
 | --- | --- | --- |
 | 00 | 来源核验日期 | 2026-10-18 |
+| 00 | CI 环境 | Python 3.12、PyTorch 2.14.1（CPU 版） |
 | 01 | 来源核验日期 | 2026-10-18 |
 | 01a | 核验和运行日期 | 2026-10-18 |
 | 03 | 动态文档核验日期 | 2026-10-19 |
@@ -9333,30 +9332,49 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 | 08a | 来源核验日期 | 2026-10-19 |
 | 08a | 访问核验日 | 2026-10-19 |
 | 08b | 验证环境 PyTorch | 2.14.1+cpu |
+| 08b | 来源核验日期 | 2026-10-19 |
 | 08c | 实验条件 PyTorch | 2.14.1+cpu |
+| 08c | 来源核对日期 | 2026-10-19 |
 | 08d | Python | 3.12.14 |
 | 08d | PyTorch | 2.14.1+cpu |
 | 08d | 动态链接核验日 | 2026-10-19 |
+| 08d | 固定版本核验日 | 2026-10-19 |
 | 08e | Python | 3.12.14 |
 | 08e | PyTorch | 2.14.1+cpu |
 | 08e | 导入检查 torch | 2.14.1 |
 | 08e | CPU 测试环境 torch | 2.14.1+cpu |
+| 08e | 来源核验日 | 2026-10-19 |
 | 08f | Python | 3.12.14 |
 | 08f | PyTorch | 2.14.1+cpu |
+| 08f | 来源与官方入口核验日期 | 2026-10-19 |
 | 08g | 验证 torch | 2.14.1 |
+| 08g | 技术报告与固定 revision 核验日期 | 2026-10-19 |
 | 08h | 实测日期 | 2026-10-19 |
 | 08h | 实测 PyTorch | 2.14.1+cpu |
+| 08h | 固定论文版本核验日期 | 2026-10-19 |
 | 08i | 实测日期 | 2026-10-19 |
 | 08i | Python | 3.12.14 |
 | 08i | torch | 2.14.1+cpu |
+| 08i | 来源核验日 | 2026-10-19 |
 | 08j | 实测日期 | 2026-10-19 |
+| 08j | 来源核验日期 | 2026-10-19 |
 | 08k | 实测日期 | 2026-10-19 |
 | 08k | 实测 PyTorch | 2.14.1+cpu |
+| 08k | 来源核验日期 | 2026-10-19 |
 | 08l | 实测日期 | 2026-10-19 |
 | 08l | 实测 PyTorch | 2.14.1+cpu |
+| 08l | TRL 源码核验日期 | 2026-10-19 |
 | 08m | 已验证环境 PyTorch | 2.14.1+cpu |
 | 08m | 跨版本核对截止 | 2026-10-19 |
+| 08m | 来源核验日期 | 2026-10-19 |
+| 08n | 固定历史版本核验日 | 2026-10-19 |
 | 08o | --torch 环境 PyTorch | 2.14.1+cpu |
+| 08o | 来源核对日期 | 2026-10-19 |
+| 09 | 核查日期 | 2026-10-19 |
+| 09a | 重新运行日期 | 2026-10-30 |
+| 09a | 重新运行 Python | 3.13.5 |
+| 09a | 重新运行 PyTorch | 2.14.1+cpu |
+| 09a | 来源核验日 | 2026-10-20 |
 | 10 | 安装页核对日期 | 2026-10-20 |
 | 10 | 安装选择器核对日期 | 2026-10-20 |
 | 10 | 阅读入口核对日期 | 2026-10-20 |

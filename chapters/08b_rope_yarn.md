@@ -290,7 +290,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_rope.py' -v
 
 ## P12.12 来源与下一步
 
-来源核验日期：2026-10-19。
+来源核验日期见附录 H。
 
 - [RoFormer / RoPE 论文，arXiv:2104.09864](https://arxiv.org/abs/2104.09864)：Q/K 旋转与相对位置点积的原始来源；本章二维数值是独立手算与脚本生成。
 - [Position Interpolation 论文（Chen 等），arXiv:2306.15595](https://arxiv.org/abs/2306.15595)：位置插值 PI 的原始来源。

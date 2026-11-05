@@ -24,7 +24,7 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 ## P17.2 哪些是已经核验的官方事实
 
-本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。2026-10-19 核验了技术报告 v1，以及官方 Hugging Face 仓库的固定 revision：
+本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。本章核验了技术报告 v1（核验日期见附录 H），以及官方 Hugging Face 仓库的固定 revision：
 
 ```text
 314113f8a7dadb388215396ba5fbee2c610a04d6

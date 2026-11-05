@@ -309,10 +309,10 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 
 ## P18.11 和官方资料对照：学机制，不冒充复现
 
-本章于 2026-10-19 核验以下固定论文版本，并沿用大纲来源编号：
+本章核验以下固定论文版本（核验日期见附录 H）：
 
-- **S19：** [DeepSeekMoE，arXiv 2401.06066v1，§3.1–3.3](https://arxiv.org/html/2401.06066v1#S3)。它讨论细粒度专家、共享专家隔离与负载均衡。共享专家始终执行，细分专家时要同时调整激活数量，不能只比较专家数。该版本公式（9）–（11）的 Softmax gating 不应被自动改写为本章的 selected renormalization。
-- **S09：** [DeepSeek-V3 官方仓库](https://github.com/deepseek-ai/DeepSeek-V3) 所链接的 [技术报告 arXiv 2412.19437v2，§2.1.2](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2)。V3 使用 Sigmoid affinity、所选 affinity 归一化、只影响选择的均衡偏置，并保留很小的序列级辅助项；报告明确说明训练和推理不丢弃 token。因此 “auxiliary-loss-free” 不能解释成全模型绝对没有任何辅助损失，也不能把本章容量丢弃示例说成 V3 的做法。
+- [DeepSeekMoE，arXiv 2401.06066v1，§3.1–3.3](https://arxiv.org/html/2401.06066v1#S3)。它讨论细粒度专家、共享专家隔离与负载均衡。共享专家始终执行，细分专家时要同时调整激活数量，不能只比较专家数。该版本公式（9）–（11）的 Softmax gating 不应被自动改写为本章的 selected renormalization。
+- [DeepSeek-V3 官方仓库](https://github.com/deepseek-ai/DeepSeek-V3) 所链接的 [技术报告 arXiv 2412.19437v2，§2.1.2](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2)。V3 使用 Sigmoid affinity、所选 affinity 归一化、只影响选择的均衡偏置，并保留很小的序列级辅助项；报告明确说明训练和推理不丢弃 token。因此 “auxiliary-loss-free” 不能解释成全模型绝对没有任何辅助损失，也不能把本章容量丢弃示例说成 V3 的做法。
 
 本书 S5 使用 Softmax affinity、单进程逐专家 dispatch、可分开观察的 batch 辅助项或偏置模式。没有复现 V3 的 Sigmoid 路由、节点限制、分布式均衡、FP8、通信 kernel、训练数据或官方权重。引用生产系统的设计动机，不意味着继承其性能和质量结论。
 
