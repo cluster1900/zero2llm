@@ -84,7 +84,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 | 监督微调 | SFT | 在示例输入与目标上继续优化；哪些 token 计 loss 必须明确 |
 | 低秩适配 | LoRA | 用低秩增量训练部分权重变化；不是自动量化，也不是免除前向计算 |
 | 偏好优化 | Preference optimization | 用相对偏好信息优化；DPO、奖励模型、GRPO 不是同一算法 |
-| 预填充/解码 | Prefill / Decode | 处理已有 prompt / 逐步产生新 token；不要与 CED 架构中的两段网络混同 |
+| 预填充/解码 | Prefill / Decode | 处理已有 prompt / 逐步产生新 token；不要与 [P17](#p17-ced) 的 CED（Causal Encoder-Decoder，因果编码器—解码器）架构中的两段网络混同 |
 | 缓存 | KV cache | 保存历史 K/V；所有者、权重、位置、dtype 必须匹配，不能混入另一请求 |
 | 贪心/采样 | Greedy / Sampling | 选最大概率 / 按分布抽样；greedy 等价不证明随机采样分布等价 |
 | 精度/量化 | Precision / Quantization | 数值表示与映射规则；权重、激活、KV 可分别使用不同格式 |
@@ -161,7 +161,7 @@ $$\Delta=x_{\mathrm{new}}-x_{\mathrm{old}},\qquad r=\Delta/x_{\mathrm{old}}.$$
 
 **第二步，锁定原始字节。** 仓库 `code/data/qwen3/manifest.json` 保存获取日期、URL、长度和 SHA-256。本配置为 **726 字节**，SHA-256 为 `660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd`。哈希证明当前文件与已记录字节相同，不证明来源自己没有错误。
 
-**第三步，做差异审查。** 文件写的是 hidden_size=1024、num_attention_heads=16、head_dim=128。1024/16=64，与显式 128 不同；投影宽度是 $16\times128=2048$，不能擅自改成 1024。新 revision 即使文件长度不变也可能改字段，必须同时检查 hash 和语义 diff，不能只看文件大小。
+**第三步，做差异审查。** 文件写的是 hidden_size=1024、num_attention_heads=16、head_dim=128。1024/16=64，与显式 128 不同；Q 投影宽度是 $16\times128=2048$（K/V 各为 $8\times128=1024$），不能擅自把 Q 投影改成 1024。新 revision 即使文件长度不变也可能改字段，必须同时检查 hash 和语义 diff，不能只看文件大小。
 
 **第四步，小实验验证。** 在仓库根目录运行：
 
@@ -184,10 +184,6 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 ## 附录 F：自测、校验与最后一步 {#p28.f-自测校验与最后一步}
 
-### F.0 平均值与一步更新速查
-
-文档平均与 token 平均使用不同分母：$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。单参数例子 $z=wx$、$L=(z-y)^2/2$ 取 $w=1,x=2,y=0$，则 $z=2$，梯度 $(z-y)\cdot x$ 等于 4；学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
-
 1. A.2 的两头 KV 若换为四头，单层 float32 K+V payload 变为多少？它证明生成速度减半吗？
 2. A.3 的三个 logits 都加 1000，第三类交叉熵是否仍为约 0.693147？为什么不能直接指数？
 3. 两文档有效目标数为 1、3，平均 loss 为 2、4，token 平均和文档平均分别是多少？
@@ -196,6 +192,10 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 6. 新闻说“模型快两倍”，你只跑了标准库参数账本。用哪种状态描述这条速度主张？最少还缺什么？
 
 **答案。** 1）1536 字节，只是 payload 翻倍，不能推出速度。2）相同；减最大值后指数安全，直接指数可能溢出。3）3.5 与 3。4）$w'=-3$、$L'=18$，大步长使本例更差。5）该固定实现使用显式 128，需核对代码；等长不等于等字节，仍需 hash。6）对本书而言待核实；若官方论文确有该结果，可另标作者报告，必须给硬件、软件、输入长度/batch、比较基线与计时方法，不能写本书复现。
+
+### F.0 平均值与一步更新速查
+
+文档平均与 token 平均使用不同分母：$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。单参数例子 $z=wx$、$L=(z-y)^2/2$ 取 $w=1,x=2,y=0$，则 $z=2$，梯度 $(z-y)\cdot x$ 等于 4；学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
 
 仓库根目录的 `python -m unittest discover -s tests -v` 检查示例与契约，`python scripts/check_book.py` 检查已生成制品的资源/链接，`npm run check:layout` 检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当前 CI 运行结果为准，运行环境版本见[附录 H](#p28.h-版本与来源)，不在这里保留会迅速过时的全书总数。
 
