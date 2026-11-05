@@ -1,4 +1,5 @@
 """B9 follow-up: 0-based ordinals in code comments use 下标 wording."""
+import re
 import unittest
 from pathlib import Path
 
@@ -21,6 +22,10 @@ CHANGED = {
         (
             "i 是第几对维度，不是已经乘过 2 的列号：",
             "i 是维度对的下标，不是已经乘过 2 的列号：",
+        ),
+        (
+            "d_model=5 时填充 (0,1)、(2,3)、最后的第 4 列 sine。",
+            "d_model=5 时填充 (0,1)、(2,3)、最后下标 4 的列（d4）只填 sine。",
         ),
         (
             '# 向上取整，奇数宽度的最后一列也要填；k 是“第几对”。',
@@ -68,6 +73,22 @@ CHANGED = {
 }
 
 
+# 「第 N 列/行/对/个/维」 in code/*.py reads as an ordinal; this book's code
+# indexes from 0, so such text is only allowed where N is a genuine 1-based
+# count. Each allowlisted line is pinned whole and must appear exactly once.
+ORDINAL_RE = re.compile(r"第\s*\d+\s*(?:列|行|对|个|维)")
+ORDINAL_ALLOWLIST = {
+    # [B, H, T, Dh]: num_heads is the 2nd axis counting from 1 (axis index 1).
+    "code/04_multi_head_attention.py": [
+        "# 为什么要换轴？因为把 num_heads 放到第 2 维后，每个头就可以独立看作一个传统的注意力！",
+    ],
+    # Everyday analogy: writing the 2nd character, must not peek at the 3rd.
+    "code/03_scaled_dot_product.py": [
+        'print("生活比喻：闭卷做题。你正在写第 2 个字，绝对不能偷看第 3 个字！")',
+    ],
+}
+
+
 def stripped_lines(path):
     return [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
 
@@ -106,6 +127,24 @@ class TestB9CodeComments(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             with self.subTest(file=path.name):
                 self.assertNotIn("第 0 ", text)
+
+    def test_no_unlisted_numeric_ordinals_in_code(self):
+        hits = []
+        for path in sorted(CODE.glob("*.py")):
+            rel = str(path.relative_to(ROOT))
+            allowed = ORDINAL_ALLOWLIST.get(rel, [])
+            for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if ORDINAL_RE.search(line) and line.strip() not in allowed:
+                    hits.append(f"{rel}:{lineno}:{line.strip()}")
+        self.assertEqual(hits, [])
+
+    def test_ordinal_allowlist_entries_exist(self):
+        for rel, lines in ORDINAL_ALLOWLIST.items():
+            stripped = stripped_lines(ROOT / rel)
+            for line in lines:
+                with self.subTest(file=rel, line=line[:40]):
+                    self.assertEqual(stripped.count(line), 1)
+                    self.assertIsNotNone(ORDINAL_RE.search(line))
 
     def test_no_dijidui_in_code_or_chapters(self):
         hits = []

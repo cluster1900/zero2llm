@@ -19,7 +19,7 @@ def generate_positional_encoding(max_seq_len, d_model):
     i 是维度对的下标，不是已经乘过 2 的列号：
       PE(pos, 2i)   = sin(pos / 10000 ** (2i / d_model))
       PE(pos, 2i+1) = cos(pos / 10000 ** (2i / d_model))
-    d_model=5 时填充 (0,1)、(2,3)、最后的第 4 列 sine。
+    d_model=5 时填充 (0,1)、(2,3)、最后下标 4 的列（d4）只填 sine。
     空序列返回 [0, d_model]；生成长度不等于模型支持的上下文长度。
     """
     for name, value in [('max_seq_len', max_seq_len), ('d_model', d_model)]:
