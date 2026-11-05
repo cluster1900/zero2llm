@@ -154,7 +154,7 @@ $$N_{\text{SwiGLU}}=D M+D M+M D=3DM$$
 
 同时改变 Norm、FFN 和 bias 才得到这份默认 S3，所以 **“默认 S2 对默认 S3”不能称为单变量消融**。默认 S3 也不是把一个已训练 S2 checkpoint 无损升级后的模型；结构不同的参数需要合适训练。
 
-为守住旧行为，测试还构建一个兼容设置：`norm_kind='layernorm'`、`ffn_kind='gelu'`、`norm_bias=True`、`ffn_bias=True`、ε=1e-5、H=4D。它在相同 seed 下与 S2 的每个 state tensor、每个输出 logit 精确相同。S2 自己的默认配置和代码没有因本章而变成 RMSNorm。
+S2 自己的默认配置和代码没有因本章而变成 RMSNorm。
 
 ## P13.7 单变量消融，先控制什么再比较什么
 

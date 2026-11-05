@@ -103,7 +103,7 @@ $$
 
 其中有效集合 $\mathcal V$ 只包含下一位置标签不是 -100 的预测位置，N 是这些位置的数量。本例第一行 5 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。
 
-代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。测试还用 Python 标量循环、稳定的指数求和独立算一次，避免两个实现都复制同一个索引错误。
+代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。
 
 ### 一个真实发现的版本细节
 
@@ -156,7 +156,7 @@ python code/21_training_frameworks.py
 python -m unittest discover -s tests -p 'test_training_frameworks.py' -v
 ```
 
-第二条会执行标准库测试；若可选包缺失或版本不在本章验证组合中，HF 测试会明确显示 skipped。脚本默认也明确打印 HF smoke: NOT RUN，必须加 --hf 才会真正训练。
+第二条会执行标准库测试。脚本默认也明确打印 HF smoke: NOT RUN，必须加 --hf 才会真正训练。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 

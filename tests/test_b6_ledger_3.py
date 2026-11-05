@@ -17,6 +17,14 @@ TESTING = ROOT / "docs" / "testing.md"
 RUN = "运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。"
 RUN_ALL = "运行上面的测试命令，末尾应显示 `OK`；本章相关的测试分类见 `docs/testing.md`。"
 MOVED = {
+ "07a_training_loop.md": [
+  "测试另用微小扰动的有限差分验证梯度，不只检查输出里是否有这串数字。",
+  "测试用一个 `Dropout(p=1)` 小对照说明模式的真实作用，而不虚构 BabyGPT 的随机层。",
+  "测试检查这个重组合等于总体 loss（允许 float32 归约误差）。"
+ ],
+ "08_baby_transformer.md": [
+  "S0 测试会改变后缀字符，检查前缀**所有 logits** 不变，而不只看最后选出来的字碰巧一样。"
+ ],
  "01_word_embedding.md": [
   "测试同时覆盖 `[3,4]` 与 `[6,8]` 的尺度例子、零向量和维度不一致。"
  ],
@@ -34,10 +42,12 @@ MOVED = {
   "这些数值答案、两张表、公式的每个元素和相对位移关系，都由 `tests/test_positions.py` 核对。测试也包含“余弦先降后升”的反例，避免把漂亮的波形误读成单调距离。"
  ],
  "06_residual_layernorm_ffn.md": [
+  "测试还与 PyTorch 官方 LayerNorm 对照。",
   "测试只在安装了兼容的 2.14.x 正式版时执行张量实验，缺失或版本不符会明确跳过，不能把跳过算成数值验收通过。",
   "测试也会逐字核对脚本生成的表格是否出现在正文中，防止只改代码或只改数字。"
  ],
  "08a_kv_cache.md": [
+  "这张表由脚本手算函数与测试核对，不用生成句子的表面效果来掩盖错误。",
   "`tests/test_kv_cache.py` 对应形状/偏移、矩形 mask、全 logits 对齐、内存公式、独立请求和上限契约；还实际构造错误 offset 和错误 mask 的负面对照。"
  ],
  "08l_preference_optimization.md": [
@@ -48,6 +58,7 @@ MOVED = {
   "在上面的基线环境实测，21 个测试通过；不加载第三方包时，7 个标准库测试通过、14 个 PyTorch 测试明确跳过。"
  ],
  "08n_quantized_serving.md": [
+  "测试另用独立标量 softmax 与加权求和核对基线，而不是调用同一个 attention 函数两次宣布正确。",
   "测试把中文和 emoji 的每一个字节切开，也枚举所有单次切分位置。",
   "`token_latencies` 用这个手算表测试。",
   "默认测试验证独立有理数格点 oracle、手算表、组尾与行边界、整数累加、校准漂移、独立 attention、UTF-8/SSE 和文件生成。它还真正改写并执行七种错误实现：漏减零点、把舍入改成截断、整数点积漏减零点、丢组尾、上下文比较差一位、漏检查 `[DONE]`、每个网络块单独解码 UTF-8。另外八项实际变异覆盖对称/仿射全零 scale、全负校准不含零、最大误差符号、未完成 SSE 事件、丢弃多行 data 换行，以及 tool_calls/error 的拒绝逻辑；加上附录批次的非对齐 GGUF 格式 fixture 回归，合计十六项。异常分支采用完整事件与精确错误原因，避免被后续“不完整”检查偶然拦截。正确基线先通过，错误变体再被同一行为断言抓住。",
@@ -70,6 +81,42 @@ MOVED = {
   "| 专项测试 | 17 项通过，无依赖跳过 | 只覆盖本章代码与快照契约 |",
   "专项测试包含六个**实际执行的数值错误变体**：漏转置、漏位置分支、bias 污染权重、按每层重复存 bank、提前暴露未完成组、调换视觉通道顺序。它们都能返回数值，由数值/坐标断言抓住；没有把语法错误或程序崩溃伪装成“成功检测”。另执行 SWA 来源与 Markdown 竖线转义两项契约变异；它们分别由精确拒绝原因和输出断言检出。此外还测试坏哈希、浮动 revision、路径越界、缺字段、非法 source 调度、补零、空序列账本和配置别名一致性。"
  ]
+}
+
+# B6 review B2（Wu 2026-11-05 决定「全搬」）：其他组章节中同类段尾测试句，原文移入 docs/testing.md。
+MOVED_B2 = {
+ "08c_modern_block.md": [
+  "为守住旧行为，测试还构建一个兼容设置：`norm_kind='layernorm'`、`ffn_kind='gelu'`、`norm_bias=True`、`ffn_bias=True`、ε=1e-5、H=4D。它在相同 seed 下与 S2 的每个 state tensor、每个输出 logit 精确相同。"
+ ],
+ "08d_grouped_kv_mla.md": [
+  "测试还写了“每个 batch、每个 query 头、每个位置分别算”的慢参考，不与快速路径共享映射函数。否则两个实现一起写错，full/cache 对齐也可能照样通过。",
+  "测试还检查底层存储大小，避免只在 shape 上做一个漂亮的切片，底下仍占着大张量。",
+  "这也是测试的一部分。"
+ ],
+ "08h_moe.md": [
+  "测试还用独立标量输出/梯度参考、78x 手算和故意注入的错误验证判据。"
+ ],
+ "08i_pretraining_pipeline.md": [
+  "测试还做了更直观的核对：关闭 dropout 后，把 A、B 一起 packing 得到的真实位置 logits，应与分别单独处理的结果接近；只改 A 的字，B 的输出应完全不变。"
+ ],
+ "08j_training_frameworks.md": [
+  "测试还用 Python 标量循环、稳定的指数求和独立算一次，避免两个实现都复制同一个索引错误。",
+  "若可选包缺失或版本不在本章验证组合中，HF 测试会明确显示 skipped。"
+ ],
+ "08k_sft_lora.md": [
+  "测试还使用手写的完整标签序列对照，避免实现与测试都照抄同一个错误 span。"
+ ],
+ "09a_minigpt_healthcheck.md": [
+  "测试还把同样形状的模型改为 float64，逐个确认缓存张量每元素 8 字节：MHA 为 8192 字节，GQA 为 4096 字节。若把元素大小写死为 4，这个独立 dtype 对照会失败。"
+ ]
+}
+
+# 全书不得再出现这些测试叙述开头；以下保留项不是测试账本（“测试时”语义、练习题、概念结论）。
+BOOK_PATTERNS = ("测试会", "测试还", "测试另用")
+BOOK_KEPT = {
+    ("08b_rope_yarn.md", "测试会"): "仍用 pθ，不改变转速；测试会出现训练未覆盖的相对距离。",
+    ("08b_rope_yarn.md", "测试还"): "纯旋转的范数测试还能原样用吗？",
+    ("08k_sft_lora.md", "测试会"): "代码测试会发现：这些忽略目标对应的 logits 没有直接 loss 梯度",
 }
 
 KEPT_MARKER_SENTENCES = {
@@ -226,6 +273,37 @@ class B6LedgerMoveGroup3Test(unittest.TestCase):
         self.assertIn("（上段“独立官方环境 28 项全部通过”为 2026-10-20 记录于 0749bef，B6 未复跑。）", doc)
         self.assertIn("```bash\n# 分开报告标准库、模板与数值测试；跳过不是通过。\n```", doc)
         self.assertNotIn("\n\n# 分开报告", doc)
+
+    def test_b2_moved_from_other_chapters(self):
+        doc = TESTING.read_text(encoding="utf-8")
+        for name, paras in MOVED_B2.items():
+            body = (CHAPTERS / name).read_text(encoding="utf-8")
+            self.assertEqual(body.count(RUN), 1)
+            for p in paras:
+                with self.subTest(chapter=name, para=p[:30]):
+                    self.assertEqual(doc.count(p), 1)
+                    self.assertNotIn(p, body)
+
+    def test_book_has_no_test_narration_patterns_left(self):
+        for path in sorted(CHAPTERS.glob("*.md")):
+            body = path.read_text(encoding="utf-8")
+            for pat in BOOK_PATTERNS:
+                kept = BOOK_KEPT.get((path.name, pat))
+                with self.subTest(chapter=path.name, pattern=pat):
+                    if kept:
+                        self.assertEqual(body.count(pat), 1)
+                        self.assertIn(kept, body)
+                    else:
+                        self.assertNotIn(pat, body)
+
+    def test_b2_dangling_fixes(self):
+        ch = lambda n: (CHAPTERS / n).read_text(encoding="utf-8")
+        self.assertIn("9. 不能。见 `test_mutations_fail_independent_oracle_not_only_cache_agreement`。", ch("08h_moe.md"))
+        self.assertIn("脚本用标准库生成这些数值。这个例子是直接优化", ch("07a_training_loop.md"))
+        self.assertIn("它便于人工检查。", ch("08k_sft_lora.md"))
+        self.assertIn("第二条会执行标准库测试。脚本默认", ch("08j_training_frameworks.md"))
+        self.assertIn("实测每层 K/V。统计不包含", ch("08d_grouped_kv_mla.md"))
+        self.assertIn("缓存字节数翻倍。", ch("08d_grouped_kv_mla.md"))
 
     def test_ledger_markers_gone_from_edited_chapters(self):
         for name in MOVED:

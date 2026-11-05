@@ -144,7 +144,7 @@ system/user 的 attention mask 仍为 1，它们是有效上下文；labels 设�
 
 有效标签位于 12、13、19、20，分别是“红、EOS、蓝、EOS”。对应评分 logits 位于 11、12、18、19。第一轮 assistant 正文的表示也会成为下一轮的上下文；这是 teacher forcing，不是模型先生成了第一轮答案再继续训练。
 
-`ChatRow.assistant_spans` 用左闭右开区间保存 `[12,14)` 与 `[19,21)`，包含答案和 EOS，但不包含 assistant role header。它便于人工检查；测试还使用手写的完整标签序列对照，避免实现与测试都照抄同一个错误 span。
+`ChatRow.assistant_spans` 用左闭右开区间保存 `[12,14)` 与 `[19,21)`，包含答案和 EOS，但不包含 assistant role header。它便于人工检查。
 
 ### EOS 是一个需要学习的目标
 

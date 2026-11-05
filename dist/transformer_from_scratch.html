@@ -4228,7 +4228,7 @@ Pre-LN zero-sublayer identity max error=0.000000</code></pre>
 也要清零，否则支路未必输出零。</li>
 <li><strong>统计实验。</strong>核对标准化前后的均值、方差，尤其注意
 epsilon 主导的小方差例子。再把 gamma/beta 改为
-2/1，检查“不再零均值”的结果。测试还与 PyTorch 官方 LayerNorm 对照。</li>
+2/1，检查“不再零均值”的结果。</li>
 <li><strong>有限性与顺序实验。</strong>对两种顺序各做一次因果前向和反向，检查输出、输入梯度、参数梯度都没有
 NaN 或无穷；再用独立参考公式核对整个 Block，而不是仅断言输出形状。</li>
 </ol>
@@ -5094,9 +5094,8 @@ loss 对 z 的梯度     [-0.25, 0.25]
 新 z = 旧 z - 0.1 * 梯度 = [1.123612289, -0.025]</code></pre>
 <p>A 分数上升、B 分数下降，新 loss 为
 <strong>0.275414489</strong>，小于原来的
-0.287682072。脚本用标准库生成这些数值；测试另用微小扰动的有限差分验证梯度，不只检查输出里是否有这串数字。这个例子是直接优化
-logits 的单题 SGD，真实模型要把梯度沿计算图反传到
-embedding、投影矩阵等参数。</p>
+0.287682072。脚本用标准库生成这些数值。这个例子是直接优化 logits 的单题
+SGD，真实模型要把梯度沿计算图反传到 embedding、投影矩阵等参数。</p>
 <p>两格取 mean 时，每格梯度还要除以 2，因此上表两个位置的梯度分别是
 <code>[-0.125,0.125]</code> 和 <code>[-0.375,0.375]</code>。换成
 sum，梯度也会跟着变；学习率不能脱离 loss reduction 讨论。</p>
@@ -5138,9 +5137,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb60-1"><a h
 <span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>model.train(was_training)</span></code></pre></div>
 <p>实验的 <code>evaluate</code> 还通过 <code>try/finally</code>
 保证恢复模式。当前 BabyGPT 没有
-Dropout/BatchNorm，因此切换模式可能不改变它的数值输出；测试用一个
-<code>Dropout(p=1)</code> 小对照说明模式的真实作用，而不虚构 BabyGPT
-的随机层。</p>
+Dropout/BatchNorm，因此切换模式可能不改变它的数值输出。</p>
 <p>评估 loss
 时，保留诗的前面字符作为已知前缀是允许的，这是条件概率评分；没有用其标签更新参数。不要把“不给梯度”误写为“连保留文档都不能前向读取”。不过，反复根据这个
 loss
@@ -5155,6 +5152,9 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb61-1"><a href=
 <p>第一条只用标准库；第二条需要稳定版 PyTorch
 <strong>2.14.x</strong>。缺失或不兼容版本时它解释原因并退出，不自动安装；测试仍运行标量部分，只跳过张量部分。已配置仓库环境可把
 <code>python</code> 换成 <code>.venv/bin/python</code>。</p>
+<p>运行本章测试文件，末尾应显示
+<code>OK</code>；测试分类、计数与错误版本清单见
+<code>docs/testing.md</code>。</p>
 <p>教学配置是 CPU 单线程、<code>d_model=16</code>、4 头、1 层、最大位置
 32、B=4、T=8、AdamW 学习率 0.003、40 次更新。每次从两首训练诗随机取 4
 个窗口；共消费 40×4×8=1280 个预测位置，<strong>包含重复，不等于 1280
@@ -5240,8 +5240,7 @@ count、loss_sum 和 mean loss：</p>
 </tbody>
 </table></div>
 <p>两组不是各占一半：整体均值应是
-<code>(4 × 见过组 loss + 19 × 未见组 loss) / 23</code>。测试检查这个重组合等于总体
-loss（允许 float32 归约误差）。共有目标的 loss
+<code>(4 × 见过组 loss + 19 × 未见组 loss) / 23</code>。共有目标的 loss
 实际下降；整体上升主要来自那 19 个从未作为训练答案的目标。在训练 softmax
 分类时，这些类别没有正目标奖励，但仍出现在分母里，其分数可能被相对压低。<strong>这次留出
 loss 上升主要反映标签分布不匹配，本实验不能证明过拟合。看到留出 loss
@@ -5347,6 +5346,9 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb62-1"><a href=
 Python 3.12、PyTorch 2.14.1+cpu、种子
 42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同
 seed 承诺跨平台逐位相同。</p>
+<p>运行本章测试文件，末尾应显示
+<code>OK</code>；测试分类、计数与错误版本清单见
+<code>docs/testing.md</code>。</p>
 <p>本章把三首诗全用于训练，观察的是<strong>训练集记忆</strong>。P09
 的整首留出实验才有训练与验证之分，而且数据仍小到不足以评价通用语言能力。本章的生成例子也不是盲测集。不要将每首诗的重叠窗口随机分组后叫作独立泛化评估。</p>
 <h2 id="先读配置与参数账">8.2 先读配置与参数账</h2>
@@ -5578,9 +5580,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb65-1"><a h
 <span id="cb65-5"><a href="#cb65-5" aria-hidden="true" tabindex="-1"></a>scores <span class="op">=</span> torch.matmul(Q, K.transpose(<span class="op">-</span><span class="dv">2</span>, <span class="op">-</span><span class="dv">1</span>)) <span class="op">/</span> math.sqrt(<span class="va">self</span>.head_dim)</span></code></pre></div>
 <p>每个 query 只能看自己和更早的 key。未来位置先在 scores 中遮挡，再做
 Softmax；不能先归一化再删掉未来权重。当前 S0 没有
-padding，合法非空输入每行至少能看见自己。S0
-测试会改变后缀字符，检查前缀<strong>所有 logits</strong>
-不变，而不只看最后选出来的字碰巧一样。</p>
+padding，合法非空输入每行至少能看见自己。</p>
 <h3 id="pre-lngelu-与最终输出">Pre-LN、GELU 与最终输出</h3>
 <div class="sourceCode" id="cb66"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>.attn(<span class="va">self</span>.ln1(x))</span>
@@ -5971,7 +5971,7 @@ P11-2：把可见性变成可手算的输出</h3>
 </table></div>
 <p>第一行分子是 10+40+90+160=300，除以 10 得 30；第二行再加
 250，550/15≈36.666667。错误的小矩形下三角会分别得到 10 和
-50/3≈16.666667。这张表由脚本手算函数与测试核对，不用生成句子的表面效果来掩盖错误。</p>
+50/3≈16.666667。</p>
 <h2 id="p11.5-证明-s0-与-s1-等价要比较什么">P11.5 证明 S0 与 S1
 等价，要比较什么</h2>
 <p>对同一个 eval 模型与同一串 ID，先完整前向取得 <code>[B,T,57]</code>
@@ -7101,9 +7101,7 @@ rotary_dim 都继承。新增的开关是归一化类型、FFN 类型、ε、内
 <p>同时改变 Norm、FFN 和 bias 才得到这份默认 S3，所以 <strong>“默认 S2
 对默认 S3”不能称为单变量消融</strong>。默认 S3 也不是把一个已训练 S2
 checkpoint 无损升级后的模型；结构不同的参数需要合适训练。</p>
-<p>为守住旧行为，测试还构建一个兼容设置：<code>norm_kind='layernorm'</code>、<code>ffn_kind='gelu'</code>、<code>norm_bias=True</code>、<code>ffn_bias=True</code>、ε=1e-5、H=4D。它在相同
-seed 下与 S2 的每个 state tensor、每个输出 logit 精确相同。S2
-自己的默认配置和代码没有因本章而变成 RMSNorm。</p>
+<p>S2 自己的默认配置和代码没有因本章而变成 RMSNorm。</p>
 <h2 id="p13.7-单变量消融先控制什么再比较什么">P13.7
 单变量消融，先控制什么再比较什么</h2>
 <p>先建立一个<strong>公开说明的无 bias 对照 A</strong>：LayerNorm 保留
@@ -7474,10 +7472,7 @@ key 时，Softmax 权重必为 1。四个头的输出就必须依次为：</p>
 头 1：[10,11]
 头 2：[20,21]
 头 3：[20,21]</code></pre>
-<p>脚本的 <code>mapping_walkthrough()</code>
-正是这个算例。测试还写了“每个 batch、每个 query
-头、每个位置分别算”的慢参考，不与快速路径共享映射函数。否则两个实现一起写错，full/cache
-对齐也可能照样通过。</p>
+<p>脚本的 <code>mapping_walkthrough()</code> 正是这个算例。</p>
 <h2 id="p14.4-真正要变小的是投影和缓存">P14.4
 真正要变小的是投影和缓存</h2>
 <p>PyTorch 的 <code>Linear(in_features, out_features)</code>
@@ -7641,10 +7636,8 @@ Hkv/Hq，不是其平方。query 不在这个缓存里。</p>
 W_k/W_v，不是整模型参数。缓存则是 <code>2×2×2×12×2×12×4=9216</code>
 字节。两者恰好在这个例子相差 2 倍，没有普遍意义。</p>
 <p>源码用 <code>numel() * element_size()</code> 实测每层
-K/V；测试还检查底层存储大小，避免只在 shape
-上做一个漂亮的切片，底下仍占着大张量。统计不包含模型权重、临时注意力矩阵、分配器和
-Python 对象开销。float64 改为每数 8
-字节，缓存字节数翻倍；这也是测试的一部分。</p>
+K/V。统计不包含模型权重、临时注意力矩阵、分配器和 Python
+对象开销。float64 改为每数 8 字节，缓存字节数翻倍。</p>
 <h2 id="p14.7-从头训练不等于转换旧-checkpoint">P14.7
 从头训练，不等于转换旧 checkpoint</h2>
 <p>有两条不同路线：</p>
@@ -10316,8 +10309,7 @@ capacity=0。</li>
 <code>test_sparse_execution_empty_experts_and_top1_router_gradient</code>。</li>
 <li>[-0.1,+0.1,0,0]；更新 buffer 后必须重置缓存。见偏置方向测试与
 <code>test_runtime_and_buffer_mutations_invalidate_cache</code>。</li>
-<li>不能。测试还用独立标量输出/梯度参考、78x
-手算和故意注入的错误验证判据。见
+<li>不能。见
 <code>test_mutations_fail_independent_oracle_not_only_cache_agreement</code>。</li>
 <li>2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV
 头与长度，而不是专家矩阵。见
@@ -10649,9 +10641,6 @@ mask，B 的 BOS 仍能看到 A 的全部输入。即使 A 的 EOS 标签已设�
 会产生不定义的结果。本实现先识别全禁用行，使用安全的临时零分数，再把禁止位置权重乘为零，使其
 attention 输出精确为零；最终 PAD logits 也置零。这不是让 PAD
 读取任意文档来“凑一个可见项”。</p>
-<p>测试还做了更直观的核对：关闭 dropout 后，把 A、B 一起 packing
-得到的真实位置 logits，应与分别单独处理的结果接近；只改 A 的字，B
-的输出应完全不变。</p>
 <h2 id="p19.5-loss每道有效小题一票不是每箱一票">P19.5
 Loss：每道有效小题一票，不是每箱一票</h2>
 <p>下面给五个有效目标指定一组<strong>人为设计、未训练得来</strong>的正确答案概率。忽略位置没有
@@ -11261,8 +11250,7 @@ loss，也不调用框架的交叉熵函数，而是自己写：</p>
 只包含下一位置标签不是 -100 的预测位置，N 是这些位置的数量。本例第一行 5
 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。</p>
 <p>代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp
-减去目标 logit。测试还用 Python
-标量循环、稳定的指数求和独立算一次，避免两个实现都复制同一个索引错误。</p>
+减去目标 logit。</p>
 <h3 id="一个真实发现的版本细节">一个真实发现的版本细节</h3>
 <p>固定版本 4.51.3 的 Trainer 在某条 loss 路径中会统计<strong>未 shift
 的 labels 中非 -100 的数量</strong>，作为 num_items_in_batch
@@ -11354,9 +11342,8 @@ benchmark。两句话被重复训练后 loss 下降，也不证明模型具备�
 <div class="sourceCode" id="cb136"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb136-1"><a href="#cb136-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/21_training_frameworks.py</span>
 <span id="cb136-2"><a href="#cb136-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_training_frameworks.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
-<p>第二条会执行标准库测试；若可选包缺失或版本不在本章验证组合中，HF
-测试会明确显示 skipped。脚本默认也明确打印 HF smoke: NOT RUN，必须加 –hf
-才会真正训练。</p>
+<p>第二条会执行标准库测试。脚本默认也明确打印 HF smoke: NOT RUN，必须加
+–hf 才会真正训练。</p>
 <p>运行本章测试文件，末尾应显示
 <code>OK</code>；测试分类、计数与错误版本清单见
 <code>docs/testing.md</code>。</p>
@@ -12037,9 +12024,7 @@ logits 位于 11、12、18、19。第一轮 assistant
 forcing，不是模型先生成了第一轮答案再继续训练。</p>
 <p><code>ChatRow.assistant_spans</code> 用左闭右开区间保存
 <code>[12,14)</code> 与 <code>[19,21)</code>，包含答案和 EOS，但不包含
-assistant role
-header。它便于人工检查；测试还使用手写的完整标签序列对照，避免实现与测试都照抄同一个错误
-span。</p>
+assistant role header。它便于人工检查。</p>
 <h3 id="eos-是一个需要学习的目标">EOS 是一个需要学习的目标</h3>
 <p>如果把所有 special token 都排除，EOS
 也会消失，模型就缺少这份数据里的结束监督。这里即使 assistant
@@ -14214,9 +14199,7 @@ K/V 行独立对称量化后再反量化，得到：</p>
 </tr>
 </tbody>
 </table></div>
-<p>最大绝对差约 0.00205910，MSE 约 0.00000331170。测试另用独立标量
-softmax 与加权求和核对基线，而不是调用同一个 attention
-函数两次宣布正确。</p>
+<p>最大绝对差约 0.00205910，MSE 约 0.00000331170。</p>
 <p>这只是单 query、单头、小前缀的机制实验；<strong>没有实现量化 cache
 的追加、分页或实际整数 attention 内核</strong>。真实框架还要说明：K/V
 是否分别有 scale，按张量、通道还是 token 定尺度，已有 cache
@@ -16450,9 +16433,7 @@ optimizer 或 RNG
 <p>第一个 2 是 K 和 V 两份，s 是每元素字节数。MHA 时 Hkv=Hq=4；因此
 <code>2×2×2×4×8×4×4=4096</code>。GQA 把 Hkv 改为 2，结果为
 2048。这是从实际缓存张量 <code>numel×element_size</code>
-求和后，再与独立整数账本对照的值。 测试还把同样形状的模型改为
-float64，逐个确认缓存张量每元素 8 字节：MHA 为 8192 字节，GQA 为 4096
-字节。若把元素大小写死为 4，这个独立 dtype 对照会失败。</p>
+求和后，再与独立整数账本对照的值。</p>
 <p>这里<strong>不是测出来的进程内存，更不是显存峰值</strong>。模型权重、注意力分数、临时复制、Python
 对象、分配器缓存都没计入。S4 计算注意力时还会临时展开共享
 K/V；存储的缓存必须保留 Hkv 头，不能把展开后的 Hq 份偷偷存回去。</p>

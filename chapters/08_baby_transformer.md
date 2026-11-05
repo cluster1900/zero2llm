@@ -15,6 +15,8 @@ python3 -m unittest discover -s tests -p 'test_baby_gpt.py' -v
 
 需要 `requirements.txt` 中的 CPU PyTorch；本文数值来自 Python 3.12、PyTorch 2.14.1+cpu、种子 42、单线程环境。线程数、版本、设备会影响运行时间及浮点结果，不能仅凭相同 seed 承诺跨平台逐位相同。
 
+运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
+
 本章把三首诗全用于训练，观察的是**训练集记忆**。P09 的整首留出实验才有训练与验证之分，而且数据仍小到不足以评价通用语言能力。本章的生成例子也不是盲测集。不要将每首诗的重叠窗口随机分组后叫作独立泛化评估。
 
 ## 8.2 先读配置与参数账
@@ -131,7 +133,7 @@ V = self.W_v(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
 scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
 ```
 
-每个 query 只能看自己和更早的 key。未来位置先在 scores 中遮挡，再做 Softmax；不能先归一化再删掉未来权重。当前 S0 没有 padding，合法非空输入每行至少能看见自己。S0 测试会改变后缀字符，检查前缀**所有 logits** 不变，而不只看最后选出来的字碰巧一样。
+每个 query 只能看自己和更早的 key。未来位置先在 scores 中遮挡，再做 Softmax；不能先归一化再删掉未来权重。当前 S0 没有 padding，合法非空输入每行至少能看见自己。
 
 ### Pre-LN、GELU 与最终输出
 
