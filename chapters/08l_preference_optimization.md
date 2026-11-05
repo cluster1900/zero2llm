@@ -404,62 +404,10 @@ grpo_config = GRPOConfig(
 
 本章可以带走的一句话是：**偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。** 下一章会把这一框架接到推理预算、MTP 和投机解码，并继续区分训练目标与推理时计算。
 
-## P22.11 延伸：on-policy 蒸馏与多教师合并（MOPD） {#p22.11-mopd}
+## P22.11 延伸阅读：on-policy 蒸馏与多教师合并（MOPD） {#p22.11-mopd}
 
-**先看动机。** 常见的蒸馏是 off-policy 的：经典做法（[Hinton 等，2015](https://arxiv.org/abs/1503.02531)）让学生在固定数据上拟合老师的软概率分布；大模型里也常让老师先写好答案，学生照着做 SFT。两种做法里的前缀都不是学生自己生成的。学生自己生成时，一旦走到老师没写过的前缀，就没人教了。On-policy 蒸馏反过来：让学生自己采样，再请老师给学生写下的**每一个 token** 打分。这个思路的公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)，K3 报告的 §4.1.3 引用了它。
+On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 token 打分，公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)用这种做法把多个领域的 RL 专家合并进一个模型，称为 Multi-Teacher On-Policy Distillation（MOPD）。
 
-**Kimi K3（S29 §4.1）。** 先做 SFT。再按三个领域（通用任务、通用 agent、编程 agent）各训一个 RL 专家。每个领域又分 low、high、max 三档推理强度，共 9 个专家。最后用 MOPD 把它们合进一个模型。领域 d、强度 e 的样本，由对应的那位老师打分。逐 token 奖励是 Eq.15：
+## P22.12 延伸阅读：Softmax Cancellation {#p22.12-softmax-cancellation}
 
-`r(y_t) = clip( sg( log π_teacher^{(d,e)}(y_t | x, y_<t) / π_θ(y_t | e, x, y_<t) ), −R_max, R_max )`。
-
-`sg` 是 stop-gradient：这个比值只当作奖励数字，不让梯度穿过它。clip 限制极端的优势信号，让 RL 更稳。报告还说，他们试过更细的 top-k 蒸馏目标，在他们的设置下没有看到明显优势。
-
-**Nemotron 3.5 Super（S30）。** 官方文档列出 6 类专科老师：agent、推理、视觉工具使用、视频推理与跟踪、视觉推理、对齐（RLHF）。MOPD 分两个阶段，每个 prompt 交给拥有该领域的老师。其余 prompt 交给一个冻结的 self-anchor。文档说明，RLVR 第 120 步是 MOPD 第一阶段的学生。self-anchor 是这个学生起始 checkpoint 的冻结副本，用作没有专科老师认领的 prompt 的老师。
-
-[`../code/23b_mopd_reward.py`](../code/23b_mopd_reward.py) 在一个 4 词表上手算：
-
-| token | 老师 | 学生 | 原始 log 比 | clip(R=1) |
-|---|---|---|---|---|
-| 0 | 0.70 | 0.25 | +1.0296 | +1.0000 |
-| 1 | 0.20 | 0.25 | −0.2231 | −0.2231 |
-| 2 | 0.05 | 0.25 | −1.6094 | −1.0000 |
-| 3 | 0.05 | 0.25 | −1.6094 | −1.0000 |
-
-不 clip 时，按学生分布求期望，正好等于 `−KL(学生 ‖ 老师)` = −0.603100。所以这是一个逐 token 的反向 KL 信号。测试还检查：学生与老师一致时奖励为 0，所以起点处的 self-anchor 给出零奖励；没认领的领域会路由到 self-anchor；把比值写反，符号就翻转。本书没有跑任何蒸馏训练。
-
-P22.11 资料（核验 2026-10-26）：S29 [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.1–4.1.3；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（厂商文档）。K3 §4.1.3 同时引用 [MiMo-V2-Flash，arXiv:2601.02780](https://arxiv.org/abs/2601.02780) 与 [DeepSeek-V4，arXiv:2606.19348](https://arxiv.org/abs/2606.19348) 的多教师蒸馏做法，本书未逐条核对这两篇的细节。
-
-## P22.12 前沿补充：学生等于老师，梯度却不为 0 {#p22.12-softmax-cancellation}
-
-> [!NOTE]
-> 本节依据 [A Fix for Softmax and Cross-Entropy](https://arxiv.org/abs/2610.31642) 的 §3 与 §7，以及[项目页](https://jonbarron.info/softmaxfix/)的代码。本书只做单行梯度演示，没有复现蒸馏训练。
-
-**问题从哪来。** 蒸馏常用软目标交叉熵：老师分布 $p=\operatorname{softmax}(z_T)$，学生分布 $q=\operatorname{softmax}(z_S)$。它对学生 logits 的梯度是 $q-p$。它与 KL$(p\Vert q)$ 只差一个与学生无关的常数，所以梯度相同。
-
-学生接近老师时，$q$ 和 $p$ 是两个几乎相等的数。浮点里相减，有效位会大量抵消。论文把这叫 Softmax Cancellation（§3）。学生完全等于老师时，真梯度是 0，算出来却可能不是。
-
-**修法。** 论文不先算两个概率再相减，而是从 logit 差 $\delta=z_S-z_T$ 出发（Eq. 8–9）：
-
-1. 在 $p$ 下中心化：$d=\delta-\sum_j p_j\delta_j$。
-2. 求 $s=d-\operatorname{log1p}\left(\sum_j p_j\operatorname{expm1}(d_j)\right)$，它等于 $\log(q/p)$。
-3. 求 $u=p\cdot\operatorname{expm1}(s)$，它等于 $q-p$。
-4. 令 $g=u-q\sum_j u_j$。精确算术下梯度和为 0；浮点下这一步把残差压到舍入量级。
-
-`log1p` 和 `expm1` 专为接近 0 的输入设计，不会先加 1 再减 1。$\delta=0$ 时每一步都是精确 0。项目页代码多了一个分支：$\lvert s\rvert\ge1$ 时直接用 $q-p$。arXiv 正文的式子没有写这个分支。
-
-**跑一下。** `code/23c_softmax_cancellation.py` 按论文 §3 的算法（Eq. 8–9）用 PyTorch 重新实现，并注明出处。前向 loss 不变，只替换梯度。项目页没有标注代码许可证，所以本书代码与注释均为自写，不复制原代码。
-
-论文例子是 $z_T=[2,1,0]$，$z_S=z_T+[-10^{-7},10^{-7},0]$，fp32：
-
-| 实现 | 学生梯度 |
-| --- | --- |
-| 论文 §3 末尾 JAX 代码示例：标准版 | [-5.960e-8, 1.452e-8, -1.123e-9] |
-| 本书：PyTorch 标准版 | [-5.960e-8, 4.470e-8, 7.451e-9] |
-| 修正版（两者相同） | [-4.596e-8, 4.144e-8, 4.513e-9] |
-| fp64 精确值 | [-4.596e-8, 4.144e-8, 4.513e-9] |
-
-两个标准版的误差不同，因为舍入顺序依赖框架实现。修正版与 fp64 精确值一致，也与论文 §3 末尾 JAX 代码示例注释中的数字一致（arXiv v1 HTML 版，核对日期 2026-10-26；表中为其 4 位有效数字舍入）。
-
-再取固定种子 0，生成 4 行 8 类的 bf16 logits，令学生等于老师。标准版最大梯度约 3.5e-3，修正版恰好为 0。论文报告的残差量级是：fp64 约 1e-17，fp32 约 1e-8，bf16 约 1e-3（§7）。本书的 bf16 实测与之同一量级。
-
-**边界。** 论文在 bf16 下观察到学生持续漂离老师（§7），本书没有复现。on-policy 蒸馏与多教师合并另见 [P22.11 的 MOPD 小节](#p22.11-mopd)，本书不在这里重复。`tests/test_softmax_fix.py` 固定输入断言上表的修正版数字、fp64 下梯度和在 1e-14 以内、去掉第 4 步后残差变大，以及学生等于老师时的精确 0。
+软目标交叉熵对学生 logits 的梯度是 $q-p$。学生接近老师时，这是两个几乎相等的数相减，浮点里有效位会大量抵消；[A Fix for Softmax and Cross-Entropy，arXiv:2610.31642](https://arxiv.org/abs/2610.31642) §3 给出从 logit 差出发、用 `log1p` 和 `expm1` 计算的修法。

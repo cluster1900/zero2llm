@@ -4,7 +4,7 @@
 
 照片类比到这里就该停了。模型里的一点误差会经过矩阵乘法、注意力和多步生成继续传播，不能只凭“肉眼看起来差不多”判断。我们先用可手算的整数格子，再用真实的本地引擎把文件加载、量化、生成和流式响应串起来。
 
-配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。`25_quantized_serving.py` 的默认实验只用 Python 标准库、CPU、小数组，不下载权重；P24.13 的 `25b_mixed_bit.py` 另需 PyTorch（CPU 即可）。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
+配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。`25_quantized_serving.py` 的默认实验只用 Python 标准库、CPU、小数组，不下载权重。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
 
 ![量化把浮点数映射到整数格点；权重、激活和 KV 是三个独立对象；真实服务还要经过格式与内核检查，并正确处理流式边界](assets/diagrams/p24-quantization.svg)
 
@@ -437,51 +437,14 @@ P24_LLAMA_BIN=/tmp/p24-engine/build/bin \
 
 你现在得到的不是一个“装上就万能”的工具名单，而是一条可检查的链：**数值规则 → 格式与架构 → 设备内核 → 服务边界 → 同条件评估**。后面读真实模型配置时，继续沿这条链检查，不要让模型名替代证据。
 
-## P24.13 混合位宽 GGUF：哪些张量多给几个 bit
+## P24.13 延伸阅读：混合位宽 GGUF
 
-P24.7 说过 GGUF 只是容器，同一个文件里不同张量可以用不同量化类型。Meta 的 [Muse Glimmer 30B 量化文档](https://dev.meta.ai/docs/muse-glimmer/quantization)（技术报告 2026-10-19 发布；文档核验日 2026-10-25）给了一个公开的真实案例。以下数字均为 Meta 官方文档，本书未在本机运行 30B 模型：
+P24.7 说过 GGUF 只是容器，同一个文件里不同张量可以用不同量化类型。常见做法是给对量化更敏感的张量多分几个 bit；哪些张量敏感，要靠困惑度或任务评估来定。
 
-- **K-Quant-17GB（固定方案，下载 16.8 GB）**：主体 `Q4_K`，group 32；`attn_v` 与 `ffn_down` 两类投影提升到 `Q6_K`，group 128；输出头 `Q5_K`，group 128。
-- **K-Quant-Dynamic（下载 19.7 GB）**：在 `Q4_K`/`Q5_K`/`Q6_K` 之间按单元搜索精度，全部 group 32，质量更高、占用更多。
-- **显存账**：K-Quant-17GB 加视觉投影器、131,072 token 完整上下文实测 19.0 GiB（文本模型 15.6、视觉投影器 1.3、KV cache 与计算缓冲 2.1 GiB），DFlash 草稿模型约再加 1.5 GiB。KV 小，是因为它用 2 个 KV 头的 GQA（见 [P14](#p14-grouped-kv)），且每 4 层里有 3 层是滑动窗口注意力。硬件粗账：30B 参数 × 2 字节 ≈ 60 GB 的 bf16 权重，约 4 bit 后文本模型低于 20 GB。
+## P24.14 延伸阅读：量化感知训练（QAT）
 
-为什么偏偏是 `attn_v` 和 `ffn_down`？这里只做一个**不依赖 Glimmer 权重**的玩具：[`../code/25b_mixed_bit.py`](../code/25b_mixed_bit.py) 构造三个 64×256 的张量，其中一个有少数放大 12 倍的列、一个是重尾 Student-t 分布，然后用本书的对称分组格式（每组一个 2 字节 scale，**不是** llama.cpp 的 `Q4_K`/`Q6_K` 超块布局）量化：
+前面的方法都是训练后量化。QAT 在训练中就让前向经过量化，让模型适应舍入误差，早期做法见 [Jacob 等，arXiv:1712.05877](https://arxiv.org/abs/1712.05877)。
 
-- 重尾张量上，4 bit 时 group 32/128 的相对误差为 0.156/0.255，6 bit 时为 0.041/0.071：位宽多 2 bit 比把 group 缩小 4 倍更有效，但两者都有代价。
-- 全部 4 bit/g32 总误差 0.167、27,648 字节；只把单独误差最大的那个张量换成 6 bit/g128，总误差降到 0.113，字节只多 12%（30,976）；全部 6 bit/g128 为 0.067、37,632 字节。
+## P24.15 延伸阅读：FP4 块缩放 {#p24.15-fp4-block}
 
-测试手算一组 4 bit 的往返结果和字节数，检查“混合方案的误差与字节都落在两个统一方案之间”，并给出一个变异：scale 用组内平均绝对值而不是最大值，会让异常值被截断、误差至少翻倍。真实模型里哪些张量敏感要靠困惑度或任务评估来定，不能照搬玩具结论。
-
-## P24.14 量化感知训练（QAT）：MiniMax-M3.1-Flash 的公开范围
-
-前面所有方法都是**训练后量化**：权重训练完再找 scale。QAT 则在训练中就让前向经过量化，让模型适应舍入误差。MiniMax 在 [M3.1-Flash 官方模型卡](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash)（核验日 2026-10-25）中说明，相对 M3 的三项改动之一是 QAT：**routed MoE 专家和注意力路径在训练中被量化**，用于降低显存占用、提升服务效率。模型卡给出约 428B 总参数、每 token 激活 23B、最长 1M 上下文；另外两项改动是把前三层全注意力也换成稀疏注意力、从而全模型使用 MSA（见 [P16](#p16-sparse-linear) 的 P16.13）和改用 DSpark 草稿头（见 [P23](#p23-mtp)）。**QAT 用的位宽、数据格式、训练阶段与步数，模型卡均未公开**，本书不作推测，也不提供 QAT 代码。
-
-## P24.15 FP4 块缩放：MXFP4、NVFP4 与“训练和 rollout 用同一种量化” {#p24.15-fp4-block}
-
-**先看动机。** 4 bit 只有 16 个码。P24.4 已经说过，一个异常值会撑大整组的 scale。FP4 块格式的办法是：每一小块共享一个 scale，块越小，异常值影响的范围越小。
-
-**格式本身。** 元素都是 FP4 E2M1：1 位符号、2 位指数、1 位尾数，绝对值只有 0、0.5、1、1.5、2、3、4、6 八种。
-
-- **MXFP4**：每 32 个元素共享一个 E8M0 scale，即纯 2 的幂。规范原文是 [OCP Microscaling Formats (MX) v1.0](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) §5.2 Table 1。[MX 格式论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537) 的 Table 1 与之一致。论文 Algorithm 1 的取法是 `X = 2^(⌊log2 max|V|⌋ − emax_elem)`，E2M1 的 `emax_elem = 2`，超出范围的元素截到 ±6。
-- **NVFP4**：每 16 个元素共享一个 FP8 E4M3 scale，另有一个整张量的 FP32 scale。来源是 [NVIDIA Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)：`x = x_e2m1 · s_block · s_global`，`s_global = amax / (448 · 6)`。E4M3 scale 不必是 2 的幂，所以更贴近块的真实最大值。
-
-只算块 scale，MXFP4 是 4 + 8/32 = 4.25 bit/元素，NVFP4 是 4 + 8/16 = 4.5 bit/元素。
-
-[`../code/25c_fp4_block.py`](../code/25c_fp4_block.py) 用 1024 个高斯值加 4 个 ±40 的离群值（种子 0，自造数据）：
-
-| 方案 | 相对 MSE |
-|---|---|
-| 每张量一个 scale | 0.0982 |
-| MXFP4，块 32 | 0.0497 |
-| NVFP4 式，块 16 | 0.0069 |
-
-这只验证舍入算术，不代表任何模型的精度。测试检查：E2M1 网格值往返不变且在 6 饱和；E4M3 舍入；MX scale 是 2 的幂；块方案误差低于每张量方案。还有一个变异：把块设成整张量，结果退回每张量方案。
-
-**PTQ、QAT、QAD。** PTQ 是训练完再量化（P24.3）。QAT 在训练中就让前向经过量化（P24.14）。QAD（Quantization-Aware Distillation）也让前向经过量化，但用原精度模型做老师来蒸馏。
-
-- **Kimi K3（S29 §4.1.4）。** MoE 专家权重用 MXFP4，激活用 MXFP8。注意力投影、latent MoE 投影、共享专家和路由器保持更高精度。QAT 覆盖整个后训练，包括 SFT 和 RL。RL 中 rollout 与训练使用同一种量化，报告说这样就消除了训练与推理不一致。这一点的意义是：策略梯度假设样本来自正在训练的那个策略；若 rollout 用的是另一套数值，样本就有一部分是 off-policy 的。
-- **Nemotron 3.5 Super（S30）。** 发布的 NVFP4 checkpoint 先用预设的 aggressive PTQ 配方（4.82 bit/元素），再做 200 步基于 SFT 的 QAD。官方文档称，35 个基准上相对 BF16 的准确率恢复中位数为 99.52%。它在 Blackwell 上以 W4A4 部署，在其他 GPU 上以 W4A16 部署。这些都是厂商报告的数字，本书没有复现。
-
-**三种量化对象别混。** K3 量化的是专家**权重**（加 MXFP8 激活）。Nemotron 的 W4A4 同时量化权重与**激活**。P26 讨论的 V4.1-Flash FP4 量化的是 **KV cache**（S12，报告 §2.4.4）。三者误差进入模型的位置不同，P24.6 已经说明 KV 量化的误差会落在每一步注意力上。
-
-P24.15 资料（核验 2026-10-26）：[OCP MX v1.0 规范](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) §5.2；[MX 论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537)；[Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)（厂商文档）；QAT 原文 [Jacob et al., arXiv:1712.05877](https://arxiv.org/abs/1712.05877)；S29 [Kimi K3，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.4；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html) §4.1（厂商报告）。
+FP4 块格式让每一小块元素共享一个 scale，块越小，异常值影响的范围越小：MXFP4 每 32 个元素共享一个 E8M0 scale（[MX 格式论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537) Table 1），NVFP4 每 16 个元素共享一个 FP8 E4M3 scale（[Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)）。

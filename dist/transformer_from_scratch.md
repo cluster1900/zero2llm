@@ -47,7 +47,7 @@ python3 code/08_byte_bpe.py
 python3 -m unittest discover -s tests -v
 ```
 
-第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、700 多条测试都会执行，其中大多与上面两个例子无关。CI 在 Python 3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；P27（09a）报告的实测数字来自 Python 3.13.5、PyTorch 2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
+第一条确认你使用的是哪个 Python；接下来两条运行例子；最后一条运行**全书**的回归测试：`tests/` 下所有测试文件、600 多条测试都会执行，其中大多与上面两个例子无关。CI 在 Python 3.12 加 PyTorch 2.14.1（CPU 版）上运行这条命令；P27（09a）报告的实测数字来自 Python 3.13.5、PyTorch 2.14.1+cpu。找不到文件时先确认终端当前目录是仓库根目录，而不是 `chapters/`。
 
 > [!TIP]
 > **选修：Hugging Face 对照实验。** 只想理解算法，可以跳过。想比较真实分词库时，新建虚拟环境，再安装 `requirements-tokenizer.txt` 中固定的 `tokenizers==0.21.4`，运行 `code/09_hf_tokenizer.py`。它仍只用 CPU 和本地合成语料，不下载语言模型。安装依赖需要网络，安装完成后的实验不需要网络。
@@ -928,39 +928,9 @@ weights = [e / sum(exps) for e in exps]
 
 `code/02_manual_attention.py` 逐步打印投影、点积、权重与输出；入口先要求列表非空且每项有限，拒绝 NaN/正负无穷。这个简化函数处理普通分数，不把负无穷掩码混入它。测试在小分数上与朴素公式对照，在大分数上验证不溢出，并检查整体平移不改结果。
 
-### 3.3a 前沿补充：减了最大值，梯度仍可能“塌掉” {#p04-softmax-collapse}
+### 3.3a 延伸阅读：Softmax Collapse {#p04-softmax-collapse}
 
-> [!NOTE]
-> 减最大值解决了上溢，但没有解决另一种精度问题。这一框只讲现象和修法，依据是 [A Fix for Softmax and Cross-Entropy](https://arxiv.org/abs/2610.31642) 的 §1–§2。
-
-**现象。** 设正确类为 $t$，论文定义 logit 间隔（Eq. 2）：
-
-$$m = z_t - \log\sum_{j\ne t} e^{z_j}.$$
-
-交叉熵对目标 logit 的梯度是 $1/(1+e^{-m})-1$（Eq. 3）。$m$ 很大时，$1+e^{-m}$ 会被舍入成恰好 1。于是目标梯度变成 0，其他类的梯度却仍为正。全部梯度之和本应为 0，现在大于 0（Eq. 4）。论文把这叫 Softmax Collapse。
-
-**悬崖在哪。** 论文给出的阈值是：bf16 约 5.5，fp32 约 16.6，fp64 约 36.7（§1）。本书脚本逐格搜索 $1+e^{-m}=1$ 的最小 $m$，实测如下：
-
-| 精度 | 论文值 | 本书实测 |
-| --- | --- | --- |
-| bf16 | 5.5 | 5.55 |
-| fp32 | 16.6 | 16.64 |
-| fp64 | 36.7 | 36.74 |
-
-设 $p$ 为含隐含位的有效位数：bf16、fp32、fp64 分别为 8、24、53。$p\ln 2$ 约为 5.545、16.636、36.737。它们与实测值在 0.01 网格内一致。若不计隐含位（7、23、52），会得到 4.85、15.94、36.04，对不上。这可以直接推出：$1$ 右侧相邻浮点数为 $1+2^{1-p}$，半个 ulp 是 $2^{-p}$；在就近舍入、平局取偶下，$e^{-m}\le 2^{-p}$ 时 $1+e^{-m}$ 舍回 $1$（恰好平局时 $1$ 的尾数为偶），即 $m\ge p\ln 2$ 时塌掉。论文没有这样表述，推导为本书补充。
-
-**修法。** 不把目标项放进求和，直接写成 $\text{CE}=\operatorname{softplus}(-m)$（Eq. 6）。目标梯度变成 $-e^{-m}/(1+e^{-m})$，不会被 1 吞掉（Eq. 3）。log-softmax 同理：最大项置为精确 0，再减 softplus（Eq. 5）。
-
-**跑一下。** `code/03b_softmax_collapse.py` 按论文 §2 的算法（Eq. 5–6）用 PyTorch 重新实现，并注明出处。输入取论文的例子 $z=[9,-9,-9]$、$t=0$、fp32：
-
-| 实现 | loss | 目标梯度 | 梯度和 |
-| --- | --- | --- | --- |
-| `torch.log_softmax` | 0 | 0 | 3.046e-8 |
-| 论文修正版 | 3.046e-8 | -3.046e-8 | 0 |
-
-这组数与论文 §2 末尾 JAX 代码示例注释中的值一致（arXiv v1 HTML 版，核对日期 2026-10-26）。换成 bf16 时，$z=[4,-4,-4]$（$m\approx7.31$）就已塌掉；同一输入在 fp32 下正常。`tests/test_softmax_fix.py` 固定输入断言这些结果。
-
-**边界。** 这里只演示单行梯度，不训练模型。论文 §4 只在 grokking 实验里讨论它：记住训练集之后，Slingshot 损失尖峰由它引起。见 [P09.3 的说明](#p09.3-cross-entropy)。论文 §8 也指出，这么大的间隔在标准大规模训练中并不常见。本书没有复现训练实验。
+减最大值解决了上溢，但没有解决另一种精度问题：正确类的 logit 间隔很大时，交叉熵对目标 logit 的梯度会在浮点里舍入成 0（论文给出的 fp32 阈值约为 16.6）。现象和修法见 [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642](https://arxiv.org/abs/2610.31642) §1–§2，本书不展开。
 
 ## 3.4 两类掩码：不能看未来，不要看补位
 
@@ -1040,7 +1010,6 @@ python3 -m unittest discover -s tests -v
 - [Attention Is All You Need，v7，§3.2 与 §3.1](https://arxiv.org/html/1706.03762v7)：缩放点积、多头与解码因果约束。上面的数值小例子与边界策略为本书构造。
 - [PyTorch 2.14：scaled_dot_product_attention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.functional.scaled_dot_product_attention.html)：官方接口及布尔 mask 约定。
 - [PyTorch 2.14：MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：对照不同接口的 mask 语义。动态文档核验日期：2026-10-19。
-- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642，§1–§2，Eq. 2–7](https://arxiv.org/abs/2610.31642)（[项目页](https://jonbarron.info/softmaxfix/)）：Softmax Collapse 与修正版代码。核验日期：2026-10-26。
 
 
 ---
@@ -2189,24 +2158,9 @@ Pre-LN zero-sublayer identity max error=0.000000
 - Xiong 等，2020：[On Layer Normalization in the Transformer Architecture](https://arxiv.org/pdf/2002.04745)，图 1、表 1、§3：两种布局及有条件的初始化/优化分析。
 - [PyTorch 2.14 LayerNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html)：epsilon、方差口径、参数形状；[MultiheadAttention](https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.html)：布尔 mask 语义和参数接口。
 
-## 6.9 延伸：AttnRes，沿深度做注意力的残差 {#p07-attnres}
+## 6.9 延伸阅读：AttnRes {#p07-attnres}
 
-先看动机。6.1 的残差把每层输出都以权重 1 加进来。层数一多，隐藏状态越加越大。每一层自己的贡献就被冲淡了。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把这件事类比成 RNN：序列方向早已用注意力替代了递推，深度方向还没有。
-
-Kimi K3 报告（S29 §2.2）采用了这个做法。第 l 层有一个可学习的 pseudo-query `w_l`。候选来源是 token embedding 和此前各层的输出。权重按 Eq.9 计算：
-
-`α_{i→l} = φ(w_l, k_i) / Σ_j φ(w_l, k_j)`，`φ(q, k) = exp(qᵀ RMSNorm(k))`，`h_l = Σ_i α_{i→l} v_i`。
-
-这里 `k_i = v_i`，就是那一层的输出（Eq.8）。RMSNorm 让输出幅度大的层不能只靠“声音大”抢走权重。
-
-保留每一层输出要 O(Ld) 显存。Block AttnRes 把 L 层分成 N 个 block，block 内求和，只在 block 之间做注意力，开销降到 O(Nd)。S29 说 N≈8 就能拿回大部分收益。K3 用 8 个 12 层的 block，末块不满，加上 embedding 共 9 个来源。
-
-[`../code/14b_attnres_situ.py`](../code/14b_attnres_situ.py) 只验证两条性质：
-
-- 任意 `w`，权重都为正，且和为 1。
-- `w = 0` 时权重均等，结果正好是普通残差之和除以来源个数。所以 AttnRes 不是“普通残差加一点”。它是加权平均，幅度不随层数线性增长。
-
-测试还把一个来源放大 100 倍。因为先做 RMSNorm，它的权重几乎不变。本书没有训练 AttnRes，没有复现论文的任何收益数字。
+6.1 的残差把每层输出都以权重 1 相加。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把它换成沿深度方向的注意力：每层用一个可学习的 pseudo-query，对 embedding 和此前各层的输出做加权平均；[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)采用了这个做法。
 
 
 ---
@@ -2529,7 +2483,7 @@ Python 切片是 `x = ids[start:start+T]`，`y = ids[start+1:start+T+1]`。右�
 默认平均损失为 `(0.287682072 + 1.386294361) / 2 = 0.836988217`。不是先把正确答案概率平均成 0.5 再取负对数，后者是不同的量。PyTorch 的 `cross_entropy` 已包含稳定的 log-softmax 计算，**传 logits，不要先 softmax 再传进去**。
 
 > [!NOTE]
-> 稳定版也有精度极限。正确答案的 logit 间隔超过约 16.6（fp32）时，目标梯度会舍入成 0。详见 [P04 的 3.3a 框](#p04-softmax-collapse)。论文在 grokking 实验中，把记住训练集后的 Slingshot 损失尖峰归因于此（[arXiv:2610.31642](https://arxiv.org/abs/2610.31642) §4）。论文 §8 也说，这么大的间隔在标准大规模训练中并不常见。本书没有复现那组训练实验。
+> 稳定版也有精度极限：正确答案的 logit 间隔很大时，目标梯度会舍入成 0，详见 [P04 的 3.3a](#p04-softmax-collapse)。
 
 一般 batch 有 B 行、每行 T 格、词表 V 个字：
 
@@ -2663,7 +2617,6 @@ python -m unittest discover -s tests -p test_training_loop.py -v
 - [Autograd mechanics](https://docs.pytorch.org/docs/2.14/notes/autograd.html)：梯度记录、no-grad 与 eval 的区别。
 - 大纲 S14 的 [Transformers 文档入口](https://huggingface.co/docs/transformers/index) 是进一步学习训练框架的导航；本实验不调用 Transformers，也不把动态文档版本冒充已验证依赖。
 - 大纲 S18 [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556) 研究特定大规模设置下模型规模、数据量和计算预算的关系。它提醒我们同时报告预算和数据，但不能把论文比例套到三首诗、不能由本实验推出 scaling law，也不据此承诺增加步数就能提升泛化。
-- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642，§4](https://arxiv.org/abs/2610.31642)：大间隔下目标梯度为 0，以及 grokking 实验中 Slingshot 尖峰的归因；§8 关于标准大规模训练中少见的说明。核验日期：2026-10-26。
 
 
 ---
@@ -3097,39 +3050,9 @@ python3 -m unittest discover -s tests -p 'test_kv_cache.py' -v
 
 `tests/test_kv_cache.py` 对应形状/偏移、矩形 mask、全 logits 对齐、内存公式、独立请求和上限契约；还实际构造错误 offset 和错误 mask 的负面对照。后续 RoPE、GQA 或缓存布局的改动，都要继续通过这种同参数对齐，而不是跳过 S0 直接看速度。
 
-## P11.10 前沿补充：不改文本，直接改 KV（cache engineering） {#p11.10-cache-engineering}
+## P11.10 延伸阅读：直接改 KV（cache engineering） {#p11.10-cache-engineering}
 
-> [!NOTE]
-> 这一节讲一个新做法：不重算，直接从缓存里“删掉”旧内容。依据是清华 NICS 的 [Cache Engineering for Agents](https://arxiv.org/abs/2610.28577)（arXiv:2610.28577v1，2026-10-20）§3.3–§3.4，代码见 [thu-nics/AKV](https://github.com/thu-nics/AKV)。本书只演示单条序列上的两个操作，不实现 AKV 的服务系统。
-
-**问题。** Agent 一轮轮调用工具，历史越来越长。常见做法是改文本：删掉或摘要旧的工具结果。可本章一直在说，后面 token 的 K/V 是在前面内容的基础上算出来的。前缀一改，后面的缓存全部作废，保留下来的内容要重新 prefill。论文 §1 把这叫作重 prefill 成本与准确率之间的两难：删得越早，要重算的后缀越长。
-
-**两个新操作。** 论文 §3.3 在普通的 `append`（本章的增量写入，Eq. 3）之外定义了两个操作，文本历史本身不改：
-
-- `drop(P)`（Eq. 4）：把集合 P 里的 KV 条目排除在以后的注意力之外。保留条目的位置编码不变，下一个 `append` 的位置编号也不变。实现上可以只在 mask 里把它们设成“不看”，就像 P11.4 的矩形 mask 多了几列“不看”。
-- `repos`（Eq. 5）：把保留下来的 r 个 key 按逻辑顺序改到位置 0…r−1，下一个 token 用位置 r。对 RoPE，把一个 key 从位置 p 挪到 q 只需 $K\leftarrow R(q)R(p)^{-1}K$；**V 原样不动**，因为 V 本来就没有旋转。为什么旋转一下就够，见 [P12.3](#p12-rope) 的相对位置性质。
-
-AKV 的接口在原来的 OpenAI 格式请求上加两个字段（[README](https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/README.md) 的 Quick Start 示例和字段表）：`"drop_message": {"4": [2]}` 表示处理完下标 4 的消息后丢掉下标 2 的消息的 KV，`"reposition": [4]` 表示处理完下标 4 的消息后压紧位置。README 的消息下标从 0 开始数：示例里下标 2 是第一条工具结果 Record A，下标 4 是第二条工具结果 Record B。论文 Fig. 6 画的是另一种写法（`"cache": {"drop": …}`），本书以仓库 README 为准。
-
-**关键：drop + repos 不等于重新 prefill。** 保留下来的 token 当初算 K/V 时，是**看过**被删内容的。第 1 层的 K/V 只由 token 本身和位置决定，所以 repos 之后能和重算完全一样；但从第 2 层起，输入已经是混入了上下文的隐藏状态，被删内容的信息就留在保留 token 的 K/V 里。论文 §3.4 和 Fig. 5 说的正是这个“历史依赖”：同样的 token、同样的位置，操作顺序不同，缓存状态就不同；Fig. 1 也注明保留的 KV 仍可能带着被删历史的信息。
-
-**跑一下。** `code/12b_cache_engineering.py` 用 P12 的 RoPE 小模型（随机初始化、float64、种子 2026）。10 个 token，删掉中间第 2–5 个（像一段旧工具结果），再追加 2 个 query token，比较两条路：A 是完整 prefill → `drop` → `repos` → 追加；B 是只把保留的 6 个 token 重新 prefill → 追加。
-
-| 模型层数 | 第 1 层（layer 0）K/V 最大差 | 更高层 K/V 最大差 | query logits 最大差 |
-| --- | --- | --- | --- |
-| 1 | 2.2e-16 / 0 | 无 | 4.4e-16 |
-| 2 | 2.2e-16 / 0 | layer 1：0.128 / 0.126 | 1.53e-2 |
-| 4 | 2.2e-16 / 0 | 最大到 layer 3：0.384 / 0.499 | 7.34e-2 |
-
-三组对照把原因钉住：
-
-- 2 层模型的 layer 1 里，排在被删段**前面**的 token 0、1 差值分别为 0 和 2.2e-16，只是舍入级（它们本来就看不到后面的被删段），排在**后面**的 token 6–9 差 0.033–0.128。差异只出现在“看过被删内容”的 token 上。
-- 只删最后两个 token（没人看过它们）再 repos，4 层模型每层 K/V 都与重算完全一致，logits 差 4.4e-16。这时保留的 key 本来就在位置 0…7，`repos` 什么也没挪，所以这组对照单独检验的是“没人看过被删内容”，与旋转无关。
-- 1 层模型若只 drop 不 repos，layer 0 的 K 与重算差 2.23，logits 差 1.64e-2：位置没压紧，key 与 query 的相对距离就和重算不同。
-
-`tests/test_cache_engineering.py` 断言以上结论，并检查：不做任何操作时 `append` 与完整前向一致；mask 式 drop 与物理删除结果相同；先转到旧位置再 `rerotate` 等于直接转到新位置；把 `repos` 换成空操作后，1 层的相等就被破坏。
-
-**边界。** 差异不是 bug，也不说明哪条路更好：论文 §3.2 在讲直接改缓存的动机时写道，保留的缓存可能仍带着计算时用过的被删历史信息，并把直接 drop 同时提高准确率、降低成本列为实验观察；这些属于作者报告。本书只验证了“二者在数值上不同、以及为什么不同”，没有验证对准确率的影响。论文摘要报告的效果（数据见 §5.2 Table 1、§5.3 Table 2；相比阈值触发摘要平均 +1.7 分、成本 −27.7%；AKV 输出吞吐最高 1.2×、P95 延迟 1.5× 加速）均为作者报告，本书未复现。本书的 `rerotate` 在 float64 下直接转角度差；AKV 的内核 [`context_reposition.py`](https://github.com/thu-nics/AKV/blob/c567a429a058f1abce3b2879e69978b09e0fda4c/akv/system/sglang/kernels/ops/attention/context_reposition.py) 第 93–95 行注释说明，它刻意用 FP32 先逆转再正转，因为角度差展开会改变舍入，在深层模型里被放大；第 114–115 行注释说明只改旋转子空间，K 的其余部分和全部 V 原样复制。radix tree、淘汰与恢复（论文 §4）属于服务系统，本书不实现，P15 讲分页缓存时可以对照。
+[Cache Engineering for Agents，arXiv:2610.28577](https://arxiv.org/abs/2610.28577)（代码 [thu-nics/AKV](https://github.com/thu-nics/AKV)）不改文本，直接在 KV 缓存里丢掉旧的工具结果，再用 RoPE 旋转把保留的 key 挪到新位置。要注意，保留 token 的 K/V 当初看过被删内容，所以这样做与只用保留文本重新 prefill 并不相同。
 
 ## 原始来源与版本
 
@@ -3139,7 +3062,6 @@ AKV 的接口在原来的 OpenAI 格式请求上加两个字段（[README](https
 2. Kwon 等，[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)，§2–3：KV cache 与服务内存管理动机。分页和连续批处理留给后续，不将本地 `cat` 称为 PagedAttention。
 3. [code/07_baby_gpt.py](../code/07_baby_gpt.py) 与 [code/12_kv_cache.py](../code/12_kv_cache.py)：本章形状、容量策略、计时范围及可运行数值的直接依据。
 4. 大纲 S15 的 [vLLM Paged Attention 设计文档](https://docs.vllm.ai/en/latest/design/paged_attention/)（动态文档，访问核验日 2026-10-19）仅作后续服务实现导航。本章不依赖 vLLM、没有运行其内核，也未实现分页缓存；本地 S1 的行为以配套脚本为准。
-5. Fu 等，[Cache Engineering for Agents](https://arxiv.org/abs/2610.28577)（arXiv:2610.28577v1），§1、§3.2–§3.4（Eq. 3–5，Fig. 1、Fig. 5）、§4，核对日期 2026-10-27；代码 [thu-nics/AKV](https://github.com/thu-nics/AKV)（Apache-2.0，核对提交 `c567a42`）的 README 与 `akv/system/sglang/kernels/ops/attention/context_reposition.py`。P11.10 的依据；[code/12b_cache_engineering.py](../code/12b_cache_engineering.py) 为本书自写实现。
 
 下一单元 [P12](#p12-rope) 将绝对位置表换成 Q/K 旋转，并继续用同参数全量/增量 logits 对照检查缓存。
 
@@ -3447,15 +3369,9 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_rope.py' -v
 
 S2 已把“位置在哪里进入模型”和“缓存该保存什么”说明白。接下来 P13 一次只换一个部件，理解 RMSNorm 与 SwiGLU；P14 再处理共享 KV 头与压缩，而不是把 RoPE、GQA 和 MLA 都叫作“节省缓存的同一种技巧”。
 
-## P12.13 延伸：有些层干脆不转——NoPE {#p12.13-nope}
+## P12.13 延伸阅读：NoPE {#p12.13-nope}
 
-RoPE 不是每一层都必须用。NoPE 指这一层的 Q、K 不加任何显式位置编码。因果 mask 仍在，所以模型仍能间接感知顺序。两个公开案例，做法不同。
-
-**Muse Spark Open（S33）。** HF 配置有 `layer_rope_theta` 字段，逐层给 RoPE 底数。值为 0 就关闭这一层的旋转，即 NoPE。默认情况下，从最后一层往前数，每第 4 层是 NoPE，其余层用全局底数。
-
-**Kimi K3（S29 §2.1.2）。** 全部 MLA 层都用 NoPE。位置与远近信息交给 KDA 层的逐通道衰减（见 [P16.14](#p16.14-production-hybrid)）。报告给出的理由是：扩展上下文时，不必重调 RoPE 底数，也不必用 P12.8 的 YaRN。
-
-这和 P12.7 的问题对上了。RoPE 外推难，是因为没见过的转角。NoPE 层没有转角可外推。但这不等于它自动读懂长文本。两份资料都没有给出单独去掉 NoPE 的消融，本书也没有做这个实验。
+NoPE 指某些层的 Q、K 不加任何显式位置编码，只靠因果 mask 间接感知顺序。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)让全部 MLA 层都用 NoPE，位置信息交给线性注意力层（见 [P16.14](#p16.14-production-hybrid)）。
 
 
 ---
@@ -3730,26 +3646,9 @@ RMSNorm 的关键是**均方缩放，不居中**；SwiGLU 的关键是**两路�
 
 下一单元 [P14](#p14-grouped-kv) 保持 S3 的 Norm 与 FFN，再改变 KV 头的共享方式。这样每次升级都有明确的变化范围，不让“现代大模型积木”变成无法追踪的名词堆叠。
 
-## P13.13 延伸：SiTU-GLU，给两个因子都装上软上限 {#p13.13-situ-glu}
+## P13.13 延伸阅读：SiTU-GLU {#p13.13-situ-glu}
 
-先看动机。P13.4 的 SwiGLU 是 `Swish(W_g x) ⊙ W_u x`。两个因子都没有上界。两个大坐标碰在一起，乘积就是一个离群值，低精度下可能溢出。原始 GLU 的 sigmoid 门有界，但丢掉了 Swish 在正半轴近似线性的形状。
-
-Kimi K3 报告（S29 §2.3.2，Eq.12）用软上限 `softcap(x, β) = β tanh(x/β)` 同时限制两个因子：
-
-`SiTU-GLU(x) = [β₁ tanh(W_g x / β₁) ⊙ Sigmoid(W_g x)] ⊙ [β₂ tanh(W_u x / β₂)]`。
-
-K3 取 `β₁ = 4`、`β₂ = 25`。所以 `|f| ≤ β₁β₂ = 100`。tanh 在原点附近近似线性，所以小输入时它和 SwiGLU 几乎一样。S29 的 Table 1 显示，K2 用 SwiGLU，K3 换成 SiTU-GLU。
-
-[`../code/14b_attnres_situ.py`](../code/14b_attnres_situ.py) 的标量对照（g = u = x）：
-
-| x | SwiGLU | SiTU-GLU |
-|---|---|---|
-| 0.1 | 0.0052 | 0.0052 |
-| 1 | 0.7311 | 0.7158 |
-| 10 | 99.9955 | 37.4846 |
-| 100 | 10000.0000 | 99.9329 |
-
-测试在 ±10⁴ 的输入上检查上界 100。它还检查原点附近两者相差小于 10⁻⁴。一个变异去掉 up 分支的上限，输出立刻超过 100。本书没有训练对比，不声称 SiTU-GLU 提高了质量。
+P13.4 的 SwiGLU 两个因子都没有上界，两个大坐标相乘就是离群值。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)的 SiTU-GLU 用软上限 `β tanh(x/β)` 同时限制两个因子。
 
 ## 来源与实现核对
 
@@ -3758,8 +3657,6 @@ K3 取 `β₁ = 4`、`β₂ = 25`。所以 `|f| ≤ β₁β₂ = 100`。tanh 在
 3. [PyTorch 2.14 LayerNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html)：方差口径、γ/β、ε 和 bias 参数。
 4. [PyTorch 2.14 RMSNorm](https://docs.pytorch.org/docs/2.14/generated/torch.nn.RMSNorm.html)：公式与 epsilon 计算类型；本代码始终显式指定 ε。
 5. [PyTorch 2.14 SiLU](https://docs.pytorch.org/docs/2.14/generated/torch.nn.SiLU.html)：SiLU 的逐元素定义。
-
-6. [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（S29）：§2.3.2 Eq.12、β₁=4、β₂=25 与 Table 1 的激活函数一行；核验 2026-10-26。
 
 来源核对日期：2026-10-19。实际实验由固定依赖环境运行；其它设备或库版本的最后几位可能不同，应先核对配置与测试，而不是把表中的舍入值当作所有环境的逐位承诺。
 
@@ -4085,20 +3982,9 @@ Rank example: 3 -> 2, Frobenius error=1.0
 
 到这里，S4 仍是一条普通 decoder-only 主线，只更换了 KV 共享方式。下一单元 [P15](#p15-attention-systems) 研究 kernel、缓存管理和服务调度时，要把“模型表示减少了什么”与“系统怎样高效执行”分开记账。
 
-## P14.13 延伸：VHA，用“虚拟头”让 GQA 缓存接近 MHA 质量
+## P14.13 延伸阅读：VHA
 
-GQA 省缓存的代价，是多个 query 头只能读同一份 K/V。2026-10-13 提交的 [VHA 论文（arXiv 2610.17959）](https://arxiv.org/abs/2610.17959) 换了个思路：**缓存仍按 GQA 只存少数 KV 头，但训练时让每个真实 query 头对每个 KV 组各派生一个“虚拟头”，再在头之间做一次低秩混合。**推理前，这两步混合都能吸收到普通权重里，部署形态还是一个 GQA。
-
-两个可训练的小矩阵（下式按论文记号）：
-
-- **Premix**：真实 query 头 i 面对 KV 组 g 时，多乘一个 `W_g^premix`，初始化为 `I + αε`（论文取 α=0.1，ε 为标准正态）。吸收后 `W̃_Q^(i,g) = W_Q^(i) W_g^premix`，只是 query 投影变多，缓存不变。
-- **Postmix**：把所有虚拟头输出 Y 按头混合，`Y' = (I + B Aᵀ) Y`，秩 r 取**物理 query 头数**的一半（论文 r = H_q′/2；1.7B 模型里虚拟头有 16 个，r=4），不是虚拟头数的一半，B 初始化为 0，所以训练开始时 Postmix 就是恒等映射。吸收到输出投影：`W_O' = ((I + A Bᵀ) ⊗ I_d) W_O`。注意吸收后是 `A Bᵀ`，转置来自“先混头再乘 W_O”等于“对 W_O 的行块做转置混合”。
-
-[`../code/15b_vha.py`](../code/15b_vha.py) 用 float64 在 CPU 上做三件事，均为断言而非打印：训练形式（显式 Premix/Postmix）与吸收后的 GQA-2 形式最大误差小于 1e-5；B=0 时 Postmix 精确等于恒等；并打印 MHA 与 GQA-2 每层每 token（BF16）的 KV 缓存字节数（d=4 时分别为 128 与 32 字节）。`tests/test_vha.py` 另外检查两个故意写错的吸收：把 `A Bᵀ` 写成 `B Aᵀ`、或忘记把 Premix 并进 W_Q，都必须让输出明显偏离。
-
-论文报告的结果（均为原文表格，本书未复现）：1.7B 规模下，相对基线的平均分差 GQA 16-2-2 为 −1.00、8-2-2 为 −1.71，VHA 为 +0.41，每层每 token（BF16）KV 缓存由 4 KB 降到 1 KB（Table 2）；1.7B、序列长 4096 时训练/prefill FLOPs 降低 7.9%（Table 5）；30B-A3B MoE 上 VHA 50.36、MLA 49.66、GQA 47.76（Table 3）。消融中给混合加 SiLU 反而变差，Postmix 秩 r=4/32/128 的分数 54.50/54.24/54.15 相差很小。
-
-边界：本节代码只验证吸收恒等式和缓存账，不训练模型、不复现论文分数，虚拟头与 KV 组的排列方式是本书按论文公式做的教学重建。
+[Virtual Head Attention，arXiv:2610.17959](https://arxiv.org/abs/2610.17959) 的思路是：缓存仍按 GQA 只存少数 KV 头，训练时额外加两次可学习的头间混合，推理前把它们吸收进普通权重，部署形态仍是 GQA。论文报告的质量对比本书没有复现。
 
 ## 资料与实现边界
 
@@ -4106,8 +3992,6 @@ GQA 省缓存的代价，是多个 query 头只能读同一份 K/V。2026-10-13 
 - [DeepSeek-V2 原始报告 v5，§2.1.2](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2) 与 [§2.1.3](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS3)：权重吸收、query 低秩分支、RoPE 不可交换性及解耦位置缓存的原始依据；固定版本核验日 2026-10-19。
 - [DeepSeek-V3 技术报告 v2，§2.1.1](https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1)：核验 MLA 的联合内容压缩、解耦位置项与缩放维度。
 - [DeepSeek-V3 官方推理源码](https://github.com/deepseek-ai/DeepSeek-V3/blob/main/inference/model.py)：核验内容/位置缓存分离的实现入口；动态链接核验日 2026-10-19。
-
-- [VHA 论文 arXiv 2610.17959](https://arxiv.org/abs/2610.17959)（提交日 2026-10-13；核验日 2026-10-25）：Premix/Postmix 初始化、吸收公式与 Table 2/3/5 数字。
 
 本章实现 GQA 的完整 tiny-model 前向和紧凑缓存；MLA 仅实现独立矩阵教学实验，未实现完整训练模型、checkpoint 转换流程、分布式部署或生产性能复现。
 
@@ -4863,49 +4747,13 @@ python -m unittest discover -s tests -p test_sparse_linear_attention.py -v
 
 下一章 [P17](#p17-ced) 再用这些信息路径概念理解因果编码器—解码器。不要把“局部窗口”“低维 KV”“固定状态”或“编码/解码”几个词互相替代。
 
-## P16.13 延伸：MSA，按块挑选远处的 K/V
+## P16.13 延伸阅读：MSA
 
-P16.4 的固定窗口和全局位置是“事先定好看哪里”。2026-06-11 提交的 [MSA（arXiv 2606.13392）](https://arxiv.org/abs/2606.13392) 改为**每个 query 动态挑块**：把历史切成长度 B_k=128 的块，用块内最大分数（max-pool）代表整块，每个 GQA 组共享一次 top-k（k=16）选择，并且当前所在的局部块总是保留。论文里打分来自一个单独训练的轻量 indexer：用 KL 损失向“组内平均注意力分布”蒸馏，教师分布和 indexer 输入都做 stop-grad，并先有一段 indexer warmup。论文在 109B 模型（64 个 query 头、4 个 KV 头）上报告 1M 上下文时注意力 FLOPs 降低 28.4×，H800 上 prefill 14.2×、decode 7.6× 加速。这些数字本书没有复现。
+P16.4 的固定窗口是事先定好看哪里。[MiniMax Sparse Attention，arXiv:2606.13392](https://arxiv.org/abs/2606.13392) 改为让每个 query 给历史分块打分，只读分数最高的几块，并总是保留当前所在的局部块。
 
-[`../code/17b_msa_block_topk.py`](../code/17b_msa_block_topk.py) 只做选择规则本身，并且故意用精确的 `q·k` 代替学到的 indexer，所以测到的只是“按块挑”带来的损失：
+## P16.14 延伸阅读：生产级混合 {#p16.14-production-hybrid}
 
-- `block_scores`：一个 query 的逐 token 分数按块取最大值，最后不满一块的部分用 −∞ 填充。
-- `select_blocks`：组内各头的块分数取平均，每组选 top-(k−1) 个其余块，再加上局部块。脚本把整段的最后一块（下标 n−1）固定当作局部块，相当于只模拟位于序列末尾的那个 query；它对全部 key 打分，没有因果掩码。
-- `token_recall`：每个头精确前 16 个 key 中，有多少落在被选中的块里。T=4096、B_k=128 的随机例子里，k=1/4/16 时召回分别为 0.008/0.250/0.836，读取的 key 数分别少 32×/8×/2×。
-
-测试手算了 max-pool 与不完整末块，检查局部块必选、组内共享、预算覆盖全部块时召回为 1，并给出一个变异：把 max-pool 换成 mean-pool 会漏掉只有一个尖峰的块。脚本最后打印 1M token、B_k=128、k=16 时只读 1/512 的 key——这是选择预算的上限比，不是论文 28.4× 的 FLOPs 账，两者口径不同，不能直接比较。
-
-## P16.14 生产级混合：KDA、Mamba-2 与局部/全局交替 {#p16.14-production-hybrid}
-
-P16.7 的递推状态大小固定。代价是它会“记混”。生产模型的做法不是全换成线性层。它们保留少量全局注意力层，专门做任意两个 token 的内容匹配。下面三家公开资料，各自给出一种配比。
-
-**Kimi K3（S29 §2.1）。** 每个 block 是 3 层 KDA 加 1 层 Gated MLA，比例 3:1。主干末尾再加一层 Gated MLA，保证最后一层是全局注意力。Table 1 给出总层数 93。Table 1 直接列出 69 层 KDA + 24 层 MLA，与 23×(3+1)+1 的图样一致。
-
-KDA 的递推是 S29 的 Eq.1：
-
-`S_t = (I − β_t k_t k_tᵀ) Diag(α_t) S_{t−1} + β_t k_t v_tᵀ`，`o_t = S_tᵀ q_t`。
-
-先看动机。`Diag(α_t)` 是逐通道的遗忘门，每个 key 通道忘得快慢不同。`(I − β_t k_t k_tᵀ)` 是 delta rule：写入新值前，先擦掉状态里沿 `k_t` 方向的旧值。delta rule 的来源是 [Schlag 等，ICML 2021](https://proceedings.mlr.press/v139/schlag21a.html) 与 [Gated DeltaNet，ICLR 2025](https://openreview.net/forum?id=r8H7xhYPwz)。逐通道门来自 [Kimi Linear，arXiv:2510.26692](https://arxiv.org/abs/2510.26692)。
-
-训练时不能一步一步地递推。S29 的 Eq.4 把序列切块，块间传状态，块内并行。块内要用累计衰减 `Γ` 去乘 Q，用 `1/Γ` 去乘 K。`Γ` 是 (0,1) 中很多数的乘积，所以 `1/Γ` 可能溢出。
-
-K3 的改法是 Eq.5：`g = g_min · Sigmoid(e^{A_h} z)`，`α = exp(g)`，`g_min = −5`。于是每步 `α > e^{−5} ≈ 6.7×10⁻³`。一个 16 token 的 tile 里，累计 log 衰减落在 (−80, 0)。倒数小于 `e^{80}`，仍在 BF16 范围内（BF16 最大值约 `e^{88.7}`）。Kimi Linear 原来用 `g = −e^{A} Softplus(z)`，没有下界。
-
-[`../code/17c_kda_hybrid.py`](../code/17c_kda_hybrid.py) 做了三件事：
-
-- `kda_recurrent`：逐步执行 Eq.1。
-- `kda_chunked`：按块传状态，块内用逐步转移矩阵的乘积。它与逐步递推的差在 1e−12 以内。它不是 Eq.4 的 UT 变换写法，那部分本书没有实现。
-- `max_log_reciprocal`：z=8 的 16 个 token，Softplus 映射给出 `log(1/Γ) = 128`，超过 BF16 的 88.7。下界映射给出 80，没有超过。
-
-测试还手算了一步更新。β=1 且 α=1 时，用同一个单位 key 读回，得到刚写入的 v。把衰减全改成 1，块式结果就和参考对不上，这是一个故意的变异。
-
-**位置从哪里来。** K3 的全部 MLA 层都不用位置编码（NoPE，S29 §2.1.2）。位置与远近信息由 KDA 层提供。报告说，这样扩展上下文时，不需要重调 RoPE 底数或使用 YaRN。见 [P12.13](#p12.13-nope)。
-
-**Nemotron 3.5 Lightning（S31）。** 官方预训练文档给出 52 层：23 层 Mamba-2、6 层注意力、23 层 MoE。每个 MoE 层有 128 个路由专家，选 top-6，另加 1 个共享专家（NVIDIA 官方文档给出，厂商口径；本书未独立核验）。注意力层用 GQA，32 个头、2 个 KV 组。同一页说明，文档里的训练配方不是发布版 Base 的实际训练过程，两者只在训练配方上不同，层结构相同。Mamba-2 的原始来源是 [Dao 与 Gu，arXiv:2405.21060](https://arxiv.org/abs/2405.21060)。这里注意力只有 6 层，状态模型承担了大部分序列混合。
-
-**Muse Spark Open（S33）。** 它没有线性层，而是局部与全局注意力混排。HF 配置默认 `sliding_window=2048`，128 个 query 头配 16 个 KV 头（GQA，见 [P14](#p14-grouped-kv)）。每层是局部还是全局，由 `layer_types` 决定。文档只说它“未提供时自动生成”；[固定提交的配置源码](https://github.com/huggingface/transformers/blob/d4804f9d76b8c071b993d813e9e87067b780cbee/src/transformers/models/muse_spark/configuration_muse_spark.py)给出的默认规则是：从最后一层往前数，每 4 层有 1 层全局（`full_attention`），其余是局部（`sliding_attention`）。默认 62 层时，全局层是第 1、5、…、61 层（从 0 数），共 16 层，局部 46 层。所以它不是一层局部、一层全局地严格交替，而是 3 局部 : 1 全局。
-
-三者的共同点是：便宜的层占多数，少量全局层负责精确检索。比例与具体部件各不相同，不能互相套用。
+生产模型通常不把注意力全换成线性层，而是保留少量全局注意力层做精确检索。例如[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)每 3 层 KDA 线性注意力配 1 层 Gated MLA；KDA 的逐通道遗忘门来自 [Kimi Linear，arXiv:2510.26692](https://arxiv.org/abs/2510.26692)。
 
 ## 资料与实现边界
 
@@ -4914,13 +4762,7 @@ K3 的改法是 Eq.5：`g = g_min · Sigmoid(e^{A_h} z)`，`α = exp(g)`，`g_mi
 - [Transformers are RNNs，ICML 2020 定稿，PMLR 119:5156–5165](https://proceedings.mlr.press/v119/katharopoulos20a.html)：正特征核、因果归一化和递推的原始依据，不把其他新架构混入该公式。
 - [FLA 官方实现入口](https://github.com/fla-org/flash-linear-attention)：动态仓库链接，仅作选读；不是本章固定算法或性能证据。
 
-- [MSA，arXiv:2606.13392](https://arxiv.org/abs/2606.13392)（提交 2026-06-11，核验 2026-10-25）：块大小、top-k、局部块、indexer KL 训练与 1M 上下文效率数字，见 P16.13。
-
-- [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（S29，核验 2026-10-26）：§2.1 的 3:1 混合与末层 MLA、Eq.1/Eq.4/Eq.5、§2.1.2 NoPE、Table 1 的 93 层，见 P16.14。原始方法另引 Kimi Linear（arXiv:2510.26692）、Gated DeltaNet 与 Schlag 等。
-- [Nemotron 3.5 Lightning 预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)（S31，核验 2026-10-26）：52 层构成与 MoE 128 选 6 加 1 共享。
-- [Muse Spark Open，Transformers 文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)（S33，核验 2026-10-26）：`sliding_window`、头数与 `layer_types` 字段。
-
-上述原始来源与官方入口核验于 2026-10-19（MSA 除外）。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
+上述原始来源与官方入口核验于 2026-10-19。CPU 实验只验证数学表达、边界和一个可重现的检索反例；没有实现生产稀疏 kernel、完整训练模型或 GPU 性能比较。
 
 
 ---
@@ -5600,35 +5442,9 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 
 到这里，S0→S5 已经把“多保存一些参数”和“每 token 真正调用哪些参数”分开。接下来进入训练流水线：即使路由与缓存都正确，数据边界、去重、切分和预算没有处理好，也训练不出可靠的模型。
 
-## P18.13 延伸：Stable LatentMoE 与 Quantile Balancing {#p18.13-latent-moe-qb}
+## P18.13 延伸阅读：Stable LatentMoE 与 Quantile Balancing {#p18.13-latent-moe-qb}
 
-**先看动机。** 专家越多、每 token 选得越多，可组合的专长就越多。但普通 MoE 里，每个被选中的专家都收到完整的 d 维向量。选 16 个，就要搬 16 份 d 维数据。[LatentMoE，arXiv:2601.18089](https://arxiv.org/abs/2601.18089) 把路由专家放到更窄的 latent 宽度 ℓ 上计算，共享专家仍走完整宽度。
-
-Kimi K3 报告（S29 §2.3，Eq.11）写成：
-
-`u = Σ_{i∈T_k(x)} p_i E_i(W↓ x)`，`y = Σ_j E_j^shared(x) + W↑ RMSNorm(u)`。
-
-S29 Table 1 的数字：隐藏宽度 7,168，latent 宽度 3584（0.5×），896 个路由专家，每 token 激活 16 个，2 个共享专家。896/16 = 56，就是报告说的稀疏度 56。RMSNorm 放在 W↑ 之前，是 K3 相对原始 LatentMoE 的改动（§2.3.1）。
-
-**负载均衡为什么要换。** 专家接近 10³ 个时，S29 说原来的定步长偏置更新不再好用。那条规则来自 DeepSeek-V3（[arXiv:2412.19437](https://arxiv.org/abs/2412.19437) §2.1.2），原文用文字描述：每步结束时，过载专家的偏置减 γ，欠载专家的偏置加 γ。写成公式 `b_j ← b_j + γ sign(ℓ̄ − ℓ_j)` 是 S29 的转写，不是 V3 原文的公式。γ 小就追得慢，γ 大就来回震荡。
-
-QB 的思路是：直接算出“让专家 j 正好接到 q 个 token”的偏置。设一批 m 个 token、n 个专家、每个选 k 个，目标负载 `q = mk/n`（Eq.14）：
-
-1. 用 top-(k+1) 路由。第 k+1 名的偏置分数记作截断线 `α_i`。
-2. 对专家 j，看所有 token 的余量 `s_{i,j} − α_i`。取第 q+1 大的余量，它的相反数就是新偏置 `b̂_j`。这等价于 `−quantile_{1−k/n}`。
-3. 所有偏置减去均值。整体平移不改变 top-k 的选择。
-4. 新偏置只用于下一步。一批数据从不用它自己算出的偏置路由。
-
-偏置只影响“选谁”，不进入混合权重 `p_{i,j}`（Eq.13）。所以它不改变路由器的梯度。
-
-**CPU 玩具。** S29 的 Figure 5 用 m=8、n=4、k=1，负载从 (4,3,1,0) 变成 (2,2,2,2)，q=2。报告没有给出图中的分数矩阵。[`../code/19b_latent_moe_qb.py`](../code/19b_latent_moe_qb.py) 用了两个本书自造的 8×4 矩阵，起始负载都是 (4,3,1,0)：
-
-- `SCORES_BALANCES`：用带种子的随机搜索找到。一步 QB 后负载为 (2,2,2,2)。
-- `SCORES_STALLS`：手写的。一步后为 (3,3,1,1)，在同一批上重复五次仍是 (3,3,1,1)。
-
-第二个例子很重要。S29 附录 C 把 QB 推导成一个分配问题对偶的坐标下降。一步更新不保证这一批立刻完全均衡。训练中数据每步都在变，这只是一个偏置估计。本书没有测大规模训练中的负载曲线。
-
-测试检查：两个矩阵的起始负载；第一个一步均衡；第二个不均衡；偏置均值为 0；整体平移不改变路由；混合权重与偏置无关。
+[LatentMoE，arXiv:2601.18089](https://arxiv.org/abs/2601.18089) 把路由专家放到更窄的 latent 宽度上计算，少搬数据。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)在此基础上用 Quantile Balancing 做负载均衡：不再按固定步长调偏置，而是直接算出让每个专家接到目标 token 数的偏置。
 
 
 ---
@@ -7207,65 +7023,13 @@ grpo_config = GRPOConfig(
 
 本章可以带走的一句话是：**偏好、奖励、策略、参考和评估是不同角色，先把每个数字属于谁说清楚，再让优化器动手。** 下一章会把这一框架接到推理预算、MTP 和投机解码，并继续区分训练目标与推理时计算。
 
-## P22.11 延伸：on-policy 蒸馏与多教师合并（MOPD） {#p22.11-mopd}
+## P22.11 延伸阅读：on-policy 蒸馏与多教师合并（MOPD） {#p22.11-mopd}
 
-**先看动机。** 常见的蒸馏是 off-policy 的：经典做法（[Hinton 等，2015](https://arxiv.org/abs/1503.02531)）让学生在固定数据上拟合老师的软概率分布；大模型里也常让老师先写好答案，学生照着做 SFT。两种做法里的前缀都不是学生自己生成的。学生自己生成时，一旦走到老师没写过的前缀，就没人教了。On-policy 蒸馏反过来：让学生自己采样，再请老师给学生写下的**每一个 token** 打分。这个思路的公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)，K3 报告的 §4.1.3 引用了它。
+On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 token 打分，公开讲解见 [Thinking Machines Lab，On-Policy Distillation（2025）](https://thinkingmachines.ai/blog/on-policy-distillation/)。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)用这种做法把多个领域的 RL 专家合并进一个模型，称为 Multi-Teacher On-Policy Distillation（MOPD）。
 
-**Kimi K3（S29 §4.1）。** 先做 SFT。再按三个领域（通用任务、通用 agent、编程 agent）各训一个 RL 专家。每个领域又分 low、high、max 三档推理强度，共 9 个专家。最后用 MOPD 把它们合进一个模型。领域 d、强度 e 的样本，由对应的那位老师打分。逐 token 奖励是 Eq.15：
+## P22.12 延伸阅读：Softmax Cancellation {#p22.12-softmax-cancellation}
 
-`r(y_t) = clip( sg( log π_teacher^{(d,e)}(y_t | x, y_<t) / π_θ(y_t | e, x, y_<t) ), −R_max, R_max )`。
-
-`sg` 是 stop-gradient：这个比值只当作奖励数字，不让梯度穿过它。clip 限制极端的优势信号，让 RL 更稳。报告还说，他们试过更细的 top-k 蒸馏目标，在他们的设置下没有看到明显优势。
-
-**Nemotron 3.5 Super（S30）。** 官方文档列出 6 类专科老师：agent、推理、视觉工具使用、视频推理与跟踪、视觉推理、对齐（RLHF）。MOPD 分两个阶段，每个 prompt 交给拥有该领域的老师。其余 prompt 交给一个冻结的 self-anchor。文档说明，RLVR 第 120 步是 MOPD 第一阶段的学生。self-anchor 是这个学生起始 checkpoint 的冻结副本，用作没有专科老师认领的 prompt 的老师。
-
-[`../code/23b_mopd_reward.py`](../code/23b_mopd_reward.py) 在一个 4 词表上手算：
-
-| token | 老师 | 学生 | 原始 log 比 | clip(R=1) |
-|---|---|---|---|---|
-| 0 | 0.70 | 0.25 | +1.0296 | +1.0000 |
-| 1 | 0.20 | 0.25 | −0.2231 | −0.2231 |
-| 2 | 0.05 | 0.25 | −1.6094 | −1.0000 |
-| 3 | 0.05 | 0.25 | −1.6094 | −1.0000 |
-
-不 clip 时，按学生分布求期望，正好等于 `−KL(学生 ‖ 老师)` = −0.603100。所以这是一个逐 token 的反向 KL 信号。测试还检查：学生与老师一致时奖励为 0，所以起点处的 self-anchor 给出零奖励；没认领的领域会路由到 self-anchor；把比值写反，符号就翻转。本书没有跑任何蒸馏训练。
-
-P22.11 资料（核验 2026-10-26）：S29 [Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.1–4.1.3；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（厂商文档）。K3 §4.1.3 同时引用 [MiMo-V2-Flash，arXiv:2601.02780](https://arxiv.org/abs/2601.02780) 与 [DeepSeek-V4，arXiv:2606.19348](https://arxiv.org/abs/2606.19348) 的多教师蒸馏做法，本书未逐条核对这两篇的细节。
-
-## P22.12 前沿补充：学生等于老师，梯度却不为 0 {#p22.12-softmax-cancellation}
-
-> [!NOTE]
-> 本节依据 [A Fix for Softmax and Cross-Entropy](https://arxiv.org/abs/2610.31642) 的 §3 与 §7，以及[项目页](https://jonbarron.info/softmaxfix/)的代码。本书只做单行梯度演示，没有复现蒸馏训练。
-
-**问题从哪来。** 蒸馏常用软目标交叉熵：老师分布 $p=\operatorname{softmax}(z_T)$，学生分布 $q=\operatorname{softmax}(z_S)$。它对学生 logits 的梯度是 $q-p$。它与 KL$(p\Vert q)$ 只差一个与学生无关的常数，所以梯度相同。
-
-学生接近老师时，$q$ 和 $p$ 是两个几乎相等的数。浮点里相减，有效位会大量抵消。论文把这叫 Softmax Cancellation（§3）。学生完全等于老师时，真梯度是 0，算出来却可能不是。
-
-**修法。** 论文不先算两个概率再相减，而是从 logit 差 $\delta=z_S-z_T$ 出发（Eq. 8–9）：
-
-1. 在 $p$ 下中心化：$d=\delta-\sum_j p_j\delta_j$。
-2. 求 $s=d-\operatorname{log1p}\left(\sum_j p_j\operatorname{expm1}(d_j)\right)$，它等于 $\log(q/p)$。
-3. 求 $u=p\cdot\operatorname{expm1}(s)$，它等于 $q-p$。
-4. 令 $g=u-q\sum_j u_j$。精确算术下梯度和为 0；浮点下这一步把残差压到舍入量级。
-
-`log1p` 和 `expm1` 专为接近 0 的输入设计，不会先加 1 再减 1。$\delta=0$ 时每一步都是精确 0。项目页代码多了一个分支：$\lvert s\rvert\ge1$ 时直接用 $q-p$。arXiv 正文的式子没有写这个分支。
-
-**跑一下。** `code/23c_softmax_cancellation.py` 按论文 §3 的算法（Eq. 8–9）用 PyTorch 重新实现，并注明出处。前向 loss 不变，只替换梯度。项目页没有标注代码许可证，所以本书代码与注释均为自写，不复制原代码。
-
-论文例子是 $z_T=[2,1,0]$，$z_S=z_T+[-10^{-7},10^{-7},0]$，fp32：
-
-| 实现 | 学生梯度 |
-| --- | --- |
-| 论文 §3 末尾 JAX 代码示例：标准版 | [-5.960e-8, 1.452e-8, -1.123e-9] |
-| 本书：PyTorch 标准版 | [-5.960e-8, 4.470e-8, 7.451e-9] |
-| 修正版（两者相同） | [-4.596e-8, 4.144e-8, 4.513e-9] |
-| fp64 精确值 | [-4.596e-8, 4.144e-8, 4.513e-9] |
-
-两个标准版的误差不同，因为舍入顺序依赖框架实现。修正版与 fp64 精确值一致，也与论文 §3 末尾 JAX 代码示例注释中的数字一致（arXiv v1 HTML 版，核对日期 2026-10-26；表中为其 4 位有效数字舍入）。
-
-再取固定种子 0，生成 4 行 8 类的 bf16 logits，令学生等于老师。标准版最大梯度约 3.5e-3，修正版恰好为 0。论文报告的残差量级是：fp64 约 1e-17，fp32 约 1e-8，bf16 约 1e-3（§7）。本书的 bf16 实测与之同一量级。
-
-**边界。** 论文在 bf16 下观察到学生持续漂离老师（§7），本书没有复现。on-policy 蒸馏与多教师合并另见 [P22.11 的 MOPD 小节](#p22.11-mopd)，本书不在这里重复。`tests/test_softmax_fix.py` 固定输入断言上表的修正版数字、fp64 下梯度和在 1e-14 以内、去掉第 4 步后残差变大，以及学生等于老师时的精确 0。
+软目标交叉熵对学生 logits 的梯度是 $q-p$。学生接近老师时，这是两个几乎相等的数相减，浮点里有效位会大量抵消；[A Fix for Softmax and Cross-Entropy，arXiv:2610.31642](https://arxiv.org/abs/2610.31642) §3 给出从 logit 差出发、用 `log1p` 和 `expm1` 计算的修法。
 
 
 ---
@@ -7603,167 +7367,30 @@ accepted/proposed=4/11; rejected rounds=4; bonuses=0
 
 读完本章，应能清楚说出：**推理能力要靠任务评估，MTP 是训练监督，投机解码是保留目标生成规则的执行方法，测试时计算是需要付账的预算。** 把它们分别定义、分别验证，比把所有改进都叫“多想一步”更重要。
 
-## P23.13 延伸：块草稿、置信截断与 ECHO 递归草稿头
+## P23.13 延伸阅读：更便宜的草稿
 
-P23.7 的验收规则不关心草稿从哪来：只要每轮都由目标模型贪心验收，输出就等于普通贪心。2026 年几篇工作都在“草稿怎么更便宜、更准”上做文章。配套 [`../code/24b_spec_drafts.py`](../code/24b_spec_drafts.py) 把三种思路缩成 CPU 玩具，**全部复用本章未修改的 `greedy_decode` 验收**，并断言输出与普通贪心逐 token 相同。
+P23.7 的验收规则不关心草稿从哪来：只要每轮都由目标模型贪心验收，输出就等于普通贪心。所以草稿可以换成更便宜或更准的方法，例如一次并行写出整块草稿的 [DFlash，arXiv:2602.06036](https://arxiv.org/abs/2602.06036)、按逐位置置信度截断草稿的 [DSpark，arXiv:2607.05147](https://arxiv.org/abs/2607.05147)，以及沿预测距离递归、复用主干最后一层的 [ECHO，arXiv:2610.24766](https://arxiv.org/abs/2610.24766)。
 
-**块草稿（DFlash）**。[DFlash（arXiv 2602.06036，2026-02-05 提交）](https://arxiv.org/abs/2602.06036)用一个轻量块扩散草稿模型一次并行写出整块草稿（论文设置块长 16、5 层草稿网络），并把目标模型的隐藏特征注入草稿层的 K/V。论文报告在 Qwen3-8B 上最高约 6.1× 无损加速，约为 EAGLE-3 的 2.5 倍。本书的 `BlockDraft` 只保留“一次调用给出整块”这个接口：用 S6 的多个 MTP 头在同一前缀上并行给出 3 个候选，不是扩散模型，也不做特征注入。
+## P23.14 延伸阅读：推理强度预算与 LK loss {#p23.14-budget-lk}
 
-**置信截断（DSpark）**。[DSpark（arXiv 2607.05147，2026-07-06 提交）](https://arxiv.org/abs/2607.05147)给每个草稿位置预测一个置信度 `c_k = σ(w·[h_k; W1[x_{k−1}]])`，训练目标是 `c* = 1 − ½‖p_d − p_t‖₁`，再由调度器（论文 Algorithm 1，贪心）决定每个请求送多长的草稿去验证；草稿头里的 Markov 部分是低秩 `B = W1W2`（r=256），γ 是草稿块长，生产部署块长 γ=5（最多一次 5 个草稿 token），位置损失权重 `w_k = exp(−(k−1)/γ)` 也用同一个 γ。论文报告相对 MTP-1 单用户速度 V4-Flash 提升 60–85%、V4-Pro 提升 57–78%。`c*` 恰好等于 `Σ_v min(p_d, p_t)`，也就是随机投机采样的接受率：代码用 20 万次 Monte Carlo 抽样验证两者相差小于 0.01，并在测试中把 ½ 删掉作为变异，必须被抓住。`BlockDraft(tau=…)` 用草稿自身最大概率代替学到的置信头，在第一个低于阈值的位置截断；阈值设成 1.01 时草稿全被截掉，输出仍不变，只是退化成普通逐 token 解码。
+[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)在 RL 中给每道题估一个 token 预算，轨迹超出预算的若干倍就把任务奖励改成 −1，以此训练出不同推理强度的档位。[LK Losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881) 则让草稿直接优化接受率 `Σ_x min(p(x), q(x))` 的负对数，而不是 KL。
 
-**ECHO 递归草稿头**。[ECHO（arXiv 2610.24766，2026-10-17 提交）](https://arxiv.org/abs/2610.24766)沿**预测距离（horizon）**递归：`h_t = T^L(F(h_{t−1}, e(x_t)))`。T^L 不是新加的模块，而是**主干自己的最后一层（第 L 层）解码层**，输出头也与主干共享；F 是轻量融合层（两路各做 RMSNorm、拼接、线性投影）。第 k 个 horizon 只调用一次 T^L：把第 k−1 个 horizon 的隐藏状态与**再往后一个 token** 的嵌入融合，预测再远一个位置。论文明确把它与“反复精炼同一位置”的 looped transformer 区分开。训练时用动态深度采样（DDS）：每个优化步按 π=(0.6, 0.3, 0.1) 抽一个 horizon 数 D∈{1,2,3}（期望 1.5），只训练前 D 个 horizon，于是第 k 个 horizon 被训练的频率是 `f_k = P(D ≥ k)`，即 (1, 0.4, 0.1)（论文式 4）。论文对比表中 ECHO-1.5(3) 为 36.34、固定深度 3 的 ECHO-3 为 36.36（平均深度只有一半），主干为 10B-A1B、600B token 预训练。本书的 `ECHOHead` 直接复用 S6 目标模型的最后一个 block 作为 T^L，并复用嵌入、`ln_f` 与输出头。写成下标：位置 t 的第 k 个 horizon `h^(k)_t = T^L(F(h^(k−1)_t, e(x_{t+k})))`，监督标签是 `x_{t+k+1}`（代码里 `idx[:, k+1:]`），`h^(0)` 就是目标模型自己的最后一层状态。每个优化步按 π 抽 D，对 horizon 1..D 的交叉熵取平均。起草时，第 j 个草稿把上一 horizon 的状态与最新 token（先是 pending，再是刚起草的 token）融合。**冻结目标模型、只训练融合层 F 是本书的简化**：论文里 F 与共享的主干（包括 T^L 和输出头）在预训练中联合优化，草稿能力本身就会塑造主干。训练后，在留出数据上 horizon 1/2/3 的贪心准确率都是 1.000（规律太简单，见下方边界）。测试改动下标 t+2 处的 token：`h^(1)_t` 必须不变、`h^(2)_t` 必须改变；把实现换成“在同一位置反复套 T 的 looped 版本”会被这条测试抓住，把标签错用成 `x_{t+2}` 的变异也会被抓住。
+## P23.15 延伸阅读：batch 变大时的投机解码 {#p23.15-eagle4}
 
-![ECHO 教学融合层在 CPU 上的训练损失（horizon 1..D 平均，DDS 抽 D；seed 231，单次运行）](assets/diagrams/p23/echo_loss.svg)
+batch 小时解码受内存带宽限制，多验证几个草稿位置几乎不增加耗时；batch 变大后矩阵乘吃满算力，验证就要付真实的算力账。EAGLE-4（[论文 PDF](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)）按实测的起草和验证代价，每轮决定起草多少、用树还是用链。
 
-平均接受长度可以直接从各位置条件接受率算出：`E[τ] = 1 + Σ_d Π_{i≤d} a_i`，1 是每轮必有的修正或 bonus token。a=(0.8, 0.6, 0.4) 时为 2.472，测试用 5 万次模拟核对，并把“乘积”误写成“直接相加”作为变异。
+## P23.16 延伸阅读：FlashMap {#p23.16-flashmap}
 
-边界：三个类都是教学重建，不是论文代码（ECHO 仓库未声明许可证，本书未复制其代码）；目标规律 `x_{t+1} = (3x_t+1) mod 11` 极易学习，所以接受率接近 100%，不代表真实模型。ECHO 论文自述的局限同样适用：预训练只重复一次、微调只用单一种子；DDS 每步只抽一个 D，各步的损失构成不同，所以图中曲线本身就会抖；曲线也只是单次运行。不声称任何加速。
-
-## P23.14 延伸：推理强度预算与 LK loss {#p23.14-budget-lk}
-
-**预算控制（S29 §4.1.2）。** 想要“同一题少想一点”，K3 在 RL 中给每道题 x 估一个初始预算 `b0(x)`，来自冷启动模型。轨迹的 token 数 `T(y)` 超过 `τ · b0(x)` 时，任务奖励直接改成 −1。通用任务只数思考 token；agent 任务数全部输出，包括工具调用参数。训练先用较大的 τ 得到 max 档，再把 τ 退火变小，得到 high 和 low 档。
-
-[`../code/24c_budget_lk.py`](../code/24c_budget_lk.py) 用 4 条自造轨迹，`b0 = 1000`：
-
-| (任务奖励, token) | τ=3 | τ=2 | τ=1 |
-|---|---|---|---|
-| (1, 900) | 1 | 1 | 1 |
-| (1, 1500) | 1 | 1 | −1 |
-| (0, 700) | 0 | 0 | 0 |
-| (1, 2600) | 1 | −1 | −1 |
-
-测试检查：恰好等于阈值不罚；τ 变小后，被罚的轨迹不会恢复。
-
-**MTP 变成草稿模型（S29 §4.1.4）。** K3 预训练时带一个 MTP 层。后训练时冻结目标模型，把这个 MTP 层微调成 EAGLE-3 式草稿（[EAGLE-3，arXiv:2503.01840](https://arxiv.org/abs/2503.01840)）。训练时草稿展开 7 步。输入融合第 1、第 4 和最后一个 AttnRes block 的特征（见 [6.9](#p07-attnres)）。融合矩阵 `W_E3` 初始化为 `[0 0 I]`，所以起点就是 MTP 层预训练时见过的高层特征。
-
-**LK loss。** P23.13 已用 Monte Carlo 验证：随机投机采样的逐 token 接受率是 `Σ_x min(p(x), q(x))`。K3 直接优化它的负对数（Eq.16），来自 [LK losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881)：
-
-`L_LK = −log Σ_x min(p(x), q(x))`，p、q 都在温度 1 下取，不加交叉熵项。
-
-动机是：草稿容量有限时，KL 更小不保证接受率更高。脚本给出一个自造反例，目标 p = (0.6, 0.3, 0.1)：
-
-| 草稿 | KL(p‖q) | 接受率 | LK |
-|---|---|---|---|
-| A = (0.45, 0.40, 0.15) | 0.0458 | 0.850 | 0.1625 |
-| B = (0.65, 0.349, 0.001) | 0.3671 | 0.901 | 0.1043 |
-
-A 的 KL 更小，B 的接受率更高。原因是 KL 重罚“目标有、草稿几乎没有”的 token，而接受率只看重叠的面积。测试还核对接受率等于 1 减总变差距离，并把 min 换成 max 作为变异。
-
-**Nemotron 3.5 Super（S30）** 的做法不同：一个递归共享的 MTP 头，从 Nemotron 3 Super Base 两个头中的第一个初始化。官方文档的 Table 8 引用值是，草稿长度 7 时平均接受长度 4.287 → 4.718（greedy）、3.787 → 4.612（sampled）。这些是厂商报告的数字，本书没有复现。
-
-## P23.15 延伸：为什么 batch 一大投机就不划算，以及 EAGLE-4 怎么按代价选树或链 {#p23.15-eagle4}
-
-P23.13 的 DFlash 一次并行写出整块草稿；EAGLE-4 走另一条路：**自回归小草稿器 + 按实测代价决定这一轮起草多少、验证多少**。对照如下（机制列以官方说明为准；加速倍数均为厂商／作者报告，本书未复现 27B）：
-
-| | MTP 自带草稿 | EAGLE-3 | DFlash | EAGLE-4 |
-|---|---|---|---|---|
-| 草稿怎么产生 | 目标模型自带的多 token 头，常做成固定链 | 单层自回归草稿器，读目标多层隐藏状态 | 块扩散：一次并行出一整块（论文块长 16） | 沿用 EAGLE-3.1 单层归一化草稿器；读目标 **3 个分别归一化的隐藏状态 + token embedding**，输出再喂回下一步 |
-| 树还是链 | 多为固定链 | 动态树（EAGLE-2 风格） | 块（非自回归树） | **低并发动态树、高并发动态链**；每轮由代价模型改形状 |
-| 随 batch 怎么调 | 固定长度，大 batch 时验证窗浪费 | 主要按接受概率长树，不显式吃硬件代价 | 固定块长，大 batch 时可能起草过多 | 一次性测硬件上的起草／验证代价；每步比较期望收益与边际代价 |
-| 词表打分 | 完整 LM head | EAGLE-3 用截断草稿词表 | 视实现 | **低秩候选头**：先用 rank-128 投影给全部词表打分，再只对前 128 个候选用完整 LM head（目标 Qwen3.8-27B 的完整词表 248320，TP4 下每片 62080；不是截断词表） |
-| 长上下文 | 视目标 | 全上下文注意力成本随长度涨 | 视实现 | 草稿注意力滑窗 **4096**；草稿 KV **只追加不淘汰** |
-
-来源：EAGLE-4 论文 PDF（[eagle-hq/EAGLE-4@`3b96ef6`](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)，Preprint，无 arXiv 号）、[LightSeek / TokenSpeed 文](https://lightseek.org/blog/eagle-4.html)（2026-10-20）、[fal 技术解读](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20）；仓库许可证为 **源码可见**（`LicenseRef-Eagle-4-Source-Available`），不是 OSI 开源。代码包 `eagle-harness` 以插件形式接到 SGLang / vLLM / TokenSpeed；本书**不复制**其源码。
-
-### 直觉：小 batch 时验证几乎免费，大 batch 时不再免费
-
-解码在小 batch 时往往是**内存带宽受限**：目标模型每次只算很少的 token，算力闲着，多验证几个草稿位置几乎不增加墙钟时间。batch 变大后，矩阵乘已经吃满算力，再塞进一棵很宽的验证树，就要付真实的算力账——这就是“投机解码收益随 batch 增大而消失”的工程原因。fal 文把同一权衡说成：更大的树给验收更多备选，但也更贵；EAGLE-4 的 harness 用 GPU 上测得的延迟表来管这个权衡。
-
-### 公式：期望收益 ÷ 边际代价
-
-论文 §3.1 把每一步都收成一次比较：
-
-`ΔA / ΔC ≥ τ`
-
-- `ΔA`：再多起草一层（或再多验证一个节点）时期望多接受的 token 数。链上若每步接受率近似为 p，第 k 个草稿位置的边际收益是 `p^k`（再加每轮必有的修正／bonus，见 P23.13 的 `E[τ]`）。树上则用根到节点的草稿概率乘积当接受可能性（EAGLE-2 风格）。
-- `ΔC`：在当前硬件、当前 batch、当前上下文长度下，**一次性测得**的起草或验证耗时增量，查表得到。
-- `τ`：阈值；论文写明起草阈值随深度升高，因为深枝估计更不可靠。
-
-Algorithm 1（论文）每轮做三件事：① 每起草一层后看要不要再深一层；② 按分数从高到低加验证节点，直到下一个节点不值它的验证代价；③ 读当前负载，轻载允许多分支、重载收成短链。同一套草稿权重，不改训练，只改这一轮的树／链形状。
-
-采样（温度 > 0）时，若按本轮已抽出的 token 决定何时停，会偏置目标分布；论文与 LightSeek 文都写明：采样轮的深度要**提前固定**为上一轮代价准则本会停下的深度，再用树拒绝采样保持目标分布。贪心时输出与目标一致。本书仍只演示贪心。
-
-### CPU 玩具：选 k，再断言贪心验收不变
-
-[`../code/24d_eagle4_cost.py`](../code/24d_eagle4_cost.py) 把上面的比较收成**链**上的教学版（不是完整动态树，也不读真实 GPU 表）：
-
-1. 给定接受率 p、单步起草代价 `c_d`、验证代价 `c0 + c1·n`，用 `ΔA/ΔC ≥ τ` 选出草稿长度 k；换一组模拟 batch（改大 `c1`）会看到选出的 k 变短，直到为 0。
-2. 用选出的 k 走本章未改动的 `greedy_decode`，草稿即便乱写也会被纠正，输出与逐 token 贪心逐 token 相同。
-3. 低秩候选头：在词表 5000、`d=64` 上用 W 的截断 SVD 得到 `A、B` 先打分、取 top-128，再只对候选行做完整 `W h`；打印 top-1 与全词表打分一致的比例，以及乘法次数对比。**这是教学简化**：论文把低秩头训练成检索器，报告 rank-128 时候选里含全头 top-1 的比例为 98.2%（作者报告，未复现）。
-
-厂商报告的速度（不是本书测量）：LightSeek / TokenSpeed 文称 Qwen3.8-27B BF16、4×B300 TP4、单请求 temperature=1 时 750 tok/s，相对不投机 2.85×、相对模型自带 MTP 1.28×；agentic coding 采样负载约 3.0×。论文 Fig.1 / Hugging Face 卡在 temperature=0 的 SPEED-Bench 定性子集上报告 EAGLE-4 863.8 tok/s、3.59×（相对 Vanilla）。两组设定不同，不要混成一个数。fal 文说明已发布模型尚未包含多层草稿、MoE 草稿和 Latent ReLU。
-
-边界：不下载 27B、不复制 source-available 代码、不声称本机加速；滑窗 4096 与词表 248320 来自官方仓库文档／工具注释（`docs/known-limits.md`、`tools/bench_kernels.py`，提交 `3b96ef6`）；248320 也是 Qwen3.8-27B config.json 里 text_config 的 `vocab_size`（[固定版本](https://huggingface.co/Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/config.json)）。与 DFlash 对照时记住：一条路是“一次出一块”，一条路是“每步决定还要不要再起草”。
-
-## P23.16 延伸：FlashMap——用 flow map 一次写出有块内依赖的草稿 {#p23.16-flashmap}
-
-P23.13 的 DFlash 一次前向写出整块草稿，但**块内各位置彼此独立**；EAGLE 系（含 P23.15 的 EAGLE-4）是**自回归小草稿器**，一步一个 token。FlashMap 走第三条路：用 **flow map 语言模型**从高斯噪声一步跳到整块 token，在**单次前向**里保留块内依赖，再交给目标模型一次并行验证。
-
-先用一句话分清三个名词（本书不训练真实 flow）：
-
-- **流（flow）**：把“噪声”连续地搬到“数据”的一条 ODE；在 token 上，数据是块内各位置的 one-hot。数值积分往往要几十上百步（论文称 NFE，network function evaluations）。
-- **Flow map**：直接学习“从时间 s 跳到时间 t”的算子，用**一次**网络评估代替多步积分；还可把几次短跳拼成 2-step 等。
-- **块内依赖**：草稿 `"new york"` 合理，`"new diego"` 不合理。独立逐位置预测（DFlash）会按边缘分布出交叉组合；联合建模才能少出这种一眼假的块——这正是论文 §6.2 shuffle 测试要量的东西。
-
-### 对照：EAGLE / DFlash / FlashMap
-
-机制列以论文与官方仓库为准；加速倍数均为**论文自报**，本书未复现 Qwen3-8B。
-
-| | EAGLE（自回归草稿） | DFlash（块扩散草稿） | FlashMap（flow map 草稿） |
-|---|---|---|---|
-| 草稿怎么产生 | 轻量自回归草稿器，一步一个 token；读目标多层隐藏状态 | 轻量块扩散：一次前向并行出整块（论文块长 K=16）；位置彼此**独立** | 条件 DiT 上的 flow map：从噪声一次（或少数次）跳到整块；块内 self-attn **保留依赖** |
-| 目标信息怎么用 | 融合目标若干层 hidden | 目标 hidden 注入草稿 K/V | 交叉注意力读目标若干层 hidden（论文取层 1/9/17/25/33）；**冻结**目标 embedding 与 LM head |
-| 每轮草稿代价 | 与草稿长度成正比（逐步） | 约 1 次草稿前向 | 默认 **1 NFE**；可选 `num_steps=2` |
-| 验收 | 目标一次并行验证；贪心时输出 = 目标贪心 | 同左 | 同左（无损） |
-| 论文自报（Qwen3-8B） | EAGLE-3 作对照基线（同数据重训） | 同条件重训的块扩散基线 | 1-step 在 GSM8K、T=0 上最高约 **6.14×** 无损加速；九个基准上平均比同条件 DFlash 快约 **7.4%**；附录有 Qwen3-4B |
-
-来源：[FlashMap，arXiv:2610.24365v1](https://arxiv.org/abs/2610.24365)（2026-10-17；Figure 1(c)、§5、Table 1/2）；代码 [al-jshen/flashmap@`cd5b45b`](https://github.com/al-jshen/flashmap/tree/cd5b45bdf19b1d81ee00bf4c2f212c7c0ed93ac6)（MIT）；权重 [j-shen/FlashMap-Qwen3-8B](https://huggingface.co/j-shen/FlashMap-Qwen3-8B) / [4B](https://huggingface.co/j-shen/FlashMap-Qwen3-4B)（Apache-2.0）；项目页 [jshen.net/flashmap](https://jshen.net/flashmap/)。官方 README 另接 SGLang（`DSPARK` 算法位）与 vLLM speculative config。
-
-### 训练两阶段（只记结构，不抄公式当实现）
-
-1. **先训 flow**：在 one-hot token 块上做连续流（Flow Map Language Models，[arXiv:2602.16813](https://arxiv.org/abs/2602.16813)）；骨干是 6 层条件 DiT（宽 2048、16 头），槽位损失权重 `w_k = e^{-(k-1)/κ}`（论文 κ=7，K=16）。
-2. **再蒸馏成 flow map**：把多步流蒸馏成两时间 denoiser，使一次（或少数次）跳跃逼近积分；论文用 semigroup 蒸馏。1 NFE 时联合结构只部分保留；**2-step** 能收回教师流大部分 shuffle Δ（§6.2）。
-
-### Shuffle 测试：分清“边缘准”和“块内一致”
-
-论文 Table 2（Qwen3-8B，T=0，**论文自报**）：同一套边缘分布下，比较“各槽共享噪声”与“各槽独立噪声”的接受长度，Δ = γ_shared − γ_shuffled。DFlash 无噪声联合、Δ=0；多步流 Δ 最大；FlashMap 1-step Δ 很小，2-step 接近多步教师。教学含义：**只把每个位置的边缘分布拟合好，不等于草稿块本身讲得通**。
-
-### CPU 玩具：联合采样 vs 独立采样
-
-[`../code/24e_flashmap_joint.py`](../code/24e_flashmap_joint.py) 用论文 Fig.1(b) 的两模式直觉（`"new york"` / `"san diego"`）做最小离散玩具——**不是** DiT，也不加载官方权重：
-
-1. 联合草稿：先抽一个模式，再写出两个 token → 块内永远一致。
-2. 独立草稿：两槽各自按边缘抽 → 会出现 `"new diego"` 这类交叉组合，前缀接受长度更短。
-3. Shuffle 对照：独立按槽抽模式（边缘不变、联合被拆掉）→ Δ>0，对应 Table 2 的教学点。
-4. 再用本章未改的 `greedy_decode` 验收一个“整块联合”接口的草稿，断言输出与普通贪心逐 token 相同（无损）。
-
-真实 FlashMap 需要 GPU 与目标模型权重；官方最小调用见仓库 README（`draft.spec_generate(target, …, num_steps=1)`）。本书不下载 Qwen3、不声称本机加速。
-
-路标（不必展开）：ReaDy（[arXiv:2610.20503](https://arxiv.org/abs/2610.20503)）在混合线性注意力里用循环状态给 DSpark 类草稿补上下文；与 FlashMap 正交。
+[FlashMap，arXiv:2610.24365](https://arxiv.org/abs/2610.24365) 用 flow map 从噪声一步跳到整块草稿，在单次前向里保留块内各位置的依赖，再交给目标模型并行验证。
 
 ## 资料版本与复现边界
 
-核验日期：2026-10-19；P23.16 资料核验 2026-10-29。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
+核验日期：2026-10-19。以下固定论文版本用于机制与训练路线；链接不是本书已运行相应大模型的证明。
 
 - [DeepSeek-R1，arXiv:2501.12948v1](https://arxiv.org/html/2501.12948v1)：§2.2–2.4，Zero／冷启动／RL／数据筛选／SFT／蒸馏的区别。
 - [DeepSeek-V3 Technical Report，arXiv:2412.19437v2](https://arxiv.org/html/2412.19437v2)：§2.2，串行 MTP 模块、训练辅助目标与推理用途。本章独立线性 head 不是该模块的复刻。
 - [Fast Inference from Transformers via Speculative Decoding，arXiv:2211.17192v2](https://arxiv.org/html/2211.17192v2)：§2 与附录 A，草稿验证和随机采样校正的原始依据。本章实现仅为贪心。
 - [DeepSeek-V4.1-Flash，arXiv:2609.19969v1](https://arxiv.org/html/2609.19969v1)：§2.4.3，仅用于核对 DSpark 与 V3 MTP 的差异；不把不同版本的训练方案拼接成一个实现。
-- [DFlash，arXiv:2602.06036](https://arxiv.org/abs/2602.06036)（提交 2026-02-05，核验 2026-10-25）：块草稿、特征注入与加速倍数，见 P23.13。
-- [DSpark，arXiv:2607.05147](https://arxiv.org/abs/2607.05147)（提交 2026-07-06，核验 2026-10-25）：置信头、`c*` 目标、Algorithm 1 调度与速度数字。
-- [ECHO，arXiv:2610.24766](https://arxiv.org/abs/2610.24766)（提交 2026-10-17，核验 2026-10-25）：式 1 递归（共享最后一层）、式 4 的 f_k、DDS 分布与 Limitations。
-- S29：[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)（核验 2026-10-26）：§4.1.2 预算控制，§4.1.4 EAGLE-3 草稿与式 16，见 P23.14。
-- [EAGLE-3，arXiv:2503.01840](https://arxiv.org/abs/2503.01840) 与 [LK losses，arXiv:2602.23881](https://arxiv.org/abs/2602.23881)：K3 引用的原文，见 P23.14。
-- S30：[Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html)（核验 2026-10-26）：共享 MTP 头与 Table 8 引用值，厂商报告。
-- [EAGLE-4：One Flexible Drafter for All Batch Sizes and Hardware](https://github.com/eagle-hq/EAGLE-4/blob/3b96ef6e1c0b2ef0c698fab74c8e383d8bf8053d/EAGLE4_Paper.pdf)（Preprint PDF，无 arXiv 号；仓库提交 `3b96ef6`，核验 2026-10-28）：§3.1 代价模型与 Algorithm 1，§3.2 低秩候选头，§3.3 滑窗与只追加草稿 KV；许可为源码可见。
-- [EAGLE](https://arxiv.org/abs/2401.15077)、[EAGLE-2](https://arxiv.org/abs/2406.16858)、[EAGLE-3](https://arxiv.org/abs/2503.01840)：家族原文；EAGLE-4 论文与 `CITATION.cff` 亦列出。
-- [LightSeek / TokenSpeed：EAGLE-4 training and serving](https://lightseek.org/blog/eagle-4.html)（2026-10-20，核验 2026-10-28）：750 tok/s 等厂商报告、Harness 树／链、Efficient LM Head、滑窗 4096。
-- [fal：EAGLE-4 Technical Deepdive](https://blog.fal.ai/eagle-4-technical-deepdive/)（2026-10-20，核验 2026-10-28）：batch 权衡、与 DFlash/DSpark 对照；已发布模型不含多层／MoE／Latent ReLU。
-- 代码与权重：[eagle-hq/EAGLE-4](https://github.com/eagle-hq/EAGLE-4)（`3b96ef6`）、[PyPI eagle-harness](https://pypi.org/project/eagle-harness/)、[EAGLE-Corp/Qwen3.8-27B-EAGLE4](https://huggingface.co/EAGLE-Corp/Qwen3.8-27B-EAGLE4)；本书实验见 [`../code/24d_eagle4_cost.py`](../code/24d_eagle4_cost.py)。
-- [FlashMap，arXiv:2610.24365v1](https://arxiv.org/abs/2610.24365)（2026-10-17，核验 2026-10-29）：§3 flow / flow map 草稿与蒸馏，§5–6 与 Figure 1(c)/Table 1/2 数字，§6.2 shuffle 测试；见 P23.16。
-- [Flow Map Language Models，arXiv:2602.16813](https://arxiv.org/abs/2602.16813)：FlashMap 所蒸馏的 continuous flow 骨架。
-- 代码与权重：[al-jshen/flashmap](https://github.com/al-jshen/flashmap)（提交 `cd5b45bdf19b1d81ee00bf4c2f212c7c0ed93ac6`，MIT）、[j-shen/FlashMap-Qwen3-8B](https://huggingface.co/j-shen/FlashMap-Qwen3-8B)、[j-shen/FlashMap-Qwen3-4B](https://huggingface.co/j-shen/FlashMap-Qwen3-4B)（Apache-2.0）；项目页 [jshen.net/flashmap](https://jshen.net/flashmap/)；本书实验见 [`../code/24e_flashmap_joint.py`](../code/24e_flashmap_joint.py)。
-- 路标：[ReaDy，arXiv:2610.20503](https://arxiv.org/abs/2610.20503)（混合线性注意力循环状态服务草稿；不必展开）。
 
 
 ---
@@ -7774,7 +7401,7 @@ P23.13 的 DFlash 一次前向写出整块草稿，但**块内各位置彼此独
 
 照片类比到这里就该停了。模型里的一点误差会经过矩阵乘法、注意力和多步生成继续传播，不能只凭“肉眼看起来差不多”判断。我们先用可手算的整数格子，再用真实的本地引擎把文件加载、量化、生成和流式响应串起来。
 
-配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。`25_quantized_serving.py` 的默认实验只用 Python 标准库、CPU、小数组，不下载权重；P24.13 的 `25b_mixed_bit.py` 另需 PyTorch（CPU 即可）。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
+配套 [code/25_quantized_serving.py](../code/25_quantized_serving.py)，测试为 `tests/test_quantized_serving.py`。`25_quantized_serving.py` 的默认实验只用 Python 标准库、CPU、小数组，不下载权重。可选实战使用锁定的 llama.cpp 和**本地生成的未训练微型模型**。其他框架是版本化选型导读，不是本书已经跑过的 GPU 成绩。
 
 ![量化把浮点数映射到整数格点；权重、激活和 KV 是三个独立对象；真实服务还要经过格式与内核检查，并正确处理流式边界](assets/diagrams/p24-quantization.svg)
 
@@ -8207,54 +7834,17 @@ P24_LLAMA_BIN=/tmp/p24-engine/build/bin \
 
 你现在得到的不是一个“装上就万能”的工具名单，而是一条可检查的链：**数值规则 → 格式与架构 → 设备内核 → 服务边界 → 同条件评估**。后面读真实模型配置时，继续沿这条链检查，不要让模型名替代证据。
 
-## P24.13 混合位宽 GGUF：哪些张量多给几个 bit
+## P24.13 延伸阅读：混合位宽 GGUF
 
-P24.7 说过 GGUF 只是容器，同一个文件里不同张量可以用不同量化类型。Meta 的 [Muse Glimmer 30B 量化文档](https://dev.meta.ai/docs/muse-glimmer/quantization)（技术报告 2026-10-19 发布；文档核验日 2026-10-25）给了一个公开的真实案例。以下数字均为 Meta 官方文档，本书未在本机运行 30B 模型：
+P24.7 说过 GGUF 只是容器，同一个文件里不同张量可以用不同量化类型。常见做法是给对量化更敏感的张量多分几个 bit；哪些张量敏感，要靠困惑度或任务评估来定。
 
-- **K-Quant-17GB（固定方案，下载 16.8 GB）**：主体 `Q4_K`，group 32；`attn_v` 与 `ffn_down` 两类投影提升到 `Q6_K`，group 128；输出头 `Q5_K`，group 128。
-- **K-Quant-Dynamic（下载 19.7 GB）**：在 `Q4_K`/`Q5_K`/`Q6_K` 之间按单元搜索精度，全部 group 32，质量更高、占用更多。
-- **显存账**：K-Quant-17GB 加视觉投影器、131,072 token 完整上下文实测 19.0 GiB（文本模型 15.6、视觉投影器 1.3、KV cache 与计算缓冲 2.1 GiB），DFlash 草稿模型约再加 1.5 GiB。KV 小，是因为它用 2 个 KV 头的 GQA（见 [P14](#p14-grouped-kv)），且每 4 层里有 3 层是滑动窗口注意力。硬件粗账：30B 参数 × 2 字节 ≈ 60 GB 的 bf16 权重，约 4 bit 后文本模型低于 20 GB。
+## P24.14 延伸阅读：量化感知训练（QAT）
 
-为什么偏偏是 `attn_v` 和 `ffn_down`？这里只做一个**不依赖 Glimmer 权重**的玩具：[`../code/25b_mixed_bit.py`](../code/25b_mixed_bit.py) 构造三个 64×256 的张量，其中一个有少数放大 12 倍的列、一个是重尾 Student-t 分布，然后用本书的对称分组格式（每组一个 2 字节 scale，**不是** llama.cpp 的 `Q4_K`/`Q6_K` 超块布局）量化：
+前面的方法都是训练后量化。QAT 在训练中就让前向经过量化，让模型适应舍入误差，早期做法见 [Jacob 等，arXiv:1712.05877](https://arxiv.org/abs/1712.05877)。
 
-- 重尾张量上，4 bit 时 group 32/128 的相对误差为 0.156/0.255，6 bit 时为 0.041/0.071：位宽多 2 bit 比把 group 缩小 4 倍更有效，但两者都有代价。
-- 全部 4 bit/g32 总误差 0.167、27,648 字节；只把单独误差最大的那个张量换成 6 bit/g128，总误差降到 0.113，字节只多 12%（30,976）；全部 6 bit/g128 为 0.067、37,632 字节。
+## P24.15 延伸阅读：FP4 块缩放 {#p24.15-fp4-block}
 
-测试手算一组 4 bit 的往返结果和字节数，检查“混合方案的误差与字节都落在两个统一方案之间”，并给出一个变异：scale 用组内平均绝对值而不是最大值，会让异常值被截断、误差至少翻倍。真实模型里哪些张量敏感要靠困惑度或任务评估来定，不能照搬玩具结论。
-
-## P24.14 量化感知训练（QAT）：MiniMax-M3.1-Flash 的公开范围
-
-前面所有方法都是**训练后量化**：权重训练完再找 scale。QAT 则在训练中就让前向经过量化，让模型适应舍入误差。MiniMax 在 [M3.1-Flash 官方模型卡](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash)（核验日 2026-10-25）中说明，相对 M3 的三项改动之一是 QAT：**routed MoE 专家和注意力路径在训练中被量化**，用于降低显存占用、提升服务效率。模型卡给出约 428B 总参数、每 token 激活 23B、最长 1M 上下文；另外两项改动是把前三层全注意力也换成稀疏注意力、从而全模型使用 MSA（见 [P16](#p16-sparse-linear) 的 P16.13）和改用 DSpark 草稿头（见 [P23](#p23-mtp)）。**QAT 用的位宽、数据格式、训练阶段与步数，模型卡均未公开**，本书不作推测，也不提供 QAT 代码。
-
-## P24.15 FP4 块缩放：MXFP4、NVFP4 与“训练和 rollout 用同一种量化” {#p24.15-fp4-block}
-
-**先看动机。** 4 bit 只有 16 个码。P24.4 已经说过，一个异常值会撑大整组的 scale。FP4 块格式的办法是：每一小块共享一个 scale，块越小，异常值影响的范围越小。
-
-**格式本身。** 元素都是 FP4 E2M1：1 位符号、2 位指数、1 位尾数，绝对值只有 0、0.5、1、1.5、2、3、4、6 八种。
-
-- **MXFP4**：每 32 个元素共享一个 E8M0 scale，即纯 2 的幂。规范原文是 [OCP Microscaling Formats (MX) v1.0](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) §5.2 Table 1。[MX 格式论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537) 的 Table 1 与之一致。论文 Algorithm 1 的取法是 `X = 2^(⌊log2 max|V|⌋ − emax_elem)`，E2M1 的 `emax_elem = 2`，超出范围的元素截到 ±6。
-- **NVFP4**：每 16 个元素共享一个 FP8 E4M3 scale，另有一个整张量的 FP32 scale。来源是 [NVIDIA Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)：`x = x_e2m1 · s_block · s_global`，`s_global = amax / (448 · 6)`。E4M3 scale 不必是 2 的幂，所以更贴近块的真实最大值。
-
-只算块 scale，MXFP4 是 4 + 8/32 = 4.25 bit/元素，NVFP4 是 4 + 8/16 = 4.5 bit/元素。
-
-[`../code/25c_fp4_block.py`](../code/25c_fp4_block.py) 用 1024 个高斯值加 4 个 ±40 的离群值（种子 0，自造数据）：
-
-| 方案 | 相对 MSE |
-|---|---|
-| 每张量一个 scale | 0.0982 |
-| MXFP4，块 32 | 0.0497 |
-| NVFP4 式，块 16 | 0.0069 |
-
-这只验证舍入算术，不代表任何模型的精度。测试检查：E2M1 网格值往返不变且在 6 饱和；E4M3 舍入；MX scale 是 2 的幂；块方案误差低于每张量方案。还有一个变异：把块设成整张量，结果退回每张量方案。
-
-**PTQ、QAT、QAD。** PTQ 是训练完再量化（P24.3）。QAT 在训练中就让前向经过量化（P24.14）。QAD（Quantization-Aware Distillation）也让前向经过量化，但用原精度模型做老师来蒸馏。
-
-- **Kimi K3（S29 §4.1.4）。** MoE 专家权重用 MXFP4，激活用 MXFP8。注意力投影、latent MoE 投影、共享专家和路由器保持更高精度。QAT 覆盖整个后训练，包括 SFT 和 RL。RL 中 rollout 与训练使用同一种量化，报告说这样就消除了训练与推理不一致。这一点的意义是：策略梯度假设样本来自正在训练的那个策略；若 rollout 用的是另一套数值，样本就有一部分是 off-policy 的。
-- **Nemotron 3.5 Super（S30）。** 发布的 NVFP4 checkpoint 先用预设的 aggressive PTQ 配方（4.82 bit/元素），再做 200 步基于 SFT 的 QAD。官方文档称，35 个基准上相对 BF16 的准确率恢复中位数为 99.52%。它在 Blackwell 上以 W4A4 部署，在其他 GPU 上以 W4A16 部署。这些都是厂商报告的数字，本书没有复现。
-
-**三种量化对象别混。** K3 量化的是专家**权重**（加 MXFP8 激活）。Nemotron 的 W4A4 同时量化权重与**激活**。P26 讨论的 V4.1-Flash FP4 量化的是 **KV cache**（S12，报告 §2.4.4）。三者误差进入模型的位置不同，P24.6 已经说明 KV 量化的误差会落在每一步注意力上。
-
-P24.15 资料（核验 2026-10-26）：[OCP MX v1.0 规范](https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf) §5.2；[MX 论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537)；[Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)（厂商文档）；QAT 原文 [Jacob et al., arXiv:1712.05877](https://arxiv.org/abs/1712.05877)；S29 [Kimi K3，arXiv:2607.24653](https://arxiv.org/abs/2607.24653) §4.1.4；S30 [Nemotron 3.5 Super 官方训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/super35/README.html) §4.1（厂商报告）。
+FP4 块格式让每一小块元素共享一个 scale，块越小，异常值影响的范围越小：MXFP4 每 32 个元素共享一个 E8M0 scale（[MX 格式论文，arXiv:2310.10537](https://arxiv.org/abs/2310.10537) Table 1），NVFP4 每 16 个元素共享一个 FP8 E4M3 scale（[Transformer Engine NVFP4 文档](https://docs.nvidia.com/deeplearning/transformer-engine/features/low_precision_training/nvfp4/nvfp4.html)）。
 
 
 ---
@@ -8599,25 +8189,9 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 
 读完本章，应能把“Qwen3 用了 GQA 和 MoE”改写为更有信息量的句子：**这份完整 revision 的 dense／MoE checkpoint，按这些配置和实现证据使用了这些组件；我们只在这个小型、可复算的范围内验证过它们。** 这也是阅读下一个模型案例时应保留的习惯。
 
-## P25.14 读配置对照：Kimi K3、Nemotron 3.5、Muse Spark Open {#p25.14-config-compare}
+## P25.14 延伸阅读：读其他模型的配置 {#p25.14-config-compare}
 
-本节只列官方配置或报告中能逐条找到的数字。空格表示本书没在对应来源里找到，不是“没有”。S31 列的数字都由 NVIDIA 官方文档给出，属于厂商口径，本书未独立核验。
-
-| 字段 | Kimi K3（S29） | Nemotron 3.5 Lightning（S31） | Muse Spark Open（S33） |
-|---|---|---|---|
-| 总参数 / 激活参数 | 2.78T / 104.2B（Table 1） | 30B-A3B（Base 名称） | 816B / 42B |
-| 层数 | 93（Table 1） | 52 | 62 |
-| 序列混合 | KDA:Gated MLA = 3:1，末层 MLA（§2.1） | 23 Mamba-2 + 6 注意力 | 局部 `sliding_window=2048` 与全局，按 `layer_types` |
-| 位置编码 | MLA 层全为 NoPE（§2.1.2） |  | `layer_rope_theta`，默认倒数每第 4 层 NoPE |
-| 注意力头 | 96（Table 1） | 32 Q / 2 KV 组（GQA） | 128 Q / 16 KV，`head_dim=64` |
-| 隐藏宽度 | 7,168 | 2688（主干沿用 Nano 3 Base；取自 Super 3 Base 的 MTP 头由 4096 剪枝到 2688，厂商口径） | 8192 |
-| MoE | 896 选 16，2 共享，latent 3584（Table 1） | 23 层，128 选 6，1 共享 | 256 选 8，`moe_hidden_size=4096` |
-| FFN 激活 | SiTU-GLU（Table 1） |  | `hidden_act=silu` |
-| 词表 | 160K（Table 1） |  | 202048 |
-
-读表时注意三件事。第一，Muse 的 `moe_hidden_size=4096` 是 MoE 块先把 8192 维压到的宽度，专家全程在这个宽度计算（S33 字段说明）。这与 K3 的 latent 宽度是同一类思路，见 [P18.13](#p18.13-latent-moe-qb)。第二，Nemotron 的 52 层把 MoE 当作单独的层来计数，K3 和 Muse 不是这样计数的。层数不能直接横比。第三，K3 的约 2.5× 扩展效率提升（S29 §2）是厂商报告的说法，本书没有复现。
-
-来源：S29 [arXiv:2607.24653](https://arxiv.org/abs/2607.24653) Table 1、§2.1、§2.3；S31 [Lightning 预训练文档](https://docs.nvidia.com/nemotron/latest/nemotron/lightning35/pretrain.html)；S33 [Muse Spark Open 文档](https://huggingface.co/docs/transformers/model_doc/muse_spark)。均核验于 2026-10-26。
+读其他模型时，可以照本章的方法逐字段对照官方配置或报告，例如[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)的 Table 1。
 
 
 ---
@@ -8769,17 +8343,9 @@ Full 是 **CSA2 路径名**，不是“不加因果 mask 的 dense attention”�
 
 尤其要看[参考 `Aligner.forward`][V41-vision]：先把 H×W×C 改成通道在前，向**右侧和底部补零**使边长能被 3 整除，再执行不重叠的 `unfold`。一个新 token 内部的顺序是“通道 → 邻域行 → 邻域列”，不是“邻域位置 → 通道”。最后才经过两层 MLP（中间 GELU）。本章只复现前面的坐标重排，不运行 ViT、projector、视觉位置编码或图像理解。
 
-### mHC、Engram、DSpark 各解决什么
+### mHC、Engram、DSpark
 
-| 阅读路标 | 先问的问题 | 本章核对范围 |
-| --- | --- | --- |
-| Single-Pass mHC | 多条 residual stream 怎样混合？哪些依赖妨碍融合？ | 报告 §2.4.1；输入混合系数错开一 block 使用，配置 `hc_mult=4` |
-| Engram | 哪些信息通过条件查表记忆，而不只靠每次 dense 计算？ | 报告 §2.4.2；tokenizer 压缩、哈希和门控；参考配置层号 `[1,14]` |
-| DSpark | 怎样产生草稿，决定验证长度，又保持目标模型负责最终输出？ | 报告 §2.4.3；读训练时序，再区分 forward 与部署调度 |
-
-阅读入口为同一份[版本化报告的 §2.4.1–2.4.3][V41-paper]与[固定源码][V41-model]。不要把三者当作 MLA 的三个别名：一个改 residual stream，一个提供参数化的条件记忆，一个服务于草稿生成。Engram 的内部查表也不能直接称为“联网搜索”或“用户文档 RAG”。
-
-本章只检查 `hc_mult`、`engram_layer_ids`、DSpark 接口字段并建立阅读路线，**未实现这些完整模块，未训练它们，也未验证各自官方收益**。遇到报告之外的新说法，应在矩阵中先记为 unknown，而不是靠熟悉的缩写把空白补满。
+DeepSeek-V4.1-Flash [报告的 §2.4.1–2.4.3][V41-paper] 还介绍了 mHC、Engram 和 DSpark：一个改 residual stream 的混合，一个提供条件查表记忆，一个服务于草稿生成。本章只读配置字段，不实现它们。
 
 ## P26.7 自动生成“组件—章节—证据”矩阵
 
@@ -9650,7 +9216,6 @@ Q 的第 0、1 头共享 KV 第 0 头；Q 第 2、3 头共享 KV 第 1 头。对
 - 文档等权平均是 $(2+4)/2=3$；
 - token 等权平均是 $(1\times2+3\times4)/4=3.5$；
 - 训练中每步各自求平均再更新，并不等于把四个 token 合成一大步。
-- 同一道理也适用于 ECHO 的动态深度采样（[P23.13](#p23-mtp)，π=(0.6, 0.3, 0.1)）：每步抽 D 后对 horizon 1..D 的损失取平均，所以第 d 个 horizon 的实际期望损失权重是 $\mathbb{E}[\mathbf{1}\{D\ge d\}/D]=47/60,\ 11/60,\ 1/30$（约 0.783、0.183、0.033）；而 (1, 0.4, 0.1) 是 $P(D\ge d)$，即各 horizon 被**训练的频率**，不是损失权重。
 
 报告必须写明分母。padding、prompt-only SFT 位置以及文档跨界 label 都可能被忽略，但 attention mask 和 loss mask 仍是两件事，见 [P19](#p19-pretraining)。
 
@@ -9775,23 +9340,6 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 维护记录至少包含：日期、对象/revision、主张、证据路径、验证命令、环境、通过/失败/跳过、限制、对应 PR。既往正常浏览器检查属于既往 head，不能复制到新 head。源代码、README、章节状态、HTML/EPUB 与验证报告应同批更新；旧的来源与验证记录作为历史保留。
 
-### E.4 前沿跟踪记录 {#p28.e4-前沿跟踪记录}
-
-下表按 E.1 的四种状态登记新论文。状态附在具体主张上，不给整篇论文盖章。
-
-| 日期 | 来源 | 主张 | 状态 | 本书位置 |
-| --- | --- | --- | --- | --- |
-| 2026-10-26 | [arXiv:2610.31642][softmax-fix] §1 | 精度悬崖：bf16 约 5.5，fp32 约 16.6，fp64 约 36.7 | 本书复现（5.55/16.64/36.74） | [P04 3.3a](#p04-softmax-collapse) |
-| 2026-10-26 | 同上 §2，Eq. 3–6 | 大间隔下标准 CE 目标梯度为 0，修正版不为 0 | 本书复现（单行 fp32/bf16） | [P04 3.3a](#p04-softmax-collapse) |
-| 2026-10-26 | 同上 §4、§8 | grokking 实验中，记住训练集后的 Slingshot 尖峰由该偏差引起；§8 称此类大间隔在标准大规模训练中少见 | 作者报告，本书未复现 | [P09.3](#p09.3-cross-entropy) |
-| 2026-10-26 | 同上 §3，Eq. 8–9；项目页代码 | 修正版蒸馏梯度与 fp64 精确值一致 | 本书复现（项目页 fp32 例子） | [P22.12](#p22.12-softmax-cancellation) |
-| 2026-10-26 | 同上 §7 | bf16 蒸馏中学生持续漂离老师 | 作者报告，本书未复现 | [P22.12](#p22.12-softmax-cancellation) |
-| 2026-10-27 | [arXiv:2610.28577][akv] §3.3，Eq. 4–5 | `drop` 把条目排除出注意力；`repos` 对 key 乘 $R(q)R(p)^{-1}$，V 不动 | 本书复现（单序列、随机初始化小模型，float64） | [P11.10](#p11.10-cache-engineering) |
-| 2026-10-27 | 同上 §3.4，Fig. 1、Fig. 5 | 缓存状态有历史依赖：保留 token 的 K/V 带着被删内容的信息，drop + repos 不等于重 prefill | 本书复现（1 层一致；2 层 logits 差 1.53e-2，4 层 7.34e-2） | [P11.10](#p11.10-cache-engineering) |
-| 2026-10-27 | 同上摘要；§5.2 Table 1、§5.3 Table 2 | 工具结果滚动 drop 比阈值触发摘要平均 +1.7 分、成本 −27.7%；AKV 吞吐最高 1.2×、P95 延迟 1.5× 加速 | 作者报告，本书未复现 | [P11.10](#p11.10-cache-engineering) |
-
-项目页代码比 arXiv 正文多一个 $\lvert s\rvert\ge1$ 分支，本书照项目页实现。项目页未标注代码许可证。
-
 ## 附录 F：自测、校验与最后一步 {#p28.f-自测校验与最后一步}
 
 ### F.0 平均值与一步更新速查
@@ -9819,8 +9367,6 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 - [PyTorch 2.14 reproducibility][repro]，固定文档版本；[官方安装选择器][install]为动态页，核对日期2026-10-20。
 - [Qwen3-0.6B 固定官方 config][qwen-config]，revision/hash 如 E.2；相关官方实现版本见 P25。
 - [3Blue1Brown 原作者 attention 页面][visual]与 [nanoGPT 原作者仓库][nanogpt]：阅读入口，核对日期2026-10-20，不当作本书实验版本。
-- [A Fix for Softmax and Cross-Entropy，arXiv:2610.31642][softmax-fix]（[项目页][softmax-fix-page]），§1–§4、§7，核对日期2026-10-26；E.4 的登记依据。
-- [Cache Engineering for Agents，arXiv:2610.28577][akv]（[代码 thu-nics/AKV][akv-code]，Apache-2.0），摘要、§3.3–§3.4、§4、§5.2–§5.3，核对日期2026-10-27；E.4 的登记依据。
 
 [attention]: https://arxiv.org/abs/1706.03762v7
 [repro]: https://docs.pytorch.org/docs/2.14/notes/randomness.html
@@ -9828,10 +9374,6 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 [qwen-config]: https://huggingface.co/Qwen/Qwen3-0.6B/resolve/c1899de289a04d12100db370d81485cdf75e47ca/config.json
 [visual]: https://www.3blue1brown.com/lessons/attention/
 [nanogpt]: https://github.com/karpathy/nanoGPT
-[softmax-fix]: https://arxiv.org/abs/2610.31642
-[softmax-fix-page]: https://jonbarron.info/softmaxfix/
-[akv]: https://arxiv.org/abs/2610.28577
-[akv-code]: https://github.com/thu-nics/AKV
 
 
 ---

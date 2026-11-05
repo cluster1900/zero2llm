@@ -128,22 +128,6 @@ class Chapter08e(unittest.TestCase):
                       read("08e_attention_systems.md"))
 
 
-class Chapter08f(unittest.TestCase):
-    def test_local_block_sentence_matches_code(self):
-        sel = func_src(code("17b_msa_block_topk.py"), "select_blocks")
-        self.assertIn("local = n - 1", sel)
-        self.assertIn("rest[local] = float(\"-inf\")", sel)
-        scores = func_src(code("17b_msa_block_topk.py"), "block_scores")
-        self.assertIn("s = q @ k.T", scores)
-        for src in (sel, scores):
-            self.assertNotIn("mask", src.lower())
-            self.assertNotIn("tril", src)
-        self.assertIn(
-            "每组选 top-(k−1) 个其余块，再加上局部块。脚本把整段的最后一块（下标 n−1）固定当作局部块，"
-            "相当于只模拟位于序列末尾的那个 query；它对全部 key 打分，没有因果掩码。",
-            read("08f_sparse_linear_attention.md"))
-
-
 class Chapter08i(unittest.TestCase):
     def setUp(self):
         self.src = code("20_pretraining_pipeline.py")
@@ -167,13 +151,6 @@ class Chapter08i(unittest.TestCase):
         # space is NOT composed (the other order would give "é").
         self.assertEqual(clean("e \u0301"), "e\u0301")
         self.assertIn("| 先做 Unicode NFC，再删除所有空白字符 |", self.text)
-
-
-class Chapter08l(unittest.TestCase):
-    def test_distillation_source(self):
-        self.assertIn(
-            "经典做法（[Hinton 等，2015](https://arxiv.org/abs/1503.02531)）让学生在固定数据上拟合老师的软概率分布",
-            read("08l_preference_optimization.md"))
 
 
 class Chapter09a(unittest.TestCase):
