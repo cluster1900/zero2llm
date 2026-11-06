@@ -9628,7 +9628,9 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb118-1"><a 
 开始；注意力的比较也是
 <code>key_position &lt;= query_position</code>，而不是按本次小块的行号比较。</p>
 <p>缓存是调用者持有的快照，新请求传
-None；增量调用不覆盖旧快照，改权重、换配置或换模型后旧缓存会被拒绝。</p>
+None；增量调用不覆盖旧快照，可以从同一个前缀分叉实验；改权重、换配置或换模型后旧缓存会被拒绝。不要编辑缓存张量，也不要用
+<code>.data</code>
+或底层共享存储写入绕过版本跟踪；这里不承诺检测这些破坏。</p>
 <p>bounded 路径会把 approximate 标记保留到后续 decode。它记录“来自截断
 replay
 的状态”，不是错误大小；某些窗口或输入上误差恰好为零，也不能把来源标记擅自改成精确。</p>
@@ -15968,7 +15970,6 @@ shape，却会改变每个维度的意义。</li>
 <li>都不能。训练时序要读报告，而窗口开关在该学生配置中为
 false。既不应把缺证据写成 false，也不应把出现一个数字写成 true。</li>
 </ol>
-<p><span id="本章小结-1"></span></p>
 <p>本章完成的不是“复现一个品牌”，而是搭起一条可检查的链：<strong>固定对象
 → 找到证据 → 说明边界 → 做小实验 → 用独立 oracle
 与错误变体检查</strong>。V3、R1、蒸馏学生和 V4.1-Flash
