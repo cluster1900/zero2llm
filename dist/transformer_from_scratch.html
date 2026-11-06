@@ -17781,14 +17781,9 @@ class="math inline">\(L&#39;=18\)</span>，大步长使本例更差。5）该固
 128，需核对代码；等长不等于等字节，仍需
 hash。6）对本书而言待核实；若官方论文确有该结果，可另标作者报告，必须给硬件、软件、输入长度/batch、比较基线与计时方法，不能写本书复现。</p>
 <h3 id="f.0-平均值与一步更新速查">F.0 平均值与一步更新速查</h3>
-<p>文档平均与 token 平均使用不同分母：<span class="math inline">\(\bar
+<p><span class="math inline">\(\bar
 L_{\mathrm{doc}}=(2+4)/2=3\)</span>，而 <span class="math inline">\(\bar
-L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5\)</span>。单参数例子 <span
-class="math inline">\(z=wx\)</span>、<span
-class="math inline">\(L=(z-y)^2/2\)</span> 取 <span
-class="math inline">\(w=1,x=2,y=0\)</span>，则 <span
-class="math inline">\(z=2\)</span>，梯度 <span
-class="math inline">\((z-y)\cdot x\)</span> 等于 4；学习率 <span
+L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5\)</span>。学习率 <span
 class="math inline">\(0.1\)</span> 后 <span
 class="math inline">\(w&#39;=1-0.1\times4=0.6\)</span>，新损失 <span
 class="math inline">\(L&#39;=(0.6\times2)^2/2=0.72\)</span>。这两个分母和更新顺序是核对训练日志的最小账本。</p>

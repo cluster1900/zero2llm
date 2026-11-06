@@ -9261,7 +9261,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 ### F.0 平均值与一步更新速查
 
-文档平均与 token 平均使用不同分母：$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。单参数例子 $z=wx$、$L=(z-y)^2/2$ 取 $w=1,x=2,y=0$，则 $z=2$，梯度 $(z-y)\cdot x$ 等于 4；学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
+$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
 
 仓库根目录的 `python -m unittest discover -s tests -v` 检查示例与契约，`python scripts/check_book.py` 检查已生成制品的资源/链接，`npm run check:layout` 检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当前 CI 运行结果为准，运行环境版本见[附录 H](#p28.h-版本与来源)，不在这里保留会迅速过时的全书总数。
 
