@@ -33,6 +33,22 @@ class WebDocument(HTMLParser):
             self.images.append(attrs)
 
 
+def check_dist_md_matches_chapters(dist):
+    """Fail when dist md drifts from chapters/ (catches dist-only edits)."""
+    root = dist.parent
+    chapters = sorted((root / 'chapters').glob('*.md'))
+    if not chapters:
+        return 'chapters/ 下没有 Markdown 章节'
+    expected = '\n\n---\n\n'.join(p.read_text(encoding='utf-8') for p in chapters) + '\n\n---\n\n'
+    text = (dist / 'transformer_from_scratch.md').read_text(encoding='utf-8')
+    header = re.match(r'(?:%.*\n){3}\n', text)
+    if not header:
+        return 'dist Markdown 缺少 Pandoc 元数据头'
+    if text[header.end():] != expected:
+        return 'dist Markdown 与 chapters/ 不一致'
+    return None
+
+
 def check_book(dist_dir):
     dist = Path(dist_dir)
     errors = []
@@ -113,6 +129,9 @@ def check_book(dist_dir):
             errors.append(f'网页锚点缺失：{link}')
     if (dist / 'index.html').read_bytes() != (dist / 'transformer_from_scratch.html').read_bytes():
         errors.append('两个网页入口内容不一致')
+    md_err = check_dist_md_matches_chapters(dist)
+    if md_err:
+        errors.append(md_err)
     if errors:
         raise ValueError('\n'.join(errors))
     print(f'✓ 产物校验通过：{expected_flows} 张流程图，{len(sizes)} 张插图；EPUB/Web 资源、内部链接、目录锚点完整')
