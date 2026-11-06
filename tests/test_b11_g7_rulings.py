@@ -51,7 +51,13 @@ class B11G7Rulings(unittest.TestCase):
         self.assertEqual(body.count("h_t"), 6)
 
     def test_8192_arithmetic(self):
+        body = read("chapters/08o_qwen3_case.md")
+        needle = "两者相差 40960 − 32768 = 8192"
+        self.assertEqual(body.count(needle), 1)
         self.assertEqual(40960 - 32768, 8192)
+        # Dist must carry the same hand check (caught by the dist-md gate too).
+        dist = read("dist/transformer_from_scratch.md")
+        self.assertEqual(dist.count(needle), 1)
 
 
 if __name__ == "__main__":
