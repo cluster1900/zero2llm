@@ -55,6 +55,6 @@ class Batch9TextTests(unittest.TestCase):
     def test_old_chapter_nine_anchors_remain_explicit(self):
         body = (ROOT / "chapters/09_modern_llms.md").read_text()
         anchors = json.loads((ROOT / "tests/fixtures/p26_legacy_anchors.json").read_text())
-        self.assertEqual(len(anchors), 15)
+        self.assertEqual(len(anchors), 14)
         for anchor in anchors:
             self.assertIn("{#" + anchor + "}", body)

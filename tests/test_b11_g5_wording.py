@@ -30,7 +30,7 @@ G5R = [
 ('chapters/08f_sparse_linear_attention.md','或者把线性层与普通注意力层交替。','或者让线性层与普通注意力层按比例混合。'),
 ('chapters/08g_ced_architecture.md','20 个 decoder 层的压缩比是 1。配置','20 个 decoder 层的压缩比是 1（报告 §2.3：压缩比为 1 即不压缩的 main KV）。'),
 ('chapters/08g_ced_architecture.md','本章核验了技术报告 v1（核验日期见附录 H），以及官方 Hugging Face 仓库的固定 revision','核验所用的报告版本与仓库固定 revision 见本章末「资料与实现边界」。\n'),
-('chapters/08g_ced_architecture.md','`tensor[:, -0:]` 会意外保留全部历史','缓存是调用者持有的快照，新请求传 None；增量调用不覆盖旧快照，改权重、换配置或换模型后旧缓存会被拒绝。'),
+('chapters/08g_ced_architecture.md','`tensor[:, -0:]` 会意外保留全部历史','缓存是调用者持有的快照，新请求传 None；增量调用不覆盖旧快照，可以从同一个前缀分叉实验；改权重、换配置或换模型后旧缓存会被拒绝。不要编辑缓存张量，也不要用 `.data` 或底层共享存储写入绕过版本跟踪；这里不承诺检测这些破坏。'),
 ('chapters/08g_ced_architecture.md','mHC、Engram','、RMSNorm、FFN、量化、视觉输入、其他生产组件与 GPU kernel。'),
 ('chapters/08g_ced_architecture.md','Full 产生 global KV 并选择索引；','把 CSA2 分成三种模式：\n\n- **Full**：产生 global KV，并选择索引。\n- **Reindex**：复用前面层的 global KV，重新选择索引。\n- **Reuse**：global KV 和选择结果都复用。\n\n三种模式都保留'),
 ('chapters/08g_ced_architecture.md','因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。','因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。'),
