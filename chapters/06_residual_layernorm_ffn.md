@@ -20,17 +20,17 @@ $$y=x+F(x)$$
 
 这里的“残差”不是考试剩下的误差，而是相对于当前表示的**增量**。如果想得到的映射是 $H(x)$，支路可以学习 $H(x)-x$，加回 $x$ 后就得到 $H(x)$。这也是残差学习论文的基本出发点。[来源：Deep Residual Learning，§3.1–3.2](https://arxiv.org/pdf/1512.03385)
 
-```
-              输入 x ─────────────┐ (原始录音笔: 抄近道)
-                 │                │
-                 ▼                │
-          ┌─────────────┐         │
-          │ 复杂神经计算 │         │
-          │    F(x)     │         │
-          └─────────────┘         │
-                 │                │
-                 ▼                ▼
-                 [   相加求和: x + F(x)   ]
+原稿走捷径，批注走支路；两路在相加处会合，这就是残差要表达的结构。
+
+```mermaid
+flowchart TD
+    %% id: ch06-residual-shortcut
+    accTitle: 残差：支路算增量，捷径保留原稿，两路相加
+    accDescr: 输入 x 分两路，支路计算 F(x)，捷径直达相加点，输出为 x+F(x)。
+    X["输入 x"] --> F["支路 F(x)"]
+    X --> ADD["相加 x + F(x)"]
+    F --> ADD
+    ADD --> Y["输出 y"]
 ```
 
 ### 先加四个数字，再谈深层网络
@@ -174,6 +174,32 @@ $$\text{Pre-LN:}\quad y=x+F(\operatorname{LN}(x))$$
 $$\text{Post-LN:}\quad y=\operatorname{LN}(x+F(x))$$
 
 Pre 的意思是“**在 F 之前**”：支路拿到的是归一化后的输入，但捷径传来的仍然是原始 $x$。Post 的意思是“**在相加之后**”：原输入和增量先相加，整个和再经过 LN。不要把 Pre-LN 错写成 $\operatorname{LN}(x)+F(\operatorname{LN}(x))$，那样原始输入也被改掉了。
+
+零件相同、只换顺序时，捷径上保留的是哪个向量全看顺序；左图 Pre-LN 的主干不经过 LN，右图 Post-LN 则让整个和过 LN。
+
+```mermaid
+flowchart LR
+    %% id: ch06-pre-post-ln
+    accTitle: Pre-LN 与 Post-LN：零件相同，捷径保留的向量不同
+    accDescr: Pre-LN 是 x 经 LN 再 F，加回原始 x；Post-LN 是 x 经 F 后与 x 相加，整个和再过 LN。
+    subgraph Pre["Pre-LN"]
+      direction TB
+      Px["x"] --> Pln["LN"]
+      Pln --> Pf["F"]
+      Px --> Padd["加回 x"]
+      Pf --> Padd
+      Padd --> Py["y = x + F(LN(x))"]
+    end
+    subgraph Post["Post-LN"]
+      direction TB
+      Qx["x"] --> Qf["F"]
+      Qx --> Qadd["x + F(x)"]
+      Qf --> Qadd
+      Qadd --> Qln["LN"]
+      Qln --> Qy["y = LN(x + F(x))"]
+    end
+    Pre ~~~ Post
+```
 
 ### 把同一个小函数放进两种顺序
 
