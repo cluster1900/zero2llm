@@ -11554,9 +11554,9 @@ loss；不能因为它“特殊”就一并忽略。</li>
 <li>第一列没有前一个输入位置来预测它。本例显式将它设为
 -100，下面会解释一个与版本有关的原因。</li>
 <li>attention_mask 控制注意力可见性；labels=-100
-控制监督位置。二者职责不同，一个不能代替另一个。 一张图把内部
-shift、忽略位和外面再 shift 的后果放在一起：</li>
+控制监督位置。二者职责不同，一个不能代替另一个。</li>
 </ul>
+<p>一张图把内部 shift、忽略位和外面再 shift 的后果放在一起：</p>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-p20-double-shift.svg"
 title="点击查看原尺寸图"><img
@@ -11735,7 +11735,7 @@ href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.parallel.Distributed
 <a href="assets/rendered/flow-p20-ddp-steps.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p20-ddp-steps.svg" class="book-diagram"
-width="295"
+width="388"
 alt="DDP：各 rank 先各算一份，再 AllReduce 平均梯度。rank0 与 rank1 读不同数据，各自前向与反传；AllReduce 平均梯度后各自按同一规则 step，参数仍一致。" /></a>
 <div class="diagram-caption">
 DDP：各 rank 先各算一份，再 AllReduce 平均梯度
@@ -12476,7 +12476,7 @@ EOS。 截断规则可以画成一张判断图：</p>
 <a href="assets/rendered/flow-p21-drop-turns.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p21-drop-turns.svg" class="book-diagram"
-width="282"
+width="272"
 alt="宁可丢掉装不下的完整轮，也不造半个答案。从前往后逐轮放入：整轮装得下就保留；装不下就丢弃这一轮及之后；一轮都装不下就拒绝样本；不补 EOS，空回答也监督 EOS。" /></a>
 <div class="diagram-caption">
 宁可丢掉装不下的完整轮，也不造半个答案
@@ -13365,9 +13365,9 @@ padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 
 logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。 把从
 logits 到一对答案 log p 的形状账本画出来：</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-p22-logp-pair.svg"
+<a href="assets/rendered/flow-p22-logp-pair.png"
 title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p22-logp-pair.svg" class="book-diagram"
+src="assets/rendered/flow-p22-logp-pair.png" class="book-diagram"
 width="317"
 alt="从变长 token 筛出一对答案 log p。logits 形状 [B,T,|𝒱|]；logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。" /></a>
 <div class="diagram-caption">
@@ -13468,9 +13468,9 @@ class="math inline">\(\beta\)</span> 是 KL 惩罚系数（局部符号，本章
 <ul>
 <li>A=+1、ρ=1.4：收益取
 min(1.4,1.2)=1.2，不再鼓励这项收益无限上涨。</li>
-<li>A=−1、ρ=0.6：收益取 min(−0.6,−0.8)=−0.8，不能错误地取 max。 clip
-之后取 min 还是看起来像 max，全看优势的正负：</li>
+<li>A=−1、ρ=0.6：收益取 min(−0.6,−0.8)=−0.8，不能错误地取 max。</li>
 </ul>
+<p>clip 之后取 min 还是看起来像 max，全看优势的正负：</p>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-p22-clip-sign.svg"
 title="点击查看原尺寸图"><img

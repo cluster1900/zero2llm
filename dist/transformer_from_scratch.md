@@ -5974,6 +5974,7 @@ labels[1] = [-100, 7, 8, 10, 3, -100]
 - EOS 是真实的结束目标，仍然进入 loss；不能因为它“特殊”就一并忽略。
 - 第一列没有前一个输入位置来预测它。本例显式将它设为 -100，下面会解释一个与版本有关的原因。
 - attention_mask 控制注意力可见性；labels=-100 控制监督位置。二者职责不同，一个不能代替另一个。
+
 一张图把内部 shift、忽略位和外面再 shift 的后果放在一起：
 
 ```mermaid
@@ -6091,14 +6092,21 @@ sequenceDiagram
     %% id: p20-ddp-steps
     accTitle: DDP：各 rank 先各算一份，再 AllReduce 平均梯度
     accDescr: rank0 与 rank1 读不同数据，各自前向与反传；AllReduce 平均梯度后各自按同一规则 step，参数仍一致。
-    autonumber
     participant R0 as rank0
+    participant S1 as ㅤ
     participant R1 as rank1
+    participant S2 as ㅤ
     participant AR as AllReduce
-    R0->>R0: 读自己的 batch
-    R1->>R1: 读另一份 batch
-    R0->>R0: 前向 → 反传（写 .grad）
-    R1->>R1: 前向 → 反传（写 .grad）
+    par 读 batch
+      R0->>R0: 读自己的 batch
+    and
+      R1->>R1: 读另一份 batch
+    end
+    par 前向与反传
+      R0->>R0: 前向 → 反传（写 .grad）
+    and
+      R1->>R1: 前向 → 反传（写 .grad）
+    end
     R0->>AR: 提交梯度
     R1->>AR: 提交梯度
     AR-->>R0: 平均后的梯度
@@ -6225,7 +6233,8 @@ flowchart TB
       direction LR
       EP1["token 送到专家设备"] --- EP2["结果送回再加权"]
     end
-    TP --> PP --> EP
+    TP ~~~ PP
+    PP ~~~ EP
 ```
 
 
@@ -6250,7 +6259,7 @@ flowchart TD
     %% id: p20-framework-choice
     accTitle: 先单进程证明正确，再按瓶颈选框架
     accDescr: 单进程验证数据、loss 与保存；常用结构与 Trainer 用 Transformers；后训练用 TRL；内存或吞吐瓶颈用 DeepSpeed ZeRO；超大模型需要 TP/PP/EP 时用 Megatron。
-    A["① 单进程验证：数据 / loss / 保存"] --> B["② 需要结构与 Trainer → Transformers"]
+    A["① 单进程验证：数据 / loss /<br/>保存"] --> B["② 需要结构与 Trainer → Transformers"]
     B --> C["③ 后训练 SFT/DPO/GRPO → TRL"]
     C --> D["④ 内存或吞吐瓶颈 → DeepSpeed ZeRO"]
     D --> E["⑤ 需要 TP/PP/EP → Megatron"]
@@ -6488,18 +6497,23 @@ PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加 0�
 截断规则可以画成一张判断图：
 
 ```mermaid
-flowchart TD
+flowchart TB
     %% id: p21-drop-turns
     accTitle: 宁可丢掉装不下的完整轮，也不造半个答案
     accDescr: 从前往后逐轮放入：整轮装得下就保留；装不下就丢弃这一轮及之后；一轮都装不下就拒绝样本；不补 EOS，空回答也监督 EOS。
-    A["从前往后逐轮放入"] --> B{"这一整轮装得下？"}
+    subgraph Head["整轮截断：装得下保留，装不下丢弃本轮及之后"]
+      direction LR
+      H["约定：不补假 EOS<br/>空回答也监督 EOS"]
+      A["从前往后逐轮放入"]
+    end
+    Head --> B{"这一整轮装得下？"}
     B -->|是| C["保留该轮<br/>继续看下一轮"]
-    C --> B
+    C -->|还有下一轮| B
+    C -->|每轮都装得下| F["返回已保留轮"]
     B -->|否| D["丢弃本轮及之后"]
     D --> E{"前面至少有一轮？"}
-    E -->|是| F["返回已保留轮"]
+    E -->|是| F
     E -->|否| G["拒绝样本<br/>不造半截答案"]
-    H["约定：不补假 EOS<br/>空回答也监督 EOS"] -.-> A
 ```
 
 
@@ -7101,6 +7115,7 @@ $$
 
 - A=+1、ρ=1.4：收益取 min(1.4,1.2)=1.2，不再鼓励这项收益无限上涨。
 - A=−1、ρ=0.6：收益取 min(−0.6,−0.8)=−0.8，不能错误地取 max。
+
 clip 之后取 min 还是看起来像 max，全看优势的正负：
 
 ```mermaid
@@ -7109,8 +7124,8 @@ flowchart TD
     accTitle: clip 之后取 min，上涨与下跌都靠优势符号管住
     accDescr: ρ=exp(log π_θ − log π_old)；A>0 时 min(ρA, clip(ρ)A) 限制上涨；A<0 时同一式子限制下跌；先在答案内平均再对答案平均，取负号得要最小化的损失。
     A["ρ = exp(log π_θ − log π_old)"] --> B{"优势 A 的符号"}
-    B -->|A > 0| C["min(ρA, clip(ρ,0.8,1.2)A)<br/>限制上涨"]
-    B -->|A < 0| D["同一个 min 式子<br/>限制下跌"]
+    B -->|"A &gt; 0"| C["min(ρA, clip(ρ,0.8,1.2)A)<br/>限制上涨"]
+    B -->|"A &lt; 0"| D["同一个 min 式子<br/>限制下跌"]
     C --> E["答案内平均 → 答案间平均"]
     D --> E
     E --> F["取负号 → 最小化损失<br/>另加 β·KL 项"]

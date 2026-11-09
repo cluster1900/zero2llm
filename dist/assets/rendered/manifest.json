@@ -187,17 +187,17 @@
     },
     "flow-p20-ddp-steps": {
       "kind": "mermaid",
-      "sha256": "e8e5e82c743f313a4e44e99dcccff1b02af5f92524e4192be5c2ea153397708e",
+      "sha256": "9c9134f7cf54dc5db6a4e1656c918960483092cb1a7e125b9d6de20245f5b821",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p20-tp-pp-ep": {
       "kind": "mermaid",
-      "sha256": "538eadd6554d31ec0e1040124b65c8050f730a16b043044bf006dc99496de998",
+      "sha256": "4f970e09aab55d2c44b6fbc33e4a6ada4487f596aecebb396b88cad029555394",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p20-framework-choice": {
       "kind": "mermaid",
-      "sha256": "690bfbac91375d006217fa8e49a80b46c949674c04f28394e45bac9236bae5fe",
+      "sha256": "163c501d99486bc52fc621f3442b36e46f032cd4e27b75b37d1e476bffc315bf",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p21-sft": {
@@ -208,7 +208,7 @@
     },
     "flow-p21-drop-turns": {
       "kind": "mermaid",
-      "sha256": "01291c8951be874a3fcf14169a3e7f0ee8b10b1ef48c58504bb5c2793c079c91",
+      "sha256": "3f7348307a63b14a27b32bba1ee39e22210e1a866570a24bccceeb91d940b4d8",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p22-preference": {
@@ -224,7 +224,7 @@
     },
     "flow-p22-clip-sign": {
       "kind": "mermaid",
-      "sha256": "7a00ea74285e65f46a0831e0662d37701db55a6a0a9804d1d0a1294c837a1353",
+      "sha256": "c105b4716327ff0585cc6da962eebe5e4aaa74cb742c2e57076427276edae90f",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p23-mtp": {
