@@ -9,7 +9,9 @@ PINS = {
     '09a_minigpt_healthcheck.md': [
         ('S6 的旁路是独立线性 head，不是 DeepSeek-V3 按深度串联的 MTP 模块', 1),
         ('[V3 报告 v2 §2.2](https://arxiv.org/abs/2412.19437v2)', 1),
-        ('只有一对通道，频率 θ=1，位置取 π/2，转角 θ×π/2=π/2', 1),
+        # bot-hub#126 F8 (F0 r4 A.5): per-pair angular frequency θ→ω_i (same sentence, letter only); old θ wording asserted absent.
+        ('只有一对通道，角频率 $\\omega_i=1$，位置取 π/2，转角 $\\omega_i\\times\\pi/2=\\pi/2$', 1),
+        ('只有一对通道，频率 θ=1，位置取 π/2，转角 θ×π/2=π/2', 0),
         ('这里 θ=1 的二维特例', 0),
         ('拿第一条序列（下标 0）的前两个 token 作 prompt（贪心解码器只接受 batch 为 1）', 1),
         ('最后拿前两个 token 作 prompt', 0),
