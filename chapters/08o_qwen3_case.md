@@ -100,6 +100,32 @@ x → RMSNorm → Attention → 加回 x
 
 注意力内部还有一层细节：Q、K 在投影并按头切开后，分别做 **QK-norm**，随后才应用 RoPE；V 不做这两项变换。
 
+整条 block 的先后顺序决定权重和缓存能否对上：
+
+```mermaid
+flowchart LR
+    %% id: p25-block-order
+    accTitle: QK-norm、RoPE 与缓存的先后顺序决定权重能否对上
+    accDescr: x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 做 QK-norm 再 RoPE；V 投影后直通，在「缓存旋转后 K / 原始 V」与旋转后 K 会合；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。
+    subgraph Attn["注意力半段"]
+      direction TB
+      A["x → RMSNorm"] --> B["Q/K/V 投影分头"]
+      B --> C["Q、K：QK-norm"]
+      C --> D["RoPE split-half"]
+      D --> E["缓存旋转后 K / 原始 V"]
+      B --> V["V：投影后直通<br/>不做 QK-norm / RoPE"]
+      V --> E
+      E --> F["注意力 → 加回 x"]
+    end
+    subgraph FFN["FFN / MoE 半段"]
+      direction TB
+      G["RMSNorm"] --> H["SwiGLU 或 MoE"]
+      H --> I["再加回"]
+    end
+    Attn --> FFN
+```
+
+
 RMSNorm 对最后一维计算：
 
 $$
@@ -263,6 +289,25 @@ False 比 True 多加的后缀（空行有意义）：
 对这两个 checkpoint，模型卡描述了硬开关 `enable_thinking`，以及在启用 thinking 时使用 `/think`、`/no_think` 的软提示机制。**软提示是给模型的文本，不是模板解析器里的另一个布尔开关。**[0.6B 固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)
 
 至于“想多久”，又是预算问题。`max_new_tokens` 限制整个新生成序列，包括思考、闭合标记、最终答案等；它不是“答案最多多少 token”，也不会自动给答案另留一份额度。`completion_budget` 只是对已经得到的 ID 记账，不会迫使模型结束思考，更不是推理预算控制器。
+
+模板开关、软提示、生成额度和配置长度上限是四层，互不改写：
+
+```mermaid
+flowchart TB
+    %% id: p25-thinking-budget
+    accTitle: Thinking 开关、软提示、生成额度与长度上限是四层
+    accDescr: ① 模板布尔开关改 prompt 文本；② 软提示由模型自行遵循；③ 总生成额度在运行时截断；④ 配置里的位置与长度上限另算；四者互不改写。
+    subgraph Top[" "]
+      direction LR
+      B["① 模板布尔开关<br/>改 prompt 文本"] ~~~ C["② 软提示 /think<br/>模型自行遵循"]
+    end
+    subgraph Bot[" "]
+      direction LR
+      D["③ 总生成额度<br/>运行时截断"] ~~~ E["④ 配置长度上限<br/>位置与上下文"]
+    end
+    Top ~~~ Bot
+```
+
 
 手算一个假想输出，不把它当作真实模型生成：
 
