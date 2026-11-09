@@ -18,13 +18,15 @@ class AppendixQuickrefTests(unittest.TestCase):
         self.body = APPENDIX.read_text(encoding="utf-8")
 
     def test_d_e_f_g_formulas_and_examples_are_present(self):
-        self.assertIn(r"\mathrm{bytes}=2\times L\times B\times H_{kv}", self.body)
+        # bot-hub#126 F9: D.1 bytes/×/d_head/s → Mem_KV/·/d_h/b_elem (A.5)
+        self.assertIn(r"\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}", self.body)
+        self.assertNotIn(r"\mathrm{bytes}=2\times L\times B\times H_{kv}", self.body)
         self.assertIn("2048", self.body)
         self.assertIn("4096", self.body)
         self.assertIn(r"\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}", self.body)
         self.assertIn("r=-8192/40960=-0.20", self.body)
-        self.assertIn(r"\bar L_{\mathrm{doc}}=(2+4)/2=3", self.body)
-        self.assertIn(r"L'=(0.6\times2)^2/2=0.72", self.body)
+        self.assertIn(r"\bar{\mathcal L}_{\mathrm{doc}}=(2+4)/2=3", self.body)
+        self.assertIn(r"\mathcal L'=(0.6\times2)^2/2=0.72", self.body)
         self.assertIn("e338758cad0bc78e2ac6b2e298c0e621b78a6d2e80bac7df11df3a828bf8b73e", self.body)
         self.assertNotIn(r"\(", self.body)
         self.assertNotIn(r"\[", self.body)
@@ -64,7 +66,7 @@ class AppendixQuickrefTests(unittest.TestCase):
 
     def test_kv_hand_calc_matches_independent_arithmetic(self):
         match = re.search(
-            r"2\\times2\\times2\\times2\\times8\\times4\\times4=(\d+)\$? bytes",
+            r"2\\cdot2\\cdot2\\cdot2\\cdot8\\cdot4\\cdot4=(\d+)\$? bytes",
             self.body,
         )
         self.assertIsNotNone(match)

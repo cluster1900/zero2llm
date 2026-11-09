@@ -50,7 +50,7 @@ class ReferenceAppendixTests(unittest.TestCase):
         printed_grad = int(re.search(r"\(z-y\)x=([0-9]+)", gradient).group(1))
         w,x,y = 1,2,0
         self.assertEqual(printed_grad, (w*x-y)*x)
-        printed_z, printed_loss = map(int, re.search(r'则 \$z=(\d+),L=(\d+)\$', gradient).groups())
+        printed_z, printed_loss = map(int, re.search(r'则 \$z=(\d+),\\mathcal L=(\d+)\$', gradient).groups())
         self.assertEqual(printed_z, w*x)
         self.assertEqual(printed_loss, (w*x-y)**2/2)
 
@@ -76,7 +76,7 @@ class ReferenceAppendixTests(unittest.TestCase):
                    ('点积 12', '点积 13'),
                    ('目标是第三类', '目标是第二类'),
                    ('(z-y)x=4', '(z-y)x=2'),
-                   ('z=2,L=2', 'z=2,L=4'),
+                   ('z=2,\\mathcal L=2', 'z=2,\\mathcal L=4'),
                    ('4,000,000 字节', '4,194,304 字节'),
                    ('1024/16=64，与显式 128 不同', '1024/16=128，与显式 128 相同')]
         for old,new in changes:
@@ -105,7 +105,7 @@ class ReferenceAppendixTests(unittest.TestCase):
         self.assertEqual(answers[3], f'{weighted:g} 与 {unweighted:g}。')
         new_w = 1-1*((1*2-0)*2)
         new_loss = (new_w*2-0)**2/2
-        self.assertEqual(answers[4], f"$w'={new_w}$、$L'={new_loss:g}$，大步长使本例更差。")
+        self.assertEqual(answers[4], f"$w'={new_w}$、$\\mathcal L'={new_loss:g}$，大步长使本例更差。")
         cfg = json.loads((ROOT/'code/data/qwen3/dense/config.json').read_text())
         self.assertNotEqual(cfg['head_dim'], cfg['hidden_size']//cfg['num_attention_heads'])
         self.assertEqual(answers[5], f"该固定实现使用显式 {cfg['head_dim']}，需核对代码；等长不等于等字节，仍需 hash。")
@@ -119,7 +119,7 @@ class ReferenceAppendixTests(unittest.TestCase):
         changes = [('1）1536 字节', '1）768 字节'),
                    ('2）相同；', '2）不同；'),
                    ('3）3.5 与 3。', '3）3 与 3。'),
-                   ("4）$w'=-3$、$L'=18$", "4）$w'=-3$、$L'=9$"),
+                   ("4）$w'=-3$、$\\mathcal L'=18$", "4）$w'=-3$、$\\mathcal L'=9$"),
                    ('5）该固定实现使用显式 128', '5）该固定实现使用显式 64'),
                    ('6）对本书而言待核实', '6）对本书而言已核实')]
         for old,new in changes:
@@ -161,8 +161,11 @@ class ReferenceAppendixTests(unittest.TestCase):
         self.assertIn('不能推出速度', BODY)
 
     def test_positive_period_for_both_frequency_signs(self):
-        self.assertIn(r'T=2\pi/\lvert\omega\rvert', BODY)
-        self.assertIn('$D=32=H_q d$', BODY)
+        # bot-hub#126 F9: A.1 period letter T→λ; A.2 head width d→d_h (A.5)
+        self.assertIn(r'\lambda=2\pi/\lvert\omega\rvert', BODY)
+        self.assertNotIn(r'T=2\pi/\lvert\omega\rvert', BODY)
+        self.assertIn('$D=32=H_q d_h$', BODY)
+        self.assertNotIn('$D=32=H_q d$', BODY)
         for omega in (2., -2., .5, -.5):
             period = 2*math.pi/abs(omega)
             self.assertGreater(period, 0)
@@ -206,8 +209,8 @@ class ReferenceAppendixTests(unittest.TestCase):
         large = Fraction(1)-4
         self.assertEqual((small,loss(small)), (Fraction(3,5),Fraction(18,25)))
         self.assertEqual((large,loss(large)),(-3,18))
-        self.assertIn("$w'=0.6$，新损失 0.72",BODY)
-        self.assertIn("$w'=-3$、$L'=18$",BODY)
+        self.assertIn("$w'=0.6$，新损失 $\\mathcal L'=0.72$",BODY)
+        self.assertIn("$w'=-3$、$\\mathcal L'=18$",BODY)
 
     def test_loss_weighting_and_mib_units(self):
         token_mean = (1*Fraction(2)+3*Fraction(4))/4

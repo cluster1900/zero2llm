@@ -35,7 +35,7 @@ G5R = [
 ('chapters/08g_ced_architecture.md','mHC、Engram','、RMSNorm、FFN、量化、视觉输入、其他生产组件与 GPU kernel。'),
 ('chapters/08g_ced_architecture.md','Full 产生 global KV 并选择索引；','把 CSA2 分成三种模式：\n\n- **Full**：产生 global KV，并选择索引。\n- **Reindex**：复用前面层的 global KV，重新选择索引。\n- **Reuse**：global KV 和选择结果都复用。\n\n三种模式都保留'),
 # bot-hub#126 F6 (F0 r4 A.5): window length W→T_win (W 只指权重); same sentence, letter only; old W sentence still asserted absent.
-('chapters/08g_ced_architecture.md','因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。','因此“最后 $T_{\\mathrm{win}}$ 行还在”不等于“能从这 $T_{\\mathrm{win}}$ 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。'),
+('chapters/08g_ced_architecture.md','因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。','因此“最后 $T_{\\mathrm{win}}$ 行还在”不等于“能从这 $T_{\\mathrm{win}}$ 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 $L\\cdot T_{\\mathrm{win}}$ 个 token（$L$ 为层数；报告记作 L × n_win）。'),
 ('chapters/08h_moe.md','得到 78x，而不是 74x。','得到 78x，而不是 74x（74x 是把两个共享分支取平均的错误算法：70+(3+5)/2）。'),
 ]
 

@@ -49,7 +49,7 @@ $$
 
 账本就是 $T^2\times b_{\mathrm{elem}}$：长度翻倍，表的边长翻倍，面积变成 4 倍。其中 $T$ 是序列长度，$b_{\mathrm{elem}}$ 是每个数的字节数（这里为 2）。这里 MiB=2²⁰ 字节，不是十进制 MB。多 batch、多头会继续乘上相应维度。
 
-GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 $T\times T$ 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 $O(T^2d_k)$，不是 $O(Td_k)$（论文把长度记作 N、宽度记作 d）。[FlashAttention 原论文（arXiv 2205.14135v2），§3](https://arxiv.org/pdf/2205.14135v2)
+GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 $T\times T$ 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 $O(T^2(d_k+d_v))$，不是 $O(T(d_k+d_v))$（当 $d_k=d_v=d$ 时即论文的 $O(N^2d)$；论文把长度记作 N、宽度记作 d）。[FlashAttention 原论文（arXiv 2205.14135v2），§3](https://arxiv.org/pdf/2205.14135v2)
 
 这还涉及 GPU 内核融合、线程组织、反向传播重计算等。本章只实现其中容易手算的**前向归一化递推**。
 
@@ -512,7 +512,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 ## P15.17 自测题与参考答案
 
-1. FlashAttention 为什么不等于把稠密 attention 改成 $O(Td_k)$？与 GQA 分别改了什么？
+1. FlashAttention 为什么不等于把稠密 attention 改成 $O(T(d_k+d_v))$？与 GQA 分别改了什么？
 2. $T$ 从 4096 变为 8192，单头一张 2 字节 score 矩阵从多少 MiB 变成多少？
 3. 手算例子第二块到来时，alpha、ell、acc、最终输出各是多少？若平均两块各自均值，会得到多少？
 4. 第一块全 mask，后块才出现合法 key，该怎样初始化？若整行全 mask，本 API 输出什么？
@@ -525,7 +525,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 参考答案：
 
-1. 它保留全部合法 QK 配对，标准稠密算术量仍为 $O(T^2d_k)$，重点是计算组织与 IO。GQA 改变 KV 头共享方式，属于模型表示的改变。
+1. 它保留全部合法 QK 配对，标准稠密算术量仍为 $O(T^2(d_k+d_v))$，重点是计算组织与 IO。GQA 改变 KV 头共享方式，属于模型表示的改变。
 2. 32 MiB → 128 MiB，增长 4 倍；这只是单张矩阵，不是完整模型峰值。
 3. alpha=0.5，ell=1.75，acc=10.5，输出=6。错误的块均值平均是 17/3，约 5.6667。
 4. 空块跳过，保持 ell=0；首个合法块用 alpha=0。整行无合法 key 返回全零，这是明确约定，不是正常概率分布。
