@@ -1852,17 +1852,17 @@ $$y=x+F(x)$$
 
 这里的“残差”不是考试剩下的误差，而是相对于当前表示的**增量**。如果想得到的映射是 $H(x)$，支路可以学习 $H(x)-x$，加回 $x$ 后就得到 $H(x)$。这也是残差学习论文的基本出发点。[来源：Deep Residual Learning，§3.1–3.2](https://arxiv.org/pdf/1512.03385)
 
-```
-              输入 x ─────────────┐ (原始录音笔: 抄近道)
-                 │                │
-                 ▼                │
-          ┌─────────────┐         │
-          │ 复杂神经计算 │         │
-          │    F(x)     │         │
-          └─────────────┘         │
-                 │                │
-                 ▼                ▼
-                 [   相加求和: x + F(x)   ]
+原稿走捷径，批注走支路；两路在相加处会合，这就是残差要表达的结构。
+
+```mermaid
+flowchart TD
+    %% id: ch06-residual-shortcut
+    accTitle: 残差：支路算增量，捷径保留原稿，两路相加
+    accDescr: 输入 x 分两路，支路计算 F(x)，捷径直达相加点，输出为 x+F(x)。
+    X["输入 x"] --> F["支路 F(x)"]
+    X --> ADD["相加 x + F(x)"]
+    F --> ADD
+    ADD --> Y["输出 y"]
 ```
 
 ### 先加四个数字，再谈深层网络
@@ -2006,6 +2006,32 @@ $$\text{Pre-LN:}\quad y=x+F(\operatorname{LN}(x))$$
 $$\text{Post-LN:}\quad y=\operatorname{LN}(x+F(x))$$
 
 Pre 的意思是“**在 F 之前**”：支路拿到的是归一化后的输入，但捷径传来的仍然是原始 $x$。Post 的意思是“**在相加之后**”：原输入和增量先相加，整个和再经过 LN。不要把 Pre-LN 错写成 $\operatorname{LN}(x)+F(\operatorname{LN}(x))$，那样原始输入也被改掉了。
+
+零件相同、只换顺序时，捷径上保留的是哪个向量全看顺序；左图 Pre-LN 的主干不经过 LN，右图 Post-LN 则让整个和过 LN。
+
+```mermaid
+flowchart LR
+    %% id: ch06-pre-post-ln
+    accTitle: Pre-LN 与 Post-LN：零件相同，捷径保留的向量不同
+    accDescr: Pre-LN 是 x 经 LN 再 F，加回原始 x；Post-LN 是 x 经 F 后与 x 相加，整个和再过 LN。
+    subgraph Pre["Pre-LN"]
+      direction TB
+      Px["x"] --> Pln["LN"]
+      Pln --> Pf["F"]
+      Px --> Padd["加回 x"]
+      Pf --> Padd
+      Padd --> Py["y = x + F(LN(x))"]
+    end
+    subgraph Post["Post-LN"]
+      direction TB
+      Qx["x"] --> Qf["F"]
+      Qx --> Qadd["x + F(x)"]
+      Qf --> Qadd
+      Qadd --> Qln["LN"]
+      Qln --> Qy["y = LN(x + F(x))"]
+    end
+    Pre ~~~ Post
+```
 
 ### 把同一个小函数放进两种顺序
 
@@ -2387,7 +2413,22 @@ flowchart TD
 - K/V 由编码器输出投影得到；
 - 权重沿源序列位置归一化，而不是沿译文词表归一化。
 
-例如 batch=1，译文当前有 2 个位置、原文有 3 个位置，每头宽度 4。省略头轴后，Q 形状 (1,2,4)，K 与 V 形状 (1,3,4)；分数形状 (1,2,3)，聚合结果形状 (1,2,4)。输入输出长度不必相同，也不需要把它们硬凑成方阵。另取一个 $d_v=2$ 的手算例子：给第一行三份资料权重 [0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是 [0.7,0.8]，不是机械复制某一个词。
+例如 batch=1，译文当前有 2 个位置、原文有 3 个位置，每头宽度 4。省略头轴后，Q 形状 (1,2,4)，K 与 V 形状 (1,3,4)；分数形状 (1,2,3)，聚合结果形状 (1,2,4)。输入输出长度不必相同，也不需要把它们硬凑成方阵。
+
+目标长度 $T_q$ 与源长度 $T_{kv}$ 可以不同：分数沿源位置归一化，再加权 V，输出长度仍跟查询侧走。
+
+```mermaid
+flowchart TD
+    %% id: ch07-cross-attn-shapes
+    accTitle: Cross-attention：查询跟目标走，分数沿源位置归一化
+    accDescr: 解码器 Q 形状 [1,2,4]（T_q=2），编码器 K/V 形状 [1,3,4]（T_kv=3）；分数 [1,2,3]，每行对 3 个源位置 Softmax 后加权 V，得到 [1,2,4]。
+    Q["解码器 Q<br/>[1,2,4]（T_q=2）"] --> S["分数<br/>[1,2,3]"]
+    KV["编码器 K / V<br/>[1,3,4]（T_kv=3）"] --> S
+    S --> SM["每行对 3 个源位置 Softmax"]
+    SM --> OUT["加权 V → [1,2,4]"]
+```
+
+另取一个 $d_v=2$ 的手算例子：给第一行三份资料权重 [0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是 [0.7,0.8]，不是机械复制某一个词。
 
 有源端 padding 时也要屏蔽对应 K/V 位置。
 
@@ -2478,6 +2519,26 @@ $$p_i(T)=\frac{\exp(z_i/T)}{\sum_j\exp(z_j/T)},\qquad T>0.$$
 - `max_new_tokens=2`：第 2 步后就达到新增上限，返回“床前明月”，没有生成 EOS，停止原因是长度预算。
 - `max_new_tokens=0`：不调用预测函数、无新增 token。若前缀本来已以 EOS 结尾，本教学函数立即按 EOS 停止。
 
+EOS、新增上限、零预算是三个不同出口；追踪表只能演示其中几条路径，状态图把出口一次画全。
+
+```mermaid
+stateDiagram-v2
+    %% id: ch07-generation-stop
+    accTitle: 生成停止：先查前缀 EOS，零预算与新增上限都返回 max_new_tokens
+    accDescr: 前缀已以 EOS 结尾则按 eos 返回且不调模型；否则预算为 0 按 max_new_tokens 返回且不调模型；生成中每步追加一个 token 后，先查 EOS，再查是否达新增上限（EOS 优先于上限）。
+    [*] --> 检查前缀
+    检查前缀 --> 停于EOS: 前缀已以 EOS 结尾
+    检查前缀 --> 检查预算: 前缀未以 EOS 结尾
+    检查预算 --> 停于上限: 否则，预算为 0
+    检查预算 --> 生成中: 预算大于 0
+    生成中 --> 刚追加: 调用模型并追加 token
+    刚追加 --> 停于EOS: 是 EOS → eos
+    刚追加 --> 停于上限: 否则，新增数达上限 → max_new_tokens
+    刚追加 --> 生成中: 都不是，继续
+    停于EOS --> [*]: 出口 eos
+    停于上限 --> [*]: 出口 max_new_tokens
+```
+
 这里的上限计**新增 token**，不把 2 个提示 token 算进去；实际框架里的 `max_length` 与 `max_new_tokens` 含义可能不同，调用时需查版本文档。长度停止可能截断一句话；模型预测 EOS 也不代表内容必然完整或正确。
 
 把循环逐行拆开看：
@@ -2547,18 +2608,23 @@ python3 -m unittest discover -s tests -p 'test_generation.py' -v
 
 训练像练习默写：模型交一份答题纸，损失函数评分，梯度告诉我们怎样微调，优化器实施调整。类比的边界是：模型没有老师式理解；一次更新是数值计算，不保证每道题都改对，也不保证下一次总分必然更好。
 
-```text
-原文 -> 按文档分组 -> 训练文档 -> 抽一个 batch
-                         |           |
-                         |       前向得到 logits
-                         |           |
-                         |       对齐答案算 loss
-                         |           |
-                         |       backward 算梯度
-                         |           |
-                         +------ step 改参数
+练习册走更新环，考试卷只评分；一张图把两边分清楚，就不用在箭头字符里对行了。
 
-独立保留文档 -----------------> 只评分，不更新
+```mermaid
+flowchart TD
+    %% id: ch07a-train-eval-loop
+    accTitle: 训练环更新参数，保留文档只评分不更新
+    accDescr: 原文按文档分组后，训练文档抽 batch、前向得 logits、对齐答案算 loss、backward、step 改参数再回到抽 batch；独立保留文档只评分，不更新。
+    A["原文"] --> B["按文档分组"]
+    B --> C["训练文档"]
+    B --> H["独立保留文档"]
+    C --> D["抽一个 batch"]
+    D --> E["前向得到 logits"]
+    E --> F["对齐答案算 loss"]
+    F --> G["backward 算梯度"]
+    G --> I["step 改参数"]
+    I --> D
+    H --> J["只评分，不更新"]
 ```
 
 先分文档，再抽窗口。把同一首诗的许多重叠窗口随机分成“训练/验证”，相当于考试卷藏着练习册里几乎相同的题。窗口不相同，也不代表来源独立。
@@ -2653,6 +2719,24 @@ optimizer.step()
 3. 前向调用模型，得到分数和当前损失；autograd 记录需要求导的运算。
 4. `backward()` 按链式法则算梯度并写入参数的 `.grad`，还没有修改权重。
 5. `step()` 根据梯度更新权重。脚本使用 AdamW，下面的手算则用 SGD；不要把 SGD 的一步公式当成 AdamW 的精确公式。
+
+清梯度、写 `.grad`、改权重是三步；漏了 `zero_grad`，下一轮梯度会叠在旧账上。
+
+```mermaid
+sequenceDiagram
+    %% id: ch07a-zero-grad-step
+    accTitle: zero_grad 清空、backward 只写梯度、step 才改参数
+    accDescr: 训练循环先对参数调用 zero_grad 清空 .grad，再前向得 loss，backward 只写入 .grad，最后 step 读取 .grad 更新参数。
+    participant L as 训练循环
+    participant P as 参数
+    participant G as .grad
+    participant O as AdamW
+    L->>G: zero_grad 清空
+    L->>P: 前向得 loss
+    L->>G: backward 只写 .grad
+    O->>G: step 读取 .grad
+    O->>P: 更新参数
+```
 
 为什么每轮清零？PyTorch 默认把新梯度加到旧梯度上。对同一个参数、不更新参数地反传同一道题两次，`[-0.25,0.25]` 会变成 `[-0.5,0.5]`。有意积累多个 micro-batch 可以节省显存，但需要设计缩放和更新时机；本实验每 batch 更新一次，不需要跨 batch 积累。
 
