@@ -43,9 +43,17 @@
     "width": 850,
     "height": 520
   },
+  "flow-ch05-permutation-equivariance": {
+    "width": 256.15625,
+    "height": 518
+  },
   "positional_encoding_waves": {
-    "width": 850.0,
-    "height": 500.0
+    "width": 850,
+    "height": 500
+  },
+  "flow-ch05-length-three-ledgers": {
+    "width": 361.40625,
+    "height": 488
   },
   "transformer_block": {
     "width": 750,
