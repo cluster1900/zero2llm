@@ -62,7 +62,7 @@
 
 ![两份固定配置如何映射到注意力、FFN 和输出预算](assets/diagrams/p25-qwen3.svg)
 
-## P25.3 一个最容易算错的维度：D 不一定等于 Hq × d
+## P25.3 一个最容易算错的维度：$D$ 不一定等于 $H_q \times d_h$ {#p25.3}
 
 以前的小型教学模型常把 `head_dim` 写成 `D // Hq`。本章两个 checkpoint **显式指定 $d_h=128$**，所以：
 
@@ -104,14 +104,14 @@ RMSNorm 对最后一维计算：
 
 $$
 \operatorname{RMSNorm}(z)_k
-= \gamma_k\frac{z_k}{\sqrt{\frac{1}{n}\sum_{k'=1}^{n}z_{k'}^2+\epsilon}}.
+= \gamma_k\frac{z_k}{\sqrt{\operatorname{mean}(z^2)+\epsilon}}.
 $$
 
 **大白话：**先算这一行数字的“均方根”当作音量，把整行除以它统一音量，再让每一维乘上自己可学的增益。不减均值，所以比 LayerNorm 少一步。
 
-其中：$z$ 是被归一化的那一行向量，$z_k$ 是它的第 $k$ 维，$k'$ 是求和用的维度下标；$n$ 是最后一维的长度；$\gamma_k$ 是第 $k$ 维的可学习 gain（代码里的 `weight`）；$\epsilon$ 是防止除以零的小常数（配置里的 `rms_norm_eps`）。
+其中：$z$ 是被归一化的那一行向量，$z_k$ 是它的第 $k$ 维；$\operatorname{mean}(z^2)$ 是对该行最后一维各分量平方取平均；$\gamma_k$ 是第 $k$ 维的可学习 gain（代码里的 `weight`）；$\epsilon$ 是防止除以零的小常数（配置里的 `rms_norm_eps`）。
 
-对 block 输入，$n=D$；对单个 Q/K 头，$n=d_h$。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 $d_h$ 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 $H_q\times d_h$ 或 $H_{kv}\times d_h$ 的 gain**。这会直接影响参数统计。
+对 block 输入，最后一维长度是 $D$；对单个 Q/K 头，最后一维长度是 $d_h$。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 $d_h$ 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 $H_q\times d_h$ 或 $H_{kv}\times d_h$ 的 gain**。这会直接影响参数统计。
 
 本章探针保留 float64 精度来做标量对照；固定官方实现的 RMSNorm 有转到 float32 求统计量再转回的逻辑。即使数学结构一样，两种数值路径也不能宣称逐位等价，更不代表 BF16 GPU kernel 的误差行为已经复现。
 
@@ -208,12 +208,12 @@ $$
 
 为何强调“完整矩阵”？输入 embedding 实际查表只访问选中 token 的行；计算次数、内存读取、算术 FLOPs 不等于这一参数计数。一个 batch 中不同 token 还可能走不同专家，选中专家的并集超过 k。**A3B 不等于只需装下 3B 权重，更不意味着它一定比某个 dense 3B 更快。**
 
-## P25.7 KV cache：这次真的按 Hkv 计算
+## P25.7 KV cache：这次真的按 $H_{kv}$ 计算 {#p25.7}
 
 不量化、各层都保存 K/V 时，逻辑 payload 为：
 
 $$
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}},
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}},
 $$
 
 **大白话：**和 P24 的 KV 账本是同一个乘法：K、V 两份，每层、每条序列、每个 KV 头、每个 token 存一条长 $d_h$ 的向量。

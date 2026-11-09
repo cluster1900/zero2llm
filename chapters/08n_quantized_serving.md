@@ -25,7 +25,7 @@ INT8 是带符号整数，通常有 -128 到 127 这 256 个码；FP8 是另一�
 权重压小不会自动把 KV 压小。标准 GQA 的缓存主体字节数仍可按 [P14](#p14-grouped-kv) 计算：
 
 $$
-\mathrm{Mem}_{KV}=2L B H_{kv} T d_h\,b_{\mathrm{elem}}.
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}.
 $$
 
 **大白话：**每层、每条序列、每个 KV 头、每个 token 都要存一条长 $d_h$ 的 K 和一条 V；把这些个数乘起来，再乘每个数占几个字节。

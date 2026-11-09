@@ -135,7 +135,7 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 缓存公式是：
 
 $$
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}.
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}.
 $$
 
 **大白话：**K、V 两份，每层、每条序列、每个 KV 头、每个 token 都存一条长 $d_h$ 的向量，个数乘起来再乘每个数的字节数。
@@ -325,7 +325,7 @@ S3 特殊设置可以在数学上退化成之前的结构，S6 depth=0 也可以
 
 A→B 只换归一化，复制并核对所有非 norm 状态。B→C 只换 FFN 家族与预算匹配宽度，复制并核对所有非 FFN 状态。脚本分别确认 14 个和 15 个不该改变的张量完全相同；输入、标签、dtype、设备和检查路径也相同。
 
-为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 $2Dm$，SwiGLU 三个矩阵的参数为 $3Dn$（$D$ 是模型宽度；$m$、$n$ 分别是 GELU 与 SwiGLU 的 FFN 中间宽度 $d_{\mathrm{ff}}$，用两个字母区分两种结构）。要让参数相等需 $n=2m/3$。$D=16$、$m=64$ 时，理想 n 为 42 又 2/3；宽度必须是整数，选择 43 后为 `3×16×43=2064`，每层多 16 个，两层总共多 32 个。
+为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 $2D d_{\mathrm{ff}}^{\mathrm{GELU}}$，SwiGLU 三个矩阵的参数为 $3D d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$（$D$ 是模型宽度；$d_{\mathrm{ff}}^{\mathrm{GELU}}$、$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 分别是两种 FFN 的中间宽度）。要让参数相等需 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=2d_{\mathrm{ff}}^{\mathrm{GELU}}/3$。$D=16$、$d_{\mathrm{ff}}^{\mathrm{GELU}}=64$ 时，理想 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 为 42 又 2/3；宽度必须是整数，选择 43 后为 `3×16×43=2064`，每层多 16 个，两层总共多 32 个。
 
 所以这个实验应叫**FFN 家族加近似匹配宽度的消融**，不能叫“仅改变激活函数，其他完全不变”。RMSNorm 不做减均值，而 SwiGLU 多了一条门控乘积；它们的原始定义分别见 [RMSNorm v1](https://arxiv.org/abs/1910.07467v1) 与 [GLU Variants v1](https://arxiv.org/abs/2002.05202v1)。
 
@@ -439,7 +439,7 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 
 ### MoE 的负载账本
 
-两行、每行 8 个 token，共 N=16；每个 token 选择 2 个路由专家，因此每层请求分配数总和必须为 `N×k=32`，不是 16。共享专家总是运行，不记在这 32 次路由分配里。
+两行、每行 8 个 token，共 $BT=16$；每个 token 选择 2 个路由专家，因此每层请求分配数总和必须为 $BT\times k=32$，不是 16。共享专家总是运行，不记在这 32 次路由分配里。
 
 本次 S5 两层的请求负载为 `[7,8,8,9]` 与 `[4,9,9,10]`。每层都加起来为 32，但并不完全均衡。这个数字说明路由确实在工作。[DeepSeekMoE v1](https://arxiv.org/abs/2401.06066v1)
 
@@ -536,7 +536,7 @@ S5 比 S4 参数少，是因为这里故意选择了很窄的专家，并非“M
 
 ## P27.13 自测：能解释失败，比记住 PASS 更重要
 
-这里只保留本章新增的综合判断；矩形 mask 的手算见 [P11.4](#p11.4-矩形-mask最容易写错的两行)，MoE 的 N×k 负载记账见 [P18](#p18-moe)，独立手算 oracle 见上文 P27.7。
+这里只保留本章新增的综合判断；矩形 mask 的手算见 [P11.4](#p11.4-矩形-mask最容易写错的两行)，MoE 的 $BT\times k$ 负载记账见 [P18](#p18-moe)，独立手算 oracle 见上文 P27.7。
 
 1. S0 和 S1 为什么必须用同一组权重？固定随机种子是否足够？
 2. GQA 把本次缓存从 4096 字节降到 2048 字节，是否证明进程内存或 GPU 显存下降一半？

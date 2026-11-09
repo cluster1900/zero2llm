@@ -94,7 +94,7 @@ $$
 
 **大白话：**同一个位置的隐藏状态，同时交给几位“考官”：主 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head 只是换一张输出矩阵，读的是同一份表示。
 
-其中：$h_t$ 是主干最后一层（经过最终 RMSNorm）在位置 $t$ 的隐藏向量，长 $D$ 的行向量（本章局部记号，即全书 $X^{(L)}$ 在位置 $t$ 的那一行；$x_{t+1}$、$x_{t+j}$ 指该位置的真实 token，和 $h_t$ 别混）；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵，和代码里 `nn.Linear` 的权重一样按 $[\lvert\mathcal V\rvert,D]$（输出×输入）存，所以乘的时候写转置 $h_tW_j^\top$；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
+其中：$h_t$ 是主干最后一层、再经最终 $\mathrm{ln\_f}$（RMSNorm）之后、在位置 $t$ 的那一行隐藏向量，长 $D$ 的行向量（本章局部记号；它**不是**附录 A.5 的 $X^{(l)}$——那里 $X^{(l)}$ 是第 $l$ 层的输入；$x_{t+1}$、$x_{t+j}$ 指该位置的真实 token，和 $h_t$ 别混）；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵，和代码里 `nn.Linear` 的权重一样按 $[\lvert\mathcal V\rvert,D]$（输出×输入）存，所以乘的时候写转置 $h_tW_j^\top$；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
 
 主 head 是 S5 原来的 head，不是再复制一个。$h_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $h_t$。
 
@@ -197,7 +197,7 @@ $$
 
 所有额外 head 都连接主干，没有 `detach`。因此辅助损失也会训练 embedding 和 Transformer；它不是冻结教师的蒸馏。若想研究“冻结主干”的另一种训练法，必须另开消融，不能只改解释文字。
 
-`depth=0` 不添加参数、不额外消耗随机初始化数；同种子下，S5 与 S6 的 state_dict、参数数量、普通 logits、普通 loss 和缓存数值完全相同。不同模型实例的 cache 仍有不同 owner，不能互换。`depth=2` 时增加的参数正好是 `2 × V × D_model`，不是完整模型参数翻倍。
+`depth=0` 不添加参数、不额外消耗随机初始化数；同种子下，S5 与 S6 的 state_dict、参数数量、普通 logits、普通 loss 和缓存数值完全相同。不同模型实例的 cache 仍有不同 owner，不能互换。`depth=2` 时增加的参数正好是 $2\lvert\mathcal V\rvert D$，不是完整模型参数翻倍。
 
 `weight=0` 只是关闭辅助损失的系数，**不删除已经创建的 head，也不省掉显式 `forward_mtp` 里的 head 计算**。若要结构上关闭旁路，构造 `depth=0`；若只做普通推理，调用普通 forward／cache 路径即可。重新训练后的主干权重变了，不能再要求它与训练前的 S5 输出相同。
 
@@ -250,7 +250,9 @@ $$
 
 接受 4，修正为 5 后，tokens 成为 `[1,2,3,4,5]`。cache 应裁成 `[1,2,3,4]`，pending 是 `[5]`。不能留下 9 的 K/V，也不能提前把 5 当作已经存在的 cache 位置。
 
-源码中若旧 cache 长度为 P，本轮一共提交 s 个新 token，则新 cache 长度为 `P+s`。因为本次调用喂入了旧 pending，但留下新 pending 未喂入。`trim_cache` 对每层 K/V 的时间维度取前缀并复制，保留 owner 与权重版本，不修改原 cache。
+源码里旧 cache 长度是 `old_length`，本轮实际写入的新 token 序列是 `emitted`，则裁切后的新 cache 长度为 `old_length + len(emitted)`（也就是 $T_{\mathrm{old}}+T_{\mathrm{emit}}$）。因为本次调用喂入了旧 pending，但留下新 pending 未喂入。`trim_cache` 对每层 K/V 的时间维度取前缀并复制，保留 owner 与权重版本，不修改原 cache。
+
+其中：`old_length` / $T_{\mathrm{old}}$ 是裁切前已缓存的 token 数；`emitted` 是本轮最终提交进 cache 的新 token 列表，$T_{\mathrm{emit}}=\lvert\texttt{emitted}\rvert$；二者之和是下一轮开始时的缓存长度。
 
 ### EOS 与预算必须一起守住
 
