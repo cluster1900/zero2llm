@@ -476,7 +476,9 @@ class B6LedgerMoveGroup3Test(unittest.TestCase):
         self.assertIn("\nMoE 中未被选中的专家梯度可以是 `None`", ch("09a_minigpt_healthcheck.md"))
         self.assertIn("“不要求模型预测这些 token”。预测被忽略 token 的那组 logits 没有直接 loss 梯度，但 user 字符的 embedding "
                       "仍可能通过注意力影响 assistant 预测，因此收到梯度。", ch("08k_sft_lora.md"))
-        self.assertIn("两条路径可能一起忘记 √d。所以还需要标准库 Decimal 的 **65 位十进制有效数字精度独立参考**：逐 query 直接算点积、指数和归一化，不经过生产实现的 Softmax 或 block 更新。\n", ch("08e_attention_systems.md"))
+        # bot-hub#126 F6: 08e writes the Q/K width as $d_k$ (A.5), so √d became $\sqrt{d_k}$; same sentence otherwise.
+        self.assertNotIn("两条路径可能一起忘记 √d。", ch("08e_attention_systems.md"))
+        self.assertIn("两条路径可能一起忘记 $\\sqrt{d_k}$。所以还需要标准库 Decimal 的 **65 位十进制有效数字精度独立参考**：逐 query 直接算点积、指数和归一化，不经过生产实现的 Softmax 或 block 更新。\n", ch("08e_attention_systems.md"))
         doc = TESTING.read_text(encoding="utf-8")
         self.assertNotIn("\n这也是测试的一部分。", doc)
 

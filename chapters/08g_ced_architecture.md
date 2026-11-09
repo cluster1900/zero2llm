@@ -60,11 +60,15 @@ mindmap
 
 ## P17.3 普通 decoder-only 的依赖链
 
-设位置 i 的输入向量是 x_i，第 l 层的输入表示是 h_i^(l)。先忽略归一化与多头，普通 self-attention 的 K/V 通常来自本层输入：
+设位置 i 的输入向量是 $x_i$，第 l 层的输入表示是 $x_i^{(l)}$，把所有位置的 $x_i^{(l)}$ 一行一行叠起来就是矩阵 $X^{(l)}$。先忽略归一化与多头，普通 self-attention 的 K/V 通常来自本层输入：
 
 $$
-K^{(l)}=H^{(l)}W_K^{(l)},\qquad V^{(l)}=H^{(l)}W_V^{(l)}.
+K^{(l)}=X^{(l)}W_K^{(l)},\qquad V^{(l)}=X^{(l)}W_V^{(l)}.
 $$
+
+白话：第 l 层要查的“资料卡”由第 l 层自己的输入现做——想要高层的卡，就得先把下面各层都走一遍。
+
+其中：上标 $(l)$ 表示第 l 层；$X^{(l)}$ 是该层输入，形状 $[T,D]$（一行一个位置）；$W_K^{(l)}$、$W_V^{(l)}$ 是该层的 key、value 投影；$K^{(l)}$、$V^{(l)}$ 是得到的键、值矩阵。
 
 因此，如果想得到很高一层的历史 K/V，通常要先算完历史 token 在下面各层的表示。KV cache 可以避免“已经算过又重算”，但没有缓存的新输入仍要经过这条层间链。
 
@@ -72,24 +76,30 @@ $$
 
 ## P17.4 CED 改了哪条边
 
-把下半部分的最终输出记为 E，形状 [B,N,D]。B 是 batch，N 是输入长度，D 是每个 token 的表示宽度。上半部分 decoder 的某层输入仍记为 H^(l)。
+把下半部分的最终输出记为 $X_{\mathrm{enc}}$，形状 $[B,T,D]$。$B$ 是批大小，$T$ 是输入长度，$D$ 是每个 token 的表示宽度。上半部分 decoder 的某层输入仍记为 $X^{(l)}$。（全书 $E$ 专指 embedding 表，所以这里不用 E；配图里的“E”“N”就是这里的 $X_{\mathrm{enc}}$、$T$。）
 
 为了先看清路径，本章教学模型使用分开的 K、V：
 
 $$
-K_g^{(l)}=E W_{Kg}^{(l)},\qquad V_g^{(l)}=E W_{Vg}^{(l)}.
+K_g^{(l)}=X_{\mathrm{enc}}W_{Kg}^{(l)},\qquad V_g^{(l)}=X_{\mathrm{enc}}W_{Vg}^{(l)}.
 $$
 
-下标 g 是 global。**右边是 E，不是 H^(l)。** 查询 Q 则仍由当前 decoder 层提出。可以把它理解成：多个深层处理步骤各自提问，但查阅的历史资料可以先由下面的网络准备好。
+和上一节的式子比，只换了乘号左边的那一项：资料卡不再用本层输入现做，而是统一用 encoder 的最终输出来做，所以能在 decoder 开工前一次备好。
+
+其中：$X_{\mathrm{enc}}$ 是 causal encoder 的最终输出；$W_{Kg}^{(l)}$、$W_{Vg}^{(l)}$ 是第 l 个 decoder 层的 global key、value 投影；$K_g^{(l)}$、$V_g^{(l)}$ 是该层读取的 global 键、值。
+
+下标 g 是 global。**右边是 $X_{\mathrm{enc}}$，不是 $X^{(l)}$。** 查询 Q 则仍由当前 decoder 层提出。可以把它理解成：多个深层处理步骤各自提问，但查阅的历史资料可以先由下面的网络准备好。
 
 生产模型的报告用 KV latent C 和压缩权重 Z 表达投影，不是本章这两块独立矩阵；CSA2 还会跨层复用，因此并非每个 decoder 层都独占一份 global cache。先分开写 K/V 是为了看清来源，不是对官方 checkpoint 的逐张量复刻。
 
 与此同时，局部路径仍保留原来的依赖：
 
 $$
-K_{local}^{(l)}=H^{(l)}W_{Kl}^{(l)},\qquad
-V_{local}^{(l)}=H^{(l)}W_{Vl}^{(l)}.
+K_{local}^{(l)}=X^{(l)}W_{Kl}^{(l)},\qquad
+V_{local}^{(l)}=X^{(l)}W_{Vl}^{(l)}.
 $$
+
+其中：$W_{Kl}^{(l)}$、$W_{Vl}^{(l)}$ 是第 l 层的局部 key、value 投影；$K_{local}^{(l)}$、$V_{local}^{(l)}$ 是滑动窗口里读取的局部键、值；$X^{(l)}$ 同上。
 
 local 的意思是滑动窗口，不是“来自另一台本地机器”。这两套 KV 不能互换：global 可以承接较远的历史，local 保留本层对最近上下文的加工。
 
@@ -99,9 +109,9 @@ local 的意思是滑动窗口，不是“来自另一台本地机器”。这�
 
 ### 因果 encoder 为什么不会偷看未来
 
-“encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的 encoder 是因果的：E_j 只依赖 x_0 到 x_j。
+“encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的 encoder 是因果的：$X_{\mathrm{enc}}$ 的第 j 行只依赖 $x_0$ 到 $x_j$。
 
-decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串起来，任何可读条目 E_j 都不可能包含 x_(i+1) 之后的信息。局部路径同样必须满足 j≤i。因此允许提前算出整段 E 和 global bank，**不代表每个 query 都可以读 bank 的所有行**。
+decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串起来，任何可读条目（$X_{\mathrm{enc}}$ 的第 j 行）都不可能包含 $x_{i+1}$ 之后的信息。局部路径同样必须满足 j≤i。因此允许提前算出整段 $X_{\mathrm{enc}}$ 和 global bank，**不代表每个 query 都可以读 bank 的所有行**。
 
 这里的 global 指覆盖历史的范围，不保证生产系统每次读取所有历史条目。真实模型还会做稀疏选择；本章为了隔离数据来源，用稠密的因果 global attention，省去索引器。
 
@@ -111,13 +121,17 @@ decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串
 
 replay（重放）就是重新运行一段历史的计算，用它恢复当前需要的状态。它不是把历史文字再生成一遍，也不是修改用户输入。
 
-设局部窗口 W 包含当前 token，每层最多再读取 W−1 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。
+设局部窗口 $T_{\mathrm{win}}$ 包含当前 token，每层最多再读取 $T_{\mathrm{win}}-1$ 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 $T_{\mathrm{win}}$ 行还在”不等于“能从这 $T_{\mathrm{win}}$ 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。
 
-[报告 §3.2.2](https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2) 的 Bounded Replay 只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 s、当前 query 为 i，局部可见范围变成：
+[报告 §3.2.2](https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2) 的 Bounded Replay 只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 $i_0$、当前 query 为 i，局部可见范围变成：
 
 $$
-\max(s,i-W+1)\le j\le i.
+\max(i_0,i-T_{\mathrm{win}}+1)\le j\le i.
 $$
+
+和 P16 的窗口不等式相比，只是把左边的“0”换成了段起点：replay 从哪里开始，窗口就最多退到哪里，段外的旧位置一律看不见。
+
+其中：$i_0$ 是 replay 段的起点位置（本节局部记号；全书 $s$ 留给注意力分数）；i 是 query 位置，j 是 key 位置；$T_{\mathrm{win}}$ 是包含当前位置的窗口长度（全书统一记号，见附录 A.5）。
 
 这会丢掉 replay 边界之前的局部依赖。**报告明确说这不是全量计算的数学等价重建。** 官方对响应质量影响的判断来自其模型与评估，本书的小矩阵误差不能验证或否定那项质量结论。
 
@@ -172,12 +186,12 @@ flowchart TD
 
 ## P17.7 先把教学模型的边界写在前面
 
-ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两层 encoder、两层 decoder，窗口 W=3；所有权重都显式初始化并固定，全部在 CPU 上用 float64 运算。
+ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两层 encoder、两层 decoder，窗口 $T_{\mathrm{win}}=3$；所有权重都显式初始化并固定，全部在 CPU 上用 float64 运算。
 
 本模型故意只保留：
 
 1. 因果的局部 encoder。
-2. 每个 decoder 层从同一个最终 E 投影 global K/V。
+2. 每个 decoder 层从同一个最终 $X_{\mathrm{enc}}$ 投影 global K/V。
 3. decoder 本层输入产生 local K/V。
 4. 完整前向、增量缓存和近似后缀 replay 三条路径。
 
@@ -192,7 +206,7 @@ ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两�
 
 ## P17.8 手算：三行输入如何走完两条路径
 
-先使用更简单的配置：encoder 一层、decoder 一层、W=2，位置项关闭；所有 Q、K 投影为零，所有 V 投影为单位矩阵。分数都是 0，Softmax 就是可见位置的平均权重。第二个坐标始终为 0，只写第一个坐标：
+先使用更简单的配置：encoder 一层、decoder 一层、$T_{\mathrm{win}}=2$，位置项关闭；所有 Q、K 投影为零，所有 V 投影为单位矩阵。分数都是 0，Softmax 就是可见位置的平均权重。第二个坐标始终为 0，只写第一个坐标：
 
 ```text
 输入 x = [1, 2, 3]
@@ -200,13 +214,13 @@ ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两�
 
 encoder 只看自身及前一个位置，再加回残差：
 
-| 位置 | encoder 可见输入 | 均值 | 加上本位置输入后的 E |
+| 位置 | encoder 可见输入 | 均值 | 加上本位置输入后的 $X_{\mathrm{enc}}$ |
 | --- | --- | --- | --- |
 | 0 | [1] | 1 | 2 |
 | 1 | [1,2] | 3/2 | 7/2 |
 | 2 | [2,3] | 5/2 | 11/2 |
 
-于是 E=[2,7/2,11/2]。decoder 的 global V 直接来自这三行 E，local V 来自本层输入；第一层的输入恰好也是 E，但多层时不能继续混为一谈。
+于是 $X_{\mathrm{enc}}=[2,7/2,11/2]$。decoder 的 global V 直接来自这三行 $X_{\mathrm{enc}}$，local V 来自本层输入；第一层的输入恰好也是 $X_{\mathrm{enc}}$，但多层时不能继续混为一谈。
 
 位置 2 的完整 decoder 输出为：
 
@@ -217,9 +231,13 @@ $$
 =\frac{41}{3}.
 $$
 
+三块加起来就是这一层的全部工作：原样保留的残差、读全部历史 global 条目的平均、读窗口内 local 条目的平均。因为 Q、K 投影都为零，Softmax 退化成“可见位置一律等权”，所以每块都是简单平均。
+
+其中：$11/2$ 是位置 2 自己的输入（第一层 decoder 的输入就是 $X_{\mathrm{enc}}$）；global 平均对位置 0、1、2 的 $X_{\mathrm{enc}}$ 取平均；local 平均只对窗口 $T_{\mathrm{win}}=2$ 内的位置 1、2 取平均。
+
 完整的输出是 `[6,9,41/3]`。
 
-现在只 replay 末尾 W=2 个位置，即位置 1、2。**global bank 仍有全部三行 E**，只是 decoder 的局部计算从位置 1 重新开始。
+现在只 replay 末尾 $T_{\mathrm{win}}=2$ 个位置，即位置 1、2。**global bank 仍有全部三行 $X_{\mathrm{enc}}$**，只是 decoder 的局部计算从位置 1 重新开始。
 
 - replay 位置 1 的 global 均值仍为 (2+7/2)/2=11/4；local 却只能看到自己，为 7/2。输出是 7/2+11/4+7/2=39/4=9.75，而完整结果是 9。
 - replay 位置 2 恰好已经拥有完整的单层局部窗口，所以这一行仍是 41/3。
@@ -236,7 +254,7 @@ kv = join_kv(encoder @ layer.global_k, encoder @ layer.global_v,
              offset, None if old is None else old[i])
 ```
 
-这里的 encoder 就是两层 causal encoder 的最终输出，不是把 decoder 的输出换个变量名。每层 global bank 都在 decoder 开始前生成，不依赖 decoder 本身。
+这里的 encoder 变量就是两层 causal encoder 的最终输出 $X_{\mathrm{enc}}$，不是把 decoder 的输出换个变量名。每层 global bank 都在 decoder 开始前生成，不依赖 decoder 本身。
 
 相反，decoder 的局部路径是：
 
@@ -247,13 +265,13 @@ q = h @ layer.q
 h = h + attention(q, global_kv[i], offset) + attention(q, kv, offset, window)
 ```
 
-h 每经过一层就改变。于是第二层 local V 会跟着第一层的处理改变，而提前准备的 global V 不会。
+代码里的 h 就是正文的 $X^{(l)}$，每经过一层就改变。于是第二层 local V 会跟着第一层的处理改变，而提前准备的 global V 不会。
 
 可以对此做“干预”，不只检查变量名：把第一层 decoder 的 local V 投影放大三倍，重新计算。结果应当是：encoder-derived global banks 保持不变，第二层 decoder 的 local cache 和最终输出改变。如果 global bank 也被改变了，说明路径很可能接回了 decoder 自己。
 
 ## P17.10 形状和绝对位置必须一起记
 
-默认例子 B=1、N=6、D=2、W=3。这里 D 始终是向量宽度；后文用 L_e、L_d 表示 encoder、decoder 的层数。
+默认例子 $B=1$、$T=6$、$D=2$、$T_{\mathrm{win}}=3$。这里 D 始终是向量宽度；后文用 L_e、L_d 表示 encoder、decoder 的层数。
 
 | 对象 | 完整 prefill 后的形状 / 位置 | 来源 |
 | --- | --- | --- |
@@ -264,7 +282,7 @@ h 每经过一层就改变。于是第二层 local V 会跟着第一层的处理
 | bounded 输出 | [1,3,2]，位置 3…5 | 只运行最后 3 行 decoder |
 | 下一次位置 | next_position=6 | 已处理 6 个位置 |
 
-为什么 local cache 留 W−1=2 行而不是 W=3 行？因为下一次会先加入当前新行。处理位置 6 时，局部可见位置正好是 `[4,5,6]`。这只是本实验的存储约定；生产实现可以用大小为 W 的环形缓冲区。
+为什么 local cache 留 $T_{\mathrm{win}}-1=2$ 行而不是 $T_{\mathrm{win}}=3$ 行？因为下一次会先加入当前新行。处理位置 6 时，局部可见位置正好是 `[4,5,6]`。这只是本实验的存储约定；生产实现可以用大小为 $T_{\mathrm{win}}$ 的环形缓冲区。
 
 代码用 KV.start 记录第一行的绝对位置，不能把缓存的行号 0 当成原序列的位置 0。增量输入 C 行时，位置项要从 offset 开始；注意力的比较也是 `key_position <= query_position`，而不是按本次小块的行号比较。
 
@@ -274,22 +292,26 @@ bounded 路径会把 approximate 标记保留到后续 decode。它记录“来�
 
 ## P17.11 算清少走的路径，别把路径数叫速度
 
-定义：B 为 batch，N 为 prompt 长度，L_e / L_d 分别为 encoder / decoder 层数，R=min(N,W) 为 replay 长度。
+定义：$B$ 为批大小，$T$ 为 prompt 长度，$L_e$ / $L_d$ 分别为 encoder / decoder 层数，$R=\min(T,T_{\mathrm{win}})$ 为 replay 长度。
 
 本实验把“一个 token 的表示经过一个层”记作一次 **token-layer visit**。完整和有界路径分别是：
 
 $$
-C_{full}=BN(L_e+L_d),\qquad
-C_{bounded}=B(NL_e+RL_d).
+C_{full}=BT(L_e+L_d),\qquad
+C_{bounded}=B(TL_e+RL_d).
 $$
 
-令 B=1、L_e=L_d=L/2 且 N≥W，则 C_bounded=NL/2+WL/2，对应报告 §2.2 的 O(NL/2+n_win·L/2) 路径计数写法；短输入仍应使用 R=min(N,W)。
+这是“人次 × 层数”的点名册：完整路径里每个 token 都要走完 encoder 和 decoder 的每一层；有界路径里 encoder 照走，decoder 只让最后 R 个 token 走。
 
-这里的 full 基线是同一个 CED 教学模型的完整执行，不是另一个普通 decoder-only 模型，更不是两个训练模型的质量对比。这是本模型实际循环累计的层处理次数，不是仅打印一条假想公式。被省掉的是 `B(N−R)L_d` 次 decoder token-layer visit。
+其中：$C_{full}$、$C_{bounded}$ 是两条路径的 token-layer visit 次数（C 取 count 之意，本节局部记号）；$B$、$T$、$L_e$、$L_d$、$R$ 同上。
 
-但不能把所有工作都塞进这个计数：两条路径仍为全部 N 个 encoder 输出做 global K/V 投影。本教学模型每个 decoder 层各有一对投影，故两边都要 `BNL_d` 对投影。**官方 CSA2 有跨层复用，不能把本实验这个投影数量直接套到真实模型。**
+令 $B=1$、$L_e=L_d=L/2$ 且 $T\ge T_{\mathrm{win}}$，则 $C_{bounded}=TL/2+T_{\mathrm{win}}L/2$，对应报告 §2.2 的 O(NL/2+n_win·L/2) 路径计数写法（报告里的 N 就是这里的 $T$，n_win 就是 $T_{\mathrm{win}}$）；短输入仍应使用 $R=\min(T,T_{\mathrm{win}})$。
 
-默认 B=1、N=6、L_e=L_d=2、W=3：
+这里的 full 基线是同一个 CED 教学模型的完整执行，不是另一个普通 decoder-only 模型，更不是两个训练模型的质量对比。这是本模型实际循环累计的层处理次数，不是仅打印一条假想公式。被省掉的是 $B(T-R)L_d$ 次 decoder token-layer visit。
+
+但不能把所有工作都塞进这个计数：两条路径仍为全部 $T$ 个 encoder 输出做 global K/V 投影。本教学模型每个 decoder 层各有一对投影，故两边都要 $BTL_d$ 对投影。**官方 CSA2 有跨层复用，不能把本实验这个投影数量直接套到真实模型。**
+
+默认 $B=1$、$T=6$、$L_e=L_d=2$、$T_{\mathrm{win}}=3$：
 
 | 计数项目 | 完整路径 | 有界路径 |
 | --- | --- | --- |
@@ -300,7 +322,7 @@ $$
 
 24 变成 18，**不等于运行时间变成 3/4**。不同路径的每次 attention 涉及的 key 数不同，投影和内存操作也有成本；本脚本甚至显式构造稠密分数矩阵，再用 mask 遮住局部不可见位置，根本不是稀疏 GPU kernel。
 
-当 N≤W 时，R=N，有界路径不会省掉 decoder 的任何位置。只有输入显著长于窗口时，计数差异才突出。即使如此，也不能由这个固定小矩阵实验推出官方吞吐、TTFT、TPOT、显存节省或语言质量。
+当 $T\le T_{\mathrm{win}}$ 时，$R=T$，有界路径不会省掉 decoder 的任何位置。只有输入显著长于窗口时，计数差异才突出。即使如此，也不能由这个固定小矩阵实验推出官方吞吐、TTFT、TPOT、显存节省或语言质量。
 
 ## P17.12 运行与验证
 
@@ -338,7 +360,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture
 
 ## P17.13 小练习与本章结论
 
-1. 将 W 从 3 改成 8，输入仍为 6 行。为什么 bounded 输出长度变回 6、block visits 也不再减少？
+1. 将 $T_{\mathrm{win}}$ 从 3 改成 8，输入仍为 6 行。为什么 bounded 输出长度变回 6、block visits 也不再减少？
 2. 不看图，只检查 global_from_encoder 与 decode 的参数。哪一条调用证明第二层 decoder 的 global KV 不依赖第一层 decoder？
 3. 手算例子里最后一行相同，为什么不能删除“近似”警告？试着把 decoder_layers 改成 2，追踪第一层位置 1 的误差会流向哪里。
 4. 如果把本实验换成真正的 CSA2，你需要新增哪些缓存、source 映射和索引有效性测试？为什么不能只把类名改成 CSA2？
