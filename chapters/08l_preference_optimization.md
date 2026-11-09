@@ -212,6 +212,19 @@ positions 是原序列中目标的位置 1…T−1，starts 是该行答案开�
 EOS 如果确实属于答案，应当计入；PAD 不计入。这个 helper 只支持右 padding、有至少一个 prompt token 和一个答案 token 的输入，遇到左 padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 tokenizer 拼接边界，调用方还要保证 chosen / rejected 共用同一 prompt 和一致的结束规则。
 
 修改被排除位置的 logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。
+把从 logits 到一对答案 log p 的形状账本画出来：
+
+```mermaid
+flowchart TD
+    %% id: p22-logp-pair
+    accTitle: 从变长 token 筛出一对答案 log p
+    accDescr: logits 形状 [B,T,|𝒱|]；logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。
+    A["logits [B,T,|𝒱|]<br/>input_ids / mask [B,T]"] --> B["causal shift：logits[:, :-1]<br/>对 input[:, 1:] 取 log p"]
+    B --> C["答案起点 + 右侧 PAD 构造 mask"]
+    C --> D["按行求和 → [B]"]
+    D --> E["chosen / rejected 两两配对"]
+```
+
 
 ## P22.6 GRPO：同一道题，先比较一组答案
 
@@ -277,6 +290,22 @@ $$
 
 - A=+1、ρ=1.4：收益取 min(1.4,1.2)=1.2，不再鼓励这项收益无限上涨。
 - A=−1、ρ=0.6：收益取 min(−0.6,−0.8)=−0.8，不能错误地取 max。
+
+clip 之后取 min 还是看起来像 max，全看优势的正负：
+
+```mermaid
+flowchart TD
+    %% id: p22-clip-sign
+    accTitle: clip 之后取 min，上涨与下跌都靠优势符号管住
+    accDescr: ρ=exp(log π_θ − log π_old)；A>0 时 min(ρA, clip(ρ)A) 限制上涨；A<0 时同一式子限制下跌；先在答案内平均再对答案平均，取负号得要最小化的损失。
+    A["ρ = exp(log π_θ − log π_old)"] --> B{"优势 A 的符号"}
+    B -->|"A &gt; 0"| C["min(ρA, clip(ρ,0.8,1.2)A)<br/>限制上涨"]
+    B -->|"A &lt; 0"| D["同一个 min 式子<br/>限制下跌"]
+    C --> E["答案内平均 → 答案间平均"]
+    D --> E
+    E --> F["取负号 → 最小化损失<br/>另加 β·KL 项"]
+```
+
 
 clip 的作用依赖优势符号和更新方向，并不是所有范围外的概率比都“没有梯度”；它也不保证实际 KL 永远小于一个固定值。更新后的概率仍需检查。
 

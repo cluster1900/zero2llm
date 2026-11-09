@@ -19,7 +19,7 @@ try {
         backgroundColor: '#ffffff',
         mermaidConfig: {
           theme: 'base',
-          fontFamily: '"PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif',
+          fontFamily: '"PingFang SC", "Noto Sans CJK SC", "Noto Sans Math", "Microsoft YaHei", sans-serif',
           themeVariables: {
             fontSize: '18px', primaryColor: '#eff6ff', primaryTextColor: '#172554',
             primaryBorderColor: '#3b82f6', lineColor: '#475569',
