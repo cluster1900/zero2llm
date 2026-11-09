@@ -2771,6 +2771,17 @@ class="math inline">\(H\)</span> 个头等宽，<span
 class="math inline">\(d_h=D/H\)</span>，Q/K/V 与输出都投影到 <span
 class="math inline">\(D\)</span>，四个线性层都不带
 bias。</strong>单头对照也保留同样的四个投影。</p>
+<p>三本账可以对照这张图看：起点相同，结论却不是同一句「变 H 倍」。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-ch04-three-ledgers.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ch04-three-ledgers.svg" class="book-diagram"
+width="340"
+alt="固定 D 改 H 时，参数、运算与显式分数表三本账结论不同。起点是 D 固定、d_h=D/H、四个投影无偏置。参数 4D² 与 H 无关；运算量级不随 H 变；显式分数表 B·H·T² 随 H 线性增长。" /></a>
+<div class="diagram-caption">
+固定 D 改 H 时，参数、运算与显式分数表三本账结论不同
+</div>
+</div>
 <h3 id="参数账标准无偏置-mha-是-4d2">参数账：标准无偏置 MHA 是 <span
 class="math inline">\(4D^2\)</span></h3>
 <p>Q、K、V 各有一个 <span class="math inline">\(D\times D\)</span>
