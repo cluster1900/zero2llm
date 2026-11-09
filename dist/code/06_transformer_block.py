@@ -153,7 +153,7 @@ def chapter_tables():
         ("输入 x", _vector(x)), ("增量 F(x)", _vector(delta)),
         ("x + F(x)", _vector(x + delta)), ("F(x)=0 时的输出", _vector(x + torch.zeros_like(x))),
     ])
-    tables["zscore"] = _table(["特征 i", "x_i", "x_i − μ", "(x_i − μ)²", "标准化后 x̂_i"], [
+    tables["zscore"] = _table(["特征 k", "x_k", "x_k − μ", "(x_k − μ)²", "标准化后 x̂_k"], [
         (i + 1, f"{x[i]:.1f}", f"{centered[i]:.1f}", f"{squared[i]:.2f}", f"{normalized[i]:.6f}")
         for i in range(x.numel())
     ])

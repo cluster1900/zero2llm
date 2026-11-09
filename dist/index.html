@@ -3640,11 +3640,24 @@ href="#p13-modern-block">P13</a>。</p>
 class="math inline">\(x\)</span>，支路算出的修改量是 <span
 class="math inline">\(F(x)\)</span>：</p>
 <p><span class="math display">\[y=x+F(x)\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(x\)</span>
+是一个位置的输入向量（宽度 <span
+class="math inline">\(D\)</span>，即模型宽度）；<span
+class="math inline">\(F\)</span> 是支路，也就是注意力或 FFN
+这样的子层，<span class="math inline">\(F(x)\)</span>
+是它算出的修改量，形状与 <span class="math inline">\(x\)</span>
+相同；<span class="math inline">\(y\)</span> 是加回之后的输出。</p>
+<p><strong>白话：</strong> 输出 = 原稿 +
+批注。支路只需学会“改多少”；什么都不想改时，交出全零就行。</p>
 <p>这里的“残差”不是考试剩下的误差，而是相对于当前表示的<strong>增量</strong>。如果想得到的映射是
-<span class="math inline">\(H(x)\)</span>，支路可以学习 <span
-class="math inline">\(H(x)-x\)</span>，加回 <span
+<span class="math inline">\(G(x)\)</span>，支路可以学习 <span
+class="math inline">\(G(x)-x\)</span>，加回 <span
 class="math inline">\(x\)</span> 后就得到 <span
-class="math inline">\(H(x)\)</span>。这也是残差学习论文的基本出发点。<a
+class="math inline">\(G(x)\)</span>（<span
+class="math inline">\(G\)</span>
+表示这一层最终想实现的输入到输出的映射，<span
+class="math inline">\(G(x)-x\)</span>
+就是支路要学的“残差”）。这也是残差学习论文的基本出发点。<a
 href="https://arxiv.org/pdf/1512.03385">来源：Deep Residual
 Learning，§3.1–3.2</a></p>
 <pre><code>              输入 x ─────────────┐ (原始录音笔: 抄近道)
@@ -3693,8 +3706,13 @@ class="math inline">\(y=x\)</span>。这种“不做改变”的映射叫<strong
 <code>[B,T,D]</code>，所以可以直接相加。如果支路改变了宽度，就不能直接做这条恒等捷径，必须先解决尺寸对齐问题。形状相同也不等于内容相同。</p>
 <p>学过导数的读者可以多看一行。标量情况下，<span
 class="math inline">\(dy/dx=1+F&#39;(x)\)</span>；向量情况下，相应的是单位矩阵
-<span class="math inline">\(I\)</span>
-加上支路的雅可比矩阵。还没学过也没关系：<strong>输入有一条不用穿过支路内部运算的直接路径</strong>，这就是后面
+<span class="math inline">\(I\)</span> 加上支路的雅可比矩阵。（<span
+class="math inline">\(F&#39;(x)\)</span>
+是支路对输入的导数；雅可比矩阵是“每个输出分量对每个输入分量的导数”排成的表；<span
+class="math inline">\(I\)</span> 对角线全是 1、其余是
+0。那个“1”正来自捷径本身：只要支路的导数没有恰好把它抵消，变化就总有一条系数为
+1
+的路可走。）还没学过也没关系：<strong>输入有一条不用穿过支路内部运算的直接路径</strong>，这就是后面
 Pre-LN 布局要保留的结构。</p>
 <p><strong>类比边界：</strong>“录音笔原封不动传过去”只形容那条加法支路，不代表整个输出无损、所有梯度永远不衰减。比如
 <span class="math inline">\(F(x)=-x\)</span>
@@ -3714,15 +3732,31 @@ token，就单独重新算。它不把不同句子、不同 token
 <p>下面坚持用同一个向量 <span
 class="math inline">\(x=[1,2,3,4]\)</span>，完整走过三个步骤。</p>
 <h3 id="第一步算均值找到中心">第一步：算均值，找到中心</h3>
-<p><span class="math display">\[\mu=\frac{1}{D}\sum_{i=1}^D x_i
+<p><span class="math display">\[\mu=\frac{1}{D}\sum_{k=1}^D x_k
 =\frac{1+2+3+4}{4}=2.5\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(x_k\)</span>
+是这个 token 向量里第 <span class="math inline">\(k\)</span>
+个特征（<span class="math inline">\(k\)</span> 从 1 数到 <span
+class="math inline">\(D\)</span>，与表 6-2 的“特征 k”一致）；<span
+class="math inline">\(D\)</span> 是特征个数，本例 <span
+class="math inline">\(D=4\)</span>；<span
+class="math inline">\(\mu\)</span> 是这一行的均值。</p>
+<p><strong>白话：</strong>
+先找这一行数的“重心”，后面所有的偏离都从它量起。</p>
 <p>从每一项减去 2.5，得到 <span
 class="math inline">\([-1.5,-0.5,0.5,1.5]\)</span>。这些偏离有正有负，求和为零，所以中心已经移动到零。</p>
 <h3 id="第二步算方差衡量偏离的尺度">第二步：算方差，衡量偏离的尺度</h3>
 <p>直接把偏离相加会正负抵消，所以先逐项平方，再取平均：</p>
 <p><span
-class="math display">\[\sigma^2=\frac{1}{D}\sum_{i=1}^D(x_i-\mu)^2
+class="math display">\[\sigma^2=\frac{1}{D}\sum_{k=1}^D(x_k-\mu)^2
 =\frac{2.25+0.25+0.25+2.25}{4}=1.25\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(\sigma^2\)</span>
+是方差，<span class="math inline">\(\sigma\)</span> 是标准差（本章的
+<span class="math inline">\(\sigma\)</span> 只表示标准差）；<span
+class="math inline">\(x_k-\mu\)</span> 是第 <span
+class="math inline">\(k\)</span> 个特征离均值有多远。</p>
+<p><strong>白话：</strong>
+偏离有正有负，平方后都变成正的“离谱程度”，再取平均，就知道这一行数散得有多开。</p>
 <p>这里除以 <strong>D，而不是
 D−1</strong>。我们正在描述当前这一个向量，不是在用样本估计一个未知总体的方差。对应代码是
 <code>x.var(dim=-1, keepdim=True, unbiased=False)</code>；PyTorch
@@ -3733,8 +3767,14 @@ href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.LayerNorm.html">来�
 <p>方差是“偏离的平方”的平均，开平方才回到原来的量纲。实际计算再加入
 <span class="math inline">\(\epsilon=10^{-5}\)</span>：</p>
 <p><span
-class="math display">\[\hat{x}_i=\frac{x_i-\mu}{\sqrt{\sigma^2+\epsilon}},\qquad
+class="math display">\[\hat{x}_k=\frac{x_k-\mu}{\sqrt{\sigma^2+\epsilon}},\qquad
 \sqrt{1.25+0.00001}\approx1.118038\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(\hat x_k\)</span>
+是标准化后的第 <span class="math inline">\(k\)</span> 个特征；<span
+class="math inline">\(\epsilon\)</span> 是防止除以零的小常数，本章取
+<span class="math inline">\(10^{-5}\)</span>，放在根号里面。</p>
+<p><strong>白话：</strong> 减均值把中心挪到
+0，除以标准差把“尺子”统一。不管原来的数大还是小，都换算成“离平均有几个标准差”。</p>
 <p>于是第一维为 <span
 class="math inline">\(-1.5/1.118038\approx-1.341635\)</span>，第二维为
 <span
@@ -3744,11 +3784,11 @@ class="math inline">\(-0.5/1.118038\approx-0.447212\)</span>。其余两维按�
 <div class="table-wrapper"><table>
 <thead>
 <tr>
-<th>特征 i</th>
-<th>x_i</th>
-<th>x_i − μ</th>
-<th>(x_i − μ)²</th>
-<th>标准化后 x̂_i</th>
+<th>特征 k</th>
+<th>x_k</th>
+<th>x_k − μ</th>
+<th>(x_k − μ)²</th>
+<th>标准化后 x̂_k</th>
 </tr>
 </thead>
 <tbody>
@@ -3793,6 +3833,16 @@ class="math inline">\(0/0\)</span>；加入正 epsilon
 <p>但 epsilon 也会改变尺度。忽略浮点舍入，标准化后有：</p>
 <p><span class="math display">\[\operatorname{mean}(\hat{x})=0,\qquad
 \operatorname{var}(\hat{x})=\frac{\sigma^2}{\sigma^2+\epsilon}\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(\hat x\)</span>
+是标准化后的整行向量；<span
+class="math inline">\(\operatorname{mean}\)</span>、<span
+class="math inline">\(\operatorname{var}\)</span> 都只沿这一个 token 的
+<span class="math inline">\(D\)</span> 个特征计算，方差同样除以 <span
+class="math inline">\(D\)</span>；<span
+class="math inline">\(\sigma^2\)</span> 是标准化之前的方差。</p>
+<p><strong>白话：</strong> <span class="math inline">\(\epsilon\)</span>
+悄悄混进了分母，所以输出方差总比 1 小一点；原来的方差越接近 <span
+class="math inline">\(\epsilon\)</span>，被“稀释”得越厉害。</p>
 <p>因此只有在方差明显大于 epsilon 时，输出方差才接近
 1。对刚才的例子，它是 <span
 class="math inline">\(1.25/1.25001\approx0.999992\)</span>，并非严格等于
@@ -3855,14 +3905,25 @@ class="math inline">\(1.25/1.25001\approx0.999992\)</span>，并非严格等于
 id="三步之后再加可学习的缩放和平移">三步之后，再加可学习的缩放和平移</h3>
 <p>完整 LayerNorm 还会计算：</p>
 <p><span
-class="math display">\[y_i=\gamma_i\hat{x}_i+\beta_i\]</span></p>
+class="math display">\[y_k=\gamma_k\hat{x}_k+\beta_k\]</span></p>
+<p><strong>其中：</strong> <span
+class="math inline">\(\gamma_k\)</span>、<span
+class="math inline">\(\beta_k\)</span> 是第 <span
+class="math inline">\(k\)</span> 个特征自己的可学习缩放与平移（代码里的
+<code>gamma</code>、<code>beta</code>；这里的 <span
+class="math inline">\(\beta\)</span> 只表示平移）；<span
+class="math inline">\(y_k\)</span> 是 LayerNorm 的最终输出。</p>
+<p><strong>白话：</strong> 标准化先把大家拉到同一起跑线，<span
+class="math inline">\(\gamma\)</span>、<span
+class="math inline">\(\beta\)</span>
+再让模型自己决定每一维放大多少、挪多少，不会被“一刀切”锁死。</p>
 <p><span class="math inline">\(\gamma\)</span> 与 <span
 class="math inline">\(\beta\)</span> 各有 D
 个参数，不是整个向量共用一个标量。本章初始化为每维 <span
-class="math inline">\(\gamma_i=1\)</span>、<span
-class="math inline">\(\beta_i=0\)</span>；训练后它们可以改变各维的尺度与偏移。举例说，若所有维度改成
-<span class="math inline">\(\gamma_i=2\)</span>、<span
-class="math inline">\(\beta_i=1\)</span>，刚才的输出均值会变成
+class="math inline">\(\gamma_k=1\)</span>、<span
+class="math inline">\(\beta_k=0\)</span>；训练后它们可以改变各维的尺度与偏移。举例说，若所有维度改成
+<span class="math inline">\(\gamma_k=2\)</span>、<span
+class="math inline">\(\beta_k=1\)</span>，刚才的输出均值会变成
 1，方差约为 <span
 class="math inline">\(4\times0.999992=3.999968\)</span>。不能再把完整输出一律称作“零均值、单位方差”。</p>
 <pre><code>原始特征分布: 散乱无章 (均值可能=-3.5, 方差可能=42.0)
@@ -3907,6 +3968,17 @@ dropout。两种顺序分别是：</p>
 y=x+F(\operatorname{LN}(x))\]</span></p>
 <p><span class="math display">\[\text{Post-LN:}\quad
 y=\operatorname{LN}(x+F(x))\]</span></p>
+<p><strong>其中：</strong> <span
+class="math inline">\(\operatorname{LN}\)</span> 是上一节的
+LayerNorm（含 <span class="math inline">\(\epsilon\)</span>、<span
+class="math inline">\(\gamma\)</span>、<span
+class="math inline">\(\beta\)</span>）；<span
+class="math inline">\(F\)</span> 是一条支路；<span
+class="math inline">\(x\)</span> 是子层输入，<span
+class="math inline">\(y\)</span> 是子层输出。</p>
+<p><strong>白话：</strong> Pre-LN
+是“先把稿子誊清再写批注，原稿不动”；Post-LN
+是“批注写完，连原稿一起重新排版”。零件一样，只是 LN 摆的位置不同。</p>
 <p>Pre 的意思是“<strong>在 F
 之前</strong>”：支路拿到的是归一化后的输入，但捷径传来的仍然是原始 <span
 class="math inline">\(x\)</span>。Post
@@ -3915,7 +3987,9 @@ LN。不要把 Pre-LN 错写成 <span
 class="math inline">\(\operatorname{LN}(x)+F(\operatorname{LN}(x))\)</span>，那样原始输入也被改掉了。</p>
 <h3 id="把同一个小函数放进两种顺序">把同一个小函数放进两种顺序</h3>
 <p>继续使用 <span class="math inline">\(x=[1,2,3,4]\)</span>，设 <span
-class="math inline">\(F(z)=2z\)</span>，LayerNorm 仍用 epsilon=<span
+class="math inline">\(F(z)=2z\)</span>（<span
+class="math inline">\(z\)</span> 是支路收到的向量），LayerNorm 仍用
+epsilon=<span
 class="math inline">\(10^{-5}\)</span>、gamma=1、beta=0。这个 <span
 class="math inline">\(F\)</span>
 是为了隔离顺序差异而选的小函数，<strong>不是实际注意力层</strong>。</p>
@@ -3996,16 +4070,33 @@ You Need，§3.3</a></p>
 <h3
 id="两层仿射变换中间必须有非线性">两层仿射变换，中间必须有非线性</h3>
 <p>采用行向量记法：</p>
-<p><span class="math display">\[h=xW_1+b_1,\qquad
-a=\operatorname{ReLU}(h),\qquad
+<p><span class="math display">\[u=xW_1+b_1,\qquad
+a=\operatorname{ReLU}(u),\qquad
 \operatorname{FFN}(x)=aW_2+b_2\]</span></p>
-<p>其中 <span class="math inline">\(W_1\)</span> 的数学形状是
-<code>[D,d_ff]</code>，<span class="math inline">\(W_2\)</span> 是
-<code>[d_ff,D]</code>。PyTorch 把 <code>nn.Linear</code> 权重存成
+<p><strong>其中：</strong> <span class="math inline">\(x\)</span>
+是一个位置的输入行向量，宽度 <span
+class="math inline">\(D\)</span>；<span
+class="math inline">\(W_1\)</span> 的数学形状是 <span
+class="math inline">\([D,d_{\mathrm{ff}}]\)</span>，<span
+class="math inline">\(b_1\)</span> 长 <span
+class="math inline">\(d_{\mathrm{ff}}\)</span>；<span
+class="math inline">\(u\)</span> 是第一层的中间结果，<span
+class="math inline">\(a\)</span> 是激活后的结果，宽度都是 <span
+class="math inline">\(d_{\mathrm{ff}}\)</span>（FFN 中间层宽度，代码里的
+<code>d_ff</code>）；<span class="math inline">\(W_2\)</span> 是 <span
+class="math inline">\([d_{\mathrm{ff}},D]\)</span>，<span
+class="math inline">\(b_2\)</span> 长 <span
+class="math inline">\(D\)</span>。</p>
+<p><strong>白话：</strong>
+先把每个位置的特征“摊开”到更宽的工作台上，ReLU
+关掉一部分通道，再“收拢”回原来的宽度。所有位置用的都是同一套 <span
+class="math inline">\(W_1,W_2\)</span>。</p>
+<p>PyTorch 把 <code>nn.Linear</code> 权重存成
 <code>[out_features,in_features]</code>，所以存储形状转置过来，计算相当于
 <code>x @ weight.T + bias</code>。</p>
-<p>ReLU 的规则是 <span
-class="math inline">\(\max(0,z)\)</span>：正数保留，负数变零。它会随着输入改变哪些通道参与后续计算，不是模型真的在做人的逻辑判断。</p>
+<p>ReLU 的规则是 <span class="math inline">\(\max(0,z)\)</span>（<span
+class="math inline">\(z\)</span>
+是任意一个通道的数）：正数保留，负数变零。它会随着输入改变哪些通道参与后续计算，不是模型真的在做人的逻辑判断。</p>
 <pre><code>     输入词特征 (维度 d_model, 如 512)
            │
            ▼  Linear 1: 展开联想 (膨胀 4 倍!)
@@ -4024,7 +4115,10 @@ class="math inline">\(\max(0,z)\)</span>：正数保留，负数变零。它会�
 class="math inline">\(x_1\)</span>、<span
 class="math inline">\(x_2+1\)</span>、<span
 class="math inline">\(x_1+x_2\)</span>、<span
-class="math inline">\(-x_1+x_2\)</span>。因此第一层权重按 PyTorch
+class="math inline">\(-x_1+x_2\)</span>（<span
+class="math inline">\(x_1,x_2\)</span> 是输入的两个分量，这里 <span
+class="math inline">\(x_1=1\)</span>、<span
+class="math inline">\(x_2=-2\)</span>）。因此第一层权重按 PyTorch
 存储为：</p>
 <pre class="text"><code>linear1.weight = [[ 1, 0], [0, 1], [1, 1], [-1, 1]]
 linear1.bias   = [0, 1, 0, 0]
@@ -4069,6 +4163,15 @@ class="math inline">\(1\times0+0\times1+0\times(-1)+0\times2-0.5=-0.5\)</span>�
 <p>如果没有中间激活，把两层展开就得到：</p>
 <p><span
 class="math display">\[(xW_1+b_1)W_2+b_2=x(W_1W_2)+(b_1W_2+b_2)\]</span></p>
+<p><strong>其中：</strong> 左边是去掉 ReLU 后的两层；右边把 <span
+class="math inline">\(W_1W_2\)</span>（形状 <span
+class="math inline">\([D,D]\)</span>）看成一个新权重，把 <span
+class="math inline">\(b_1W_2+b_2\)</span>（长 <span
+class="math inline">\(D\)</span>）看成一个新偏置。</p>
+<p><strong>白话：</strong>
+两次线性变换叠起来还是一次线性变换，就像先放大 2 倍再放大 3
+倍，等于直接放大 6 倍。中间夹一个
+ReLU，才能“折”出一条直线做不到的形状。</p>
 <p>右边仍然是“一次乘矩阵，再加一个偏置”，即一个仿射变换。光堆这样的层不能得到新的非线性表达；增加
 ReLU
 后，通常不能再把它们合并成一个固定的仿射变换。表中的反例也显示，删掉
@@ -4076,9 +4179,22 @@ ReLU 会改变第二维的结果。</p>
 <h3 id="参数预算不要漏掉偏置">参数预算：不要漏掉偏置</h3>
 <p>本章普通、稠密、带偏置 FFN 的参数量是：</p>
 <p><span
-class="math display">\[N_{\mathrm{FFN}}=D\,d_{ff}+d_{ff}+d_{ff}D+D
-=2D\,d_{ff}+d_{ff}+D\]</span></p>
-<p>其中两大项是矩阵里的数，两小项是两个偏置向量。ReLU 自身没有参数。取
+class="math display">\[N_{\mathrm{FFN}}=D\,d_{\mathrm{ff}}+d_{\mathrm{ff}}+d_{\mathrm{ff}}D+D
+=2D\,d_{\mathrm{ff}}+d_{\mathrm{ff}}+D\]</span></p>
+<p><strong>其中：</strong> <span
+class="math inline">\(N_{\mathrm{FFN}}\)</span> 是 FFN
+的参数个数；两大项 <span
+class="math inline">\(D\,d_{\mathrm{ff}}\)</span>、<span
+class="math inline">\(d_{\mathrm{ff}}D\)</span> 是 <span
+class="math inline">\(W_1\)</span>、<span
+class="math inline">\(W_2\)</span> 里的数，两小项 <span
+class="math inline">\(d_{\mathrm{ff}}\)</span>、<span
+class="math inline">\(D\)</span> 是偏置 <span
+class="math inline">\(b_1\)</span>、<span
+class="math inline">\(b_2\)</span> 的长度。</p>
+<p><strong>白话：</strong> 数参数就是数“格子”：两张权重表各有 <span
+class="math inline">\(D\times d_{\mathrm{ff}}\)</span>
+格，再加两条偏置。ReLU 自身没有参数。取
 <code>D=16,d_ff=64</code>，直接枚举代码中的参数：</p>
 <h3 id="表-6-6ffn-参数账本">表 6-6：FFN 参数账本</h3>
 <div class="table-wrapper"><table>
@@ -4117,24 +4233,40 @@ class="math display">\[N_{\mathrm{FFN}}=D\,d_{ff}+d_{ff}+d_{ff}D+D
 </tr>
 </tbody>
 </table></div>
-<p>如果使用 <code>d_ff=4D</code>，公式就是 <span
-class="math inline">\(8D^2+5D\)</span>。参数主要按宽度的平方增长；只有两个权重矩阵的近似数才是
+<p>如果使用 <code>d_ff=4D</code>，代入得 <span
+class="math inline">\(2D\cdot4D+4D+D=8D^2+5D\)</span>。参数主要按宽度的平方增长；只有两个权重矩阵的近似数才是
 <span
 class="math inline">\(8D^2\)</span>，不能把它说成包含偏置的精确总数。</p>
 <p>序列从 5 个 token 变成 50 个 token，FFN
 <strong>参数数目不变</strong>，因为各位置共用权重，但运算次数和中间激活会增加。矩阵乘法的主要乘加次数约为
-<span
-class="math inline">\(2BTD\,d_{ff}\)</span>，这是运算量，不是实际耗时；硬件、精度与实现都会影响速度。</p>
+<span class="math inline">\(2BTD\,d_{\mathrm{ff}}\)</span>（<span
+class="math inline">\(B\)</span> 是 batch 大小，<span
+class="math inline">\(T\)</span> 是序列长度；两层各约 <span
+class="math inline">\(BTD\,d_{\mathrm{ff}}\)</span>
+次乘加），这是运算量，不是实际耗时；硬件、精度与实现都会影响速度。</p>
 <hr />
 <h2 id="装成完整-block对齐张量也对齐顺序">6.5 装成完整
 Block：对齐张量，也对齐顺序</h2>
 <p>默认的 Pre-LN Block 含两条支路。用 <span
 class="math inline">\(A\)</span> 表示自注意力，用 <span
 class="math inline">\(F\)</span> 表示 FFN：</p>
-<p><span class="math display">\[u=x+A(\operatorname{LN}_1(x)),\qquad
-y=u+F(\operatorname{LN}_2(u))\]</span></p>
+<p><span class="math display">\[\tilde
+x=x+A(\operatorname{LN}_1(x)),\qquad
+y=\tilde x+F(\operatorname{LN}_2(\tilde x))\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(x\)</span> 是
+Block 的输入，形状 <span class="math inline">\([B,T,D]\)</span>；<span
+class="math inline">\(A\)</span> 是多头自注意力子层，<span
+class="math inline">\(F\)</span> 是 FFN；<span
+class="math inline">\(\operatorname{LN}_1\)</span>、<span
+class="math inline">\(\operatorname{LN}_2\)</span> 是两个
+LayerNorm；<span class="math inline">\(\tilde x\)</span>
+是做完第一次残差后的中间表示，<span class="math inline">\(y\)</span> 是
+Block 的输出，形状都仍是 <span
+class="math inline">\([B,T,D]\)</span>。</p>
+<p><strong>白话：</strong> 一个 Block 就是两轮“整理 → 加工 →
+加回”：第一轮让各个 token 互相交流，第二轮各自消化。</p>
 <p>注意第二次残差加回的是<strong>注意力之后的 <span
-class="math inline">\(u\)</span></strong>，不是最初的 <span
+class="math inline">\(\tilde x\)</span></strong>，不是最初的 <span
 class="math inline">\(x\)</span>。两个 LayerNorm 也有各自的
 gamma/beta，不共享参数。</p>
 <pre><code>                    输入特征 x
@@ -4182,7 +4314,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb49-1"><a h
 <span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>._attention(<span class="va">self</span>.ln1(x), mask)</span>
 <span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>.ffn(<span class="va">self</span>.ln2(x))</span></code></pre></div>
 <p>第一行右边先求值，再把新的结果赋给 <code>x</code>；第二行拿到的已经是
-<span class="math inline">\(u\)</span>。<code>_attention</code>
+<span class="math inline">\(\tilde x\)</span>。<code>_attention</code>
 将同一个归一化后的向量作为 Q/K/V 的来源，它内部仍会做可学习投影。FFN
 则只沿最后的特征维加工。</p>
 <p>切换 <code>norm_first=False</code> 后，代码改为：</p>
@@ -4238,8 +4370,10 @@ cross-attention。三种架构的差别留到下一章。</p>
 </tbody>
 </table></div>
 <p>第 4 章手写 MHA 使用无 bias 的投影，计数是 <span
-class="math inline">\(4D^2\)</span>；这里 PyTorch MHA
-启用了偏置，所以多出 <span
+class="math inline">\(4D^2\)</span>（Q、K、V、O 四个 <span
+class="math inline">\(D\times D\)</span> 矩阵）；这里 PyTorch MHA
+启用了偏置，四个投影各多一条长 <span class="math inline">\(D\)</span>
+的偏置，所以多出 <span
 class="math inline">\(4D\)</span>。比较参数量必须先统一这些条件。本块的
 3280 个参数不包括 embedding、词表输出层、位置参数或其他
 Block，也不是整个语言模型的规模。</p>
@@ -4466,7 +4600,7 @@ alt="因果掩码矩阵原理" /></a>
 <h3 id="表-7-24-词序列的掩码矩阵数值演变推导表">表 7-2：4
 词序列的掩码矩阵数值演变推导表</h3>
 <p>假设输入序列为四个字：“我”、“爱”、“学”、“习”。</p>
-<h4 id="原始点积分数矩阵-q-kt-d_k">1. 原始点积分数矩阵 (Q · K^T /
+<h4 id="原始点积分数矩阵-q-kᵀ-d_k">1. 原始点积分数矩阵 (Q · Kᵀ /
 √d_k)：</h4>
 <div class="table-wrapper"><table>
 <colgroup>
@@ -4516,6 +4650,15 @@ alt="因果掩码矩阵原理" /></a>
 </tr>
 </tbody>
 </table></div>
+<p><strong>其中：</strong> 表头里的 <span
+class="math inline">\(Q\)</span>、<span class="math inline">\(K\)</span>
+是查询、键矩阵，<span class="math inline">\(K^\top\)</span> 是 <span
+class="math inline">\(K\)</span> 的转置；<span
+class="math inline">\(d_k\)</span> 是 Q/K 每行的宽度，除以 <span
+class="math inline">\(\sqrt{d_k}\)</span> 是第 3 章的缩放。行是查询位置
+<span class="math inline">\(i\)</span>，列是键位置 <span
+class="math inline">\(j\)</span>；标着“未来”的格子满足 <span
+class="math inline">\(j&gt;i\)</span>。</p>
 <h4 id="施加因果掩码后未来位置实际填入负无穷">2.
 施加因果掩码后（未来位置实际填入负无穷）：</h4>
 <div class="table-wrapper"><table>
@@ -4565,6 +4708,10 @@ class="math inline">\(-\infty\)</span></td>
 </tr>
 </tbody>
 </table></div>
+<p><strong>其中：</strong> <span class="math inline">\(-\infty\)</span>
+是负无穷。这一步相当于给分数加上加性 mask <span
+class="math inline">\(M\)</span>：可看的格子加 0，未来的格子加 <span
+class="math inline">\(-\infty\)</span>。</p>
 <h4 id="最终-softmax-注意力权重矩阵百分比">3. 最终 Softmax
 注意力权重矩阵（百分比）：</h4>
 <div class="table-wrapper"><table>
@@ -4630,6 +4777,8 @@ class="math inline">\(-\infty\)</span></td>
 class="math inline">\(e^{3.20} \approx 24.53\)</span>，加起来约 28.20。
 权重分别是 <span class="math inline">\(3.67/28.20 \approx
 13.01\%\)</span> 和 <span class="math inline">\(86.99\%\)</span>。
+<strong>白话：</strong> Softmax
+就是“先取指数，再按比例分蛋糕”：分数高一点，指数后就大很多，分到的份额也大得多。
 被写成 <span class="math inline">\(-\infty\)</span> 的格子贡献 <span
 class="math inline">\(e^{-\infty} =
 0\)</span>，所以未来的字不会分到百分比。 第 3、4
@@ -4654,9 +4803,11 @@ cross-attention 中：</p>
 4。省略头轴后，Q 形状 (1,2,4)，K 与 V 形状 (1,3,4)；分数形状
 (1,2,3)，聚合结果形状
 (1,2,4)。输入输出长度不必相同，也不需要把它们硬凑成方阵。另取一个 <span
-class="math inline">\(d_v=2\)</span> 的手算例子：给第一行三份资料权重
-[0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是
-[0.7,0.8]，不是机械复制某一个词。</p>
+class="math inline">\(d_v=2\)</span> 的手算例子（<span
+class="math inline">\(d_v\)</span> 是每份 V
+的宽度）：给第一行三份资料权重 [0.2,0.3,0.5]，三份 V 分别为
+[1,0]、[0,1]、[1,1]，读到的内容便是 <span
+class="math inline">\(0.2\times[1,0]+0.3\times[0,1]+0.5\times[1,1]=[0.7,0.8]\)</span>，不是机械复制某一个词。</p>
 <p>有源端 padding 时也要屏蔽对应 K/V 位置。</p>
 <h2 id="teacher-forcing谁向右移预测谁">7.5 Teacher
 forcing：谁向右移，预测谁？</h2>
@@ -4750,8 +4901,23 @@ temperature：同一组 logits，如何选 token？</h2>
 <p>Logits 是词表上未归一化的分数，不是已经生成的 token。设三名候选 A/B/C
 的 logits=[2,1,0]：</p>
 <p><span
-class="math display">\[p_i(T)=\frac{\exp(z_i/T)}{\sum_j\exp(z_j/T)},\qquad
-T&gt;0.\]</span></p>
+class="math display">\[p_c(\tau)=\frac{\exp(z_c/\tau)}{\sum_{c&#39;\in\mathcal
+V}\exp(z_{c&#39;}/\tau)},\qquad \tau&gt;0.\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(c\)</span>
+是一个候选 token，<span class="math inline">\(z_c\)</span> 是它的
+logit；<span class="math inline">\(\mathcal V\)</span> 是词表（本例只有
+A、B、C 三个候选），<span class="math inline">\(c&#39;\)</span>
+遍历词表里的每个候选；<span class="math inline">\(\tau\)</span>
+是温度（代码里的 <code>temperature</code>）；<span
+class="math inline">\(p_c(\tau)\)</span> 是温度为 <span
+class="math inline">\(\tau\)</span> 时抽中 <span
+class="math inline">\(c\)</span> 的概率。</p>
+<p><strong>白话：</strong> 温度先把所有分数统一除以 <span
+class="math inline">\(\tau\)</span>：<span
+class="math inline">\(\tau&lt;1\)</span>
+时分数差被放大，分布更“尖”；<span
+class="math inline">\(\tau&gt;1\)</span> 时差距被压扁，分布更“平”；<span
+class="math inline">\(\tau=1\)</span> 就是普通 Softmax。</p>
 <p>脚本的 <code>probabilities</code>
 先减最大值再除以温度，避免对大正数直接取指数。以下百分数由脚本计算：</p>
 <div class="table-wrapper"><table style="width:100%;">
@@ -4808,7 +4974,7 @@ T&gt;0.\]</span></p>
 <p>数学公式不能直接除以 0。教学函数的 <code>temperature=0</code>
 <strong>另走 greedy
 分支</strong>，同分时选词表中第一个最大项。只有最大项唯一时，<span
-class="math inline">\(T\to0^+\)</span>
+class="math inline">\(\tau\to0^+\)</span>
 的分布才趋向该项；并列最大项的极限仍共享权重，不等于我们的“选第一个”约定。</p>
 <h2 id="表-7-3从真实脚本输出逐步追踪停止">7.8 表
 7-3：从真实脚本输出逐步追踪停止</h2>
@@ -4928,7 +5094,8 @@ seed 及非法输入。</p>
 §7.4，输出是 [0.7,0.8]。</li>
 <li>不是。若完整样本是“BOS 我 爱 EOS”，输入是“BOS 我 爱”，标签是“我 爱
 EOS”，最后一个位置预测停止符。</li>
-<li>抽样不一定，A 约 86.68%；greedy 才确定选 A。T 趋 0
+<li>抽样不一定，A 约 86.68%；greedy 才确定选 A。<span
+class="math inline">\(\tau\)</span> 趋于 0
 的结论还要检查是否唯一最大。</li>
 <li>第 2 步，得到 4 个总 token（2 提示 + 2 新增），不是等 EOS
 出现才停。</li>
@@ -4960,7 +5127,7 @@ H。</li>
 <h1 id="训练基础-P09-让一次猜字变成一次学习">训练基础（P09）：让一次猜字变成一次学习</h1>
 <p>前面我们已经装好了注意力、残差和因果掩码。但“能算出下一个字的分数”不等于“已经学会猜字”。本章先把训练循环慢放，再到下一章《Baby-GPT》拼完整模型。</p>
 <p><strong>读完你应该能回答：这一批题从哪里来，答案对齐哪一格，错多少，谁计算梯度，谁修改参数，以及凭什么说模型变好了。</strong>
-先懂 Python 切片与前几章的 <code>[B,T,C]</code>
+先懂 Python 切片与前几章的 <code>[B,T,D]</code>
 就够了；导数只用“向哪个方向微调”的直觉。</p>
 <h2 id="p09.1-练习册答题纸与考试卷">P09.1 练习册、答题纸与考试卷</h2>
 <p>训练像练习默写：模型交一份答题纸，损失函数评分，梯度告诉我们怎样微调，优化器实施调整。类比的边界是：模型没有老师式理解；一次更新是数值计算，不保证每道题都改对，也不保证下一次总分必然更好。</p>
@@ -5042,6 +5209,11 @@ ID，模型也没有学到这些字符在第三首中的顺序。</p>
 <p>模型输出的是任意实数分数 logits，不必为正，也不要求总和为 1。softmax
 将分数变成概率；交叉熵取正确答案概率的负自然对数：<code>loss = -ln(p_correct)</code>。正确答案概率越小，罚得越重。对数底数为
 e，单位可称 nats。</p>
+<p><strong>其中：</strong> <code>p_correct</code> 是 softmax
+之后正确答案那一类的概率；<code>ln</code> 是以 e
+为底的自然对数（全书公式里的 <span class="math inline">\(\log\)</span>
+也默认指它）。<strong>白话：</strong> 猜对的把握越小，罚得越狠：把握是 1
+时罚 0，把握趋近 0 时罚分趋向无穷大。</p>
 <p>下面只有 A/B 两类、两个待评分位置，二者正确答案都是 A。令
 <code>ln(3)=1.098612289</code>：</p>
 <div class="table-wrapper"><table>
@@ -5083,8 +5255,15 @@ e，单位可称 nats。</p>
 <p>稳定版也有精度极限：正确答案的 logit 间隔很大时，目标梯度会舍入成
 0，详见 <a href="#p04-softmax-collapse">P04 的 3.3a</a>。</p>
 </div>
-<p>一般 batch 有 B 行、每行 T 格、词表 V 个字：</p>
+<p>一般 batch 有 <span class="math inline">\(B\)</span> 行、每行 <span
+class="math inline">\(T\)</span> 格、词表有 <span
+class="math inline">\(\lvert\mathcal V\rvert\)</span> 个字：</p>
 <div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
 <thead>
 <tr>
 <th>对象</th>
@@ -5100,17 +5279,19 @@ e，单位可称 nats。</p>
 </tr>
 <tr>
 <td>logits</td>
-<td><code>[B,T,V]</code>，浮点</td>
+<td><span class="math inline">\([B,T,\lvert\mathcal
+V\rvert]\)</span>，浮点</td>
 <td>每格每个候选字的分数</td>
 </tr>
 <tr>
 <td>用于 CE 的 logits</td>
-<td><code>[B*T,V]</code></td>
+<td><span class="math inline">\([B\cdot T,\lvert\mathcal
+V\rvert]\)</span></td>
 <td>把格子排成一个题目列表</td>
 </tr>
 <tr>
 <td>用于 CE 的 y</td>
-<td><code>[B*T]</code></td>
+<td><span class="math inline">\([B\cdot T]\)</span></td>
 <td>每题一个类别编号</td>
 </tr>
 <tr>
@@ -5120,6 +5301,12 @@ e，单位可称 nats。</p>
 </tr>
 </tbody>
 </table></div>
+<p><strong>其中：</strong> <span class="math inline">\(B\)</span> 是
+batch 大小（行数），<span class="math inline">\(T\)</span>
+是每行的格数（序列长度），<span class="math inline">\(\lvert\mathcal
+V\rvert\)</span> 是词表大小（本章是 57）；<span
+class="math inline">\(B\cdot T\)</span>
+是把所有格子排成一列后的题目数。</p>
 <p>这里没有 padding、类别权重或忽略标签，每格权重相同。以后有 padding
 时，分母应是有效标签数，不能把 padding
 算进去。评估多份长度不同的文档时，也要按预测 token
@@ -5134,6 +5321,13 @@ one-hot”：</p>
 loss 对 z 的梯度     [-0.25, 0.25]
 学习率 0.1 的 SGD:
 新 z = 旧 z - 0.1 * 梯度 = [1.123612289, -0.025]</code></pre>
+<p><strong>其中：</strong> <code>z</code> 是两个类别的 logits；梯度等于
+softmax 概率减去正确答案的 one-hot 向量；0.1 是学习率 <span
+class="math inline">\(\eta\)</span>，SGD 一步就是 <span
+class="math inline">\(z\leftarrow z-\eta\,\nabla_z\mathcal
+L\)</span>（<span class="math inline">\(\nabla_z\mathcal L\)</span> 是
+loss 对 <code>z</code> 的梯度）。<strong>白话：</strong> 梯度指向 loss
+变大的方向，所以逆着它走一小步：正确答案的分数被抬高，错误答案的分数被压低。</p>
 <p>A 分数上升、B 分数下降，新 loss 为
 <strong>0.275414489</strong>，小于原来的
 0.287682072。脚本用标准库生成这些数值。这个例子是直接优化 logits 的单题
