@@ -87,23 +87,23 @@ allowed 第 1 行：  1、1、1、1、1
 只看某一行 query。对已经处理过的合法分数 s_j，记录：
 
 ```text
-m   = 已处理分数的最大值
-ell = Σ exp(s_j - m)
-acc = Σ exp(s_j - m) × v_j
+s_max = 已处理分数的最大值
+ell = Σ exp(s_j - s_max)
+acc = Σ exp(s_j - s_max) × v_j
 ```
 
-三本账各有分工：m 是“目前见过的最高分”，用来防止指数溢出；ell 是 Softmax 分母（已减去 m）；acc 是分子，即按同样指数权重累加的 value。
+三本账各有分工：s_max 是“目前见过的最高分”，用来防止指数溢出；ell 是 Softmax 分母（已减去 s_max）；acc 是分子，即按同样指数权重累加的 value。
 
-其中：$s_j$ 是这一行 query 对第 $j$ 个合法 key 的缩放分数；$v_j$ 是对应的 value 向量；Σ 对已处理的合法 key 求和；m、ell（即 ℓ）、acc 是本节的局部记号。
+其中：$s_j$ 是这一行 query 对第 $j$ 个合法 key 的缩放分数；$v_j$ 是对应的 value 向量；Σ 对已处理的合法 key 求和；s_max 是这一行已处理分数里的最大值（附录 A.5 的 $s_{\max}$；P15.6 的代码里变量名是 `m`、`next_m`）；ell（即 ℓ）、acc 是本节的局部记号。
 
-m 和 ell 是标量；acc 是 $d_v$ 维向量。最后输出 `acc / ell`。注意 acc 还没有归一化，不是当前已经算好的概率均值。
+s_max 和 ell 是标量；acc 是 $d_v$ 维向量。最后输出 `acc / ell`。注意 acc 还没有归一化，不是当前已经算好的概率均值。
 
 现在读到下一块，合法分数为 s_new。新的最大值可能变大：
 
 ```text
-next_m = max(m, max(s_new))
-alpha  = exp(m - next_m)
-p_new  = exp(s_new - next_m)
+next_s_max = max(s_max, max(s_new))
+alpha  = exp(s_max - next_s_max)
+p_new  = exp(s_new - next_s_max)
 
 next_ell = alpha × ell + Σ p_new
 next_acc = alpha × acc + Σ p_new × v_new
@@ -111,19 +111,19 @@ next_acc = alpha × acc + Σ p_new × v_new
 
 每读一块就做三件事：更新最高分；把旧账按新最高分“换汇”（乘 alpha）；再把这一块的指数权重加进分母和分子。
 
-其中：s_new 是新块里的合法分数，v_new 是对应 value；next_m、next_ell、next_acc 是更新后的三本账；alpha 是旧账的换算系数（局部记号）；p_new 是新块的未归一化指数权重。
+其中：s_new 是新块里的合法分数，v_new 是对应 value；next_s_max、next_ell、next_acc 是更新后的三本账；alpha 是旧账的换算系数（局部记号）；p_new 是新块的未归一化指数权重。
 
-为什么必须乘 alpha？旧账用的是 exp(s−m)，新账用的是 exp(s−next_m)。利用指数运算：
+为什么必须乘 alpha？旧账用的是 exp(s−s_max)，新账用的是 exp(s−next_s_max)。利用指数运算：
 
 ```text
-exp(s - next_m) = exp(s - m) × exp(m - next_m)
+exp(s - next_s_max) = exp(s - s_max) × exp(s_max - next_s_max)
 ```
 
-白话说，换了参照的最高分，旧账上的每一项都要乘同一个系数 $e^{m-\text{next\_m}}$ 才能和新账对齐，就像不同币种先换汇再相加。
+白话说，换了参照的最高分，旧账上的每一项都要乘同一个系数 $e^{s_{\max}-\text{next\_s\_max}}$ 才能和新账对齐，就像不同币种先换汇再相加。
 
 所以旧分母和旧分子必须一起换到新尺度。只缩放其中一个，或者把每块 Softmax 后的输出直接相加，都不对。
 
-初始状态设 `m=-∞, ell=0, acc=0`。第一次读到合法分数时，代码直接令 alpha=0，不去做不必要的无穷运算。
+初始状态设 s_max=−∞、ell=0、acc=0（代码里是 `m, ell = -math.inf, 0.0`）。第一次读到合法分数时，代码直接令 alpha=0，不去做不必要的无穷运算。
 
 ## P15.5 手算：分成两块，仍然得到 6
 
@@ -141,7 +141,7 @@ exp(s - next_m) = exp(s - m) × exp(m - next_m)
 第一块：
 
 ```text
-m = ln 2
+s_max = ln 2
 p = [1/2, 1]
 ell = 1/2 + 1 = 1.5
 acc = (1/2)×2 + 1×4 = 5
@@ -150,7 +150,7 @@ acc = (1/2)×2 + 1×4 = 5
 第二块的分数 ln 4 更大：
 
 ```text
-next_m = ln 4
+next_s_max = ln 4
 alpha = exp(ln 2 - ln 4) = 1/2
 p_new = [1]
 next_ell = (1/2)×1.5 + 1 = 1.75
@@ -175,7 +175,7 @@ m = next_m
 ```
 
 1. scores 只包含当前块中允许读取的 key。
-2. next_m 取旧块、新块的共同最大值，不是只记新块的最大值。
+2. `next_m`（上文的 next_s_max）取旧块、新块的共同最大值，不是只记新块的最大值。
 3. alpha 把旧的 ell、acc 转换到同一个尺度。
 4. weights 仍是未归一化的指数权重，不是单块概率。
 5. 每个 value 通道 c 有自己的分子，但共享分母 ell。
@@ -345,18 +345,18 @@ Prefill 一次处理已知 prompt 的很多位置，decode 沿着输出依赖一
 
 ## P15.14 TTFT、TPOT、吞吐：用时间戳而不是印象
 
-本章固定采用**客户端可观察时间**：请求到达时间为 a，输出 token 接收时间依次为 t₁…tₙ。不同工具可能采用不同统计口径，比较前先写清楚。
+本章固定采用**客户端可观察时间**：请求到达时间为 a，输出 token 接收时间依次为 $t_1,\ldots,t_{T_{\mathrm{out}}}$。不同工具可能采用不同统计口径，比较前先写清楚。
 
 ```text
-TTFT = t₁ - a                         首 token 等待
-TPOT = (tₙ - t₁) / (n - 1)，n>1       后续每 token 平均间隔
-E2E  = tₙ - a                         整个请求耗时
+TTFT = t_1 - a                                     首 token 等待
+TPOT = (t_{T_out} - t_1) / (T_out - 1)，T_out>1    后续每 token 平均间隔
+E2E  = t_{T_out} - a                               整个请求耗时
 输出吞吐 = 观察窗口内输出 token 数 / 窗口秒数
 ```
 
 四个指标都只是“时间戳相减”：TTFT 看第一个字等了多久，TPOT 把首字之后的总时长平摊到每个间隔上，E2E 是整单用时，吞吐是“窗口里出了几个字 ÷ 窗口多长”。
 
-其中：a 是请求到达时刻；$t_1,\ldots,t_n$ 是依次收到各输出 token 的时刻（局部记号，与序列长度 $T$ 无关）；n 是这个请求的输出 token 数；分母 $n-1$ 是首字之后的间隔个数。
+其中：a 是请求到达时刻；$t_1,\ldots,t_{T_{\mathrm{out}}}$ 是依次收到各输出 token 的时刻（局部记号）；$T_{\mathrm{out}}$ 是这个请求的输出 token 数，同时也是最后一个时刻的下标（代码块里写作 T_out）；分母 $T_{\mathrm{out}}-1$ 是首字之后的间隔个数。
 
 TTFT 可以包含排队、prefill、采样与网络等延迟，不等于纯 prefill kernel 时间。TPOT 这里排除了第一 token 的等待。只有一个输出 token 时，没有后续间隔，所以脚本返回 `None`，不是除以零，也不是假装 TPOT=0。
 

@@ -71,7 +71,7 @@ $$
 
 A 选择的原始概率和为 0.7，所以不是“0.4 倍下标 0 的专家加 0.3 倍下标 1 的专家”，而是 4/7 与 3/7。C 的平局不随机打破。
 
-请求负载是 `[2,2,1,1]`，总和 6=N×k（N=3 是 token 数，k=2）。它数的是 **token—专家分配次数**，不是不同 token 的数量，也不包括共享专家。一个 token 选择两个专家，会计两次；每个共享专家另外处理全部 N=3 个 token。
+请求负载是 `[2,2,1,1]`，总和 $6=BT\cdot k$（摊平后共 $BT=3$ 个 token，k=2）。它数的是 **token—专家分配次数**，不是不同 token 的数量，也不包括共享专家。一个 token 选择两个专家，会计两次；每个共享专家另外处理全部 $BT=3$ 个 token。
 
 ### 再把输出算成一个具体数字
 
@@ -87,18 +87,18 @@ $$
 
 ## P18.3 张量账本：先摊平，最后放回
 
-设输入 X 的形状为 [B,T,D]，N=B×T（N 是摊平后的 token 数，本章局部记号）。MoE 的路由和专家计算不需要先混合不同 token，因此把前两维暂时摊平即可。
+设输入 X 的形状为 [B,T,D]，摊平后共有 $BT$ 个 token（附录 A.5：正文不用不带下标的 $N$，摊平后的 token 数直接写 $BT$）。MoE 的路由和专家计算不需要先混合不同 token，因此把前两维暂时摊平即可。
 
 | 张量 | 形状 | 含义 |
 | --- | --- | --- |
-| flat | [N,D] | 当前调用的全部 token 向量 |
+| flat | $[BT,D]$ | 当前调用的全部 token 向量 |
 | router.weight | $[N_E,D]$ | 为所有路由专家打分 |
-| logits、probs | $[N,N_E]$ | 每 token 对每个路由专家的分数、affinity |
-| indices | [N,k] | 被选中的专家编号 |
-| weights | [N,k] | 丢弃前的组合权重 |
-| kept | [N,k] | 容量实验中是否接受该分配 |
+| logits、probs | $[BT,N_E]$ | 每 token 对每个路由专家的分数、affinity |
+| indices | $[BT,k]$ | 被选中的专家编号 |
+| weights | $[BT,k]$ | 丢弃前的组合权重 |
+| kept | $[BT,k]$ | 容量实验中是否接受该分配 |
 | requested、accepted | $[N_E]$ | 容量处理前后各专家的分配次数 |
-| output | [N,D] → [B,T,D] | 专家结果按原 token 位置合回 |
+| output | $[BT,D]$ → $[B,T,D]$ | 专家结果按原 token 位置合回 |
 
 **dispatch** 是按专家收集 token；**combine** 是把结果送回 token 原位置并加权。它们不能只做 reshape：同一个 token 可能出现在多个专家的小批次中，结果要相加，而不是覆盖。
 
@@ -155,8 +155,8 @@ $$
 本章将整个 [B,T] 摊平，定义：
 
 $$
-f_e=\frac{n_e}{Nk},\qquad
-\bar p_e=\frac1N\sum_{t=1}^{N}p_{t,e},\qquad
+f_e=\frac{n_e}{BTk},\qquad
+\bar p_e=\frac{1}{BT}\sum_{t=1}^{BT}p_{t,e},\qquad
 \mathcal L_{\mathrm{aux}}=N_E\sum_e f_e\bar p_e.
 $$
 
@@ -164,7 +164,7 @@ n_e 使用丢弃前的 requested 计数；f 的总和为 1。计数来自离散�
 
 $f_e$ 看实际派了几张单，$\bar p_e$ 看平均有多想派；两者一起偏向同一位师傅时和最大，所以压低它就是劝路由器别扎堆。乘 $N_E$ 是为了让完全均匀时结果正好为 1。
 
-其中：$n_e$ 是丢弃前第 e 个专家收到的分配次数；N 是 token 数，k 是每 token 选几个，所以 $Nk$ 是分配总次数；$f_e$ 是专家 e 分到的份额；$p_{t,e}$ 是第 t 个 token 对专家 e 的 affinity，$\bar p_e$ 是它在 N 个 token 上的平均；$\mathcal L_{\mathrm{aux}}$ 是均衡辅助损失。
+其中：$n_e$ 是丢弃前第 e 个专家收到的分配次数；$BT$ 是摊平后的 token 数，k 是每 token 选几个，所以 $BTk$ 是分配总次数；$f_e$ 是专家 e 分到的份额；$p_{t,e}$ 是摊平后第 t 个 token（从 1 数到 $BT$）对专家 e 的 affinity，$\bar p_e$ 是它在 $BT$ 个 token 上的平均；$\mathcal L_{\mathrm{aux}}$ 是均衡辅助损失。
 
 $$
 \mathcal L=\mathcal L_{\mathrm{CE}}+\alpha\cdot\operatorname{mean}_{\mathrm{layers}}(\mathcal L_{\mathrm{aux}}).
@@ -313,7 +313,7 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 
 当专家分布在不同设备上，dispatch 不再只是本机索引：需要把 token 向量送到相应专家所在的设备，算完后把输出送回。常见 expert parallel 会用到 all-to-all 一类通信，但具体分组、复制和合并方案各不相同。
 
-一个粗略账本是：N 个 token，每个发往 k 个远端专家，每份 D 维、每元素 $b_{\mathrm{elem}}$ 字节，那么一次向外发送的向量 payload 约为 $NkDb_{\mathrm{elem}}$；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。
+一个粗略账本是：$BT$ 个 token，每个发往 k 个远端专家，每份 D 维、每元素 $b_{\mathrm{elem}}$ 字节，那么一次向外发送的向量 payload 约为 $BT\cdot kDb_{\mathrm{elem}}$；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。
 
 因此，决定时延的至少包括：
 
