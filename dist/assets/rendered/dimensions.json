@@ -55,6 +55,14 @@
     "width": 361.40625,
     "height": 488
   },
+  "flow-ch06-residual-shortcut": {
+    "width": 188.89453125,
+    "height": 304
+  },
+  "flow-ch06-pre-post-ln": {
+    "width": 468.74609375,
+    "height": 538
+  },
   "transformer_block": {
     "width": 750,
     "height": 640
@@ -75,9 +83,25 @@
     "width": 820,
     "height": 480
   },
+  "flow-ch07-cross-attn-shapes": {
+    "width": 422.4375,
+    "height": 358
+  },
   "flow-ed42531e828f": {
     "width": 385,
     "height": 523
+  },
+  "flow-ch07-generation-stop": {
+    "width": 736.6253662109375,
+    "height": 728.7999877929688
+  },
+  "flow-ch07a-train-eval-loop": {
+    "width": 440.5078125,
+    "height": 620
+  },
+  "flow-ch07a-zero-grad-step": {
+    "width": 705,
+    "height": 461
   },
   "flow-9b62f68b43a9": {
     "width": 267.7265625,
@@ -91,17 +115,41 @@
     "width": 473.62890625,
     "height": 279
   },
+  "flow-p08-generate-stop": {
+    "width": 462.015625,
+    "height": 285.6000061035156
+  },
+  "flow-p11-prefill-decode": {
+    "width": 705.5,
+    "height": 1137
+  },
+  "flow-p11-shapes-offset": {
+    "width": 606.51171875,
+    "height": 543
+  },
+  "flow-p11-length-bounds": {
+    "width": 694.0159912109375,
+    "height": 388.8000183105469
+  },
   "p12-rope": {
     "width": 960.0,
     "height": 340.0
   },
+  "flow-p12-yarn-bands": {
+    "width": 715.47265625,
+    "height": 512.671875
+  },
   "p13-modern-block": {
-    "width": 800.0,
-    "height": 410.0
+    "width": 800,
+    "height": 410
   },
   "grouped_kv_mla": {
-    "width": 920.0,
-    "height": 430.0
+    "width": 920,
+    "height": 430
+  },
+  "flow-p14-mla-absorb": {
+    "width": 493.5,
+    "height": 533
   },
   "p15-attention-systems": {
     "width": 920.0,
