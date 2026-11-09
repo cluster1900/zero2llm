@@ -64,7 +64,7 @@
     },
     "flow-ch05-permutation-equivariance": {
       "kind": "mermaid",
-      "sha256": "85ebf96b00a34893341140bd3b13d701482cb2b2c99ad7ad4c4dc9216f8e0972",
+      "sha256": "8891b08bb6f695ae0da5937141ad94d9b215a896350c4925f4fcc847cb58abb6",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "positional_encoding_waves": {
@@ -75,7 +75,7 @@
     },
     "flow-ch05-length-three-ledgers": {
       "kind": "mermaid",
-      "sha256": "1aa361843c97b6975dd44ba58a1af577f2b8bfeea043ecc8f4284413aa375894",
+      "sha256": "a9370e7e00073391cc03d3d17b2d84b322e9d7afc57e98de33fc2a449c3a2e5c",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "transformer_block": {
