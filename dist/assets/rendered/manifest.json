@@ -209,7 +209,7 @@
     },
     "flow-p22-logp-pair": {
       "kind": "mermaid",
-      "sha256": "f7eb3875876cf2bb5fc3aaec3717997746512082c864c8a16d2cb7661f9404ca",
+      "sha256": "ec4edc48d95960ef105c294804408c73de265d1d22cc7371acf5bde348dbf774",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p22-clip-sign": {

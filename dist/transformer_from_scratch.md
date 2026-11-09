@@ -6828,8 +6828,8 @@ EOS 如果确实属于答案，应当计入；PAD 不计入。这个 helper 只�
 flowchart TD
     %% id: p22-logp-pair
     accTitle: 从变长 token 筛出一对答案 log p
-    accDescr: logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。
-    A["logits [B,T,|V|]<br/>input_ids / mask [B,T]"] --> B["causal shift：logits[:, :-1]<br/>对 input[:, 1:] 取 log p"]
+    accDescr: logits 形状 [B,T,|𝒱|]（图中写作 |V_vocab|，避免与 Value 的 V 混淆）；logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。
+    A["logits [B,T,|V_vocab|]<br/>input_ids / mask [B,T]"] --> B["causal shift：logits[:, :-1]<br/>对 input[:, 1:] 取 log p"]
     B --> C["答案起点 + 右侧 PAD 构造 mask"]
     C --> D["按行求和 → [B]"]
     D --> E["chosen / rejected 两两配对"]
