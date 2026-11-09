@@ -84,7 +84,7 @@
     "height": 279
   },
   "flow-p08-generate-stop": {
-    "width": 570.015625,
+    "width": 462.015625,
     "height": 285.6000061035156
   },
   "flow-p11-prefill-decode": {
@@ -97,7 +97,7 @@
   },
   "flow-p11-length-bounds": {
     "width": 694.0159912109375,
-    "height": 408.6000061035156
+    "height": 388.8000183105469
   },
   "p12-rope": {
     "width": 960.0,

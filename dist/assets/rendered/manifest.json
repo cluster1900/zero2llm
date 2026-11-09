@@ -118,7 +118,7 @@
     },
     "flow-p08-generate-stop": {
       "kind": "mermaid",
-      "sha256": "897d683bc10f3fd55c0bd649d98644414632ee35c504a3e735b29fe663b2342a",
+      "sha256": "de39025441fad46d0586b1ca1cf2631544c7c8e1067fce205037b136ea824fd3",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p11-prefill-decode": {
@@ -133,7 +133,7 @@
     },
     "flow-p11-length-bounds": {
       "kind": "mermaid",
-      "sha256": "4753bffec279edc42c45682438e274a9f60de2ef0fa73558a4b10f2bdf497f03",
+      "sha256": "a7e29b4510fbbd2bcbe93352ae33ae071603b8e10ce2136ec90088c0bf20ddc7",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p12-rope": {
