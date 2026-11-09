@@ -2957,7 +2957,7 @@ new_logits, cache = cached_forward(model, next_ids, cache)
 
 设已有 P 个位置，本次新输入 C 个位置；头数 $H$，每头宽度 $d_h$，主干宽度 $D=Hd_h$。
 
-$D=Hd_h$ 的意思是：主干的 $D$ 个数平均切给 $H$ 个头，每头分到 $d_h$ 个；各头算完再拼回去，宽度仍是 $D$，所以缓存按头存和按主干宽度存，数出来的元素一样多。
+$D=Hd_h$ 的意思是：主干的 $D$ 个数平均切给 $H$ 个头，每头分到 $d_h$ 个（这要求各头等宽、且所有头拼起来正好是 $D$，本书的 S0 正是如此）；各头算完再拼回去，宽度仍是 $D$，所以缓存按头存和按主干宽度存，数出来的元素一样多。
 
 其中：$P$ 是缓存里已有的位置数，$C$ 是本次新块的长度（两者都是本章的局部记号）；$B$ 是 batch 大小；$H$ 是注意力头数；$d_h$ 是每个头的宽度；$D$ 是模型宽度。
 
@@ -3312,7 +3312,7 @@ RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：
 
 没有绝对位置查表，并不表示长上下文问题消失了。公式当然能给位置 1000 算 cos/sin；模型是否学会在那个距离检索内容，是另一个问题。新增干扰内容、注意力分布、训练数据和数值精度也都会影响结果。
 
-设训练长度 $T_{\mathrm{train}}=8$，希望使用长度 $T'=32$，扩展倍数 $\kappa=T'/T_{\mathrm{train}}=4$：
+设训练长度 $T_{\mathrm{train}}=8$，希望使用长度 $T'=32$，扩展倍数 $\kappa=T'/T_{\mathrm{train}}=4$（PI、YaRN 论文把这个倍数记作 s；本书的 $s$ 留给注意力分数，所以写 $\kappa$）：
 
 - **直接外推**：仍用 pθ，不改变转速；测试会出现训练未覆盖的相对距离。
 - **位置插值（PI）**：用 $(p/\kappa)\theta$，等价于把频率改为 $\theta/\kappa$。这里缩放的是旋转相位，不是删除 token，也不是把注意力矩阵缩成八个位置。
@@ -3352,7 +3352,7 @@ r 可以读成“训练长度内这对坐标转了几圈”：r 大说明训练�
 
 其中：θ′ 是调整后的转角；γ 是 ramp 系数，取值在 0 到 1 之间，由 r 决定；α、β 是 ramp 两端的阈值（局部符号，只在本节使用）；$\kappa$ 与 r 同上。
 
-另一部分是注意力温度：把 $\operatorname{softmax}(QK^\top/\sqrt{d_h})$ 改为 $\operatorname{softmax}(QK^\top/(\tau\sqrt{d_h}))$。若 Q 和 K 各乘 $a=\sqrt{1/\tau}$，点积会乘 **a²**，不是 a。$\kappa>1$ 时 $a>1$，即 $\tau<1$，logits 被放大，注意力分布变得更尖。论文对 LLaMA 系列给出的经验关系是 $a=1+0.1\ln\kappa$，不能当成所有模型通用的常数。这个缩放会改变 Q/K 的长度；P12.2 的“范数不变”只适用于未附加幅度缩放的纯旋转。
+另一部分是注意力温度（论文记作 t，本书写 $\tau$）：把 $\operatorname{softmax}(QK^\top/\sqrt{d_h})$ 改为 $\operatorname{softmax}(QK^\top/(\tau\sqrt{d_h}))$。若 Q 和 K 各乘 $a=\sqrt{1/\tau}$，点积会乘 **a²**，不是 a。$\kappa>1$ 时 $a>1$，即 $\tau<1$，logits 被放大，注意力分布变得更尖。论文对 LLaMA 系列给出的经验关系是 $a=1+0.1\ln\kappa$，不能当成所有模型通用的常数。这个缩放会改变 Q/K 的长度；P12.2 的“范数不变”只适用于未附加幅度缩放的纯旋转。
 
 直观地说：上下文拉长后，分母里要摊开的 key 变多，注意力容易被摊平；把 logits 稍微放大，相当于把“偏好”调得更鲜明一点。把 a 分别乘到 Q、K 上，就能在不改 Softmax 代码的情况下实现这个温度。
 
@@ -3474,12 +3474,12 @@ NoPE 指某些层的 Q、K 不加任何显式位置编码，只靠因果 mask �
 
 一个 Block 仍然做两次“先归一化、再计算、加回主干”：
 
-$$x'=x+\operatorname{Attention}(\operatorname{Norm}_1(x))$$
-$$y=x'+\operatorname{FFN}(\operatorname{Norm}_2(x'))$$
+$$u=x+\operatorname{Attention}(\operatorname{Norm}_1(x))$$
+$$y=u+\operatorname{FFN}(\operatorname{Norm}_2(u))$$
 
 两行是同一个套路：先把输入“理一理”（Norm），交给子层算出一份修改意见，再把意见加回原来的主干。主干本身一直原样往下传，子层只负责“补一笔”。
 
-其中：$x$ 是本 Block 的输入，一行一个位置；$x'$ 是做完注意力、加回主干后的中间结果；$y$ 是本 Block 的输出；$\operatorname{Norm}_1$、$\operatorname{Norm}_2$ 是两处独立的归一化层（各有自己的参数）；$\operatorname{Attention}$ 是因果多头注意力；$\operatorname{FFN}$ 是逐位置前馈网络。
+其中：$x$ 是本 Block 的输入，一行一个位置；$u$ 是做完注意力、加回主干后的中间结果（全书用 $u$ 记这个注意力后的残差）；$y$ 是本 Block 的输出；$\operatorname{Norm}_1$、$\operatorname{Norm}_2$ 是两处独立的归一化层（各有自己的参数）；$\operatorname{Attention}$ 是因果多头注意力；$\operatorname{FFN}$ 是逐位置前馈网络。
 
 Norm 和 FFN 都分别作用于每个 token 的最后一维。它们本身不把不同位置混起来；跨位置读信息的是 Attention。输入和输出都是 `[B,T,D]`，所以残差相加仍然合法。这里 B 是 batch，T 是序列长度，D 是主干宽度。
 
@@ -3566,12 +3566,12 @@ return (work * inv_rms * self.weight.to(work.dtype)).to(x.dtype)
 
 SwiGLU 在同一个输入上走两条 $D\to d_{\mathrm{ff}}'$ 支路（加撇是为了和 GELU FFN 的宽度 $d_{\mathrm{ff}}$ 区分）。一条产生内容 `up(x)`，另一条经过 SiLU 后调节内容 `gate(x)`，最后通过 `down` 回到 D：
 
-$$g=xW_g,\quad u=xW_u,\quad z=\operatorname{SiLU}(g)\odot u,\quad y=zW_d$$
+$$g=xW_g,\quad c=xW_u,\quad z=\operatorname{SiLU}(g)\odot c,\quad y=zW_d$$
 $$\operatorname{SiLU}(t)=t\sigma(t)=\frac{t}{1+e^{-t}}$$
 
-第一行像“内容 × 音量旋钮”：u 是要传的内容，SiLU(g) 决定每个坐标放大、缩小还是反向；相乘后再用 $W_d$ 压回主干宽度。第二行给出 SiLU 本身：输入乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近 0。
+第一行像“内容 × 音量旋钮”：c 是要传的内容，SiLU(g) 决定每个坐标放大、缩小还是反向；相乘后再用 $W_d$ 压回主干宽度。第二行给出 SiLU 本身：输入乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近 0。
 
-其中：x 是一个 token 的输入行向量，宽 $D$；$W_g$、$W_u$ 是门支路和内容支路的投影，形状 $[D,d_{\mathrm{ff}}']$；$W_d$ 是下投影，形状 $[d_{\mathrm{ff}}',D]$；g、u 是两条支路的中间结果，z 是相乘后的结果，y 是输出；$\odot$ 是逐坐标相乘；t 是 SiLU 的任意实数输入；$\sigma(t)=1/(1+e^{-t})$ 是 sigmoid 函数（本节局部符号）。
+其中：x 是一个 token 的输入行向量，宽 $D$；$W_g$、$W_u$ 是门支路和内容支路的投影，形状 $[D,d_{\mathrm{ff}}']$；$W_d$ 是下投影，形状 $[d_{\mathrm{ff}}',D]$；g、c 是两条支路的中间结果（本节局部记号；c 取 content 之意，不用 u，免得和上面的残差 u 撞名），z 是相乘后的结果，y 是输出；$\odot$ 是逐坐标相乘；t 是 SiLU 的任意实数输入；$\sigma(t)=1/(1+e^{-t})$ 是 sigmoid 函数（本节局部符号）。
 
 这里公式采用行向量右乘矩阵的记法，PyTorch `nn.Linear` 则储存转置方向的权重。`gate.weight` 与 `up.weight` 的形状是 `[d_ff',D]`，`down.weight` 是 `[D,d_ff']`。源码只有一行核心计算：
 
@@ -3595,7 +3595,7 @@ down.weight = [[1, 0], [0,1]]
 
 于是 gate 的第一坐标是 1×1+2×(−1)=−1，第二坐标是 1×0+2×1=2；up 的两坐标分别是 3 和 4。
 
-| 中间坐标 | gate 投影 g | sigmoid(g) | SiLU(g)=g×sigmoid(g) | up 内容 u | 相乘结果 z |
+| 中间坐标 | gate 投影 g | sigmoid(g) | SiLU(g)=g×sigmoid(g) | up 内容 c | 相乘结果 z |
 | --- | --- | --- | --- | --- | --- |
 | 0 | -1 | 0.268941 | -0.268941 | 3 | -0.806824 |
 | 1 | 2 | 0.880797 | 1.761594 | 4 | 7.046377 |

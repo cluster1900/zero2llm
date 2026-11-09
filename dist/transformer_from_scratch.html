@@ -5875,7 +5875,10 @@ class="math inline">\(D=Hd_h\)</span>。</p>
 <p><span class="math inline">\(D=Hd_h\)</span> 的意思是：主干的 <span
 class="math inline">\(D\)</span> 个数平均切给 <span
 class="math inline">\(H\)</span> 个头，每头分到 <span
-class="math inline">\(d_h\)</span> 个；各头算完再拼回去，宽度仍是 <span
+class="math inline">\(d_h\)</span>
+个（这要求各头等宽、且所有头拼起来正好是 <span
+class="math inline">\(D\)</span>，本书的 S0
+正是如此）；各头算完再拼回去，宽度仍是 <span
 class="math inline">\(D\)</span>，所以缓存按头存和按主干宽度存，数出来的元素一样多。</p>
 <p>其中：<span class="math inline">\(P\)</span>
 是缓存里已有的位置数，<span class="math inline">\(C\)</span>
@@ -6630,7 +6633,10 @@ cos/sin；模型是否学会在那个距离检索内容，是另一个问题。�
 <p>设训练长度 <span
 class="math inline">\(T_{\mathrm{train}}=8\)</span>，希望使用长度 <span
 class="math inline">\(T&#39;=32\)</span>，扩展倍数 <span
-class="math inline">\(\kappa=T&#39;/T_{\mathrm{train}}=4\)</span>：</p>
+class="math inline">\(\kappa=T&#39;/T_{\mathrm{train}}=4\)</span>（PI、YaRN
+论文把这个倍数记作 s；本书的 <span class="math inline">\(s\)</span>
+留给注意力分数，所以写 <span
+class="math inline">\(\kappa\)</span>）：</p>
 <ul>
 <li><strong>直接外推</strong>：仍用
 pθ，不改变转速；测试会出现训练未覆盖的相对距离。</li>
@@ -6721,7 +6727,8 @@ class="math inline">\(\theta/\kappa\)</span> 平滑过渡回原转速
 <p>其中：θ′ 是调整后的转角；γ 是 ramp 系数，取值在 0 到 1 之间，由 r
 决定；α、β 是 ramp 两端的阈值（局部符号，只在本节使用）；<span
 class="math inline">\(\kappa\)</span> 与 r 同上。</p>
-<p>另一部分是注意力温度：把 <span
+<p>另一部分是注意力温度（论文记作 t，本书写 <span
+class="math inline">\(\tau\)</span>）：把 <span
 class="math inline">\(\operatorname{softmax}(QK^\top/\sqrt{d_h})\)</span>
 改为 <span
 class="math inline">\(\operatorname{softmax}(QK^\top/(\tau\sqrt{d_h}))\)</span>。若
@@ -6970,13 +6977,14 @@ P07 的 Pre-LN 和逐位置 FFN，以及 P09 的前向、反向和 optimizer。<
 <h2 id="p13.1-先认出没有变的骨架">P13.1 先认出没有变的骨架</h2>
 <p>一个 Block 仍然做两次“先归一化、再计算、加回主干”：</p>
 <p><span
-class="math display">\[x&#39;=x+\operatorname{Attention}(\operatorname{Norm}_1(x))\]</span>
+class="math display">\[u=x+\operatorname{Attention}(\operatorname{Norm}_1(x))\]</span>
 <span
-class="math display">\[y=x&#39;+\operatorname{FFN}(\operatorname{Norm}_2(x&#39;))\]</span></p>
+class="math display">\[y=u+\operatorname{FFN}(\operatorname{Norm}_2(u))\]</span></p>
 <p>两行是同一个套路：先把输入“理一理”（Norm），交给子层算出一份修改意见，再把意见加回原来的主干。主干本身一直原样往下传，子层只负责“补一笔”。</p>
 <p>其中：<span class="math inline">\(x\)</span> 是本 Block
-的输入，一行一个位置；<span class="math inline">\(x&#39;\)</span>
-是做完注意力、加回主干后的中间结果；<span
+的输入，一行一个位置；<span class="math inline">\(u\)</span>
+是做完注意力、加回主干后的中间结果（全书用 <span
+class="math inline">\(u\)</span> 记这个注意力后的残差）；<span
 class="math inline">\(y\)</span> 是本 Block 的输出；<span
 class="math inline">\(\operatorname{Norm}_1\)</span>、<span
 class="math inline">\(\operatorname{Norm}_2\)</span>
@@ -7176,10 +7184,10 @@ d_{\mathrm{ff}}&#39;\)</span> 支路（加撇是为了和 GELU FFN 的宽度 <sp
 class="math inline">\(d_{\mathrm{ff}}\)</span> 区分）。一条产生内容
 <code>up(x)</code>，另一条经过 SiLU 后调节内容
 <code>gate(x)</code>，最后通过 <code>down</code> 回到 D：</p>
-<p><span class="math display">\[g=xW_g,\quad u=xW_u,\quad
-z=\operatorname{SiLU}(g)\odot u,\quad y=zW_d\]</span> <span
+<p><span class="math display">\[g=xW_g,\quad c=xW_u,\quad
+z=\operatorname{SiLU}(g)\odot c,\quad y=zW_d\]</span> <span
 class="math display">\[\operatorname{SiLU}(t)=t\sigma(t)=\frac{t}{1+e^{-t}}\]</span></p>
-<p>第一行像“内容 × 音量旋钮”：u 是要传的内容，SiLU(g)
+<p>第一行像“内容 × 音量旋钮”：c 是要传的内容，SiLU(g)
 决定每个坐标放大、缩小还是反向；相乘后再用 <span
 class="math inline">\(W_d\)</span> 压回主干宽度。第二行给出 SiLU
 本身：输入乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近
@@ -7190,8 +7198,9 @@ class="math inline">\(W_g\)</span>、<span
 class="math inline">\(W_u\)</span> 是门支路和内容支路的投影，形状 <span
 class="math inline">\([D,d_{\mathrm{ff}}&#39;]\)</span>；<span
 class="math inline">\(W_d\)</span> 是下投影，形状 <span
-class="math inline">\([d_{\mathrm{ff}}&#39;,D]\)</span>；g、u
-是两条支路的中间结果，z 是相乘后的结果，y 是输出；<span
+class="math inline">\([d_{\mathrm{ff}}&#39;,D]\)</span>；g、c
+是两条支路的中间结果（本节局部记号；c 取 content 之意，不用
+u，免得和上面的残差 u 撞名），z 是相乘后的结果，y 是输出；<span
 class="math inline">\(\odot\)</span> 是逐坐标相乘；t 是 SiLU
 的任意实数输入；<span
 class="math inline">\(\sigma(t)=1/(1+e^{-t})\)</span> 是 sigmoid
@@ -7233,7 +7242,7 @@ down.weight = [[1, 0], [0,1]]</code></pre>
 <th>gate 投影 g</th>
 <th>sigmoid(g)</th>
 <th>SiLU(g)=g×sigmoid(g)</th>
-<th>up 内容 u</th>
+<th>up 内容 c</th>
 <th>相乘结果 z</th>
 </tr>
 </thead>
