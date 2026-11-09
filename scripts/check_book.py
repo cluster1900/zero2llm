@@ -12,18 +12,45 @@ from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
 
 try:
-    from scripts.diagram_ids import MANIFEST, mermaid_blocks, mermaid_id, sha256_bytes, sha256_text
+    from scripts.diagram_ids import DIMENSIONS, MANIFEST, mermaid_blocks, mermaid_id, sha256_bytes, sha256_text
 except ImportError:  # run as `python scripts/check_book.py`
-    from diagram_ids import MANIFEST, mermaid_blocks, mermaid_id, sha256_bytes, sha256_text
+    from diagram_ids import DIMENSIONS, MANIFEST, mermaid_blocks, mermaid_id, sha256_bytes, sha256_text
 
 # Mermaid source must never reach a reader: an EPUB <pre>/<code> element that
 # starts with a diagram header (after optional front matter and %% comment
 # lines such as `%% id:` / `%% accTitle:`) means a block escaped pre-rendering.
+# The keyword list covers every diagram detector registered by the pinned
+# mermaid@11.17.2 (dist/mermaid.js), plus zenuml from the external
+# @mermaid-js/mermaid-zenuml plugin. tests/test_diagram_ids.py cross-checks it
+# against node_modules/mermaid when that is installed. Keep docs/diagrams.md in sync.
+MERMAID_KEYWORDS = (
+    'flowchart', 'flowchart-elk', 'graph', 'sequenceDiagram', 'classDiagram', 'classDiagram-v2',
+    'stateDiagram', 'stateDiagram-v2', 'erDiagram', 'journey', 'gantt', 'pie', 'quadrantChart',
+    'requirement', 'requirementDiagram', 'gitGraph', 'C4Context', 'C4Container', 'C4Component',
+    'C4Dynamic', 'C4Deployment', 'mindmap', 'timeline', 'zenuml', 'sankey', 'sankey-beta',
+    'xychart', 'xychart-beta', 'block', 'block-beta', 'packet', 'packet-beta', 'kanban',
+    'architecture', 'architecture-beta', 'radar-beta', 'treemap', 'treemap-beta', 'treeView-beta',
+    'swimlane-beta', 'eventmodeling', 'venn-beta', 'cynefin-beta', 'info',
+)
+# Mermaid matches these case-insensitively.
+MERMAID_KEYWORDS_ANY_CASE = (
+    'ishikawa', 'ishikawa-beta', 'wardley-beta', 'railroad-beta', 'railroad-ebnf-beta',
+    'railroad-abnf-beta', 'railroad-peg-beta',
+)
+
+
+def _alternation(words):
+    return '|'.join(re.escape(word) for word in sorted(words, key=len, reverse=True))
+
+
+# Many keywords are ordinary words too (graph, pie, info, block, timeline...), so the
+# header must be a whole line: the keyword alone, or followed by arguments such as
+# `graph LR`, `pie title X`, `gitGraph LR:`, never by `=`, `(`, `.`, `:` like code is;
+# and the diagram needs a body line after it.
 MERMAID_SOURCE = re.compile(
-    r'^\s*(?:---\n.*?\n---\s*\n\s*)?(?:%%[^\n]*\n\s*)*(?:flowchart\s|sequenceDiagram\b|mindmap\b'
-    # Other diagram keywords are ordinary words too, so require a following line.
-    r'|(?:graph\s+(?:TB|TD|BT|RL|LR)|stateDiagram(?:-v2)?|block-beta|gantt|classDiagram|architecture-beta'
-    r'|erDiagram|journey|timeline|pie|quadrantChart|xychart-beta|sankey-beta|gitGraph)\b[^\n]*\n)', re.S)
+    r'^\s*(?:---\n.*?\n---\s*\n\s*)?(?:%%[^\n]*\n\s*)*'
+    r'(?:' + _alternation(MERMAID_KEYWORDS) + r'|(?i:' + _alternation(MERMAID_KEYWORDS_ANY_CASE) + r'))'
+    r'(?![\w-])(?:[ \t]*|[ \t]+[^\s=(.,:\[{][^\n]*)\n', re.S)
 
 
 class WebDocument(HTMLParser):
@@ -92,13 +119,22 @@ def check_render_manifest(dist, markdown, sizes):
             if diagram_id not in wanted:
                 errors.append(f'渲染清单里有书稿中不存在的 Mermaid 图：{diagram_id}')
         elif entry.get('kind') == 'static':
-            source = dist / entry.get('source', '')
-            if not source.is_file():
+            # Hash the repo source people edit (assets/diagrams/), exactly as the
+            # build does (scripts/book_diagrams.py collect_jobs), not the dist copy.
+            relative = entry.get('source', '')
+            source = dist.parent / relative
+            if not relative or not source.is_file():
                 errors.append(f'静态图源文件缺失：{diagram_id}')
             elif sha256_bytes(source.read_bytes()) != entry.get('sha256'):
                 errors.append(f'静态图的渲染已过期（SVG 改了但没重新构建）：{diagram_id}')
+            elif (dist / relative).is_file() and (dist / relative).read_bytes() != source.read_bytes():
+                errors.append(f'dist 里的静态图副本和仓库源文件不一致（请重新构建）：{diagram_id}')
         else:
             errors.append(f'渲染清单条目类型未知：{diagram_id}')
+    rendered = dist / 'assets/rendered'
+    expected = {MANIFEST, DIMENSIONS} | {f'{name}.{ext}' for name in {*manifest, *sizes} for ext in ('svg', 'png')}
+    for orphan in sorted(p.name for p in rendered.iterdir() if p.name not in expected):
+        errors.append(f'渲染目录里有清单之外的孤儿文件：assets/rendered/{orphan}')
     return errors
 
 

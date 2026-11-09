@@ -6,3 +6,5 @@ __pycache__/
 .vscode/
 node_modules/
 .release/
+.render-backup/
+.render-backup.tmp/
