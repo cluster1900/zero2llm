@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from book_diagrams import collect_jobs, render_all  # noqa: E402
 from check_book import (MERMAID_KEYWORDS, MERMAID_KEYWORDS_ANY_CASE, MERMAID_SOURCE,  # noqa: E402
-                        check_book, check_render_manifest)
+                        check_book, check_render_manifest, scan_mermaid_js_detectors)
 from diagram_ids import (mermaid_blocks, mermaid_id, mermaid_labels,  # noqa: E402
                          sha256_bytes, sha256_text)
 
@@ -298,7 +298,9 @@ class LeakCheckTests(unittest.TestCase):
                 self.assertTrue(MERMAID_SOURCE.match(keyword.upper() + '\n  a'))
 
     def test_headers_with_arguments_are_detected(self):
-        for source in [FLOW, 'graph LR\n  A-->B', 'graph TD;\n  A-->B', 'pie title 宠物\n  "猫" : 3',
+        for source in [FLOW, 'graph LR\n  A-->B', 'graph TD;\n  A-->B',
+                       'graph LR; A-->B\n', 'graph TD;A-->B\n',
+                       'pie title 宠物\n  "猫" : 3',
                        'pie showData\n  "a" : 1', 'gitGraph LR:\n  commit', 'xychart-beta horizontal\n  x-axis [a]',
                        'info showInfo\n', 'sequenceDiagram\n  A->>B: x', 'stateDiagram-v2\n  [*] --> A', MINDMAP,
                        '%% id: p16-x\n%% accTitle: a\n%% accDescr: b\nblock-beta\n  a b', 'gantt\n  x :0, 1',
@@ -328,8 +330,8 @@ class LeakCheckTests(unittest.TestCase):
         version = json.loads((ROOT / 'node_modules/mermaid/package.json').read_text())['version']
         self.assertEqual(version, '11.17.2')
         source = MERMAID_JS.read_text()
-        detectors = re.findall(r'return /\^\\s\*([^/]+)/i?\.test\(\w+\)', source)
-        detectors += re.findall(r'if \(\s*(?://[^\n]*\n\s*)*/\^\\s\*([^/]+)/i?\.test\(\w+\)', source)
+        from_return, from_if = scan_mermaid_js_detectors(source)
+        detectors = from_return + from_if
         self.assertGreaterEqual(len(detectors), 30)
         self.assertTrue(any('flowchart-elk' in d for d in detectors), 'should see flowchart-elk from if (/…/)')
         self.assertTrue(any('stateDiagram-v2' in d for d in detectors), 'should see stateDiagram-v2 from if (/…/)')
@@ -437,11 +439,15 @@ class D0FollowUpMutationTests(unittest.TestCase):
         if not MERMAID_JS.is_file():
             self.skipTest('needs node_modules/mermaid')
         source = MERMAID_JS.read_text()
-        from_return = re.findall(r'return /\^\\s\*([^/]+)/i?\.test\(\w+\)', source)
-        from_if = re.findall(r'if \(\s*(?://[^\n]*\n\s*)*/\^\\s\*([^/]+)/i?\.test\(\w+\)', source)
+        from_return, from_if = scan_mermaid_js_detectors(source)
         self.assertTrue(from_if, 'mermaid.js still uses if (/…/) detectors')
         self.assertFalse(any('flowchart-elk' in d for d in from_return))
         self.assertTrue(any('flowchart-elk' in d for d in from_if))
+
+    def test_same_line_direction_args_are_detected(self):
+        for source in ('graph LR; A-->B\n', 'graph TD;A-->B\n', 'graph RL;\n', 'graph BT A-->B\n'):
+            with self.subTest(source=source):
+                self.assertTrue(MERMAID_SOURCE.match(source))
 
     def test_nested_orphan_reports_file_path_not_just_directory(self):
         with TemporaryDirectory() as folder:

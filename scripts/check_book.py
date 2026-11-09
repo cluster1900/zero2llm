@@ -63,7 +63,7 @@ def _mermaid_source_re():
     # Alone / `keyword:` form: optional colon, then only spaces to the newline.
     alone = r':?[ \t]*\n'
     amb_args = (
-        r'[ \t]+(?:(?:LR|RL|TD|TB|BT)\b;?[ \t]*|title\b[^\n]*|showData\b[^\n]*|showInfo\b[^\n]*)\n'
+        r'[ \t]+(?:(?:LR|RL|TD|TB|BT)\b;?[^\n]*|title\b[^\n]*|showData\b[^\n]*|showInfo\b[^\n]*)\n'
     )
     other_args = r'[ \t]+[^\s=(.,\[{][^\n]*\n'
     amb = (
@@ -78,6 +78,19 @@ def _mermaid_source_re():
 
 
 MERMAID_SOURCE = _mermaid_source_re()
+
+# Patterns used by the pinned mermaid.js to recognise diagram headers.
+# Keep these in one place so LeakCheckTests and mutation tests call the same scan.
+_MERMAID_RETURN_DETECTOR = re.compile(r'return /\^\\s\*([^/]+)/i?\.test\(\w+\)')
+_MERMAID_IF_DETECTOR = re.compile(
+    r'if \(\s*(?://[^\n]*\n\s*)*/\^\\s\*([^/]+)/i?\.test\(\w+\)'
+)
+
+
+def scan_mermaid_js_detectors(source):
+    """Return (from_return, from_if) detector pattern lists from mermaid.js text."""
+    return _MERMAID_RETURN_DETECTOR.findall(source), _MERMAID_IF_DETECTOR.findall(source)
+
 
 
 class WebDocument(HTMLParser):

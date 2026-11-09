@@ -186,7 +186,7 @@ flowchart TD
     K --> P
     P --> F["allowed [B,1,T,T]"]
     T["下三角 [T,T]"] --> F
-    N["旁注：损失掩码另算 ≠ 注意力 mask"] -.-> F
+    N["旁注：损失掩码另算 ≠ 注意力 mask"]
 ```
 
 

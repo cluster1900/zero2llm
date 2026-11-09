@@ -20,8 +20,8 @@
     "height": 670.0
   },
   "flow-ch01a-bpe-merge-loop": {
-    "width": 371.5,
-    "height": 672
+    "width": 435.765625,
+    "height": 923
   },
   "flow-ch01a-prod-pipeline": {
     "width": 266.578125,
@@ -48,7 +48,7 @@
     "height": 439
   },
   "flow-ch03-mask-broadcast": {
-    "width": 781.62890625,
+    "width": 589.80859375,
     "height": 331
   },
   "flow-ch03-all-masked-row": {
