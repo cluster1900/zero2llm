@@ -6970,6 +6970,29 @@ On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 tok
 | 已经训练好的目标模型，能否少做几次串行调用？ | 生成算法与执行安排 | 投机解码 |
 | 测试时多给计算，答案是否更好？ | 单题计算预算与评估方式 | 预算—正确率曲线 |
 
+四个问题挤在一个名词里最容易混，先用脑图分开：
+
+```mermaid
+mindmap
+  %% id: p23-four-names
+  %% accTitle: 四个问题，别挤进同一个名词
+  %% accDescr: 中心是四件事：推理模型的训练路线与计算预算、MTP 训练时多预测未来位置、投机解码先草稿后验证、蒸馏从老师到学生。
+  root((四件事))
+    推理模型
+      训练路线
+      计算预算
+    MTP
+      训练时多预测
+      未来位置监督
+    投机解码
+      推理时先草稿
+      再验证
+    蒸馏
+      老师到学生
+      常只做 SFT
+```
+
+
 MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是**投机解码**。前者可以为后者提供草稿，但不是同义词。没有 MTP 的小模型也能做 drafter；有 MTP 辅助损失的模型也可以只用普通自回归生成。
 
 同桌类比也有限：计算机的“检查”不是凭感觉觉得通顺，而是执行明确的接受规则。我们要保持的是**目标模型原来的生成规则**，不是“只要答案差不多就行”。目标模型本身可能算错题，投机解码不会自动纠正它的知识或算术能力。
@@ -6986,6 +7009,25 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 - **R1** 先用少量较可读的长解答做冷启动 SFT，再做面向推理任务的 RL。
 - 随后从训练后的模型收集候选解答、筛选数据，并混入非推理数据做新一轮 SFT；再进行覆盖更多场景的 RL。
 - 报告中的小模型蒸馏使用教师生成并筛选的数据进行 SFT，不应写成“小模型完整重跑了教师的 RL 流程”。[DeepSeek-R1 v1，§2.2–2.4](https://arxiv.org/html/2501.12948v1)
+
+三条路线分叉画清楚，数据筛选和草稿拒绝就不再挤在一处：
+
+```mermaid
+flowchart TD
+    %% id: p23-r1-routes
+    accTitle: R1 式三条路线：直接 RL、多阶段、蒸馏学生
+    accDescr: 基座分三路：R1-Zero 直接 RL；R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL；蒸馏学生只做 SFT。数据筛选与草稿拒绝不是一回事。
+    BASE["基座模型"] --> Z["R1-Zero<br/>直接 RL"]
+    BASE --> R["R1"]
+    BASE --> D["蒸馏学生"]
+    R --> R1["冷启动 SFT"]
+    R1 --> R2["推理 RL"]
+    R2 --> R3["筛选数据再 SFT"]
+    R3 --> R4["综合 RL"]
+    D --> DS["只做 SFT<br/>不重跑教师 RL"]
+    X["筛选数据 ≠ 草稿拒绝"] -.-> R3
+```
+
 
 这里的 **cold start（冷启动）** 是给后续 RL 提供一个起点；**rejection sampling（拒绝采样筛选）** 在该训练阶段用于保留合格的数据样本。它不是下文为了保持目标生成规则而进行的“草稿接受／拒绝”，两者的目的、输出和正确性要求不同。
 
@@ -7170,6 +7212,31 @@ $$
 - `cache`：缓存 `tokens[:, :-1]`，即还没包含最后一个已生成 token。
 - `pending`：`tokens[:, -1:]`，下轮才喂入目标模型。
 
+tokens、cache、pending 三者相差一位，用时序图对齐：
+
+```mermaid
+sequenceDiagram
+    %% id: p23-pending-cache
+    accTitle: pending 还没喂进 cache：三者相差一位
+    accDescr: 草稿模型提出草稿；目标模型 prefill 得到首 token 作 pending；每轮把 pending 加草稿一起喂给目标；接受前缀后修正或 bonus 成为新 pending；拒绝后 cache 截回已接受长度。
+    autonumber
+    participant Draft as 草稿模型
+    participant Target as 目标模型
+    participant Cache as cache / pending
+    Target->>Cache: prefill prompt，首 token 变 pending
+    Note over Cache: tokens 含 pending；cache 只到倒数第二
+    Draft->>Target: 本轮草稿
+    Target->>Target: 喂入 pending + 草稿，一次验证
+    alt 接受前缀
+      Target->>Cache: 提交接受的 token
+      Target->>Cache: 修正或 bonus → 新 pending
+    else 拒绝
+      Target->>Cache: 截回已接受长度
+      Target->>Cache: correction → 新 pending
+    end
+```
+
+
 先对完整 prompt 做一次 prefill，取末行 logits 的 argmax，输出第一个 token。此时 cache 恰好装着 prompt，第一个新 token 成为 pending。
 
 ### 带具体位置的拒绝例子
@@ -7202,6 +7269,29 @@ $$
 - correction 或 bonus 是 EOS：提交它，然后结束。
 - 每轮最多提议 `min(draft_tokens, remaining-1)` 个 token，预留一个 correction／bonus 位置。只剩一个输出名额时，不征求草稿，普通前向一步。
 
+停机条件互相嵌套，状态图比文字清单更清楚：
+
+```mermaid
+stateDiagram-v2
+    %% id: p23-eos-budget
+    accTitle: EOS 与预算必须一起守住
+    accDescr: 名额为 0 或 prompt 末尾已是 EOS 则直接返回；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。
+    [*] --> Check: 新请求
+    Check --> Done: 名额=0 或 prompt 末已是 EOS
+    Check --> Prefill: 还有名额
+    Prefill --> Gen: 得到 pending
+    Prefill --> Done: prefill 就产出 EOS
+    Gen --> Verify: 征求草稿并验证
+    Verify --> Done: 接受/修正/bonus 遇 EOS
+    Verify --> Gen: 提交后仍有名额
+    Verify --> Gen: 拒草稿里的 EOS（不停）
+    note right of Verify
+      只剩 1 个名额：草稿长度=0
+    end note
+    Done --> [*]
+```
+
+
 因此最后一轮不会越过 `max_new_tokens`。本例保守要求 `prompt 长度 + 生成预算 <= max_seq_len`，不实现滑动截断；若模型权重或影响缓存的设置改变，必须重新开始请求。
 
 每轮验证还必须至少提交一个 token。若拒绝分支因程序错误忘了提交 correction，代码立即抛出 `RuntimeError`，而不是在同一前缀上无限循环。**空草稿本身是合法的**：它仍从目标 logits 提交一个 token，所以不能仅因草稿长度为 0 就报“没有进展”。
@@ -7222,6 +7312,21 @@ r(x)=\frac{\max(0,p(x)-q(x))}
 $$
 
 这套接受与校正规则的依据见 [Fast Inference from Transformers via Speculative Decoding v2，§2.3 与附录 A](https://arxiv.org/html/2211.17192v2)。若 q(x)=0，正常从 q 采样不会得到该 x；p=q 时拒绝概率为零，不应去归一化一个全零残差。涉及 temperature 或截断采样时，要使用相应处理后的分布，不能混用原始 logits 和修改后的概率。
+
+拒绝之后必须从残差分布重抽，流程如下：
+
+```mermaid
+flowchart TD
+    %% id: p23-spec-sample
+    accTitle: 拒绝之后要从残差分布重抽，不能改用 argmax
+    accDescr: 从 q 抽 x，以 min(1, p(x)/q(x)) 接受；接受则输出 x；拒绝则从 max(0, p−q) 归一化后重抽，不是 argmax。
+    A["从草稿分布 q 抽 x"] --> B{"接受？<br/>min(1, p(x)/q(x))"}
+    B -->|是| C["输出 x"]
+    B -->|否| D["残差 r ∝ max(0, p−q)"]
+    D --> E["从 r 归一化后重抽"]
+    F["禁止：改用 argmax(p)"] -.-> E
+```
+
 
 手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4 的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到 [0.6,0.4]。
 
@@ -7650,6 +7755,27 @@ b5046 的微型 Llama 成功，**不证明 Qwen3 或 DeepSeek-V4.1-Flash 可运�
 
 SSE（Server-Sent Events）用空行分隔事件，事件的 `data:` 字段里常放 JSON。一次网络读取可能只有半个中文字符，也可能包含三个事件；一个 content delta 可能包含多个 token，也可能为空。
 
+网络块、SSE 事件和 token 三种边界互不对齐：
+
+```mermaid
+sequenceDiagram
+    %% id: p24-sse-stream
+    accTitle: 网络块、SSE 事件和 token 三种边界互不对齐
+    accDescr: 客户端 POST 流式 completions；服务端逐 token 生成并以空行分隔 SSE 事件；一次网络读取可能只有半个字符；客户端缓冲到完整事件再解析，直到 data:[DONE]。
+    autonumber
+    participant C as 客户端
+    participant S as 服务端
+    C->>S: POST /v1/completions (stream)
+    S->>S: 逐 token 生成
+    S-->>C: 网络块（可能半个字符）
+    C->>C: 缓冲到完整 SSE 事件
+    Note over C,S: data:{...} 以空行分隔
+    S-->>C: 更多事件 / 半包
+    C->>C: 解析 JSON，拼文本
+    S-->>C: data: [DONE]
+```
+
+
 ```text
 data: {"choices":[{"text":"春","finish_reason":null}]}
 
@@ -7867,6 +7993,30 @@ x → RMSNorm → Attention → 加回 x
 
 注意力内部还有一层细节：Q、K 在投影并按头切开后，分别做 **QK-norm**，随后才应用 RoPE；V 不做这两项变换。
 
+整条 block 的先后顺序决定权重和缓存能否对上：
+
+```mermaid
+flowchart LR
+    %% id: p25-block-order
+    accTitle: QK-norm、RoPE 与缓存的先后顺序决定权重能否对上
+    accDescr: x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 各做 QK-norm（V 不做），再 RoPE；缓存旋转后的 K 与原始 V；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。
+    subgraph Attn["注意力半段"]
+      direction TB
+      A["x → RMSNorm"] --> B["Q/K/V 投影分头"]
+      B --> C["Q、K：QK-norm<br/>V：不做"]
+      C --> D["RoPE split-half"]
+      D --> E["缓存旋转后 K<br/>与原始 V"]
+      E --> F["注意力 → 加回 x"]
+    end
+    subgraph FFN["FFN / MoE 半段"]
+      direction TB
+      G["RMSNorm"] --> H["SwiGLU 或 MoE"]
+      H --> I["再加回"]
+    end
+    Attn --> FFN
+```
+
+
 RMSNorm 对最后一维计算：
 
 $$
@@ -8008,6 +8158,31 @@ False 比 True 多加的后缀（空行有意义）：
 对这两个 checkpoint，模型卡描述了硬开关 `enable_thinking`，以及在启用 thinking 时使用 `/think`、`/no_think` 的软提示机制。**软提示是给模型的文本，不是模板解析器里的另一个布尔开关。**[0.6B 固定模型卡](https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/README.md)
 
 至于“想多久”，又是预算问题。`max_new_tokens` 限制整个新生成序列，包括思考、闭合标记、最终答案等；它不是“答案最多多少 token”，也不会自动给答案另留一份额度。`completion_budget` 只是对已经得到的 ID 记账，不会迫使模型结束思考，更不是推理预算控制器。
+
+模板开关、软提示、生成额度和配置长度上限是四层，互不改写：
+
+```mermaid
+flowchart TD
+    %% id: p25-thinking-budget
+    accTitle: Thinking 开关、软提示、生成额度与长度上限是四层
+    accDescr: 模板布尔开关改 prompt 文本；软提示由模型自行遵循；总生成额度在运行时截断；配置里的位置与长度上限另算；四者互不改写。
+    TOP["四件事并列，互不改写"]
+    subgraph G[" "]
+      direction LR
+      subgraph L[" "]
+        direction TB
+        B["① 模板布尔开关<br/>改 prompt 文本"]
+        C["② 软提示 /think<br/>模型自行遵循"]
+      end
+      subgraph R[" "]
+        direction TB
+        D["③ 总生成额度<br/>运行时截断"]
+        E["④ 配置长度上限<br/>位置与上下文"]
+      end
+    end
+    TOP --> G
+```
+
 
 手算一个假想输出，不把它当作真实模型生成：
 
@@ -8175,6 +8350,22 @@ V3 的 MTP 是**顺序模块**，不是在同一 hidden state 上并排挂几个
 
 因此，主任务预测下一词，额外深度再监督更远一个词。训练时可以提供移位后的真实 token，部署时却不能偷看尚未生成的答案。若用作草稿，仍要由目标模型按投机解码规则验证。**MTP 训练、多 token 草稿、最终接受几个 token，是三个不同问题。** [P23](#p23-mtp) 的独立线性未来头用于学习标签对齐，不冒充 V3 的顺序 MTP。
 
+顺序 MTP 每一深度都要接上上一深度的表示和对应 token 向量：
+
+```mermaid
+flowchart TD
+    %% id: p26-mtp-depth
+    accTitle: 顺序 MTP：每一深度接上上一表示和对应 token 向量
+    accDescr: 主干 x_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，共享输出头预测 t+2；更深依此类推；训练用真 token，部署不能偷看。
+    A["主干表示 x_t"] --> B["主头 → 预测 t+1"]
+    A --> C["深度 1：上一表示 + emb(t+1)"]
+    C --> D["额外 Transformer 块"]
+    D --> E["共享输出头 → 预测 t+2"]
+    E --> F["深度 2：依此类推"]
+    G["训练：用真 token<br/>部署：不能偷看"] -.-> C
+```
+
+
 ## P26.3 R1：改变训练路线，不等于发明另一种 Attention
 
 [R1 固定配置][R1-config] 的 `model_type` 仍是 `deepseek_v3`，61 层与 `kv_lora_rank=512` 等字段也能直接读取。但仅靠这些字段，既不能证明模型经过 RL，也不能证明它擅长推理。要回答训练问题，必须读 [R1 原始报告 §2.2–2.4][R1-paper]。
@@ -8255,6 +8446,27 @@ Full 是 **CSA2 路径名**，不是“不加因果 mask 的 dense attention”�
 [固定配置][V41-config]给出视觉宽度 1,024、downsample ratio 3、语言宽度 5,120。于是一个 3×3 邻域原来有九个 1,024 维位置，重排后成为一个 **9,216 维向量**，再由 projector 对齐到语言宽度。重排减少位置数，但在投影前并没有丢掉原有九块的通道数。
 
 尤其要看[参考 `Aligner.forward`][V41-vision]：先把 H×W×C 改成通道在前，向**右侧和底部补零**使边长能被 3 整除，再执行不重叠的 `unfold`。一个新 token 内部的顺序是“通道 → 邻域行 → 邻域列”，不是“邻域位置 → 通道”。最后才经过两层 MLP（中间 GELU）。本章只复现前面的坐标重排，不运行 ViT、projector、视觉位置编码或图像理解。
+
+补零方式和展开顺序都会改变拼出来的向量：
+
+```mermaid
+flowchart TD
+    %% id: p26-vision-pack
+    accTitle: 视觉特征补零并 3×3 展开后，再投到文本宽度 D
+    accDescr: ViT 特征网格高×宽×C 先转成通道在前，右侧与下方补零到 3 的倍数，再 3×3 不重叠展开（块内顺序：通道、行、列）得到 9C 维，经 MLP 投到 D 后接入文本 token 序列。
+    subgraph Prep["重排前"]
+      direction LR
+      A["ViT H×W×C"] --> B["通道在前"]
+      B --> C["右/下补零<br/>边长为 3 的倍数"]
+    end
+    subgraph Pack["展开与投影"]
+      direction LR
+      D["3×3 不重叠展开<br/>通道→行→列"] --> E["9C 维"]
+      E --> F["MLP → D<br/>接入文本序列"]
+    end
+    Prep --> Pack
+```
+
 
 ### mHC、Engram、DSpark
 
@@ -8602,6 +8814,29 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 7. 运行真实控制组、三类坏行为；选修 MTP 再做标签、梯度与贪心对照。
 8. 用同一个 S0 权重和固定 token 重放，记录普通／缓存 CPU 前向的计时分布。
 
+八步有依赖，顺序不能打乱：
+
+```mermaid
+flowchart LR
+    %% id: p27-health-steps
+    accTitle: 健康检查八步有依赖，不能打乱顺序瞎跳
+    accDescr: make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、负例控制（含选修 MTP）、CPU 计时，最后出报告。
+    subgraph Col1["前四步"]
+      direction TB
+      A["① make_stages"] --> B["② fixture / 梯度 smoke"]
+      B --> C["③ 未来扰动检查"]
+      C --> D["④ checkpoint 读回"]
+    end
+    subgraph Col2["后四步"]
+      direction TB
+      E["⑤ 多种分块缓存检查"] --> F["⑥ 组件 oracle 与兼容"]
+      F --> G["⑦ 负例控制（含 MTP）"]
+      G --> H["⑧ CPU 计时 → 报告"]
+    end
+    Col1 --> Col2
+```
+
+
 这里的 backward 是**梯度 smoke**，不是训练完成。参数没有更新，checkpoint 也不包含 optimizer 或 RNG 状态。想验证中断后能否继续同一条训练轨迹，需要回到训练流水线章节，保存更完整的恢复状态。
 
 正常实现从不触发某道防线，不代表防线已经被测试。这里另外包装真实计算，逐一制造下列坏行为；正常体检必须拒绝。
@@ -8744,6 +8979,20 @@ def causal_error(model, tokens, cut=3):
 | 严格 state_dict | 缺失、多余或错形状张量 |
 
 加载端必须明确传入**期望的阶段、配置、词表与 depth**，先比较语义元数据，再逐键检查目标 dtype，最后严格加载张量。仅检查浮点张量不够：整数、布尔或复数张量也可能被加载接口悄悄转换成浮点权重；参数与 buffer 都必须匹配对应目标张量的 dtype。文件不能任意指定一个 Python 模块让加载器导入。该格式只服务本书工厂建立的教学模型，不支持给模块随手 monkey-patch 后的任意运行时结构。
+
+形状相同时词表或 RoPE 仍可能不一致，检查顺序决定先报哪个错：
+
+```mermaid
+flowchart TD
+    %% id: p27-ckpt-gate
+    accTitle: 形状相同也可能词表或 RoPE 不一致，先核元数据再 strict 加载
+    accDescr: 读 metadata 依次核阶段、配置、词表、深度、dtype，任一项不符就报错；全部通过再 strict 加载张量；缓存不在文件里，加载后重新 prefill。
+    A["读 metadata"] --> B{"阶段 / 配置 / 词表<br/>深度 / dtype 全匹配？"}
+    B -->|否| C["报错拒绝"]
+    B -->|是| D["strict 加载张量"]
+    D --> E["缓存不在文件里<br/>加载后重新 prefill"]
+```
+
 
 | 尝试 | 本章结果 | 理由 |
 | --- | --- | --- |

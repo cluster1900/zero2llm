@@ -64,6 +64,22 @@ V3 的 MTP 是**顺序模块**，不是在同一 hidden state 上并排挂几个
 
 因此，主任务预测下一词，额外深度再监督更远一个词。训练时可以提供移位后的真实 token，部署时却不能偷看尚未生成的答案。若用作草稿，仍要由目标模型按投机解码规则验证。**MTP 训练、多 token 草稿、最终接受几个 token，是三个不同问题。** [P23](#p23-mtp) 的独立线性未来头用于学习标签对齐，不冒充 V3 的顺序 MTP。
 
+顺序 MTP 每一深度都要接上上一深度的表示和对应 token 向量：
+
+```mermaid
+flowchart TD
+    %% id: p26-mtp-depth
+    accTitle: 顺序 MTP：每一深度接上上一表示和对应 token 向量
+    accDescr: 主干 x_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，共享输出头预测 t+2；更深依此类推；训练用真 token，部署不能偷看。
+    A["主干表示 x_t"] --> B["主头 → 预测 t+1"]
+    A --> C["深度 1：上一表示 + emb(t+1)"]
+    C --> D["额外 Transformer 块"]
+    D --> E["共享输出头 → 预测 t+2"]
+    E --> F["深度 2：依此类推"]
+    G["训练：用真 token<br/>部署：不能偷看"] -.-> C
+```
+
+
 ## P26.3 R1：改变训练路线，不等于发明另一种 Attention
 
 [R1 固定配置][R1-config] 的 `model_type` 仍是 `deepseek_v3`，61 层与 `kv_lora_rank=512` 等字段也能直接读取。但仅靠这些字段，既不能证明模型经过 RL，也不能证明它擅长推理。要回答训练问题，必须读 [R1 原始报告 §2.2–2.4][R1-paper]。
@@ -144,6 +160,27 @@ Full 是 **CSA2 路径名**，不是“不加因果 mask 的 dense attention”�
 [固定配置][V41-config]给出视觉宽度 1,024、downsample ratio 3、语言宽度 5,120。于是一个 3×3 邻域原来有九个 1,024 维位置，重排后成为一个 **9,216 维向量**，再由 projector 对齐到语言宽度。重排减少位置数，但在投影前并没有丢掉原有九块的通道数。
 
 尤其要看[参考 `Aligner.forward`][V41-vision]：先把 H×W×C 改成通道在前，向**右侧和底部补零**使边长能被 3 整除，再执行不重叠的 `unfold`。一个新 token 内部的顺序是“通道 → 邻域行 → 邻域列”，不是“邻域位置 → 通道”。最后才经过两层 MLP（中间 GELU）。本章只复现前面的坐标重排，不运行 ViT、projector、视觉位置编码或图像理解。
+
+补零方式和展开顺序都会改变拼出来的向量：
+
+```mermaid
+flowchart TD
+    %% id: p26-vision-pack
+    accTitle: 视觉特征补零并 3×3 展开后，再投到文本宽度 D
+    accDescr: ViT 特征网格高×宽×C 先转成通道在前，右侧与下方补零到 3 的倍数，再 3×3 不重叠展开（块内顺序：通道、行、列）得到 9C 维，经 MLP 投到 D 后接入文本 token 序列。
+    subgraph Prep["重排前"]
+      direction LR
+      A["ViT H×W×C"] --> B["通道在前"]
+      B --> C["右/下补零<br/>边长为 3 的倍数"]
+    end
+    subgraph Pack["展开与投影"]
+      direction LR
+      D["3×3 不重叠展开<br/>通道→行→列"] --> E["9C 维"]
+      E --> F["MLP → D<br/>接入文本序列"]
+    end
+    Prep --> Pack
+```
+
 
 ### mHC、Engram、DSpark
 

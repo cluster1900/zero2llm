@@ -108,6 +108,29 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 7. 运行真实控制组、三类坏行为；选修 MTP 再做标签、梯度与贪心对照。
 8. 用同一个 S0 权重和固定 token 重放，记录普通／缓存 CPU 前向的计时分布。
 
+八步有依赖，顺序不能打乱：
+
+```mermaid
+flowchart LR
+    %% id: p27-health-steps
+    accTitle: 健康检查八步有依赖，不能打乱顺序瞎跳
+    accDescr: make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、负例控制（含选修 MTP）、CPU 计时，最后出报告。
+    subgraph Col1["前四步"]
+      direction TB
+      A["① make_stages"] --> B["② fixture / 梯度 smoke"]
+      B --> C["③ 未来扰动检查"]
+      C --> D["④ checkpoint 读回"]
+    end
+    subgraph Col2["后四步"]
+      direction TB
+      E["⑤ 多种分块缓存检查"] --> F["⑥ 组件 oracle 与兼容"]
+      F --> G["⑦ 负例控制（含 MTP）"]
+      G --> H["⑧ CPU 计时 → 报告"]
+    end
+    Col1 --> Col2
+```
+
+
 这里的 backward 是**梯度 smoke**，不是训练完成。参数没有更新，checkpoint 也不包含 optimizer 或 RNG 状态。想验证中断后能否继续同一条训练轨迹，需要回到训练流水线章节，保存更完整的恢复状态。
 
 正常实现从不触发某道防线，不代表防线已经被测试。这里另外包装真实计算，逐一制造下列坏行为；正常体检必须拒绝。
@@ -250,6 +273,20 @@ def causal_error(model, tokens, cut=3):
 | 严格 state_dict | 缺失、多余或错形状张量 |
 
 加载端必须明确传入**期望的阶段、配置、词表与 depth**，先比较语义元数据，再逐键检查目标 dtype，最后严格加载张量。仅检查浮点张量不够：整数、布尔或复数张量也可能被加载接口悄悄转换成浮点权重；参数与 buffer 都必须匹配对应目标张量的 dtype。文件不能任意指定一个 Python 模块让加载器导入。该格式只服务本书工厂建立的教学模型，不支持给模块随手 monkey-patch 后的任意运行时结构。
+
+形状相同时词表或 RoPE 仍可能不一致，检查顺序决定先报哪个错：
+
+```mermaid
+flowchart TD
+    %% id: p27-ckpt-gate
+    accTitle: 形状相同也可能词表或 RoPE 不一致，先核元数据再 strict 加载
+    accDescr: 读 metadata 依次核阶段、配置、词表、深度、dtype，任一项不符就报错；全部通过再 strict 加载张量；缓存不在文件里，加载后重新 prefill。
+    A["读 metadata"] --> B{"阶段 / 配置 / 词表<br/>深度 / dtype 全匹配？"}
+    B -->|否| C["报错拒绝"]
+    B -->|是| D["strict 加载张量"]
+    D --> E["缓存不在文件里<br/>加载后重新 prefill"]
+```
+
 
 | 尝试 | 本章结果 | 理由 |
 | --- | --- | --- |

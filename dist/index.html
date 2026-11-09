@@ -13047,6 +13047,17 @@ draft/verify。<strong>随机投机采样没有实现，不声称其分布保持
 </tr>
 </tbody>
 </table></div>
+<p>四个问题挤在一个名词里最容易混，先用脑图分开：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p23-four-names.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p23-four-names.svg" class="book-diagram"
+width="720"
+alt="四个问题，别挤进同一个名词。中心是四件事：推理模型的训练路线与计算预算、MTP 训练时多预测未来位置、投机解码先草稿后验证、蒸馏从老师到学生。" /></a>
+<div class="diagram-caption">
+四个问题，别挤进同一个名词
+</div>
+</div>
 <p>MTP 是 <strong>Multi-Token Prediction，多 token
 预测</strong>；speculative decoding
 是<strong>投机解码</strong>。前者可以为后者提供草稿，但不是同义词。没有
@@ -13078,6 +13089,17 @@ SFT，不应写成“小模型完整重跑了教师的 RL 流程”。<a
 href="https://arxiv.org/html/2501.12948v1">DeepSeek-R1
 v1，§2.2–2.4</a></li>
 </ul>
+<p>三条路线分叉画清楚，数据筛选和草稿拒绝就不再挤在一处：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p23-r1-routes.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p23-r1-routes.svg" class="book-diagram"
+width="481"
+alt="R1 式三条路线：直接 RL、多阶段、蒸馏学生。基座分三路：R1-Zero 直接 RL；R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL；蒸馏学生只做 SFT。数据筛选与草稿拒绝不是一回事。" /></a>
+<div class="diagram-caption">
+R1 式三条路线：直接 RL、多阶段、蒸馏学生
+</div>
+</div>
 <p>这里的 <strong>cold start（冷启动）</strong> 是给后续 RL
 提供一个起点；<strong>rejection sampling（拒绝采样筛选）</strong>
 在该训练阶段用于保留合格的数据样本。它不是下文为了保持目标生成规则而进行的“草稿接受／拒绝”，两者的目的、输出和正确性要求不同。</p>
@@ -13411,6 +13433,17 @@ correction／bonus 额外调用一次目标模型，本实现维护如下不变�
 <code>tokens[:, :-1]</code>，即还没包含最后一个已生成 token。</li>
 <li><code>pending</code>：<code>tokens[:, -1:]</code>，下轮才喂入目标模型。</li>
 </ul>
+<p>tokens、cache、pending 三者相差一位，用时序图对齐：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p23-pending-cache.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p23-pending-cache.svg" class="book-diagram"
+width="339"
+alt="pending 还没喂进 cache：三者相差一位。草稿模型提出草稿；目标模型 prefill 得到首 token 作 pending；每轮把 pending 加草稿一起喂给目标；接受前缀后修正或 bonus 成为新 pending；拒绝后 cache 截回已接受长度。" /></a>
+<div class="diagram-caption">
+pending 还没喂进 cache：三者相差一位
+</div>
+</div>
 <p>先对完整 prompt 做一次 prefill，取末行 logits 的 argmax，输出第一个
 token。此时 cache 恰好装着 prompt，第一个新 token 成为 pending。</p>
 <h3 id="带具体位置的拒绝例子">带具体位置的拒绝例子</h3>
@@ -13473,6 +13506,17 @@ cache。</li>
 token，预留一个 correction／bonus
 位置。只剩一个输出名额时，不征求草稿，普通前向一步。</li>
 </ul>
+<p>停机条件互相嵌套，状态图比文字清单更清楚：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p23-eos-budget.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p23-eos-budget.svg" class="book-diagram"
+width="478"
+alt="EOS 与预算必须一起守住。名额为 0 或 prompt 末尾已是 EOS 则直接返回；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。" /></a>
+<div class="diagram-caption">
+EOS 与预算必须一起守住
+</div>
+</div>
 <p>因此最后一轮不会越过 <code>max_new_tokens</code>。本例保守要求
 <code>prompt 长度 + 生成预算 &lt;= max_seq_len</code>，不实现滑动截断；若模型权重或影响缓存的设置改变，必须重新开始请求。</p>
 <p>每轮验证还必须至少提交一个 token。若拒绝分支因程序错误忘了提交
@@ -13499,6 +13543,17 @@ q(x)=0，正常从 q 采样不会得到该 x；p=q
 时拒绝概率为零，不应去归一化一个全零残差。涉及 temperature
 或截断采样时，要使用相应处理后的分布，不能混用原始 logits
 和修改后的概率。</p>
+<p>拒绝之后必须从残差分布重抽，流程如下：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p23-spec-sample.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p23-spec-sample.svg" class="book-diagram"
+width="606"
+alt="拒绝之后要从残差分布重抽，不能改用 argmax。从 q 抽 x，以 min(1, p(x)/q(x)) 接受；接受则输出 x；拒绝则从 max(0, p−q) 归一化后重抽，不是 argmax。" /></a>
+<div class="diagram-caption">
+拒绝之后要从残差分布重抽，不能改用 argmax
+</div>
+</div>
 <p>手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B
 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4
 的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到
@@ -14358,6 +14413,17 @@ href="https://docs.vllm.ai/en/v0.8.4/serving/openai_compatible_server.html">vLLM
 字段里常放
 JSON。一次网络读取可能只有半个中文字符，也可能包含三个事件；一个 content
 delta 可能包含多个 token，也可能为空。</p>
+<p>网络块、SSE 事件和 token 三种边界互不对齐：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p24-sse-stream.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p24-sse-stream.svg" class="book-diagram"
+width="282"
+alt="网络块、SSE 事件和 token 三种边界互不对齐。客户端 POST 流式 completions；服务端逐 token 生成并以空行分隔 SSE 事件；一次网络读取可能只有半个字符；客户端缓冲到完整事件再解析，直到 data:[DONE]。" /></a>
+<div class="diagram-caption">
+网络块、SSE 事件和 token 三种边界互不对齐
+</div>
+</div>
 <pre class="text"><code>data: {&quot;choices&quot;:[{&quot;text&quot;:&quot;春&quot;,&quot;finish_reason&quot;:null}]}
 
 data: {&quot;choices&quot;:[{&quot;text&quot;:&quot;风&quot;,&quot;finish_reason&quot;:&quot;length&quot;}]}
@@ -14779,6 +14845,17 @@ block：QK-norm 不是又一个 LayerNorm</h2>
   → RMSNorm → dense SwiGLU 或稀疏 MoE → 加回上一步结果</code></pre>
 <p>注意力内部还有一层细节：Q、K 在投影并按头切开后，分别做
 <strong>QK-norm</strong>，随后才应用 RoPE；V 不做这两项变换。</p>
+<p>整条 block 的先后顺序决定权重和缓存能否对上：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p25-block-order.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p25-block-order.svg" class="book-diagram"
+width="393"
+alt="QK-norm、RoPE 与缓存的先后顺序决定权重能否对上。x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 各做 QK-norm（V 不做），再 RoPE；缓存旋转后的 K 与原始 V；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。" /></a>
+<div class="diagram-caption">
+QK-norm、RoPE 与缓存的先后顺序决定权重能否对上
+</div>
+</div>
 <p>RMSNorm 对最后一维计算：</p>
 <p><span class="math display">\[
 \operatorname{RMSNorm}(z)_j
@@ -15013,6 +15090,17 @@ href="https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485
 token”，也不会自动给答案另留一份额度。<code>completion_budget</code>
 只是对已经得到的 ID
 记账，不会迫使模型结束思考，更不是推理预算控制器。</p>
+<p>模板开关、软提示、生成额度和配置长度上限是四层，互不改写：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p25-thinking-budget.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p25-thinking-budget.svg" class="book-diagram"
+width="490"
+alt="Thinking 开关、软提示、生成额度与长度上限是四层。模板布尔开关改 prompt 文本；软提示由模型自行遵循；总生成额度在运行时截断；配置里的位置与长度上限另算；四者互不改写。" /></a>
+<div class="diagram-caption">
+Thinking 开关、软提示、生成额度与长度上限是四层
+</div>
+</div>
 <p>手算一个假想输出，不把它当作真实模型生成：</p>
 <pre class="text"><code>生成 ID：[151667, 7, 8, 151668, 9]
 总额度：6
@@ -15323,6 +15411,17 @@ token，部署时却不能偷看尚未生成的答案。若用作草稿，仍要
 训练、多 token 草稿、最终接受几个 token，是三个不同问题。</strong> <a
 href="#p23-mtp">P23</a> 的独立线性未来头用于学习标签对齐，不冒充 V3
 的顺序 MTP。</p>
+<p>顺序 MTP 每一深度都要接上上一深度的表示和对应 token 向量：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p26-mtp-depth.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p26-mtp-depth.svg" class="book-diagram"
+width="498"
+alt="顺序 MTP：每一深度接上上一表示和对应 token 向量。主干 x_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，共享输出头预测 t+2；更深依此类推；训练用真 token，部署不能偷看。" /></a>
+<div class="diagram-caption">
+顺序 MTP：每一深度接上上一表示和对应 token 向量
+</div>
+</div>
 <h2 id="p26.3-r1改变训练路线不等于发明另一种-attention">P26.3
 R1：改变训练路线，不等于发明另一种 Attention</h2>
 <p><a
@@ -15561,6 +15660,17 @@ href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb
 → 邻域行 → 邻域列”，不是“邻域位置 → 通道”。最后才经过两层 MLP（中间
 GELU）。本章只复现前面的坐标重排，不运行
 ViT、projector、视觉位置编码或图像理解。</p>
+<p>补零方式和展开顺序都会改变拼出来的向量：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p26-vision-pack.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p26-vision-pack.svg" class="book-diagram"
+width="624"
+alt="视觉特征补零并 3×3 展开后，再投到文本宽度 D。ViT 特征网格高×宽×C 先转成通道在前，右侧与下方补零到 3 的倍数，再 3×3 不重叠展开（块内顺序：通道、行、列）得到 9C 维，经 MLP 投到 D 后接入文本 token 序列。" /></a>
+<div class="diagram-caption">
+视觉特征补零并 3×3 展开后，再投到文本宽度 D
+</div>
+</div>
 <h3 id="mhcengramdspark">mHC、Engram、DSpark</h3>
 <p>DeepSeek-V4.1-Flash <a
 href="https://arxiv.org/html/2609.19969v1">报告的 §2.4.1–2.4.3</a>
@@ -16263,6 +16373,17 @@ logits。</li>
 <li>用同一个 S0 权重和固定 token 重放，记录普通／缓存 CPU
 前向的计时分布。</li>
 </ol>
+<p>八步有依赖，顺序不能打乱：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p27-health-steps.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p27-health-steps.svg" class="book-diagram"
+width="599"
+alt="健康检查八步有依赖，不能打乱顺序瞎跳。make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、负例控制（含选修 MTP）、CPU 计时，最后出报告。" /></a>
+<div class="diagram-caption">
+健康检查八步有依赖，不能打乱顺序瞎跳
+</div>
+</div>
 <p>这里的 backward 是<strong>梯度
 smoke</strong>，不是训练完成。参数没有更新，checkpoint 也不包含
 optimizer 或 RNG
@@ -16558,6 +16679,17 @@ dtype，最后严格加载张量。仅检查浮点张量不够：整数、布尔
 buffer 都必须匹配对应目标张量的 dtype。文件不能任意指定一个 Python
 模块让加载器导入。该格式只服务本书工厂建立的教学模型，不支持给模块随手
 monkey-patch 后的任意运行时结构。</p>
+<p>形状相同时词表或 RoPE 仍可能不一致，检查顺序决定先报哪个错：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p27-ckpt-gate.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p27-ckpt-gate.svg" class="book-diagram"
+width="335"
+alt="形状相同也可能词表或 RoPE 不一致，先核元数据再 strict 加载。读 metadata 依次核阶段、配置、词表、深度、dtype，任一项不符就报错；全部通过再 strict 加载张量；缓存不在文件里，加载后重新 prefill。" /></a>
+<div class="diagram-caption">
+形状相同也可能词表或 RoPE 不一致，先核元数据再 strict 加载
+</div>
+</div>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />

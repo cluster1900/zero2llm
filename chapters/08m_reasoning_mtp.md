@@ -15,6 +15,29 @@
 | 已经训练好的目标模型，能否少做几次串行调用？ | 生成算法与执行安排 | 投机解码 |
 | 测试时多给计算，答案是否更好？ | 单题计算预算与评估方式 | 预算—正确率曲线 |
 
+四个问题挤在一个名词里最容易混，先用脑图分开：
+
+```mermaid
+mindmap
+  %% id: p23-four-names
+  %% accTitle: 四个问题，别挤进同一个名词
+  %% accDescr: 中心是四件事：推理模型的训练路线与计算预算、MTP 训练时多预测未来位置、投机解码先草稿后验证、蒸馏从老师到学生。
+  root((四件事))
+    推理模型
+      训练路线
+      计算预算
+    MTP
+      训练时多预测
+      未来位置监督
+    投机解码
+      推理时先草稿
+      再验证
+    蒸馏
+      老师到学生
+      常只做 SFT
+```
+
+
 MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是**投机解码**。前者可以为后者提供草稿，但不是同义词。没有 MTP 的小模型也能做 drafter；有 MTP 辅助损失的模型也可以只用普通自回归生成。
 
 同桌类比也有限：计算机的“检查”不是凭感觉觉得通顺，而是执行明确的接受规则。我们要保持的是**目标模型原来的生成规则**，不是“只要答案差不多就行”。目标模型本身可能算错题，投机解码不会自动纠正它的知识或算术能力。
@@ -31,6 +54,25 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 - **R1** 先用少量较可读的长解答做冷启动 SFT，再做面向推理任务的 RL。
 - 随后从训练后的模型收集候选解答、筛选数据，并混入非推理数据做新一轮 SFT；再进行覆盖更多场景的 RL。
 - 报告中的小模型蒸馏使用教师生成并筛选的数据进行 SFT，不应写成“小模型完整重跑了教师的 RL 流程”。[DeepSeek-R1 v1，§2.2–2.4](https://arxiv.org/html/2501.12948v1)
+
+三条路线分叉画清楚，数据筛选和草稿拒绝就不再挤在一处：
+
+```mermaid
+flowchart TD
+    %% id: p23-r1-routes
+    accTitle: R1 式三条路线：直接 RL、多阶段、蒸馏学生
+    accDescr: 基座分三路：R1-Zero 直接 RL；R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL；蒸馏学生只做 SFT。数据筛选与草稿拒绝不是一回事。
+    BASE["基座模型"] --> Z["R1-Zero<br/>直接 RL"]
+    BASE --> R["R1"]
+    BASE --> D["蒸馏学生"]
+    R --> R1["冷启动 SFT"]
+    R1 --> R2["推理 RL"]
+    R2 --> R3["筛选数据再 SFT"]
+    R3 --> R4["综合 RL"]
+    D --> DS["只做 SFT<br/>不重跑教师 RL"]
+    X["筛选数据 ≠ 草稿拒绝"] -.-> R3
+```
+
 
 这里的 **cold start（冷启动）** 是给后续 RL 提供一个起点；**rejection sampling（拒绝采样筛选）** 在该训练阶段用于保留合格的数据样本。它不是下文为了保持目标生成规则而进行的“草稿接受／拒绝”，两者的目的、输出和正确性要求不同。
 
@@ -215,6 +257,31 @@ $$
 - `cache`：缓存 `tokens[:, :-1]`，即还没包含最后一个已生成 token。
 - `pending`：`tokens[:, -1:]`，下轮才喂入目标模型。
 
+tokens、cache、pending 三者相差一位，用时序图对齐：
+
+```mermaid
+sequenceDiagram
+    %% id: p23-pending-cache
+    accTitle: pending 还没喂进 cache：三者相差一位
+    accDescr: 草稿模型提出草稿；目标模型 prefill 得到首 token 作 pending；每轮把 pending 加草稿一起喂给目标；接受前缀后修正或 bonus 成为新 pending；拒绝后 cache 截回已接受长度。
+    autonumber
+    participant Draft as 草稿模型
+    participant Target as 目标模型
+    participant Cache as cache / pending
+    Target->>Cache: prefill prompt，首 token 变 pending
+    Note over Cache: tokens 含 pending；cache 只到倒数第二
+    Draft->>Target: 本轮草稿
+    Target->>Target: 喂入 pending + 草稿，一次验证
+    alt 接受前缀
+      Target->>Cache: 提交接受的 token
+      Target->>Cache: 修正或 bonus → 新 pending
+    else 拒绝
+      Target->>Cache: 截回已接受长度
+      Target->>Cache: correction → 新 pending
+    end
+```
+
+
 先对完整 prompt 做一次 prefill，取末行 logits 的 argmax，输出第一个 token。此时 cache 恰好装着 prompt，第一个新 token 成为 pending。
 
 ### 带具体位置的拒绝例子
@@ -247,6 +314,29 @@ $$
 - correction 或 bonus 是 EOS：提交它，然后结束。
 - 每轮最多提议 `min(draft_tokens, remaining-1)` 个 token，预留一个 correction／bonus 位置。只剩一个输出名额时，不征求草稿，普通前向一步。
 
+停机条件互相嵌套，状态图比文字清单更清楚：
+
+```mermaid
+stateDiagram-v2
+    %% id: p23-eos-budget
+    accTitle: EOS 与预算必须一起守住
+    accDescr: 名额为 0 或 prompt 末尾已是 EOS 则直接返回；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。
+    [*] --> Check: 新请求
+    Check --> Done: 名额=0 或 prompt 末已是 EOS
+    Check --> Prefill: 还有名额
+    Prefill --> Gen: 得到 pending
+    Prefill --> Done: prefill 就产出 EOS
+    Gen --> Verify: 征求草稿并验证
+    Verify --> Done: 接受/修正/bonus 遇 EOS
+    Verify --> Gen: 提交后仍有名额
+    Verify --> Gen: 拒草稿里的 EOS（不停）
+    note right of Verify
+      只剩 1 个名额：草稿长度=0
+    end note
+    Done --> [*]
+```
+
+
 因此最后一轮不会越过 `max_new_tokens`。本例保守要求 `prompt 长度 + 生成预算 <= max_seq_len`，不实现滑动截断；若模型权重或影响缓存的设置改变，必须重新开始请求。
 
 每轮验证还必须至少提交一个 token。若拒绝分支因程序错误忘了提交 correction，代码立即抛出 `RuntimeError`，而不是在同一前缀上无限循环。**空草稿本身是合法的**：它仍从目标 logits 提交一个 token，所以不能仅因草稿长度为 0 就报“没有进展”。
@@ -267,6 +357,21 @@ r(x)=\frac{\max(0,p(x)-q(x))}
 $$
 
 这套接受与校正规则的依据见 [Fast Inference from Transformers via Speculative Decoding v2，§2.3 与附录 A](https://arxiv.org/html/2211.17192v2)。若 q(x)=0，正常从 q 采样不会得到该 x；p=q 时拒绝概率为零，不应去归一化一个全零残差。涉及 temperature 或截断采样时，要使用相应处理后的分布，不能混用原始 logits 和修改后的概率。
+
+拒绝之后必须从残差分布重抽，流程如下：
+
+```mermaid
+flowchart TD
+    %% id: p23-spec-sample
+    accTitle: 拒绝之后要从残差分布重抽，不能改用 argmax
+    accDescr: 从 q 抽 x，以 min(1, p(x)/q(x)) 接受；接受则输出 x；拒绝则从 max(0, p−q) 归一化后重抽，不是 argmax。
+    A["从草稿分布 q 抽 x"] --> B{"接受？<br/>min(1, p(x)/q(x))"}
+    B -->|是| C["输出 x"]
+    B -->|否| D["残差 r ∝ max(0, p−q)"]
+    D --> E["从 r 归一化后重抽"]
+    F["禁止：改用 argmax(p)"] -.-> E
+```
+
 
 手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4 的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到 [0.6,0.4]。
 

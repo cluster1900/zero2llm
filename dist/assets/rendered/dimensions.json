@@ -127,29 +127,77 @@
     "width": 1080.0,
     "height": 850.0
   },
+  "flow-p23-four-names": {
+    "width": 765.24072265625,
+    "height": 410.88275146484375
+  },
   "p23-mtp": {
     "width": 1120.0,
     "height": 1060.0
+  },
+  "flow-p23-r1-routes": {
+    "width": 480.7734375,
+    "height": 516
+  },
+  "flow-p23-pending-cache": {
+    "width": 552,
+    "height": 913
+  },
+  "flow-p23-eos-budget": {
+    "width": 677.4671630859375,
+    "height": 793.6000366210938
+  },
+  "flow-p23-spec-sample": {
+    "width": 605.5625,
+    "height": 495.8125
   },
   "p24-quantization": {
     "width": 1120.0,
     "height": 1050.0
   },
+  "flow-p24-sse-stream": {
+    "width": 399,
+    "height": 793
+  },
   "p25-qwen3": {
     "width": 1200.0,
     "height": 1060.0
+  },
+  "flow-p25-block-order": {
+    "width": 488.0625,
+    "height": 696
+  },
+  "flow-p25-thinking-budget": {
+    "width": 489.734375,
+    "height": 471
   },
   "p26-deepseek": {
     "width": 960.0,
     "height": 780.0
   },
+  "flow-p26-mtp-depth": {
+    "width": 497.65625,
+    "height": 410
+  },
+  "flow-p26-vision-pack": {
+    "width": 623.578125,
+    "height": 288
+  },
   "p27-healthcheck": {
     "width": 1120.0,
     "height": 700.0
   },
+  "flow-p27-health-steps": {
+    "width": 599.34375,
+    "height": 434
+  },
   "cache_causal": {
     "width": 960.0,
     "height": 460.0
+  },
+  "flow-p27-ckpt-gate": {
+    "width": 336.7734375,
+    "height": 563.609375
   },
   "negative_controls": {
     "width": 960.0,

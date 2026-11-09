@@ -334,6 +334,27 @@ b5046 的微型 Llama 成功，**不证明 Qwen3 或 DeepSeek-V4.1-Flash 可运�
 
 SSE（Server-Sent Events）用空行分隔事件，事件的 `data:` 字段里常放 JSON。一次网络读取可能只有半个中文字符，也可能包含三个事件；一个 content delta 可能包含多个 token，也可能为空。
 
+网络块、SSE 事件和 token 三种边界互不对齐：
+
+```mermaid
+sequenceDiagram
+    %% id: p24-sse-stream
+    accTitle: 网络块、SSE 事件和 token 三种边界互不对齐
+    accDescr: 客户端 POST 流式 completions；服务端逐 token 生成并以空行分隔 SSE 事件；一次网络读取可能只有半个字符；客户端缓冲到完整事件再解析，直到 data:[DONE]。
+    autonumber
+    participant C as 客户端
+    participant S as 服务端
+    C->>S: POST /v1/completions (stream)
+    S->>S: 逐 token 生成
+    S-->>C: 网络块（可能半个字符）
+    C->>C: 缓冲到完整 SSE 事件
+    Note over C,S: data:{...} 以空行分隔
+    S-->>C: 更多事件 / 半包
+    C->>C: 解析 JSON，拼文本
+    S-->>C: data: [DONE]
+```
+
+
 ```text
 data: {"choices":[{"text":"春","finish_reason":null}]}
 
