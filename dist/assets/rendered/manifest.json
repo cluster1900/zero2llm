@@ -205,17 +205,17 @@
     },
     "flow-p23-r1-routes": {
       "kind": "mermaid",
-      "sha256": "1239c989f217e1bcdd8368c0d95a71e4ed40812cafcb907f18e2d32de795a309",
+      "sha256": "ea7ab72656a4cbe6ce491f30a0c3709a056dbbe246a7be6f38becbfdd558cd86",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p23-pending-cache": {
       "kind": "mermaid",
-      "sha256": "d28b3b0cead29f9003c4205fa5735eb394f9c6a7ad434c20177b7c7e9700125d",
+      "sha256": "5d4bcd634a2e6b24f1df70f7c332dcb41714bc17c4046c21de0e4bd6fd3beef1",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p23-eos-budget": {
       "kind": "mermaid",
-      "sha256": "3b81d0f317dcac9899536712ecd31ac8137718c6d042561777f30245decba891",
+      "sha256": "d8686d495d381f527d0861339d044a66cddeb65c3b690f1e027d0c12d044c993",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p23-spec-sample": {
@@ -231,7 +231,7 @@
     },
     "flow-p24-sse-stream": {
       "kind": "mermaid",
-      "sha256": "842b725365071c398e36f12b219502fd276f76bd8ce8bebeaddef1e6f911a9f5",
+      "sha256": "0f7198d44af1a240cbe16439f2a63f37841cef9fbe1697e0870a8df3b8d8b8bf",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p25-qwen3": {
@@ -242,12 +242,12 @@
     },
     "flow-p25-block-order": {
       "kind": "mermaid",
-      "sha256": "a1bda66c4dbccb0fd39a3a2491b6105f7db61642fc29d6b16024f8f0ef7f6e12",
+      "sha256": "97cde23550945c9f4d8dc815b2d6cb6ef46eade4d391a3049c8635098065a44f",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p25-thinking-budget": {
       "kind": "mermaid",
-      "sha256": "2e72642811637ac2ff052f52136abd051d18abe262df6d6c1f32505c2049ab00",
+      "sha256": "a516187eae51c30d8250d2db34d58810a946fb45a1b3b19bb3bddfaf5d9e6bf0",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p26-deepseek": {
@@ -258,12 +258,12 @@
     },
     "flow-p26-mtp-depth": {
       "kind": "mermaid",
-      "sha256": "5dee6959d70469eb2ab2b4032dfc19e4748c8fc2bd888c15b0ad05ab77876ce1",
+      "sha256": "cebfb78a8780e72c8faf25bfd6d37247f225becc86376a3e8cd0cc4fd2f06d2a",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p26-vision-pack": {
       "kind": "mermaid",
-      "sha256": "81579a1e208dbd7948ff52cfa2b3a0021ccb4970a2eb1c8f7e16bcb8e3d1684c",
+      "sha256": "7119803d87b8772e23eca953540cd58e54dd03ca430c181c11001e626073d96f",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p27-healthcheck": {
@@ -274,7 +274,7 @@
     },
     "flow-p27-health-steps": {
       "kind": "mermaid",
-      "sha256": "af6f54d9f513f5018a20ace475a2f2b8c906ce9cdc1133e1c82914b7a33efcbc",
+      "sha256": "5acff838dadd50ae883fcc45fcc18c628c37ea5a94f9672e7025c3601f998f97",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "cache_causal": {

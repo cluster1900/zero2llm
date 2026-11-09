@@ -149,11 +149,11 @@
   },
   "flow-p23-pending-cache": {
     "width": 552,
-    "height": 913
+    "height": 865
   },
   "flow-p23-eos-budget": {
-    "width": 677.4671630859375,
-    "height": 793.6000366210938
+    "width": 1126.47705078125,
+    "height": 813.4000244140625
   },
   "flow-p23-spec-sample": {
     "width": 605.5625,
@@ -172,23 +172,23 @@
     "height": 1060.0
   },
   "flow-p25-block-order": {
-    "width": 488.0625,
-    "height": 696
+    "width": 734.625,
+    "height": 669
   },
   "flow-p25-thinking-budget": {
-    "width": 489.734375,
-    "height": 471
+    "width": 478.734375,
+    "height": 284
   },
   "p26-deepseek": {
     "width": 960.0,
     "height": 780.0
   },
   "flow-p26-mtp-depth": {
-    "width": 497.65625,
-    "height": 410
+    "width": 623.5703125,
+    "height": 437
   },
   "flow-p26-vision-pack": {
-    "width": 623.578125,
+    "width": 630.671875,
     "height": 288
   },
   "p27-healthcheck": {
@@ -196,8 +196,8 @@
     "height": 700.0
   },
   "flow-p27-health-steps": {
-    "width": 599.34375,
-    "height": 434
+    "width": 670.484375,
+    "height": 461
   },
   "cache_causal": {
     "width": 960.0,

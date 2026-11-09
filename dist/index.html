@@ -13779,7 +13779,7 @@ draft/verify。<strong>随机投机采样没有实现，不声称其分布保持
 </tr>
 </tbody>
 </table></div>
-<p>四个问题挤在一个名词里最容易混，先用脑图分开：</p>
+<p>四个问题挤在一个名词里最容易混；下面脑图拆开常被混称的几件事，不必与上表逐行一一对应：</p>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-p23-four-names.svg"
 title="点击查看原尺寸图"><img
@@ -13827,7 +13827,7 @@ v1，§2.2–2.4</a></li>
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p23-r1-routes.svg" class="book-diagram"
 width="481"
-alt="R1 式三条路线：直接 RL、多阶段、蒸馏学生。基座分三路：R1-Zero 直接 RL；R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL；蒸馏学生只做 SFT。数据筛选与草稿拒绝不是一回事。" /></a>
+alt="R1 式三条路线：直接 RL、多阶段、蒸馏学生。基座分三路——R1-Zero 直接 RL，R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL，蒸馏学生只做 SFT——且数据筛选与草稿拒绝不是一回事。" /></a>
 <div class="diagram-caption">
 R1 式三条路线：直接 RL、多阶段、蒸馏学生
 </div>
@@ -14170,7 +14170,7 @@ correction／bonus 额外调用一次目标模型，本实现维护如下不变�
 <a href="assets/rendered/flow-p23-pending-cache.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p23-pending-cache.svg" class="book-diagram"
-width="339"
+width="357"
 alt="pending 还没喂进 cache：三者相差一位。草稿模型提出草稿；目标模型 prefill 得到首 token 作 pending；每轮把 pending 加草稿一起喂给目标；接受前缀后修正或 bonus 成为新 pending；拒绝后 cache 截回已接受长度。" /></a>
 <div class="diagram-caption">
 pending 还没喂进 cache：三者相差一位
@@ -14243,8 +14243,8 @@ token，预留一个 correction／bonus
 <a href="assets/rendered/flow-p23-eos-budget.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p23-eos-budget.svg" class="book-diagram"
-width="478"
-alt="EOS 与预算必须一起守住。名额为 0 或 prompt 末尾已是 EOS 则直接返回；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。" /></a>
+width="720"
+alt="EOS 与预算必须一起守住。名额为 0 或 prompt 末尾已是 EOS 则直接返回；prefill 或生成后名额用尽则 Done；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。" /></a>
 <div class="diagram-caption">
 EOS 与预算必须一起守住
 </div>
@@ -15582,8 +15582,8 @@ block：QK-norm 不是又一个 LayerNorm</h2>
 <a href="assets/rendered/flow-p25-block-order.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p25-block-order.svg" class="book-diagram"
-width="393"
-alt="QK-norm、RoPE 与缓存的先后顺序决定权重能否对上。x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 各做 QK-norm（V 不做），再 RoPE；缓存旋转后的 K 与原始 V；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。" /></a>
+width="615"
+alt="QK-norm、RoPE 与缓存的先后顺序决定权重能否对上。x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 做 QK-norm 再 RoPE；V 投影后直通，在「缓存旋转后 K / 原始 V」与旋转后 K 会合；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。" /></a>
 <div class="diagram-caption">
 QK-norm、RoPE 与缓存的先后顺序决定权重能否对上
 </div>
@@ -15827,8 +15827,8 @@ token”，也不会自动给答案另留一份额度。<code>completion_budget<
 <a href="assets/rendered/flow-p25-thinking-budget.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p25-thinking-budget.svg" class="book-diagram"
-width="490"
-alt="Thinking 开关、软提示、生成额度与长度上限是四层。模板布尔开关改 prompt 文本；软提示由模型自行遵循；总生成额度在运行时截断；配置里的位置与长度上限另算；四者互不改写。" /></a>
+width="479"
+alt="Thinking 开关、软提示、生成额度与长度上限是四层。① 模板布尔开关改 prompt 文本；② 软提示由模型自行遵循；③ 总生成额度在运行时截断；④ 配置里的位置与长度上限另算；四者互不改写。" /></a>
 <div class="diagram-caption">
 Thinking 开关、软提示、生成额度与长度上限是四层
 </div>
@@ -16148,8 +16148,8 @@ href="#p23-mtp">P23</a> 的独立线性未来头用于学习标签对齐，不�
 <a href="assets/rendered/flow-p26-mtp-depth.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p26-mtp-depth.svg" class="book-diagram"
-width="498"
-alt="顺序 MTP：每一深度接上上一表示和对应 token 向量。主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，共享输出头预测 t+2；更深依此类推；训练用真 token，部署不能偷看。" /></a>
+width="624"
+alt="顺序 MTP：每一深度接上上一表示和对应 token 向量。主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，其输出再经共享输出头读出 t+2；深度 2 接该块输出与 emb(t+2) 再进下一块；训练用真 token，部署不能偷看。" /></a>
 <div class="diagram-caption">
 顺序 MTP：每一深度接上上一表示和对应 token 向量
 </div>
@@ -16397,7 +16397,7 @@ ViT、projector、视觉位置编码或图像理解。</p>
 <a href="assets/rendered/flow-p26-vision-pack.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p26-vision-pack.svg" class="book-diagram"
-width="624"
+width="631"
 alt="视觉特征补零并 3×3 展开后，再投到文本宽度 D。ViT 特征网格高×宽×C 先转成通道在前，右侧与下方补零到 3 的倍数，再 3×3 不重叠展开（块内顺序：通道、行、列）得到 9C 维，经 MLP 投到 D 后接入文本 token 序列。" /></a>
 <div class="diagram-caption">
 视觉特征补零并 3×3 展开后，再投到文本宽度 D
@@ -17110,8 +17110,8 @@ logits。</li>
 <a href="assets/rendered/flow-p27-health-steps.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p27-health-steps.svg" class="book-diagram"
-width="599"
-alt="健康检查八步有依赖，不能打乱顺序瞎跳。make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、负例控制（含选修 MTP）、CPU 计时，最后出报告。" /></a>
+width="670"
+alt="健康检查八步有依赖，不能打乱顺序瞎跳。make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、对照消融与负例控制（含选修 MTP）、CPU 计时，最后出报告。" /></a>
 <div class="diagram-caption">
 健康检查八步有依赖，不能打乱顺序瞎跳
 </div>

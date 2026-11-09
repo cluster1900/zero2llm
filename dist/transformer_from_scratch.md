@@ -7187,7 +7187,7 @@ On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 tok
 | 已经训练好的目标模型，能否少做几次串行调用？ | 生成算法与执行安排 | 投机解码 |
 | 测试时多给计算，答案是否更好？ | 单题计算预算与评估方式 | 预算—正确率曲线 |
 
-四个问题挤在一个名词里最容易混，先用脑图分开：
+四个问题挤在一个名词里最容易混；下面脑图拆开常被混称的几件事，不必与上表逐行一一对应：
 
 ```mermaid
 mindmap
@@ -7233,7 +7233,7 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 flowchart TD
     %% id: p23-r1-routes
     accTitle: R1 式三条路线：直接 RL、多阶段、蒸馏学生
-    accDescr: 基座分三路：R1-Zero 直接 RL；R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL；蒸馏学生只做 SFT。数据筛选与草稿拒绝不是一回事。
+    accDescr: 基座分三路——R1-Zero 直接 RL，R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL，蒸馏学生只做 SFT——且数据筛选与草稿拒绝不是一回事。
     BASE["基座模型"] --> Z["R1-Zero<br/>直接 RL"]
     BASE --> R["R1"]
     BASE --> D["蒸馏学生"]
@@ -7441,7 +7441,7 @@ sequenceDiagram
     participant Target as 目标模型
     participant Cache as cache / pending
     Target->>Cache: prefill prompt，首 token 变 pending
-    Note over Cache: tokens 含 pending；cache 只到倒数第二
+    Note over Cache: tokens 含 pending；<br/>cache 只到倒数第二
     Draft->>Target: 本轮草稿
     Target->>Target: 喂入 pending + 草稿，一次验证
     alt 接受前缀
@@ -7492,16 +7492,19 @@ sequenceDiagram
 stateDiagram-v2
     %% id: p23-eos-budget
     accTitle: EOS 与预算必须一起守住
-    accDescr: 名额为 0 或 prompt 末尾已是 EOS 则直接返回；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。
+    accDescr: 名额为 0 或 prompt 末尾已是 EOS 则直接返回；prefill 或生成后名额用尽则 Done；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。
     [*] --> Check: 新请求
     Check --> Done: 名额=0 或 prompt 末已是 EOS
     Check --> Prefill: 还有名额
-    Prefill --> Gen: 得到 pending
-    Prefill --> Done: prefill 就产出 EOS
+    Prefill --> Gen: 得到 pending 且仍有名额
+    Prefill --> Done: prefill 产出 EOS
+    Prefill --> Done: 名额用尽
     Gen --> Verify: 征求草稿并验证
+    Gen --> Done: 名额用尽
     Verify --> Done: 接受/修正/bonus 遇 EOS
     Verify --> Gen: 提交后仍有名额
-    Verify --> Gen: 拒草稿里的 EOS（不停）
+    Verify --> RejectedEOS: 拒草稿里的 EOS（不停）
+    RejectedEOS --> Gen
     note right of Verify
       只剩 1 个名额：草稿长度=0
     end note
@@ -7983,7 +7986,7 @@ sequenceDiagram
     participant C as 客户端
     participant S as 服务端
     C->>S: POST /v1/completions (stream)
-    S->>S: 逐 token 生成
+    S->>S: 生成 token
     S-->>C: 网络块（可能半个字符）
     C->>C: 缓冲到完整 SSE 事件
     Note over C,S: data:{...} 以空行分隔
@@ -8216,13 +8219,15 @@ x → RMSNorm → Attention → 加回 x
 flowchart LR
     %% id: p25-block-order
     accTitle: QK-norm、RoPE 与缓存的先后顺序决定权重能否对上
-    accDescr: x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 各做 QK-norm（V 不做），再 RoPE；缓存旋转后的 K 与原始 V；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。
+    accDescr: x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 做 QK-norm 再 RoPE；V 投影后直通，在「缓存旋转后 K / 原始 V」与旋转后 K 会合；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。
     subgraph Attn["注意力半段"]
       direction TB
       A["x → RMSNorm"] --> B["Q/K/V 投影分头"]
-      B --> C["Q、K：QK-norm<br/>V：不做"]
+      B --> C["Q、K：QK-norm"]
       C --> D["RoPE split-half"]
-      D --> E["缓存旋转后 K<br/>与原始 V"]
+      D --> E["缓存旋转后 K / 原始 V"]
+      B --> V["V：投影后直通<br/>不做 QK-norm / RoPE"]
+      V --> E
       E --> F["注意力 → 加回 x"]
     end
     subgraph FFN["FFN / MoE 半段"]
@@ -8379,25 +8384,19 @@ False 比 True 多加的后缀（空行有意义）：
 模板开关、软提示、生成额度和配置长度上限是四层，互不改写：
 
 ```mermaid
-flowchart TD
+flowchart TB
     %% id: p25-thinking-budget
     accTitle: Thinking 开关、软提示、生成额度与长度上限是四层
-    accDescr: 模板布尔开关改 prompt 文本；软提示由模型自行遵循；总生成额度在运行时截断；配置里的位置与长度上限另算；四者互不改写。
-    TOP["四件事并列，互不改写"]
-    subgraph G[" "]
+    accDescr: ① 模板布尔开关改 prompt 文本；② 软提示由模型自行遵循；③ 总生成额度在运行时截断；④ 配置里的位置与长度上限另算；四者互不改写。
+    subgraph Top[" "]
       direction LR
-      subgraph L[" "]
-        direction TB
-        B["① 模板布尔开关<br/>改 prompt 文本"]
-        C["② 软提示 /think<br/>模型自行遵循"]
-      end
-      subgraph R[" "]
-        direction TB
-        D["③ 总生成额度<br/>运行时截断"]
-        E["④ 配置长度上限<br/>位置与上下文"]
-      end
+      B["① 模板布尔开关<br/>改 prompt 文本"] --> C["② 软提示 /think<br/>模型自行遵循"]
     end
-    TOP --> G
+    subgraph Bot[" "]
+      direction LR
+      D["③ 总生成额度<br/>运行时截断"] --> E["④ 配置长度上限<br/>位置与上下文"]
+    end
+    Top --> Bot
 ```
 
 
@@ -8573,12 +8572,13 @@ V3 的 MTP 是**顺序模块**，不是在同一 hidden state 上并排挂几个
 flowchart TD
     %% id: p26-mtp-depth
     accTitle: 顺序 MTP：每一深度接上上一表示和对应 token 向量
-    accDescr: 主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，共享输出头预测 t+2；更深依此类推；训练用真 token，部署不能偷看。
+    accDescr: 主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，其输出再经共享输出头读出 t+2；深度 2 接该块输出与 emb(t+2) 再进下一块；训练用真 token，部署不能偷看。
     A["主干表示 h_t"] --> B["主头 → 预测 t+1"]
     A --> C["深度 1：上一表示 + emb(t+1)"]
     C --> D["额外 Transformer 块"]
-    D --> E["共享输出头 → 预测 t+2"]
-    E --> F["深度 2：依此类推"]
+    D --> E["共享输出头 → 预测 t+2<br/>（旁路读出）"]
+    D --> F["深度 2：块输出 + emb(t+2)"]
+    F --> H["再一块…"]
     G["训练：用真 token<br/>部署：不能偷看"] -.-> C
 ```
 
@@ -8673,7 +8673,7 @@ flowchart TD
     accDescr: ViT 特征网格高×宽×C 先转成通道在前，右侧与下方补零到 3 的倍数，再 3×3 不重叠展开（块内顺序：通道、行、列）得到 9C 维，经 MLP 投到 D 后接入文本 token 序列。
     subgraph Prep["重排前"]
       direction LR
-      A["ViT H×W×C"] --> B["通道在前"]
+      A["ViT 高×宽×C"] --> B["通道在前"]
       B --> C["右/下补零<br/>边长为 3 的倍数"]
     end
     subgraph Pack["展开与投影"]
@@ -9037,7 +9037,7 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 flowchart LR
     %% id: p27-health-steps
     accTitle: 健康检查八步有依赖，不能打乱顺序瞎跳
-    accDescr: make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、负例控制（含选修 MTP）、CPU 计时，最后出报告。
+    accDescr: make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、对照消融与负例控制（含选修 MTP）、CPU 计时，最后出报告。
     subgraph Col1["前四步"]
       direction TB
       A["① make_stages"] --> B["② fixture / 梯度 smoke"]
@@ -9047,7 +9047,7 @@ flowchart LR
     subgraph Col2["后四步"]
       direction TB
       E["⑤ 多种分块缓存检查"] --> F["⑥ 组件 oracle 与兼容"]
-      F --> G["⑦ 负例控制（含 MTP）"]
+      F --> G["⑦ 对照消融 + 负例控制（含 MTP）"]
       G --> H["⑧ CPU 计时 → 报告"]
     end
     Col1 --> Col2
