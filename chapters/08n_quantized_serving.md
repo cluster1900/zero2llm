@@ -345,7 +345,7 @@ sequenceDiagram
     participant C as 客户端
     participant S as 服务端
     C->>S: POST /v1/completions (stream)
-    S->>S: 逐 token 生成
+    S->>S: 生成 token
     S-->>C: 网络块（可能半个字符）
     C->>C: 缓冲到完整 SSE 事件
     Note over C,S: data:{...} 以空行分隔

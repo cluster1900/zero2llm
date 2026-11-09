@@ -70,12 +70,13 @@ V3 的 MTP 是**顺序模块**，不是在同一 hidden state 上并排挂几个
 flowchart TD
     %% id: p26-mtp-depth
     accTitle: 顺序 MTP：每一深度接上上一表示和对应 token 向量
-    accDescr: 主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，共享输出头预测 t+2；更深依此类推；训练用真 token，部署不能偷看。
+    accDescr: 主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，其输出再经共享输出头读出 t+2；深度 2 接该块输出与 emb(t+2) 再进下一块；训练用真 token，部署不能偷看。
     A["主干表示 h_t"] --> B["主头 → 预测 t+1"]
     A --> C["深度 1：上一表示 + emb(t+1)"]
     C --> D["额外 Transformer 块"]
-    D --> E["共享输出头 → 预测 t+2"]
-    E --> F["深度 2：依此类推"]
+    D --> E["共享输出头 → 预测 t+2<br/>（旁路读出）"]
+    D --> F["深度 2：块输出 + emb(t+2)"]
+    F --> H["再一块…"]
     G["训练：用真 token<br/>部署：不能偷看"] -.-> C
 ```
 
@@ -170,7 +171,7 @@ flowchart TD
     accDescr: ViT 特征网格高×宽×C 先转成通道在前，右侧与下方补零到 3 的倍数，再 3×3 不重叠展开（块内顺序：通道、行、列）得到 9C 维，经 MLP 投到 D 后接入文本 token 序列。
     subgraph Prep["重排前"]
       direction LR
-      A["ViT H×W×C"] --> B["通道在前"]
+      A["ViT 高×宽×C"] --> B["通道在前"]
       B --> C["右/下补零<br/>边长为 3 的倍数"]
     end
     subgraph Pack["展开与投影"]

@@ -114,7 +114,7 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 flowchart LR
     %% id: p27-health-steps
     accTitle: 健康检查八步有依赖，不能打乱顺序瞎跳
-    accDescr: make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、负例控制（含选修 MTP）、CPU 计时，最后出报告。
+    accDescr: make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、对照消融与负例控制（含选修 MTP）、CPU 计时，最后出报告。
     subgraph Col1["前四步"]
       direction TB
       A["① make_stages"] --> B["② fixture / 梯度 smoke"]
@@ -124,7 +124,7 @@ flowchart LR
     subgraph Col2["后四步"]
       direction TB
       E["⑤ 多种分块缓存检查"] --> F["⑥ 组件 oracle 与兼容"]
-      F --> G["⑦ 负例控制（含 MTP）"]
+      F --> G["⑦ 对照消融 + 负例控制（含 MTP）"]
       G --> H["⑧ CPU 计时 → 报告"]
     end
     Col1 --> Col2

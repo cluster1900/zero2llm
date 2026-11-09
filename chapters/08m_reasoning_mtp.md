@@ -15,7 +15,7 @@
 | 已经训练好的目标模型，能否少做几次串行调用？ | 生成算法与执行安排 | 投机解码 |
 | 测试时多给计算，答案是否更好？ | 单题计算预算与评估方式 | 预算—正确率曲线 |
 
-四个问题挤在一个名词里最容易混，先用脑图分开：
+四个问题挤在一个名词里最容易混；下面脑图拆开常被混称的几件事，不必与上表逐行一一对应：
 
 ```mermaid
 mindmap
@@ -61,7 +61,7 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 flowchart TD
     %% id: p23-r1-routes
     accTitle: R1 式三条路线：直接 RL、多阶段、蒸馏学生
-    accDescr: 基座分三路：R1-Zero 直接 RL；R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL；蒸馏学生只做 SFT。数据筛选与草稿拒绝不是一回事。
+    accDescr: 基座分三路——R1-Zero 直接 RL，R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL，蒸馏学生只做 SFT——且数据筛选与草稿拒绝不是一回事。
     BASE["基座模型"] --> Z["R1-Zero<br/>直接 RL"]
     BASE --> R["R1"]
     BASE --> D["蒸馏学生"]
@@ -269,7 +269,7 @@ sequenceDiagram
     participant Target as 目标模型
     participant Cache as cache / pending
     Target->>Cache: prefill prompt，首 token 变 pending
-    Note over Cache: tokens 含 pending；cache 只到倒数第二
+    Note over Cache: tokens 含 pending；<br/>cache 只到倒数第二
     Draft->>Target: 本轮草稿
     Target->>Target: 喂入 pending + 草稿，一次验证
     alt 接受前缀
@@ -320,16 +320,19 @@ sequenceDiagram
 stateDiagram-v2
     %% id: p23-eos-budget
     accTitle: EOS 与预算必须一起守住
-    accDescr: 名额为 0 或 prompt 末尾已是 EOS 则直接返回；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。
+    accDescr: 名额为 0 或 prompt 末尾已是 EOS 则直接返回；prefill 或生成后名额用尽则 Done；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。
     [*] --> Check: 新请求
     Check --> Done: 名额=0 或 prompt 末已是 EOS
     Check --> Prefill: 还有名额
-    Prefill --> Gen: 得到 pending
-    Prefill --> Done: prefill 就产出 EOS
+    Prefill --> Gen: 得到 pending 且仍有名额
+    Prefill --> Done: prefill 产出 EOS
+    Prefill --> Done: 名额用尽
     Gen --> Verify: 征求草稿并验证
+    Gen --> Done: 名额用尽
     Verify --> Done: 接受/修正/bonus 遇 EOS
     Verify --> Gen: 提交后仍有名额
-    Verify --> Gen: 拒草稿里的 EOS（不停）
+    Verify --> RejectedEOS: 拒草稿里的 EOS（不停）
+    RejectedEOS --> Gen
     note right of Verify
       只剩 1 个名额：草稿长度=0
     end note

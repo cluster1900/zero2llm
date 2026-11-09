@@ -103,13 +103,15 @@ x → RMSNorm → Attention → 加回 x
 flowchart LR
     %% id: p25-block-order
     accTitle: QK-norm、RoPE 与缓存的先后顺序决定权重能否对上
-    accDescr: x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 各做 QK-norm（V 不做），再 RoPE；缓存旋转后的 K 与原始 V；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。
+    accDescr: x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 做 QK-norm 再 RoPE；V 投影后直通，在「缓存旋转后 K / 原始 V」与旋转后 K 会合；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。
     subgraph Attn["注意力半段"]
       direction TB
       A["x → RMSNorm"] --> B["Q/K/V 投影分头"]
-      B --> C["Q、K：QK-norm<br/>V：不做"]
+      B --> C["Q、K：QK-norm"]
       C --> D["RoPE split-half"]
-      D --> E["缓存旋转后 K<br/>与原始 V"]
+      D --> E["缓存旋转后 K / 原始 V"]
+      B --> V["V：投影后直通<br/>不做 QK-norm / RoPE"]
+      V --> E
       E --> F["注意力 → 加回 x"]
     end
     subgraph FFN["FFN / MoE 半段"]
@@ -266,25 +268,19 @@ False 比 True 多加的后缀（空行有意义）：
 模板开关、软提示、生成额度和配置长度上限是四层，互不改写：
 
 ```mermaid
-flowchart TD
+flowchart TB
     %% id: p25-thinking-budget
     accTitle: Thinking 开关、软提示、生成额度与长度上限是四层
-    accDescr: 模板布尔开关改 prompt 文本；软提示由模型自行遵循；总生成额度在运行时截断；配置里的位置与长度上限另算；四者互不改写。
-    TOP["四件事并列，互不改写"]
-    subgraph G[" "]
+    accDescr: ① 模板布尔开关改 prompt 文本；② 软提示由模型自行遵循；③ 总生成额度在运行时截断；④ 配置里的位置与长度上限另算；四者互不改写。
+    subgraph Top[" "]
       direction LR
-      subgraph L[" "]
-        direction TB
-        B["① 模板布尔开关<br/>改 prompt 文本"]
-        C["② 软提示 /think<br/>模型自行遵循"]
-      end
-      subgraph R[" "]
-        direction TB
-        D["③ 总生成额度<br/>运行时截断"]
-        E["④ 配置长度上限<br/>位置与上下文"]
-      end
+      B["① 模板布尔开关<br/>改 prompt 文本"] --> C["② 软提示 /think<br/>模型自行遵循"]
     end
-    TOP --> G
+    subgraph Bot[" "]
+      direction LR
+      D["③ 总生成额度<br/>运行时截断"] --> E["④ 配置长度上限<br/>位置与上下文"]
+    end
+    Top --> Bot
 ```
 
 
