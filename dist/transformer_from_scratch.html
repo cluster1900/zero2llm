@@ -1087,20 +1087,20 @@ class="math inline">\(b\)</span> 的夹角（局部符号，只在本节使用�
 之间。<strong>把两个向量都归一化成单位长度后，点积就等于余弦相似度</strong>（严格说，只要两个长度的乘积为
 1 即可）。</p>
 <p>一般地：</p>
-<p><span class="math display">\[a\cdot b=\sum_{j=1}^{D}a_j b_j,\qquad
-\|a\|=\sqrt{\sum_{j=1}^{D}a_j^2},\qquad
+<p><span class="math display">\[a\cdot b=\sum_{k=1}^{D}a_k b_k,\qquad
+\|a\|=\sqrt{\sum_{k=1}^{D}a_k^2},\qquad
 \cos\theta=\frac{a\cdot b}{\|a\|\|b\|}\]</span></p>
 <p>三个式子各管一件事：点积把对应分量相乘再加起来，两根箭头越同向、越长，它就越大；长度是“自己和自己点积再开方”，像拿尺子量箭头；余弦再把点积除以两根箭头的长度，把长短的影响除掉，只剩“方向像不像”。</p>
 <p>其中：<span class="math inline">\(D\)</span>
 是向量宽度，也就是分量个数；<span
-class="math inline">\(a_j\)</span>、<span
-class="math inline">\(b_j\)</span> 是 <span
+class="math inline">\(a_k\)</span>、<span
+class="math inline">\(b_k\)</span> 是 <span
 class="math inline">\(a\)</span>、<span class="math inline">\(b\)</span>
-的第 <span class="math inline">\(j\)</span> 个分量，这里的 <span
-class="math inline">\(j\)</span> 只是分量编号，从 1 数到 <span
+的第 <span class="math inline">\(k\)</span> 个分量，<span
+class="math inline">\(k\)</span> 是分量（特征）编号，从 1 数到 <span
 class="math inline">\(D\)</span>；<span
-class="math inline">\(\sum_{j=1}^{D}\)</span> 表示把 <span
-class="math inline">\(j=1\)</span> 到 <span
+class="math inline">\(\sum_{k=1}^{D}\)</span> 表示把 <span
+class="math inline">\(k=1\)</span> 到 <span
 class="math inline">\(D\)</span> 的各项加起来；<span
 class="math inline">\(\theta\)</span> 同上，是两向量的夹角。</p>
 <p>余弦为
