@@ -1341,13 +1341,13 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a hr
 bytes，并更新每篇文档。完整代码在 <code>counts</code>
 为空时停止，避免对空集合求最小值。</p>
 <p>训练的一轮可以画成下面这张循环图：按文档统计 → 选最高频对 → 分配新 ID
-→ 不重叠替换，直到合并次数用完。</p>
+→ 不重叠替换；统计后若没有相邻对，或合并次数用完，就停止。</p>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-ch01a-bpe-merge-loop.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-ch01a-bpe-merge-loop.svg" class="book-diagram"
-width="310"
-alt="最小字节 BPE：每轮只合并当前最常见的一对。各文档分别统计相邻对，取次数最高的一对（并列取较小 ID 对），新 ID 从 256 起并拼接 bytes，从左到右替换命中对并跳两格，循环到合并次数用完。" /></a>
+width="264"
+alt="最小字节 BPE：每轮只合并当前最常见的一对。各文档分别统计相邻对；没有相邻对则得到 merges 与 vocab。否则取次数最高的一对（并列取较小 ID 对），新 ID 从 256 起并拼接 bytes，从左到右替换命中对并跳两格；合并次数用完也停止。" /></a>
 <div class="diagram-caption">
 最小字节 BPE：每轮只合并当前最常见的一对
 </div>
@@ -2303,7 +2303,7 @@ device；<code>code/attention_core.py</code>
 <a href="assets/rendered/flow-ch03-mask-broadcast.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-ch03-mask-broadcast.svg" class="book-diagram"
-width="720"
+width="590"
 alt="因果掩码与补位掩码先广播再取与，得到 [B,1,T,T]。valid 形状 [B,T]；查询侧扩成 [B,1,T,1]、键侧扩成 [B,1,1,T]，再与下三角 [T,T] 取与，得到 [B,1,T,T]。损失掩码另算，不能用注意力 mask 代替。" /></a>
 <div class="diagram-caption">
 因果掩码与补位掩码先广播再取与，得到 [B,1,T,T]

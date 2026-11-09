@@ -32,7 +32,7 @@
     },
     "flow-ch01a-bpe-merge-loop": {
       "kind": "mermaid",
-      "sha256": "b8e77b9ba7728504508c5026759bcd324e638c6da582dbcdb8c50729b2e5e3de",
+      "sha256": "d230530daa1f2828a9038688ec2295a6e0c7cf9c2d255fd3f30b29bc70e67ad9",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-ch01a-prod-pipeline": {
@@ -68,7 +68,7 @@
     },
     "flow-ch03-mask-broadcast": {
       "kind": "mermaid",
-      "sha256": "8306295e72ff484bf32844bc3f6a46f9d5285d72684e50b7cd194ab0b9d5ece1",
+      "sha256": "4b6384bf4f6760d495e73961129722a58506a3fee6ad9f69c99d528cc0fe625e",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-ch03-all-masked-row": {
