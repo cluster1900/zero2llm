@@ -116,9 +116,9 @@ exp(s - next_m) = exp(s - m) × exp(m - next_m)
 flowchart TD
     %% id: p15-online-softmax
     accTitle: 在线 Softmax 每读一块都把旧账换到新尺度
-    accDescr: 初始 m=−∞、ell=0、acc=0；读一块后取 next_m，用 α=exp(m−next_m) 先缩放旧 ell 与 acc，再累加新块；还有块就继续，读完输出 acc/ell。
-    I["初始 m=−∞，ell=0，acc=0"] --> R["读下一块分数"]
-    R --> N["next_m 与 α"]
+    accDescr: 初始 s_max=−∞、ell=0、acc=0；读一块后取 next_s_max，用 α=exp(s_max−next_s_max) 先缩放旧 ell 与 acc，再累加新块；还有块就继续，读完输出 acc/ell。
+    I["初始 s_max=−∞，ell=0，acc=0"] --> R["读下一块分数"]
+    R --> N["next_s_max 与 α"]
     N --> U["ell、acc 先换尺度再累加"]
     U --> Q{"还有块？"}
     Q -->|有| R
@@ -272,7 +272,7 @@ stateDiagram-v2
     accTitle: 写入前先看尾块满不满、引用是否大于 1
     accDescr: 尾块已满就新分配下一块且不复制；未满且引用大于 1 就复制尾块再写；引用等于 1 则直接写；释放后引用降到 0 的块回空闲池。
     [*] --> 准备写入
-    准备写入 --> 新分配下一块: 尾块已满\n（不复制前缀）
+    准备写入 --> 新分配下一块: 尾块已满（不复制）
     准备写入 --> 复制尾块再写: 未满且引用 > 1
     准备写入 --> 直接写入: 未满且引用 = 1
     新分配下一块 --> 写入完成
@@ -319,12 +319,11 @@ stateDiagram-v2
 flowchart TD
     %% id: p15-prefix-cache
     accTitle: 前缀缓存只复用兼容计算下的同一段历史，语义相似不算
-    accDescr: 先问权重与位置是否兼容：整段相同可用 fork 并共享未满尾块；share_prefix 只共享完整块；只是语义相似或块已释放则不复用。
-    A["要复用已有 KV？"] --> B{"权重与位置处理兼容？\n且 token 前缀相同？"}
-    B -->|否| N["不复用\n语义相似也无效"]
-    B -->|是：整段历史相同| F["fork：可共享未满尾块\n之后写入走写时复制"]
-    B -->|是：只要共同前缀| S["share_prefix：\n只共享完整块边界"]
-    S --> R["已释放的块不能再当前缀"]
+    accDescr: 先问权重与位置是否兼容：整段相同可用 fork 并共享未满尾块；share_prefix 只共享完整块；语义相似或已释放的块都不能复用。
+    A["要复用已有 KV？"] --> B{"权重与位置兼容，且前缀相同？"}
+    B -->|否| N["不复用：语义相似也无效；已释放的块不能当前缀"]
+    B -->|是：整段历史相同| F["fork：可共享未满尾块，之后写时复制"]
+    B -->|是：只要共同前缀| S["share_prefix：只共享完整块边界"]
     N --> R2["重新 prefill"]
 ```
 

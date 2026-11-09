@@ -27,14 +27,14 @@ $$
 
 ![S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃](assets/diagrams/p18-moe.svg)
 
-图中的 N_E 是可选的路由专家数量，k 是每 token 选择的数量，N_S 是始终参与的共享专家数量。**N_E 和 k 不能混写。** k=2、N_E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。
+图中标了 N_E=4、k=2；N_E 是可选的路由专家数量，k 是每 token 选择的数量。共享专家始终参与，数量记 N_S（图中共享专家框未标具体数）。**N_E 和 k 不能混写。** k=2、N_E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。
 
 ## P18.2 路由器先打分，再选择，再加权
 
 设一个 token 的输入是行向量 x，宽度为 D。教学路由器是一层不带 bias 的 Linear：
 
 $$
-z=xW_r^T,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
+z=xW_r^\top,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
 p_e=\frac{\exp(z_e)}{\sum_j\exp(z_j)}.
 $$
 
@@ -99,8 +99,8 @@ $$
 flowchart TD
     %% id: p18-dispatch-combine
     accTitle: MoE 先摊平再按专家收集，combine 按原位置加权放回
-    accDescr: X 形状 [B,T,D] 摊平为 [N,D]（N=B·T）；路由得到 top-k 下标与权重后，dispatch 按专家收集 token，各专家算 F_e，combine 回到原位置加权求和，再还原 [B,T,D]。同一 token 可能去多个专家。
-    X["X [B,T,D]"] --> F["摊平 [N,D]\nN = B · T"]
+    accDescr: X 形状 [B,T,D] 摊平为 [B·T,D]；路由得到 top-k 下标与权重后，dispatch 按专家收集 token，各专家算 F_e，combine 回到原位置加权求和，再还原 [B,T,D]。同一 token 可能去多个专家。
+    X["X [B,T,D]"] --> F["摊平 [B·T,D]"]
     F --> R["路由：top-k 下标与权重"]
     R --> D["dispatch：按专家收集 token\n同一 token 可去多个专家"]
     D --> E["各专家计算 F_e"]
@@ -225,12 +225,22 @@ A、B、C 例子设置 capacity=1 后，requested 仍是 `[2,2,1,1]`，accepted 
 ```mermaid
 flowchart TD
     %% id: p18-grad-paths
-    accTitle: 主损失走被选专家和组合权重，辅助损失才打到全部 affinity
-    accDescr: 主损失更新被选专家参数，未选专家 grad 可为 None；主损失经组合权重 w 回路由器，但 top-1 时 w≡1 使这条任务梯度为 0；辅助损失经全部 p 更新路由器。
-    L["主损失"] --> E["被选专家参数；未选 grad 可为 None"]
-    E --> W["组合权重 w → 路由器；top-1 时 w≡1"]
-    W --> A["辅助损失"]
-    A --> P["全部 affinity p → 路由器"]
+    accTitle: 主损失分叉到被选专家与组合权重，辅助损失才打到全部 affinity
+    accDescr: 三条路径分叉：主损失更新被选专家参数（未选 grad 可为 None）；主损失经组合权重 w 回路由器，top-1 时 w≡1 使该任务梯度为 0；辅助损失经全部 affinity p 更新路由器。
+    subgraph P1["路径 1"]
+      direction LR
+      L1["主损失"] --> E["被选专家参数；未选 grad 可为 None"]
+    end
+    subgraph P2["路径 2"]
+      direction LR
+      L2["主损失"] --> W["w → 路由器；top-1 时为 0"]
+    end
+    subgraph P3["路径 3"]
+      direction LR
+      A["辅助损失"] --> P["全部 affinity p → 路由器"]
+    end
+    P1 ~~~ P2
+    P2 ~~~ P3
 ```
 
 ## P18.8 顺着代码走一次
@@ -342,13 +352,13 @@ sequenceDiagram
     participant L as 本机
     participant N as 网络 all-to-all
     participant R as 远端专家设备
-    L->>L: 本机路由，选出专家
+    L->>L: 本机做路由
     L->>N: 按专家打包 token
     N->>R: 送到专家所在设备
     R->>R: 计算 F_e
     R->>N: 送回专家输出
     N->>L: 收齐各设备结果
-    L->>L: 加权相加，再加共享专家
+    L->>L: 加权并加共享
     Note over L,R: 最忙的设备决定整步等待时间
 ```
 

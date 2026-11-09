@@ -100,16 +100,16 @@
     "height": 650.0
   },
   "flow-p15-online-softmax": {
-    "width": 343.17578125,
+    "width": 361.96484375,
     "height": 594
   },
   "flow-p15-cow-write": {
-    "width": 516.109375,
-    "height": 481.8000183105469
+    "width": 490.03125,
+    "height": 462
   },
   "flow-p15-prefix-cache": {
-    "width": 678.484375,
-    "height": 568
+    "width": 984,
+    "height": 613
   },
   "flow-p15-continuous-batch": {
     "width": 557,
@@ -120,12 +120,12 @@
     "height": 531
   },
   "p16-sparse-linear": {
-    "width": 980.0,
-    "height": 520.0
+    "width": 980,
+    "height": 520
   },
   "flow-p16-sparse-mixed": {
-    "width": 296.140625,
-    "height": 462
+    "width": 316.25,
+    "height": 464
   },
   "flow-p17-codec-names": {
     "width": 834.138427734375,
@@ -136,8 +136,8 @@
     "height": 660
   },
   "flow-p17-csa2-modes": {
-    "width": 324,
-    "height": 410
+    "width": 342.84375,
+    "height": 513
   },
   "p18-moe": {
     "width": 1000,
@@ -145,15 +145,15 @@
   },
   "flow-p18-dispatch-combine": {
     "width": 299.359375,
-    "height": 595
+    "height": 568
   },
   "flow-p18-grad-paths": {
-    "width": 324,
-    "height": 437
+    "width": 532,
+    "height": 384
   },
   "flow-p18-expert-parallel": {
-    "width": 569.5,
-    "height": 769
+    "width": 566,
+    "height": 721
   },
   "p19-pretraining": {
     "width": 1000.0,

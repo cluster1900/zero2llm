@@ -11,7 +11,7 @@
   <rect x="490" y="56" width="470" height="428" rx="12" fill="#f0fdf4" stroke="#bbf7d0"/>
   <text x="245" y="89" text-anchor="middle" class="title">SWA：窗口选择边</text>
   <text x="725" y="89" text-anchor="middle" class="title">线性注意力：先更新，再读取</text>
-  <text x="245" y="119" text-anchor="middle" class="label">W = 3 包含当前位；query 在位置 5</text>
+  <text x="245" y="119" text-anchor="middle" class="label">T_win = 3 包含当前位；query 在位置 5</text>
   <g class="label" text-anchor="middle">
     <rect x="44" y="144" width="54" height="48" rx="6" fill="#e2e8f0" stroke="#94a3b8"/><text x="71" y="175">0</text>
     <rect x="112" y="144" width="54" height="48" rx="6" fill="#e2e8f0" stroke="#94a3b8"/><text x="139" y="175">1</text>
@@ -26,7 +26,7 @@
   <text x="46" y="298" class="label">1 层：3、4、5</text>
   <text x="46" y="332" class="label">2 层：1、2、3、4、5</text>
   <text x="46" y="366" class="label">3 层：0、1、2、3、4、5</text>
-  <text x="245" y="408" text-anchor="middle" class="label">每层最多向前跨 W − 1 位</text>
+  <text x="245" y="408" text-anchor="middle" class="label">每层最多向前跨 T_win − 1 位</text>
   <text x="245" y="453" text-anchor="middle" class="small">有路径 ≠ 一定学会或保留了远处事实</text>
   <g class="label" text-anchor="middle">
     <rect x="609" y="112" width="232" height="44" rx="7" fill="#fff" stroke="#94a3b8"/>
@@ -34,7 +34,7 @@
     <path class="line" d="M675 156L622 190"/><path class="line" d="M775 156L830 190"/>
     <rect x="510" y="197" width="220" height="88" rx="8" fill="#dcfce7" stroke="#4ade80"/>
     <text x="620" y="223">内容状态 S_t</text>
-    <text x="620" y="249" class="small">旧 S + φ(k_t) v_t^T</text>
+    <text x="620" y="249" class="small">旧 S + φ(k_t) v_t⊤</text>
     <text x="620" y="272" class="small">形状 [r, d_v]</text>
     <rect x="745" y="197" width="195" height="88" rx="8" fill="#fef3c7" stroke="#fbbf24"/>
     <text x="842" y="223">归一化状态 z_t</text>
@@ -42,7 +42,7 @@
     <text x="842" y="272" class="small">形状 [r]</text>
     <path class="line" d="M620 285L682 337"/><path class="line" d="M842 285L787 337"/>
     <rect x="538" y="345" width="375" height="54" rx="8" fill="#fff" stroke="#94a3b8"/>
-    <text x="725" y="378">输出 = φ(q_t)^T S_t / φ(q_t)^T z_t</text>
+    <text x="725" y="378">输出 = φ(q_t)⊤ S_t / φ(q_t)⊤ z_t</text>
     <text x="725" y="426" class="label">状态元素数 r × d_v + r，不随 T 增长</text>
     <text x="725" y="453" class="small">固定状态 ≠ 任意长度都能准确检索</text>
   </g>

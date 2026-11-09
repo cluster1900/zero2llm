@@ -4179,9 +4179,9 @@ exp(s - next_m) = exp(s - m) × exp(m - next_m)
 flowchart TD
     %% id: p15-online-softmax
     accTitle: 在线 Softmax 每读一块都把旧账换到新尺度
-    accDescr: 初始 m=−∞、ell=0、acc=0；读一块后取 next_m，用 α=exp(m−next_m) 先缩放旧 ell 与 acc，再累加新块；还有块就继续，读完输出 acc/ell。
-    I["初始 m=−∞，ell=0，acc=0"] --> R["读下一块分数"]
-    R --> N["next_m 与 α"]
+    accDescr: 初始 s_max=−∞、ell=0、acc=0；读一块后取 next_s_max，用 α=exp(s_max−next_s_max) 先缩放旧 ell 与 acc，再累加新块；还有块就继续，读完输出 acc/ell。
+    I["初始 s_max=−∞，ell=0，acc=0"] --> R["读下一块分数"]
+    R --> N["next_s_max 与 α"]
     N --> U["ell、acc 先换尺度再累加"]
     U --> Q{"还有块？"}
     Q -->|有| R
@@ -4335,7 +4335,7 @@ stateDiagram-v2
     accTitle: 写入前先看尾块满不满、引用是否大于 1
     accDescr: 尾块已满就新分配下一块且不复制；未满且引用大于 1 就复制尾块再写；引用等于 1 则直接写；释放后引用降到 0 的块回空闲池。
     [*] --> 准备写入
-    准备写入 --> 新分配下一块: 尾块已满\n（不复制前缀）
+    准备写入 --> 新分配下一块: 尾块已满（不复制）
     准备写入 --> 复制尾块再写: 未满且引用 > 1
     准备写入 --> 直接写入: 未满且引用 = 1
     新分配下一块 --> 写入完成
@@ -4382,12 +4382,11 @@ stateDiagram-v2
 flowchart TD
     %% id: p15-prefix-cache
     accTitle: 前缀缓存只复用兼容计算下的同一段历史，语义相似不算
-    accDescr: 先问权重与位置是否兼容：整段相同可用 fork 并共享未满尾块；share_prefix 只共享完整块；只是语义相似或块已释放则不复用。
-    A["要复用已有 KV？"] --> B{"权重与位置处理兼容？\n且 token 前缀相同？"}
-    B -->|否| N["不复用\n语义相似也无效"]
-    B -->|是：整段历史相同| F["fork：可共享未满尾块\n之后写入走写时复制"]
-    B -->|是：只要共同前缀| S["share_prefix：\n只共享完整块边界"]
-    S --> R["已释放的块不能再当前缀"]
+    accDescr: 先问权重与位置是否兼容：整段相同可用 fork 并共享未满尾块；share_prefix 只共享完整块；语义相似或已释放的块都不能复用。
+    A["要复用已有 KV？"] --> B{"权重与位置兼容，且前缀相同？"}
+    B -->|否| N["不复用：语义相似也无效；已释放的块不能当前缀"]
+    B -->|是：整段历史相同| F["fork：可共享未满尾块，之后写时复制"]
+    B -->|是：只要共同前缀| S["share_prefix：只共享完整块边界"]
     N --> R2["重新 prefill"]
 ```
 
@@ -4693,12 +4692,20 @@ $$
 flowchart TD
     %% id: p16-sparse-mixed
     accTitle: 同层加全局边，和换掉部分层的注意力，是两种结构
-    accDescr: 同一层里 T_win=3 的窗口边再加全局位置 G={0}，位置 5 可见 0、3、4、5；混合层则是滑窗层与全量层交替堆叠，全量层的 KV 仍随 T 增长。
-    A["同层：全局加局部"] --> B["T_win=3，G={0}"]
-    B --> C["位置 5 可见 {0,3,4,5}"]
-    C --> D["跨层：混合层"]
-    D --> E["滑窗层 → 全量层 → 滑窗层…"]
-    E --> F["全量层的 KV 仍随 T 增长"]
+    accDescr: 同一层里 T_win=3 的窗口边再加全局位置 G={0}，位置 5 可见 0、3、4、5；混合层则是滑窗层与全量层交替堆叠，全量层的 KV 仍随 T 增长。两种结构并列，互不蕴含先后。
+    subgraph S1["同层：全局加局部"]
+      direction TB
+      B["T_win=3，G={0}"]
+      C["位置 5 可见 {0,3,4,5}"]
+      B ~~~ C
+    end
+    subgraph S2["跨层：混合层"]
+      direction TB
+      E["滑窗层 / 全量层 / 滑窗层…"]
+      F["全量层的 KV 仍随 T 增长"]
+      E ~~~ F
+    end
+    S1 ~~~ S2
 ```
 
 ## P16.5 稀疏选择不等于 MLA 压缩
@@ -4997,6 +5004,8 @@ local 的意思是滑动窗口，不是“来自另一台本地机器”。这�
 
 ![教学 CED 数据流：encoder 最终输出投影为 decoder global KV；decoder 本层输入产生 local KV；有界 replay 只处理后缀且为近似](assets/diagrams/p17-ced.svg)
 
+图中 X_enc、x、T、T_win 分别对应正文的 E、H^(l)、N、W。
+
 ### 因果 encoder 为什么不会偷看未来
 
 “encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的 encoder 是因果的：E_j 只依赖 x_0 到 x_j。
@@ -5056,10 +5065,18 @@ flowchart TD
     %% id: p17-csa2-modes
     accTitle: CSA2 三种模式差在谁写 global KV、谁重选索引
     accDescr: Full 写 global KV 并选索引；Reindex 复用 KV 但重选索引；Reuse 两者都复用。三种模式都保留本层 Q 与 SWA；量化只管存储精度，不替代这些模式。
-    A["三种模式都保留本层 Q 与 SWA"] --> F["Full：写 global KV 并选索引"]
-    F --> R["Reindex：复用 KV，重选索引"]
-    R --> U["Reuse：KV 与索引都复用"]
-    U --> Q["量化只改存储精度，不替代上述模式"]
+    A["三种模式都保留本层 Q 与 SWA"]
+    subgraph M[" "]
+      direction TB
+      F["Full：写 global KV 并选索引"]
+      R["Reindex：复用 KV，重选索引"]
+      U["Reuse：KV 与索引都复用"]
+      F ~~~ R
+      R ~~~ U
+    end
+    Q["量化只改存储精度，不替代上述模式"]
+    A ~~~ M
+    M ~~~ Q
 ```
 
 ## P17.7 先把教学模型的边界写在前面
@@ -5281,14 +5298,14 @@ $$
 
 ![S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃](assets/diagrams/p18-moe.svg)
 
-图中的 N_E 是可选的路由专家数量，k 是每 token 选择的数量，N_S 是始终参与的共享专家数量。**N_E 和 k 不能混写。** k=2、N_E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。
+图中标了 N_E=4、k=2；N_E 是可选的路由专家数量，k 是每 token 选择的数量。共享专家始终参与，数量记 N_S（图中共享专家框未标具体数）。**N_E 和 k 不能混写。** k=2、N_E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。
 
 ## P18.2 路由器先打分，再选择，再加权
 
 设一个 token 的输入是行向量 x，宽度为 D。教学路由器是一层不带 bias 的 Linear：
 
 $$
-z=xW_r^T,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
+z=xW_r^\top,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
 p_e=\frac{\exp(z_e)}{\sum_j\exp(z_j)}.
 $$
 
@@ -5353,8 +5370,8 @@ $$
 flowchart TD
     %% id: p18-dispatch-combine
     accTitle: MoE 先摊平再按专家收集，combine 按原位置加权放回
-    accDescr: X 形状 [B,T,D] 摊平为 [N,D]（N=B·T）；路由得到 top-k 下标与权重后，dispatch 按专家收集 token，各专家算 F_e，combine 回到原位置加权求和，再还原 [B,T,D]。同一 token 可能去多个专家。
-    X["X [B,T,D]"] --> F["摊平 [N,D]\nN = B · T"]
+    accDescr: X 形状 [B,T,D] 摊平为 [B·T,D]；路由得到 top-k 下标与权重后，dispatch 按专家收集 token，各专家算 F_e，combine 回到原位置加权求和，再还原 [B,T,D]。同一 token 可能去多个专家。
+    X["X [B,T,D]"] --> F["摊平 [B·T,D]"]
     F --> R["路由：top-k 下标与权重"]
     R --> D["dispatch：按专家收集 token\n同一 token 可去多个专家"]
     D --> E["各专家计算 F_e"]
@@ -5479,12 +5496,22 @@ A、B、C 例子设置 capacity=1 后，requested 仍是 `[2,2,1,1]`，accepted 
 ```mermaid
 flowchart TD
     %% id: p18-grad-paths
-    accTitle: 主损失走被选专家和组合权重，辅助损失才打到全部 affinity
-    accDescr: 主损失更新被选专家参数，未选专家 grad 可为 None；主损失经组合权重 w 回路由器，但 top-1 时 w≡1 使这条任务梯度为 0；辅助损失经全部 p 更新路由器。
-    L["主损失"] --> E["被选专家参数；未选 grad 可为 None"]
-    E --> W["组合权重 w → 路由器；top-1 时 w≡1"]
-    W --> A["辅助损失"]
-    A --> P["全部 affinity p → 路由器"]
+    accTitle: 主损失分叉到被选专家与组合权重，辅助损失才打到全部 affinity
+    accDescr: 三条路径分叉：主损失更新被选专家参数（未选 grad 可为 None）；主损失经组合权重 w 回路由器，top-1 时 w≡1 使该任务梯度为 0；辅助损失经全部 affinity p 更新路由器。
+    subgraph P1["路径 1"]
+      direction LR
+      L1["主损失"] --> E["被选专家参数；未选 grad 可为 None"]
+    end
+    subgraph P2["路径 2"]
+      direction LR
+      L2["主损失"] --> W["w → 路由器；top-1 时为 0"]
+    end
+    subgraph P3["路径 3"]
+      direction LR
+      A["辅助损失"] --> P["全部 affinity p → 路由器"]
+    end
+    P1 ~~~ P2
+    P2 ~~~ P3
 ```
 
 ## P18.8 顺着代码走一次
@@ -5596,13 +5623,13 @@ sequenceDiagram
     participant L as 本机
     participant N as 网络 all-to-all
     participant R as 远端专家设备
-    L->>L: 本机路由，选出专家
+    L->>L: 本机做路由
     L->>N: 按专家打包 token
     N->>R: 送到专家所在设备
     R->>R: 计算 F_e
     R->>N: 送回专家输出
     N->>L: 收齐各设备结果
-    L->>L: 加权相加，再加共享专家
+    L->>L: 加权并加共享
     Note over L,R: 最忙的设备决定整步等待时间
 ```
 

@@ -142,17 +142,17 @@
     },
     "flow-p15-online-softmax": {
       "kind": "mermaid",
-      "sha256": "22ced10db7683c4c09655541212da507d5901fa63fd3fd456f22c38f84f9ec8f",
+      "sha256": "8e0650bf7ff3fb15d1228b758c505eeffe0c5294675bc84394504fd0eb881627",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p15-cow-write": {
       "kind": "mermaid",
-      "sha256": "c8fefd07e193f22ee4ffea3d71364df7173e519f10776c3f9221ed64690cfd60",
+      "sha256": "215ebbd4516b00b1ee15cd115b00cba3650540907146e7f226401604930b32b1",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p15-prefix-cache": {
       "kind": "mermaid",
-      "sha256": "bb41aad5ee092c67230769049169d6e3e9adb793dcb77d0940fb0df975f8537c",
+      "sha256": "cfee52c4b440b3a32f702f46cbaabbdc8ed691ae09c556625ff3d35d954c0ce2",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p15-continuous-batch": {
@@ -167,13 +167,13 @@
     },
     "p16-sparse-linear": {
       "kind": "static",
-      "sha256": "5275378af07a4b52214799420c426964b31b20d342b4628798a95a7992dbbc4f",
-      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "sha256": "f3914f86d8be86f73ead987ff30b52f04b744f092bb2a738c203eed4c1dda1b8",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1",
       "source": "assets/diagrams/p16-sparse-linear.svg"
     },
     "flow-p16-sparse-mixed": {
       "kind": "mermaid",
-      "sha256": "167762a2fea7d2fb6c15152f226f052a913100a46e6df9dda438bb448dc71061",
+      "sha256": "aec648041d865ea034ca3601b4f16d497e9831006ab1cffced71aa0c8f10df57",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p17-codec-names": {
@@ -189,28 +189,28 @@
     },
     "flow-p17-csa2-modes": {
       "kind": "mermaid",
-      "sha256": "53bcdcb5a844160b57b31fbec068833fa1277d79f7c2f934497caeec0a2f1f4e",
+      "sha256": "b6a04a8ae0b2d39f3976357869b93784a6f129716b419d2d8af1aff1c9c60c61",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p18-moe": {
       "kind": "static",
-      "sha256": "23fbd0164201539e62f88f3b91c711e22c719356e1a5363848b68e8862bdcc78",
+      "sha256": "115d71c7787a7ab727da25b4c6acae5dfd6a3b0b247fe651990201160218b4c8",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1",
       "source": "assets/diagrams/p18-moe.svg"
     },
     "flow-p18-dispatch-combine": {
       "kind": "mermaid",
-      "sha256": "94a3cac9470a5bd2bbd386f2faba945feb8bb1e0aa4975705a55a1afcdec5e2f",
+      "sha256": "4173620ba27ce4e3021f2ed4f55488f4ec7cf8e5a7e86cb4baf5a24ff3cdc7e8",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p18-grad-paths": {
       "kind": "mermaid",
-      "sha256": "beeee49c7d76bc022e92eb25fa2e218232b17cbcede327d280cc013a94811bf5",
+      "sha256": "8e032fbb83fefaada84cb35ff13430d42abafd590f5cc2478ceaf3f5f8ade2ce",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p18-expert-parallel": {
       "kind": "mermaid",
-      "sha256": "0f0ec94caad674a29d8a8ba67c65d6b9a12e94c9690a4731b4f0f37180fcec26",
+      "sha256": "052174680b9d82b9e77598ed7f90e170e74723f4badaaacf91649a1299eb70a4",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p19-pretraining": {

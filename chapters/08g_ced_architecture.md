@@ -95,6 +95,8 @@ local 的意思是滑动窗口，不是“来自另一台本地机器”。这�
 
 ![教学 CED 数据流：encoder 最终输出投影为 decoder global KV；decoder 本层输入产生 local KV；有界 replay 只处理后缀且为近似](assets/diagrams/p17-ced.svg)
 
+图中 X_enc、x、T、T_win 分别对应正文的 E、H^(l)、N、W。
+
 ### 因果 encoder 为什么不会偷看未来
 
 “encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的 encoder 是因果的：E_j 只依赖 x_0 到 x_j。
@@ -154,10 +156,18 @@ flowchart TD
     %% id: p17-csa2-modes
     accTitle: CSA2 三种模式差在谁写 global KV、谁重选索引
     accDescr: Full 写 global KV 并选索引；Reindex 复用 KV 但重选索引；Reuse 两者都复用。三种模式都保留本层 Q 与 SWA；量化只管存储精度，不替代这些模式。
-    A["三种模式都保留本层 Q 与 SWA"] --> F["Full：写 global KV 并选索引"]
-    F --> R["Reindex：复用 KV，重选索引"]
-    R --> U["Reuse：KV 与索引都复用"]
-    U --> Q["量化只改存储精度，不替代上述模式"]
+    A["三种模式都保留本层 Q 与 SWA"]
+    subgraph M[" "]
+      direction TB
+      F["Full：写 global KV 并选索引"]
+      R["Reindex：复用 KV，重选索引"]
+      U["Reuse：KV 与索引都复用"]
+      F ~~~ R
+      R ~~~ U
+    end
+    Q["量化只改存储精度，不替代上述模式"]
+    A ~~~ M
+    M ~~~ Q
 ```
 
 ## P17.7 先把教学模型的边界写在前面

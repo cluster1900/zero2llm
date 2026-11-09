@@ -19,11 +19,11 @@
   <text x="500" y="77" text-anchor="middle" class="small">保留 S4 的 RoPE、RMSNorm、GQA、残差和 compact KV cache</text>
   <rect x="340" y="105" width="320" height="65" rx="12" fill="#eaf7f0" stroke="#22a06b" stroke-width="2"/>
   <text x="500" y="133" text-anchor="middle" class="label">归一化后的输入 x</text>
-  <text x="500" y="158" text-anchor="middle" class="small">[B,T,D] → [N,D]</text>
+  <text x="500" y="158" text-anchor="middle" class="small">[B,T,D] → [B·T,D]</text>
   <path d="M440 170V204H335V230" class="line"/>
   <path d="M600 170V190H980V403H850V434" class="line"/>
   <rect x="105" y="230" width="460" height="104" rx="12" fill="#edf2ff" stroke="#6477bf" stroke-width="2"/>
-  <text x="335" y="261" text-anchor="middle" class="label">router：z = x W_r^T</text>
+  <text x="335" y="261" text-anchor="middle" class="label">router：z = x W_r⊤</text>
   <text x="335" y="290" text-anchor="middle" class="small">Softmax affinity → top-k</text>
   <text x="335" y="316" text-anchor="middle" class="tiny">本例 N_E=4、k=2；平局按专家编号</text>
   <rect x="655" y="241" width="300" height="109" rx="12" fill="#fff8e5" stroke="#d7a22c" stroke-width="1.5"/>
