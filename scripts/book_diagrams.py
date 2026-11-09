@@ -23,6 +23,23 @@ except ImportError:  # scripts/ on sys.path (tests, build_without_browser.py)
 # Set ZERO2LLM_RERENDER=1 to ignore the cache, e.g. after changing render_diagrams.mjs.
 FORCE_ENV = 'ZERO2LLM_RERENDER'
 
+# Mathematical Script Capital V (U+1D4B1). Web SVG often tofu this glyph even when
+# the committed Mermaid SVG keeps the code point; EPUB already embeds PNG. For any
+# Mermaid definition that contains this character, HTML img + 「原尺寸」 link use PNG.
+SCRIPT_V = '\U0001D4B1'
+
+
+def diagram_asset_ext(definition, epub):
+    """Pick rendered asset extension for a figure.
+
+    EPUB always uses PNG. HTML uses PNG when the Mermaid source contains U+1D4B1
+    (`𝒱`); other web figures stay on SVG.
+    """
+    if epub or (definition and SCRIPT_V in definition):
+        return 'png'
+    return 'svg'
+
+
 
 def node_renderer_label(base):
     """Provenance string recorded for figures rendered by render_diagrams.mjs."""
@@ -180,13 +197,13 @@ def prepare_documents(merged_md, temp_dir, base_dir, markdown_format, renderer=N
                                   renderer_label=renderer_label, force=force)
     sizes = json.loads((output / DIMENSIONS).read_text())
 
-    def image(diagram_id, title, description, epub):
+    def image(diagram_id, title, description, epub, definition=''):
         size = sizes[diagram_id]
         # Fit within a compact reading panel, with proportional dimensions and no upscaling.
         # CSS additionally handles narrower screens and landscape reader viewports.
         max_width, max_height = (560, 480) if epub else (720, 560)
         width = round(min(size['width'], max_width, max_height * size['width'] / size['height']))
-        ext = 'png' if epub else 'svg'
+        ext = diagram_asset_ext(definition, epub)
         src = f'assets/rendered/{diagram_id}.{ext}'
         return {'t': 'Image', 'c': [
             ['', ['book-diagram'], [['width', f'{width}px']]],
@@ -199,11 +216,13 @@ def prepare_documents(merged_md, temp_dir, base_dir, markdown_format, renderer=N
         if not isinstance(value, dict):
             return value
         if value.get('t') == 'CodeBlock' and 'mermaid' in value['c'][0][1]:
-            diagram_id, title, description = definitions[value['c'][1]]
-            img = image(diagram_id, title, description, epub)
+            definition = value['c'][1]
+            diagram_id, title, description = definitions[definition]
+            img = image(diagram_id, title, description, epub, definition=definition)
             if not epub:
+                ext = diagram_asset_ext(definition, False)
                 img = {'t': 'Link', 'c': [
-                    ['', [], []], [img], [f'assets/rendered/{diagram_id}.svg', '点击查看原尺寸图'],
+                    ['', [], []], [img], [f'assets/rendered/{diagram_id}.{ext}', '点击查看原尺寸图'],
                 ]}
             return {'t': 'Div', 'c': [['', ['diagram-figure'], []], [
                 {'t': 'Plain', 'c': [img]},

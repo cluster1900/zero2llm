@@ -218,7 +218,24 @@ class ReferencedImagesTests(unittest.TestCase):
         html = (DIST / 'index.html').read_text()
         refs = set(re.findall(r'(?:src|href)="(assets/rendered/[^"#?]+)"', html))
         manifest = json.loads((DIST / 'assets/rendered/manifest.json').read_text())['diagrams']
-        self.assertEqual(refs, {f'assets/rendered/{i}.svg' for i in manifest})
+        # Mermaid figures whose source contains U+1D4B1 use PNG on the website;
+        # everything else stays on SVG (see book_diagrams.diagram_asset_ext).
+        from book_diagrams import SCRIPT_V, diagram_asset_ext
+        script_v_ids = set()
+        for path in sorted((ROOT / 'chapters').glob('*.md')):
+            text = path.read_text(encoding='utf-8')
+            for block in re.findall(r'```mermaid\n(.*?)```', text, re.S):
+                if SCRIPT_V in block:
+                    mid = re.search(r'%% id:\s*(\S+)', block)
+                    self.assertIsNotNone(mid, f'missing %% id in {path}')
+                    script_v_ids.add(f'flow-{mid.group(1)}')
+        expected = set()
+        for diagram_id in manifest:
+            ext = 'png' if diagram_id in script_v_ids else 'svg'
+            self.assertEqual(ext, diagram_asset_ext(
+                SCRIPT_V if diagram_id in script_v_ids else 'no-script-v', False))
+            expected.add(f'assets/rendered/{diagram_id}.{ext}')
+        self.assertEqual(refs, expected)
         for ref in sorted(refs):
             with self.subTest(ref=ref):
                 self.assertTrue((DIST / ref).is_file())
@@ -390,6 +407,26 @@ class RenderBackupTests(unittest.TestCase):
         shutil.rmtree(self.rendered)
         self.assertIsNone(self.build.backup_render(str(self.rendered), self.backup))
 
+
+
+class ScriptVWebAssetTests(unittest.TestCase):
+    """HTML must use PNG for any Mermaid figure whose source contains U+1D4B1."""
+
+    def test_diagram_asset_ext_png_when_script_v_or_epub(self):
+        from book_diagrams import SCRIPT_V, diagram_asset_ext
+        self.assertEqual(diagram_asset_ext('logits [B,T,|%s|]' % SCRIPT_V, False), 'png')
+        self.assertEqual(diagram_asset_ext('no special glyph', False), 'svg')
+        self.assertEqual(diagram_asset_ext('no special glyph', True), 'png')
+        self.assertEqual(diagram_asset_ext('', False), 'svg')
+
+    def test_site_uses_png_for_script_v_diagrams(self):
+        from book_diagrams import SCRIPT_V
+        html = (DIST / 'index.html').read_text(encoding='utf-8')
+        self.assertIn(SCRIPT_V, (ROOT / 'chapters' / '08l_preference_optimization.md').read_text(encoding='utf-8'))
+        # Both img src and 原尺寸 href for the logp-pair figure must be PNG.
+        self.assertIn('assets/rendered/flow-p22-logp-pair.png', html)
+        self.assertNotIn('href="assets/rendered/flow-p22-logp-pair.svg"', html)
+        self.assertNotIn('src="assets/rendered/flow-p22-logp-pair.svg"', html)
 
 
 class ScriptVFontTests(unittest.TestCase):

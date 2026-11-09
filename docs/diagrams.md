@@ -61,7 +61,7 @@
 | Node.js / npm | v24.22.1 / 11.21.1（package.json 要求 Node ≥ 22） | `node -v`、`npm -v` |
 | Pandoc | 3.9 | `pandoc --version` |
 | Python | 3.13.5 | `python3 --version` |
-| 中文字体 | Noto Sans CJK SC（`render_diagrams.mjs` 依次尝试 PingFang SC → Noto Sans CJK SC → Microsoft YaHei） | `fc-match "Noto Sans CJK SC"` |
+| 中文字体 | Noto Sans CJK SC（`render_diagrams.mjs` 依次尝试 PingFang SC → Noto Sans CJK SC → **Noto Sans Math** → Microsoft YaHei） | `fc-match "Noto Sans CJK SC"` |
 | 数学字母字体 | **Noto Sans Math Regular v3.000**（覆盖 U+1D4B1 `𝒱` 等 Mathematical Alphanumeric Symbols；CJK 缺字形时回退到它） | 见下文安装 |
 
 字体或 Chrome 不同，文字宽度会差几个像素。实测重渲 D0 之前的 10 张图，2 张字节相同，其余宽度相差 < 2.5%，内容一致。复用机制保证这种漂移只出现在新增或改动的图上。
@@ -95,7 +95,7 @@ fc-list "Noto Sans Math"
 fc-list :charset=1D4B1 family   # 应列出 Noto Sans Math
 ```
 
-`tests/test_diagram_ids.py` 会检查：`render_diagrams.mjs` 的 `fontFamily` 含 `Noto Sans Math`；若某张已提交的 Mermaid SVG 源码含 `𝒱`，则 SVG 正文也必须含 `𝒱`（不是 `` U+FFFD）；本机装了该 ttf 时再断言 cmap 覆盖 U+1D4B1，CI 未装字体则跳过字形检查。
+`tests/test_diagram_ids.py` 会检查：`render_diagrams.mjs` 的 `fontFamily` 含 `Noto Sans Math`；若某张已提交的 Mermaid SVG 源码含 `𝒱`，则 SVG 正文也必须含 `𝒱`（不是 `U+FFFD`）；本机装了该 ttf 时再断言 cmap 覆盖 U+1D4B1，CI 未装字体则跳过字形检查。
 
 ## 4. 复现命令
 

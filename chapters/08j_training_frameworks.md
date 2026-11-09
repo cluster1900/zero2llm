@@ -93,6 +93,7 @@ labels[1] = [-100, 7, 8, 10, 3, -100]
 - EOS 是真实的结束目标，仍然进入 loss；不能因为它“特殊”就一并忽略。
 - 第一列没有前一个输入位置来预测它。本例显式将它设为 -100，下面会解释一个与版本有关的原因。
 - attention_mask 控制注意力可见性；labels=-100 控制监督位置。二者职责不同，一个不能代替另一个。
+
 一张图把内部 shift、忽略位和外面再 shift 的后果放在一起：
 
 ```mermaid
@@ -210,14 +211,21 @@ sequenceDiagram
     %% id: p20-ddp-steps
     accTitle: DDP：各 rank 先各算一份，再 AllReduce 平均梯度
     accDescr: rank0 与 rank1 读不同数据，各自前向与反传；AllReduce 平均梯度后各自按同一规则 step，参数仍一致。
-    autonumber
     participant R0 as rank0
+    participant S1 as ㅤ
     participant R1 as rank1
+    participant S2 as ㅤ
     participant AR as AllReduce
-    R0->>R0: 读自己的 batch
-    R1->>R1: 读另一份 batch
-    R0->>R0: 前向 → 反传（写 .grad）
-    R1->>R1: 前向 → 反传（写 .grad）
+    par 读 batch
+      R0->>R0: 读自己的 batch
+    and
+      R1->>R1: 读另一份 batch
+    end
+    par 前向与反传
+      R0->>R0: 前向 → 反传（写 .grad）
+    and
+      R1->>R1: 前向 → 反传（写 .grad）
+    end
     R0->>AR: 提交梯度
     R1->>AR: 提交梯度
     AR-->>R0: 平均后的梯度
@@ -344,7 +352,8 @@ flowchart TB
       direction LR
       EP1["token 送到专家设备"] --- EP2["结果送回再加权"]
     end
-    TP --> PP --> EP
+    TP ~~~ PP
+    PP ~~~ EP
 ```
 
 
@@ -369,7 +378,7 @@ flowchart TD
     %% id: p20-framework-choice
     accTitle: 先单进程证明正确，再按瓶颈选框架
     accDescr: 单进程验证数据、loss 与保存；常用结构与 Trainer 用 Transformers；后训练用 TRL；内存或吞吐瓶颈用 DeepSpeed ZeRO；超大模型需要 TP/PP/EP 时用 Megatron。
-    A["① 单进程验证：数据 / loss / 保存"] --> B["② 需要结构与 Trainer → Transformers"]
+    A["① 单进程验证：数据 / loss /<br/>保存"] --> B["② 需要结构与 Trainer → Transformers"]
     B --> C["③ 后训练 SFT/DPO/GRPO → TRL"]
     C --> D["④ 内存或吞吐瓶颈 → DeepSpeed ZeRO"]
     D --> E["⑤ 需要 TP/PP/EP → Megatron"]
