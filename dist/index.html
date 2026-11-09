@@ -2443,7 +2443,10 @@ class="math inline">\(d_h\)</span>：头越多，每个头分到的越窄，蛋�
 <p>其中：<span class="math inline">\(D\)</span>、<span
 class="math inline">\(H\)</span>、<span
 class="math inline">\(d_h\)</span> 见上表，依次是模型宽度（代码里的
-<code>d_model</code>）、头数、每个头的宽度。</p>
+<code>d_model</code>）、头数、每个头的宽度。这条等式是<strong>本章的约定</strong>：只有各头等宽、且所有头拼起来的总宽恰好等于
+<span class="math inline">\(D\)</span> 时才成立；有些模型的 <span
+class="math inline">\(Hd_h\)</span> 并不等于 <span
+class="math inline">\(D\)</span>（见附录 A.5）。</p>
 <p>因此 <span class="math inline">\(D\)</span> 必须能被 <span
 class="math inline">\(H\)</span>
 整除，而且二者都应是正整数。<code>D=8, H=2</code>
@@ -2476,7 +2479,9 @@ class="math inline">\(X\)</span></strong>，所以每个头的投影都能利用
 <span class="math inline">\(D\)</span>
 个特征，而不是只看原始输入中的某一小段。</p>
 <p>实现时，把各头投影沿输出特征方向并排拼成一个 <span
-class="math inline">\([D,D]\)</span> 矩阵，就不必写 <span
+class="math inline">\([D,Hd_h]\)</span> 矩阵（本章 <span
+class="math inline">\(Hd_h=D\)</span>，所以是 <span
+class="math inline">\([D,D]\)</span>），就不必写 <span
 class="math inline">\(H\)</span> 个 Python 循环：</p>
 <p><span class="math display">\[W_Q = [W_1^Q\; W_2^Q\; \cdots\;
 W_H^Q]\]</span></p>
@@ -2484,8 +2489,10 @@ W_H^Q]\]</span></p>
 张窄矩阵左右并排粘成一张宽矩阵：乘一次宽矩阵，就等于分别乘了 <span
 class="math inline">\(H\)</span>
 次窄矩阵，只是各头的结果首尾相接排在一行里。</p>
-<p>其中：<span class="math inline">\(W_Q\)</span> 是形状 <span
-class="math inline">\([D,D]\)</span> 的整张查询投影；<span
+<p>其中：<span class="math inline">\(W_Q\)</span> 是整张查询投影，形状
+<span class="math inline">\([D,Hd_h]\)</span>，在本章等宽且总宽为 <span
+class="math inline">\(D\)</span> 的约定下就是 <span
+class="math inline">\([D,D]\)</span>；<span
 class="math inline">\(W_h^Q\)</span> 是它从左数第 <span
 class="math inline">\(h\)</span> 段、宽 <span
 class="math inline">\(d_h\)</span>
@@ -2767,14 +2774,19 @@ class="math inline">\(4D^2\)</span></h3>
 class="math inline">\(D\times D\)</span> 的表，切成几块都还是 <span
 class="math inline">\(D^2\)</span> 个数。</p>
 <p>其中：<span class="math inline">\(N_{\mathrm{param}}\)</span>
-是参数个数，这里只数注意力模块；四个 <span
-class="math inline">\(D^2\)</span> 依次来自 <span
+是参数个数，这里借用附录 A.5
+的参数量记号，但只数注意力模块的四个投影，不是缩放定律里整个模型的参数量；四个
+<span class="math inline">\(D^2\)</span> 依次来自 <span
 class="math inline">\(W_Q\)</span>、<span
 class="math inline">\(W_K\)</span>、<span
 class="math inline">\(W_V\)</span>、<span
-class="math inline">\(W_O\)</span>，每张都是 <span
-class="math inline">\(D\times D\)</span>；<span
-class="math inline">\(D\)</span> 是模型宽度。</p>
+class="math inline">\(W_O\)</span>；<span
+class="math inline">\(D\)</span> 是模型宽度。每张都是 <span
+class="math inline">\(D\times
+D\)</span>，靠的是本节开头的条件（各头等宽、Q/K/V 与输出都投影到 <span
+class="math inline">\(D\)</span>）；一般情况下输出投影 <span
+class="math inline">\(W_O\)</span> 的形状是 <span
+class="math inline">\([Hd_v,D]\)</span>，不一定是方阵。</p>
 <p>按头拆开数也一样：Q 投影共有 <span class="math inline">\(H\cdot
 Dd_h=D^2\)</span> 个参数。<span class="math inline">\(D=8\)</span>
 时，四个矩阵共 256 个参数；改成 1、2、4 或 8
@@ -2807,7 +2819,7 @@ class="math inline">\(T^2\)</span> 成正比。所以序列比模型宽度短（
 class="math inline">\(T&lt;D\)</span>）时第一项更大，序列更长时第二项会反超。</p>
 <p>其中：<span class="math inline">\(O(\cdot)\)</span> 是大 O
 记号，只保留随尺寸增长的主项、忽略常数；<span
-class="math inline">\(B\)</span> 是 batch 大小，<span
+class="math inline">\(B\)</span> 是批大小，<span
 class="math inline">\(T\)</span> 是序列长度，<span
 class="math inline">\(D\)</span> 是模型宽度；第二项由 <span
 class="math inline">\(BHT^2d_h=BT^2D\)</span> 得到，用到了 <span
