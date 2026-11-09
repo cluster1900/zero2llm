@@ -22,6 +22,26 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 **网络的 decoder 不等于推理的 decode 阶段。** 在 CED 中，生成一个新 token 的表示，仍然要经过 causal encoder 和 decoder。反过来，prefill 也不是绝对不运行 decoder，稍后会看到需要处理一段后缀。
 
+
+```mermaid
+mindmap
+  %% id: p17-codec-names
+  %% accTitle: 四种“编码—解码”同名不同义，先分开再说 CED
+  %% accDescr: 中心是编码—解码，分出经典 seq2seq、CED 同序列两条 KV 路径、推理的 prefill 与 decode、以及 tokenizer 的文本与 ID 转换。
+  root((编码—解码))
+    经典 seq2seq
+      两条序列
+      源句与目标句
+    CED
+      同一序列
+      两条 KV 路径
+    推理阶段
+      prefill
+      decode
+    tokenizer
+      文本 ↔ ID
+```
+
 ## P17.2 哪些是已经核验的官方事实
 
 本节只谈 **DeepSeek-V4.1-Flash**，不把结论泛化成所有叫“V4.1”的模型。核验所用的报告版本与仓库固定 revision 见本章末「资料与实现边界」。
@@ -127,6 +147,18 @@ $$
 三种模式都保留本层 query 与 SWA 状态。这里的 Full 是 **CSA2 模式名**，不能理解成“取消因果约束的全注意力”。
 
 所以，CED 解释“资料从下半网络准备”，CSA2 进一步解释“哪些层共用资料和选取结果”。两者可以协同，但不应把所有缓存节省都归功于 CED。相关头数 / latent 概念见 [P14](#p14-grouped-kv)，局部与稀疏路径见 [P16](#p16-sparse-linear)。
+
+
+```mermaid
+flowchart TD
+    %% id: p17-csa2-modes
+    accTitle: CSA2 三种模式差在谁写 global KV、谁重选索引
+    accDescr: Full 写 global KV 并选索引；Reindex 复用 KV 但重选索引；Reuse 两者都复用。三种模式都保留本层 Q 与 SWA；量化只管存储精度，不替代这些模式。
+    A["三种模式都保留本层 Q 与 SWA"] --> F["Full：写 global KV 并选索引"]
+    F --> R["Reindex：复用 KV，重选索引"]
+    R --> U["Reuse：KV 与索引都复用"]
+    U --> Q["量化只改存储精度，不替代上述模式"]
+```
 
 ## P17.7 先把教学模型的边界写在前面
 
