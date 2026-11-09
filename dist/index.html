@@ -8523,6 +8523,16 @@ Softmax 后的输出直接相加，都不对。</p>
 <p>初始状态设
 <code>m=-∞, ell=0, acc=0</code>。第一次读到合法分数时，代码直接令
 alpha=0，不去做不必要的无穷运算。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-online-softmax.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-online-softmax.svg" class="book-diagram"
+width="341"
+alt="在线 Softmax 每读一块都把旧账换到新尺度。初始 s_max=−∞、ell=0、acc=0；读一块后取 next_s_max，用 α=exp(s_max−next_s_max) 先缩放旧 ell 与 acc，再累加新块；还有块就继续，读完输出 acc/ell。" /></a>
+<div class="diagram-caption">
+在线 Softmax 每读一块都把旧账换到新尺度
+</div>
+</div>
 <h2 id="p15.5-手算分成两块仍然得到-6">P15.5 手算：分成两块，仍然得到
 6</h2>
 <p>设
@@ -8676,6 +8686,16 @@ v1，§4.4</a></p>
 <p>若尾块的引用计数已经是
 1，也能直接写入，不必复制。请求释放时只减少它所引用块的计数；降到 0
 的物理块才回到空闲池。脚本的空闲块可以再次分配，但旧数据必须清掉。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-cow-write.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-cow-write.svg" class="book-diagram"
+width="490"
+alt="写入前先看尾块满不满、引用是否大于 1。尾块已满就新分配下一块且不复制；未满且引用大于 1 就复制尾块再写；引用等于 1 则直接写；释放后引用降到 0 的块回空闲池。" /></a>
+<div class="diagram-caption">
+写入前先看尾块满不满、引用是否大于 1
+</div>
+</div>
 <h2 id="p15.10-用槽位记账不伪造显存数字">P15.10
 用槽位记账，不伪造显存数字</h2>
 <p>上面的分叉实例可以独立数出来：</p>
@@ -8757,6 +8777,16 @@ b=2，来源长度 5，可以共享前 4 个 token；要求共享前 3 个会报
 还需要前缀标识、查找、失效规则、淘汰策略以及正确的请求隔离；固定版本
 vLLM 文档说明了块级缓存查找的设计（版本见本章末资料）。</p>
 <p>脚本没有实现这些查找和安全机制，也不会检查两个文本是否相同。它还没有“请求结束后仍保留的前缀缓存”引用：所有活跃请求释放后，物理块就释放了。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-prefix-cache.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-prefix-cache.svg" class="book-diagram"
+width="661"
+alt="前缀缓存只复用兼容计算下的同一段历史，语义相似不算。先问权重与位置是否兼容：整段相同可用 fork 并共享未满尾块；share_prefix 只共享完整块；语义相似或已释放的块都不能复用。" /></a>
+<div class="diagram-caption">
+前缀缓存只复用兼容计算下的同一段历史，语义相似不算
+</div>
+</div>
 <h2 id="p15.12-continuous-batching不要让空位等整桌结束">P15.12
 Continuous batching：不要让空位等整桌结束</h2>
 <p>普通静态 batch 可能要等同一批里最长的请求完成，才接下一批。Continuous
@@ -8823,6 +8853,16 @@ ms 窗口。</p>
 <p>真实 batch 大小会影响轮时，KV
 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token
 间隔可能变长。必须把每轮执行时间和排队一起看。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-continuous-batch.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-continuous-batch.svg" class="book-diagram"
+width="530"
+alt="连续 batch 在空位出现时立刻补位，静态 batch 要等整桌结束。调度器与两个槽位每 10 ms 一轮。静态 batch 里 A 结束后空位干等，C 到 40 ms 才进入；连续 batch 里 C 在 20 ms 补进空位。" /></a>
+<div class="diagram-caption">
+连续 batch 在空位出现时立刻补位，静态 batch 要等整桌结束
+</div>
+</div>
 <h2 id="p15.13-prefilldecode-与排队会互相影响">P15.13 Prefill、decode
 与排队会互相影响</h2>
 <p>Prefill 一次处理已知 prompt 的很多位置，decode
@@ -8894,6 +8934,16 @@ TPOT=0。</p>
 <li>把所有后续 token 间隔放一起平均：<code>(90+60)/3=50 ms</code>。</li>
 </ul>
 <p>两者都可有定义，但不能用同一个标签不加说明。真实服务还应报告分位数、并发、错误率和输出长度；两条请求不足以说明线上长尾表现。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-ttft-tpot.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-ttft-tpot.svg" class="book-diagram"
+width="385"
+alt="TTFT 量到首字，TPOT 平摊首字之后的间隔，E2E 量整单。客户端请求在时刻 a 到达；服务端排队加 prefill 后在 t1 发出首 token，TTFT=t1−a；随后 t2…t_Tout，TPOT=(t_Tout−t1)/(T_out−1)；E2E=t_Tout−a。" /></a>
+<div class="diagram-caption">
+TTFT 量到首字，TPOT 平摊首字之后的间隔，E2E 量整单
+</div>
+</div>
 <h2 id="p15.15-运行与输出哪些确实测过">P15.15
 运行与输出：哪些确实测过</h2>
 <p>在仓库根目录直接运行：</p>
@@ -9220,6 +9270,16 @@ Longformer 的独立全局投影或完整模型。</p>
 后接一层全量注意力，或者让线性层与普通注意力层按比例混合。它不同于在同一层给窗口加几列全局
 key。若某些层仍读取全量历史，这些层的 KV 缓存仍会随 T
 增长，不能把整个模型都按窗口大小计费。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p16-sparse-mixed.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p16-sparse-mixed.svg" class="book-diagram"
+width="316"
+alt="同层加全局边，和换掉部分层的注意力，是两种结构。同一层里 T_win=3 的窗口边再加全局位置 G={0}，位置 5 可见 0、3、4、5；混合层则是滑窗层与全量层交替堆叠，全量层的 KV 仍随 T 增长。两种结构并列，互不蕴含先后。" /></a>
+<div class="diagram-caption">
+同层加全局边，和换掉部分层的注意力，是两种结构
+</div>
+</div>
 <h2 id="p16.5-稀疏选择不等于-mla-压缩">P16.5 稀疏选择不等于 MLA
 压缩</h2>
 <p><a href="#p14-grouped-kv">P14</a> 的 MLA
@@ -9666,6 +9726,16 @@ replay 为什么有误差，并检查缓存位置有没有接错。</p>
 中，生成一个新 token 的表示，仍然要经过 causal encoder 和
 decoder。反过来，prefill 也不是绝对不运行
 decoder，稍后会看到需要处理一段后缀。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p17-codec-names.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p17-codec-names.svg" class="book-diagram"
+width="720"
+alt="四种“编码—解码”同名不同义，先分开再说 CED。中心是编码—解码，分出经典 seq2seq、CED 同序列两条 KV 路径、推理的 prefill 与 decode、以及 tokenizer 的文本与 ID 转换。" /></a>
+<div class="diagram-caption">
+四种“编码—解码”同名不同义，先分开再说 CED
+</div>
+</div>
 <h2 id="p17.2-哪些是已经核验的官方事实">P17.2
 哪些是已经核验的官方事实</h2>
 <p>本节只谈
@@ -9754,6 +9824,7 @@ alt="教学 CED 数据流：encoder 最终输出投影为 decoder global KV；de
 KV；decoder 本层输入产生 local KV；有界 replay
 只处理后缀且为近似</figcaption>
 </figure>
+<p>图中 X_enc、x、T、T_win 分别对应正文的 E、H^(l)、N、W。</p>
 <h3 id="因果-encoder-为什么不会偷看未来">因果 encoder
 为什么不会偷看未来</h3>
 <p>“encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的
@@ -9861,6 +9932,16 @@ KV，重新选择索引。</li>
 CED。相关头数 / latent 概念见 <a
 href="#p14-grouped-kv">P14</a>，局部与稀疏路径见 <a
 href="#p16-sparse-linear">P16</a>。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p17-csa2-modes.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p17-csa2-modes.svg" class="book-diagram"
+width="343"
+alt="CSA2 三种模式差在谁写 global KV、谁重选索引。Full 写 global KV 并选索引；Reindex 复用 KV 但重选索引；Reuse 两者都复用。三种模式都保留本层 Q 与 SWA；量化只管存储精度，不替代这些模式。" /></a>
+<div class="diagram-caption">
+CSA2 三种模式差在谁写 global KV、谁重选索引
+</div>
+</div>
 <h2 id="p17.7-先把教学模型的边界写在前面">P17.7
 先把教学模型的边界写在前面</h2>
 <p>ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两层
@@ -10198,15 +10279,16 @@ alt="S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k
 <figcaption>S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k
 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃</figcaption>
 </figure>
-<p>图中的 E 是可选的路由专家数量，k 是每 token 选择的数量，S
-是始终参与的共享专家数量。<strong>E 和 k 不能混写。</strong> k=2、E=4
-时，模型保存四个路由专家，单个 token 只调用其中两个。</p>
+<p>图中标了 N_E=4、k=2；N_E 是可选的路由专家数量，k 是每 token
+选择的数量。共享专家始终参与，数量记
+N_S（图中共享专家框未标具体数）。<strong>N_E 和 k 不能混写。</strong>
+k=2、N_E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。</p>
 <h2 id="p18.2-路由器先打分再选择再加权">P18.2
 路由器先打分，再选择，再加权</h2>
 <p>设一个 token 的输入是行向量 x，宽度为 D。教学路由器是一层不带 bias 的
 Linear：</p>
 <p><span class="math display">\[
-z=xW_r^T,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
+z=xW_r^\top,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
 p_e=\frac{\exp(z_e)}{\sum_j\exp(z_j)}.
 \]</span></p>
 <p>z 是分数，p 是本章选用的 Softmax affinity，意思是 token
@@ -10349,6 +10431,16 @@ token；<strong>combine</strong> 是把结果送回 token
 <p>例如上面的 A、B、C：下标 0 的专家收 A、C；下标 1 的专家收 A、C；下标
 2 的专家收 B；下标 3 的专家收 B。下标 0 的专家的两个输出再分别回到 A、C
 的位置。并没有把 A 的结果交给 C。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p18-dispatch-combine.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p18-dispatch-combine.svg" class="book-diagram"
+width="295"
+alt="MoE 先摊平再按专家收集，combine 按原位置加权放回。X 形状 [B,T,D] 摊平为 [B·T,D]；路由得到 top-k 下标与权重后，dispatch 按专家收集 token，各专家算 F_e，combine 回到原位置加权求和，再还原 [B,T,D]。同一 token 可能去多个专家。" /></a>
+<div class="diagram-caption">
+MoE 先摊平再按专家收集，combine 按原位置加权放回
+</div>
+</div>
 <h2 id="p18.4-专家多了参数和计算怎样算">P18.4
 专家多了，参数和计算怎样算</h2>
 <p>沿用 P13 的无 bias SwiGLU，中间宽度为 d_f
@@ -10530,6 +10622,16 @@ router，不能把“空专家没有直接任务梯度”误说成“对应 rout
 间重新分配。输入第一维梯度为 78+20 ln 2，第二维为 78。</p>
 <p>“今天没收到梯度”不等于“永远不会变化”：其他 batch
 可能路由到它，优化器的历史动量、权重衰减和梯度清理方式也会影响实际更新。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p18-grad-paths.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p18-grad-paths.svg" class="book-diagram"
+width="532"
+alt="主损失分叉到被选专家与组合权重，辅助损失才打到全部 affinity。三条路径分叉：主损失更新被选专家参数（未选 grad 可为 None）；主损失经组合权重 w 回路由器，top-1 时 w≡1 使该任务梯度为 0；辅助损失经全部 affinity p 更新路由器。" /></a>
+<div class="diagram-caption">
+主损失分叉到被选专家与组合权重，辅助损失才打到全部 affinity
+</div>
+</div>
 <h2 id="p18.8-顺着代码走一次">P18.8 顺着代码走一次</h2>
 <p>关键实现没有写成一个与主线无关的玩具。<code>MoEGPT</code> 继承
 <code>GroupedGPT</code>，保留 attention、norm、残差、embedding 和
@@ -10640,6 +10742,16 @@ NkDq；返回还要再算一趟。它不是网络实测：同节点合并、专�
 下，大量小矩阵乘法和调度可能更慢。性能要回到 P15
 的相同请求长度、并发、硬件与 TTFT/TPOT 等指标上测；本章没有 GPU
 或多卡实验。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p18-expert-parallel.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p18-expert-parallel.svg" class="book-diagram"
+width="440"
+alt="多设备 MoE 要付 all-to-all 往返，整步速度被最忙的设备拖住。本机先路由，再 all-to-all 把 token 送到专家所在设备，远端算 F_e 后 all-to-all 送回，本机加权相加并加上共享专家；最忙的设备决定整步的等待时间。" /></a>
+<div class="diagram-caption">
+多设备 MoE 要付 all-to-all 往返，整步速度被最忙的设备拖住
+</div>
+</div>
 <h2 id="p18.11-和官方资料对照学机制不冒充复现">P18.11
 和官方资料对照：学机制，不冒充复现</h2>
 <p>本章核验以下固定论文版本（核验日期见附录 H）：</p>

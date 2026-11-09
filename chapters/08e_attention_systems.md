@@ -111,6 +111,20 @@ exp(s - next_m) = exp(s - m) × exp(m - next_m)
 
 初始状态设 `m=-∞, ell=0, acc=0`。第一次读到合法分数时，代码直接令 alpha=0，不去做不必要的无穷运算。
 
+
+```mermaid
+flowchart TD
+    %% id: p15-online-softmax
+    accTitle: 在线 Softmax 每读一块都把旧账换到新尺度
+    accDescr: 初始 s_max=−∞、ell=0、acc=0；读一块后取 next_s_max，用 α=exp(s_max−next_s_max) 先缩放旧 ell 与 acc，再累加新块；还有块就继续，读完输出 acc/ell。
+    I["初始 s_max=−∞，ell=0，acc=0"] --> R["读下一块分数"]
+    R --> N["next_s_max 与 α"]
+    N --> U["ell、acc 先换尺度再累加"]
+    U --> Q{"还有块？"}
+    Q -->|有| R
+    Q -->|无| O["输出 acc/ell"]
+```
+
 ## P15.5 手算：分成两块，仍然得到 6
 
 设 d=dv=1，Q=`[1]`，K=`[0, ln 2, ln 4]`，V=`[2,4,8]`。缩放分母 √d=1，三个分数正好就是 K。没有 mask。
@@ -251,6 +265,22 @@ A 仍然是 `[10,20,30]`，B 是 `[10,20,30,40]`；完整前缀块 0 继续共�
 
 若尾块的引用计数已经是 1，也能直接写入，不必复制。请求释放时只减少它所引用块的计数；降到 0 的物理块才回到空闲池。脚本的空闲块可以再次分配，但旧数据必须清掉。
 
+
+```mermaid
+stateDiagram-v2
+    %% id: p15-cow-write
+    accTitle: 写入前先看尾块满不满、引用是否大于 1
+    accDescr: 尾块已满就新分配下一块且不复制；未满且引用大于 1 就复制尾块再写；引用等于 1 则直接写；释放后引用降到 0 的块回空闲池。
+    [*] --> 准备写入
+    准备写入 --> 新分配下一块: 尾块已满（不复制）
+    准备写入 --> 复制尾块再写: 未满且引用 > 1
+    准备写入 --> 直接写入: 未满且引用 = 1
+    新分配下一块 --> 写入完成
+    复制尾块再写 --> 写入完成
+    直接写入 --> 写入完成
+    写入完成 --> 回空闲池: 释放后引用 = 0
+```
+
 ## P15.10 用槽位记账，不伪造显存数字
 
 上面的分叉实例可以独立数出来：
@@ -284,6 +314,19 @@ A 仍然是 `[10,20,30]`，B 是 `[10,20,30,40]`；完整前缀块 0 继续共�
 
 脚本没有实现这些查找和安全机制，也不会检查两个文本是否相同。它还没有“请求结束后仍保留的前缀缓存”引用：所有活跃请求释放后，物理块就释放了。
 
+
+```mermaid
+flowchart TD
+    %% id: p15-prefix-cache
+    accTitle: 前缀缓存只复用兼容计算下的同一段历史，语义相似不算
+    accDescr: 先问权重与位置是否兼容：整段相同可用 fork 并共享未满尾块；share_prefix 只共享完整块；语义相似或已释放的块都不能复用。
+    A["要复用已有 KV？"] --> B{"权重与位置兼容，且前缀相同？"}
+    B -->|否| N["不复用：语义相似也无效<br/>已释放的块不能当前缀"]
+    B -->|是：整段历史相同| F["fork：可共享未满尾块<br/>之后写时复制"]
+    B -->|是：只要共同前缀| S["share_prefix：<br/>只共享完整块边界"]
+    N --> R2["重新 prefill"]
+```
+
 ## P15.12 Continuous batching：不要让空位等整桌结束
 
 普通静态 batch 可能要等同一批里最长的请求完成，才接下一批。Continuous batching 在每轮计算边界移除已结束请求，再把符合资源条件的新请求加进来。
@@ -310,6 +353,24 @@ C 在 t=10 到达时，两槽仍被占用，所以连续 batch 也不是立刻�
 两种方法都完成 8 个输出 token。按这个人造观察窗口，静态是 `8/0.06≈133.333` tokens/s，连续是 `8/0.04=200` tokens/s。注意两个窗口不一样长：各自从 t=0 算到自己最后一个输出 token，静态 60 ms，连续 40 ms。若同用 0–60 ms 窗口，两者都完成 8 个 token，都是 `8/0.06≈133.333` tokens/s；200 只是来自更短的 40 ms 窗口。
 
 真实 batch 大小会影响轮时，KV 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token 间隔可能变长。必须把每轮执行时间和排队一起看。
+
+
+```mermaid
+sequenceDiagram
+    %% id: p15-continuous-batch
+    accTitle: 连续 batch 在空位出现时立刻补位，静态 batch 要等整桌结束
+    accDescr: 调度器与两个槽位每 10 ms 一轮。静态 batch 里 A 结束后空位干等，C 到 40 ms 才进入；连续 batch 里 C 在 20 ms 补进空位。
+    participant S as 调度器
+    participant S1 as 槽1
+    participant S2 as 槽2
+    Note over S,S2: 每轮10ms；A需2、B需4、C于10ms到达需2
+    S->>S1: 0-20ms 跑A（结束）
+    S->>S2: 0-20ms 跑B
+    Note over S1: 静态空等 / 连续接C
+    S->>S1: 连续20-40ms：C
+    S->>S2: 20-40ms：B（结束）
+    Note over S,S2: 连续约40ms收齐；静态C要到60ms
+```
 
 ## P15.13 Prefill、decode 与排队会互相影响
 
@@ -353,6 +414,22 @@ TTFT 可以包含排队、prefill、采样与网络等延迟，不等于纯 pref
 - 把所有后续 token 间隔放一起平均：`(90+60)/3=50 ms`。
 
 两者都可有定义，但不能用同一个标签不加说明。真实服务还应报告分位数、并发、错误率和输出长度；两条请求不足以说明线上长尾表现。
+
+
+```mermaid
+sequenceDiagram
+    %% id: p15-ttft-tpot
+    accTitle: TTFT 量到首字，TPOT 平摊首字之后的间隔，E2E 量整单
+    accDescr: 客户端请求在时刻 a 到达；服务端排队加 prefill 后在 t1 发出首 token，TTFT=t1−a；随后 t2…t_Tout，TPOT=(t_Tout−t1)/(T_out−1)；E2E=t_Tout−a。
+    participant Cl as 客户端
+    participant Sv as 服务端
+    Cl->>Sv: 到达时刻 a
+    Note over Sv: 排队与 prefill
+    Sv-->>Cl: t1 首 token
+    Note over Cl,Sv: TTFT = t1 - a
+    Sv-->>Cl: t2 到 t_Tout
+    Note over Cl,Sv: TPOT 用 T_out；<br/>E2E = t_Tout - a
+```
 
 ## P15.15 运行与输出：哪些确实测过
 
