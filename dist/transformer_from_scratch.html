@@ -1587,16 +1587,20 @@ class="math inline">\(h_3\)</span>。这条时间依赖使普通 RNN
 batch，单步内部的矩阵运算也可以并行。真正受限的是<strong>沿序列方向的隐藏状态依赖</strong>，不是所有计算都只能一件件做。</p>
 <p>下面两张图只比较信息连接的路径，不表示某个模型已经正确理解了代词。</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-01.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-01.svg" class="book-diagram" width="226"
+<a href="assets/rendered/flow-84635206051a.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-84635206051a.svg" class="book-diagram"
+width="226"
 alt="RNN：信息沿序列逐步传递。早期词语的信息需要经过许多步才能到达后面的词；长距离信息可能衰减。" /></a>
 <div class="diagram-caption">
 RNN：信息沿序列逐步传递
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-02.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-02.svg" class="book-diagram" width="304"
+<a href="assets/rendered/flow-3d58967fc068.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-3d58967fc068.svg" class="book-diagram"
+width="304"
 alt="自注意力：直接比较相关的词。它可以直接与小明、在、草地计算相关性，不必逐词传话；生成时仍受因果掩码限制。箭头从当前位置指向被查询的位置。" /></a>
 <div class="diagram-caption">
 自注意力：直接比较相关的词
@@ -1945,16 +1949,20 @@ width="720" alt="图 3-1：缩放点积注意力计算流程" /></a>
 </figure>
 <p>把计算链分成两张图。这里先画无掩码、每行都有可见位置的情况；后面会补空行约定。</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-03.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-03.svg" class="book-diagram" width="275"
+<a href="assets/rendered/flow-32da2122435e.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-32da2122435e.svg" class="book-diagram"
+width="275"
 alt="注意力上半程：从输入算出分数。输入 X 的形状为 3 乘 2，经过三个投影得到 Q、K、V，再计算 3 乘 3 的点积分数。" /></a>
 <div class="diagram-caption">
 注意力上半程：从输入算出分数
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-04.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-04.svg" class="book-diagram" width="324"
+<a href="assets/rendered/flow-e59ba8fcee2e.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-e59ba8fcee2e.svg" class="book-diagram"
+width="324"
 alt="注意力下半程：按比例收集信息。分数除以根号 2，每行经 Softmax 得到权重，再与 V 相乘得到 3 乘 2 的输出。" /></a>
 <div class="diagram-caption">
 注意力下半程：按比例收集信息
@@ -4575,16 +4583,20 @@ alt="经典 Transformer 完整宏观架构" /></a>
 +
 疑是」是同一句译文在不同生成步的快照：前者已多生成了「地上」两个字，后者正在预测「地」。归一化与残差在简图中省略，不表示它们消失了。</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-05.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-05.svg" class="book-diagram" width="256"
+<a href="assets/rendered/flow-99f1aa76a4ba.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-99f1aa76a4ba.svg" class="book-diagram"
+width="256"
 alt="编码器：读懂整段输入。输入经嵌入、自注意力、前馈网络得到上下文表征；图中省略归一化和残差，模块可重复堆叠。" /></a>
 <div class="diagram-caption">
 编码器：读懂整段输入
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-06.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-06.svg" class="book-diagram" width="240"
+<a href="assets/rendered/flow-550bbb1ad2f4.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-550bbb1ad2f4.svg" class="book-diagram"
+width="240"
 alt="解码器：利用前缀与原文预测下一个字。前缀经过因果自注意力，再用自身的 Q 查询编码器提供的 K、V，经过前馈网络和输出层得到预测。" /></a>
 <div class="diagram-caption">
 解码器：利用前缀与原文预测下一个字
@@ -4882,8 +4894,10 @@ token“明”，不需要先等一个不存在的“明”的输出。</p>
 再实现缓存并做等价性检验。</p>
 <p>“打字机特效”是界面如何流式展示文本，不能用来判断底层每步是不是一个汉字、是否有缓冲或其他生成优化。我们先学普通自回归的逻辑依赖：</p>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-07.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-07.svg" class="book-diagram" width="385"
+<a href="assets/rendered/flow-ed42531e828f.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ed42531e828f.svg" class="book-diagram"
+width="385"
 alt="自回归生成：每次多接一个字。输入床前，依次生成明、月、光，每轮都把新增文字放回前缀。" /></a>
 <div class="diagram-caption">
 自回归生成：每次多接一个字
@@ -5635,24 +5649,30 @@ seed 承诺跨平台逐位相同。</p>
 checkpoint 硬塞进去。</p>
 <h2 id="一个短句的完整数据流">8.3 一个短句的完整数据流</h2>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-08.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-08.svg" class="book-diagram" width="268"
+<a href="assets/rendered/flow-9b62f68b43a9.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-9b62f68b43a9.svg" class="book-diagram"
+width="268"
 alt="Baby-GPT 第一段：准备输入。床前明月光的编号是 23、10、27、32、8。词嵌入与五个位置的嵌入相加，得到 1 乘 5 乘 48 的张量。" /></a>
 <div class="diagram-caption">
 Baby-GPT 第一段：准备输入
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-09.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-09.svg" class="book-diagram" width="269"
+<a href="assets/rendered/flow-0299971fbce4.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-0299971fbce4.svg" class="book-diagram"
+width="269"
 alt="Baby-GPT 第二段：提炼信息并打分。输入经过两个 Pre-LN 因果 Transformer 块、最终层归一化和线性输出头，得到词表上 57 个字的分数。" /></a>
 <div class="diagram-caption">
 Baby-GPT 第二段：提炼信息并打分
 </div>
 </div>
 <div class="diagram-figure">
-<a href="assets/rendered/flow-10.svg" title="点击查看原尺寸图"><img
-src="assets/rendered/flow-10.svg" class="book-diagram" width="474"
+<a href="assets/rendered/flow-a3f07f2a8050.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-a3f07f2a8050.svg" class="book-diagram"
+width="474"
 alt="Baby-GPT 第三段：训练与生成的分岔。训练时对各位置的下一字目标计算交叉熵并更新参数；生成时只取最后一个位置的分数，经温度采样选出下一个字。" /></a>
 <div class="diagram-caption">
 Baby-GPT 第三段：训练与生成的分岔

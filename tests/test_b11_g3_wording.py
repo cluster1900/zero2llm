@@ -2,6 +2,8 @@
 
 RULINGS: 02 figure caption arrow direction; 03 scaling node relabel; 04 §4.4 lead sentence.
 """
+import json
+import sys
 import unittest
 from pathlib import Path
 
@@ -57,7 +59,17 @@ class TestB11Group3(unittest.TestCase):
         self.assertNotIn("负温度", (ROOT / "chapters/08_baby_transformer.md").read_text(encoding="utf-8"))
 
     def test_rendered_scaling_node(self):
-        svg = (ROOT / "dist/assets/rendered/flow-04.svg").read_text(encoding="utf-8")
+        # Find the rendered asset by its stable id (scripts/diagram_ids.py), not by
+        # book order: the 03 diagram that carries the relabelled scaling node.
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from diagram_ids import mermaid_blocks, mermaid_id, sha256_text
+        chapter = (ROOT / "chapters/03_qkv_self_attention.md").read_text(encoding="utf-8")
+        blocks = [b for b in mermaid_blocks(chapter) if "缩放：Score ÷ √d_k（本例 √2）" in b]
+        self.assertEqual(len(blocks), 1)
+        diagram_id = mermaid_id(blocks[0])
+        manifest = json.loads((ROOT / "dist/assets/rendered/manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["diagrams"][diagram_id]["sha256"], sha256_text(blocks[0]))
+        svg = (ROOT / f"dist/assets/rendered/{diagram_id}.svg").read_text(encoding="utf-8")
         self.assertIn("d_k", svg)
 
 
