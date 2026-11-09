@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-11-09
+% 2026-11-10
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -7515,12 +7515,12 @@ MSE 是所有元素误差平方的平均值，结果约为 **1.6000062**。中�
 忽略 bias，一个点积近似为：
 
 $$
-\sum_i x_iw_i\ \approx\ s_xs_w\sum_i(q_{x,i}-z_x)(q_{w,i}-z_w).
+\sum_k x_kw_k\ \approx\ s_xs_w\sum_k(q_{x,k}-z_x)(q_{w,k}-z_w).
 $$
 
 **大白话：**两边各自先减掉零点、在整数里乘加，最后只乘一次两把尺子的刻度，就回到浮点结果；整数部分可以交给快的整数乘法器。
 
-其中：$x_i$、$w_i$ 是激活和权重的第 $i$ 项；$q_{x,i}$、$q_{w,i}$ 是它们的整数码；$s_x,z_x$ 与 $s_w,z_w$ 分别是激活、权重的 scale 和 zero-point。
+其中：$x_k$、$w_k$ 是激活和权重的第 $k$ 维；$q_{x,k}$、$q_{w,k}$ 是它们的整数码；$s_x,z_x$ 与 $s_w,z_w$ 分别是激活、权重的 scale 和 zero-point。
 
 对称 z=0 时看起来很简洁；仿射版本若漏减 z，会得到系统性错误。
 
@@ -7919,13 +7919,13 @@ x → RMSNorm → Attention → 加回 x
 RMSNorm 对最后一维计算：
 
 $$
-\operatorname{RMSNorm}(z)_j
-= \gamma_j\frac{z_j}{\sqrt{\frac{1}{n}\sum_{i=1}^{n}z_i^2+\epsilon}}.
+\operatorname{RMSNorm}(z)_k
+= \gamma_k\frac{z_k}{\sqrt{\frac{1}{n}\sum_{k'=1}^{n}z_{k'}^2+\epsilon}}.
 $$
 
 **大白话：**先算这一行数字的“均方根”当作音量，把整行除以它统一音量，再让每一维乘上自己可学的增益。不减均值，所以比 LayerNorm 少一步。
 
-其中：$z$ 是被归一化的那一行向量，$z_j$ 是它的第 $j$ 维；$n$ 是最后一维的长度；$\gamma_j$ 是第 $j$ 维的可学习 gain（代码里的 `weight`）；$\epsilon$ 是防止除以零的小常数（配置里的 `rms_norm_eps`）。
+其中：$z$ 是被归一化的那一行向量，$z_k$ 是它的第 $k$ 维，$k'$ 是求和用的维度下标；$n$ 是最后一维的长度；$\gamma_k$ 是第 $k$ 维的可学习 gain（代码里的 `weight`）；$\epsilon$ 是防止除以零的小常数（配置里的 `rms_norm_eps`）。
 
 对 block 输入，$n=D$；对单个 Q/K 头，$n=d_h$。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 $d_h$ 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 $H_q\times d_h$ 或 $H_{kv}\times d_h$ 的 gain**。这会直接影响参数统计。
 

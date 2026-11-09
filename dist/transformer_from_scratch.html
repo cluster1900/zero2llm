@@ -14151,14 +14151,14 @@ group=8 到 4 没变，MSE 却下降了，说明只看一个误差指标也不�
 整数乘法：乘的是码，累加器不能也是 8 位</h2>
 <p>忽略 bias，一个点积近似为：</p>
 <p><span class="math display">\[
-\sum_i x_iw_i\ \approx\ s_xs_w\sum_i(q_{x,i}-z_x)(q_{w,i}-z_w).
+\sum_k x_kw_k\ \approx\ s_xs_w\sum_k(q_{x,k}-z_x)(q_{w,k}-z_w).
 \]</span></p>
 <p><strong>大白话：</strong>两边各自先减掉零点、在整数里乘加，最后只乘一次两把尺子的刻度，就回到浮点结果；整数部分可以交给快的整数乘法器。</p>
-<p>其中：<span class="math inline">\(x_i\)</span>、<span
-class="math inline">\(w_i\)</span> 是激活和权重的第 <span
-class="math inline">\(i\)</span> 项；<span
-class="math inline">\(q_{x,i}\)</span>、<span
-class="math inline">\(q_{w,i}\)</span> 是它们的整数码；<span
+<p>其中：<span class="math inline">\(x_k\)</span>、<span
+class="math inline">\(w_k\)</span> 是激活和权重的第 <span
+class="math inline">\(k\)</span> 维；<span
+class="math inline">\(q_{x,k}\)</span>、<span
+class="math inline">\(q_{w,k}\)</span> 是它们的整数码；<span
 class="math inline">\(s_x,z_x\)</span> 与 <span
 class="math inline">\(s_w,z_w\)</span> 分别是激活、权重的 scale 和
 zero-point。</p>
@@ -14938,17 +14938,19 @@ block：QK-norm 不是又一个 LayerNorm</h2>
 <strong>QK-norm</strong>，随后才应用 RoPE；V 不做这两项变换。</p>
 <p>RMSNorm 对最后一维计算：</p>
 <p><span class="math display">\[
-\operatorname{RMSNorm}(z)_j
-= \gamma_j\frac{z_j}{\sqrt{\frac{1}{n}\sum_{i=1}^{n}z_i^2+\epsilon}}.
+\operatorname{RMSNorm}(z)_k
+=
+\gamma_k\frac{z_k}{\sqrt{\frac{1}{n}\sum_{k&#39;=1}^{n}z_{k&#39;}^2+\epsilon}}.
 \]</span></p>
 <p><strong>大白话：</strong>先算这一行数字的“均方根”当作音量，把整行除以它统一音量，再让每一维乘上自己可学的增益。不减均值，所以比
 LayerNorm 少一步。</p>
 <p>其中：<span class="math inline">\(z\)</span>
-是被归一化的那一行向量，<span class="math inline">\(z_j\)</span>
-是它的第 <span class="math inline">\(j\)</span> 维；<span
+是被归一化的那一行向量，<span class="math inline">\(z_k\)</span>
+是它的第 <span class="math inline">\(k\)</span> 维，<span
+class="math inline">\(k&#39;\)</span> 是求和用的维度下标；<span
 class="math inline">\(n\)</span> 是最后一维的长度；<span
-class="math inline">\(\gamma_j\)</span> 是第 <span
-class="math inline">\(j\)</span> 维的可学习 gain（代码里的
+class="math inline">\(\gamma_k\)</span> 是第 <span
+class="math inline">\(k\)</span> 维的可学习 gain（代码里的
 <code>weight</code>）；<span class="math inline">\(\epsilon\)</span>
 是防止除以零的小常数（配置里的 <code>rms_norm_eps</code>）。</p>
 <p>对 block 输入，<span class="math inline">\(n=D\)</span>；对单个 Q/K
