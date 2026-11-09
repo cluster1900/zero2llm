@@ -17816,11 +17816,16 @@ class="math inline">\(n\)</span></td>
 <tr>
 <td>P12 RoPE 每对维度的频率、YaRN 混合后的频率</td>
 <td><span class="math inline">\(\theta_i\)</span>、<span
-class="math inline">\(\theta&#39;\)</span></td>
+class="math inline">\(\theta&#39;\)</span>；P12.3 不带下标的 <span
+class="math inline">\(\theta\)</span>（<span
+class="math inline">\(R(m\theta)\)</span>、例子里的 <span
+class="math inline">\(\theta=1\)</span>）</td>
 <td><span class="math inline">\(\omega_i\)</span>、<span
 class="math inline">\(\omega&#39;\)</span>（与第 5 章一致；原论文写作
 <span class="math inline">\(\theta\)</span>），转角 <span
-class="math inline">\(t\omega_i\)</span></td>
+class="math inline">\(t\omega_i\)</span>；只看一对维度时写 <span
+class="math inline">\(R(m\omega_i)\)</span>、<span
+class="math inline">\(\omega_i=1\)</span></td>
 </tr>
 <tr>
 <td>P12 YaRN 的扩展倍数</td>
@@ -17840,9 +17845,15 @@ class="math inline">\(s\)</span>）</td>
 </tr>
 <tr>
 <td>P13 SiLU 的自变量</td>
-<td><span class="math inline">\(t\)</span></td>
-<td><span class="math inline">\(z\)</span>（<span
-class="math inline">\(t\)</span> 只作位置编号）</td>
+<td><span
+class="math inline">\(\operatorname{SiLU}(t)=t\sigma(t)\)</span></td>
+<td><span
+class="math inline">\(\operatorname{SiLU}(g)=g\sigma(g)\)</span>（<span
+class="math inline">\(g=xW_{\mathrm{gate}}\)</span> 正是 SiLU
+的输入；<span class="math inline">\(z\)</span> 仍表示乘积 <span
+class="math inline">\(\operatorname{SiLU}(g)\odot
+a_{\mathrm{up}}\)</span>；<span class="math inline">\(t\)</span>
+只作位置编号）</td>
 </tr>
 <tr>
 <td>P13 FFN 中间宽度</td>
@@ -17875,10 +17886,15 @@ class="math inline">\(T_q\)</span>、<span
 class="math inline">\(T_{kv}\)</span>）</td>
 </tr>
 <tr>
-<td>P15、P24 的输出 token 数</td>
-<td><span class="math inline">\(n\)</span>、<span
-class="math inline">\(N\)</span></td>
-<td><span class="math inline">\(T_{\mathrm{out}}\)</span></td>
+<td>P15、P24 TPOT 式里的输出 token 数（同时是最后一个时刻的下标）</td>
+<td>P15：<span class="math inline">\(t_1\ldots t_n\)</span>、<span
+class="math inline">\((t_n-t_1)/(n-1)\)</span>；P24：<span
+class="math inline">\(t_1\ldots t_N\)</span>、<span
+class="math inline">\((t_N-t_1)/(N-1)\)</span></td>
+<td><span class="math inline">\(t_1\ldots
+t_{T_{\mathrm{out}}}\)</span>、<span
+class="math inline">\((t_{T_{\mathrm{out}}}-t_1)/(T_{\mathrm{out}}-1)\)</span>，<span
+class="math inline">\(T_{\mathrm{out}}&gt;1\)</span></td>
 </tr>
 <tr>
 <td>P16、P17 的窗口长度</td>
@@ -17965,11 +17981,21 @@ class="math inline">\(N_{\mathrm{valid}}\)</span></td>
 </tr>
 <tr>
 <td>P21 LoRA 的两块矩阵与乘法方向</td>
-<td><span class="math inline">\(A,B\)</span>；<span
-class="math inline">\(W_0x\)</span></td>
-<td><span class="math inline">\(W_A,W_B\)</span>；行向量写 <span
-class="math inline">\(xW_0^\top\)</span>、<span
-class="math inline">\(\Delta W=\frac{\alpha}{r}W_BW_A\)</span></td>
+<td>列向量写法：<span class="math inline">\(W_0\in\mathbb
+R^{d_{\mathrm{out}}\times d_{\mathrm{in}}}\)</span>，<span
+class="math inline">\(A\in\mathbb R^{r\times
+d_{\mathrm{in}}}\)</span>，<span class="math inline">\(B\in\mathbb
+R^{d_{\mathrm{out}}\times r}\)</span>，<span
+class="math inline">\(\Delta W=\frac{\alpha}{r}BA\)</span>，<span
+class="math inline">\(y=W_0x+\frac{\alpha}{r}B(Ax)\)</span></td>
+<td><span class="math inline">\(W_A:[r,d_{\mathrm{in}}]\)</span>，<span
+class="math inline">\(W_B:[d_{\mathrm{out}},r]\)</span>，<span
+class="math inline">\(\Delta W=\frac{\alpha}{r}W_BW_A\)</span>，与 <span
+class="math inline">\(W_0:[d_{\mathrm{out}},d_{\mathrm{in}}]\)</span>
+同形；行向量前向写 <span class="math inline">\(y=x(W_0+\Delta
+W)^\top=xW_0^\top+\frac{\alpha}{r}(xW_A^\top)W_B^\top\)</span>（两项都要转置，不能把
+<span class="math inline">\(x\Delta W\)</span> 加到 <span
+class="math inline">\(xW_0^\top\)</span> 上）</td>
 </tr>
 <tr>
 <td>P22 的 KL 散度</td>
@@ -17977,17 +18003,37 @@ class="math inline">\(\Delta W=\frac{\alpha}{r}W_BW_A\)</span></td>
 <td><span class="math inline">\(\operatorname{KL}\)</span></td>
 </tr>
 <tr>
-<td>P22 GRPO 的奖励标准差、回复长度、回复个数、逐 token KL 估计</td>
+<td>P22 GRPO 的奖励标准差、回复长度、回复个数</td>
 <td><span class="math inline">\(s\)</span>、<span
 class="math inline">\(L_i\)</span>、<span
-class="math inline">\(N\)</span>、<span
-class="math inline">\(K_{i,t}\)</span>、<span
-class="math inline">\(k\)</span></td>
+class="math inline">\(N\)</span></td>
 <td><span class="math inline">\(\sigma_r\)</span>、<span
 class="math inline">\(T_i\)</span>、<span
-class="math inline">\(N_{\mathrm{resp}}\)</span>、<span
-class="math inline">\(\widehat{\operatorname{KL}}_{i,t}\)</span>、<span
-class="math inline">\(\widehat{\operatorname{KL}}\)</span></td>
+class="math inline">\(N_{\mathrm{resp}}\)</span></td>
+</tr>
+<tr>
+<td>P22 GRPO 损失里的逐 token KL
+项（本章枚举整个词表算出的<strong>精确</strong>条件 KL）</td>
+<td><span class="math inline">\(K_{i,t}\)</span></td>
+<td><span
+class="math inline">\(\operatorname{KL}_{i,t}\)</span>（不加帽子）</td>
+</tr>
+<tr>
+<td>P22 原论文的逐 token KL <strong>估计量</strong>（单个样本，不是精确
+KL）</td>
+<td><span class="math inline">\(k\)</span></td>
+<td><span
+class="math inline">\(\widehat{\operatorname{KL}}_{i,t}\)</span>（只有估计量加帽子）</td>
+</tr>
+<tr>
+<td>P22 <code>grpo_loss</code> 的张量形状</td>
+<td><code>[N,L,V]</code>、<code>[N,L]</code>、<code>[N]</code></td>
+<td><span class="math inline">\([N_{\mathrm{resp}},T,\lvert\mathcal
+V\rvert]\)</span>、<span
+class="math inline">\([N_{\mathrm{resp}},T]\)</span>、<span
+class="math inline">\([N_{\mathrm{resp}}]\)</span>（这里的 <span
+class="math inline">\(T\)</span> 是填充后的长度，每份回复的有效长度
+<span class="math inline">\(T_i\le T\)</span>）</td>
 </tr>
 <tr>
 <td>P22 KL 估计里的“动作 / 状态”</td>
@@ -18021,13 +18067,15 @@ class="math inline">\(W_j\)</span> 按 <span
 class="math inline">\([\lvert\mathcal V\rvert,D]\)</span> 存）</td>
 </tr>
 <tr>
-<td>P24 量化步长</td>
+<td>P24 量化步长（格点间距）</td>
 <td><span class="math inline">\(s\)</span>、<span
 class="math inline">\(s_x\)</span>、<span
 class="math inline">\(s_w\)</span></td>
-<td><span class="math inline">\(\Delta\)</span>、<span
-class="math inline">\(\Delta_x\)</span>、<span
-class="math inline">\(\Delta_w\)</span></td>
+<td>量化 <span class="math inline">\(x\)</span> 时写 <span
+class="math inline">\(\Delta_x\)</span>，量化权重时写 <span
+class="math inline">\(\Delta_w\)</span>；步长一律带下标，不写裸 <span
+class="math inline">\(\Delta\)</span>（裸 <span
+class="math inline">\(\Delta\)</span> 留给差值）</td>
 </tr>
 <tr>
 <td>各章损失</td>
@@ -18044,7 +18092,7 @@ class="math inline">\(\mathcal L_j\)</span></td>
 </table></div>
 <p><strong>下标与写法</strong></p>
 <ul>
-<li>编号字母（只当编号用）：<span
+<li>编号字母（主要当编号用）：<span
 class="math inline">\(i\)</span>、<span class="math inline">\(j\)</span>
 是 query、key 的位置，<span class="math inline">\(t\)</span>
 是时间步或当前位置，<span class="math inline">\(m\)</span>、<span
@@ -18056,7 +18104,17 @@ class="math inline">\(e\)</span> 是第几个专家，P23
 的预测距离（horizon）也用 <span class="math inline">\(j\)</span>，<span
 class="math inline">\(l\)</span> 是第几层，<span
 class="math inline">\(b\)</span> 是 batch 里第几条。指数里的 <span
-class="math inline">\(e\)</span> 仍是自然常数。带文字下标的小写 <span
+class="math inline">\(e\)</span> 仍是自然常数。有两处例外要认得：<span
+class="math inline">\(i\)</span> 在 RoPE、YaRN 里也是维度对的编号（第
+<span class="math inline">\(i\)</span> 个频率对，<span
+class="math inline">\(\omega_i\)</span>、<span
+class="math inline">\(\lambda_i\)</span> 的 <span
+class="math inline">\(i\)</span>）；<span
+class="math inline">\(h\)</span> 作下标（如 <span
+class="math inline">\(W_h^Q\)</span>）是第几个头，单独出现的 <span
+class="math inline">\(h\)</span>、<span
+class="math inline">\(h_t\)</span>
+则是章内局部量（见下面的局部字母）。带文字下标的小写 <span
 class="math inline">\(n\)</span> 表示个数（如 <span
 class="math inline">\(n_{\mathrm{mtp}}\)</span>、P18 的 <span
 class="math inline">\(n_e\)</span>）；带下标的 <span
@@ -18099,8 +18157,16 @@ class="math inline">\(\pi_\theta\)</span>）、<span
 class="math inline">\(\phi\)</span>（旋转角、特征映射，或奖励模型参数）、<span
 class="math inline">\(\rho\)</span>（概率比）、<span
 class="math inline">\(\delta\)</span>、<span
-class="math inline">\(\Delta\)</span>（差值、更新量 <span
-class="math inline">\(\Delta W\)</span>、量化步长）、<span
+class="math inline">\(\Delta\)</span>（不带下标的 <span
+class="math inline">\(\Delta\)</span> 只表示差值，如 P12 的 <span
+class="math inline">\(\Delta=n-m\)</span>、E.0 的 <span
+class="math inline">\(\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}\)</span>；<span
+class="math inline">\(\Delta W\)</span> 是更新量；P22 DPO 的 <span
+class="math inline">\(\Delta_\theta\)</span>、<span
+class="math inline">\(\Delta_{\mathrm{ref}}\)</span>
+是两个对数比的差；量化步长只写带下标的 <span
+class="math inline">\(\Delta_x\)</span>、<span
+class="math inline">\(\Delta_w\)</span>）、<span
 class="math inline">\(\mu\)</span>（均值）。</li>
 <li>拉丁字母：<span
 class="math inline">\(x\)</span>（某个式子的输入：一个位置的向量、它的第
