@@ -106,6 +106,10 @@ $$
 \qquad N=\sum_{b,t}m_{b,t+1}.
 $$
 
+**大白话：**把每条样本里“该评分”的位置挑出来，看模型给下一个正确 token 多少概率，取负对数当扣分，最后按评分位置的个数求平均；不评分的位置乘上 $m=0$，等于直接划掉。
+
+其中：$b$ 是第几条样本，$B$ 是 batch 大小；$t$ 是输入位置，$T$ 是序列长度；$x_{b,t}$ 是第 $b$ 条样本位置 $t$ 的 token，$x_{b,\le t}$ 是到位置 $t$ 为止的前缀；$m_{b,t+1}\in\{0,1\}$ 标记位置 $t+1$ 的目标是否评分（label 不是 -100 时为 1）；$p_\theta$ 是参数为 $\theta$ 的模型给出的概率；$N$ 是评分位置总数。
+
 这个 N 是有效目标数，不是 batch 大小，也不是 `B×T`。本例 N=2。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：
 
 $$
@@ -114,6 +118,8 @@ $$
 =\frac{0.69314718+1.38629436}{2}
 \approx1.03972077.
 $$
+
+其中：0.5、0.25 是模型给正确的“红”和 EOS 的概率，分母 2 就是上式的 $N$。
 
 这是自然对数下的平均负对数似然。除以八个输入格子，会错误得到四分之一大小的 loss 与梯度；只要分母错误固定，loss 依然可能下降，因此“曲线看起来正常”不能代替索引检查。
 
@@ -176,19 +182,25 @@ PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加 0�
 对一个线性层，采用列向量记法：
 
 $$
-y=W_0x,\qquad W_0\in\mathbb R^{d_{out}\times d_{in}}.
+y=W_0x,\qquad W_0\in\mathbb R^{d_{\mathrm{out}}\times d_{\mathrm{in}}}.
 $$
+
+其中：$x$ 是长 $d_{\mathrm{in}}$ 的输入列向量，$y$ 是长 $d_{\mathrm{out}}$ 的输出，$W_0$ 是预训练得到的原权重。本节沿用 LoRA 原论文的列向量写法；换成全书默认的行向量就是 $y=xW_0^\top$，内容完全一样。
 
 全量更新允许直接调整 W0 中的全部元素。普通 LoRA 冻结它，增加两个小矩阵：
 
 $$
-A\in\mathbb R^{r\times d_{in}},\quad
-B\in\mathbb R^{d_{out}\times r},\quad
+A\in\mathbb R^{r\times d_{\mathrm{in}}},\quad
+B\in\mathbb R^{d_{\mathrm{out}}\times r},\quad
 \Delta W=\frac{\alpha}{r}BA,\quad
 y=W_0x+\frac{\alpha}{r}B(Ax).
 $$
 
-可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是**这次更新**：`rank(BA)≤r`，还可能低于 r。
+**大白话：**原权重 $W_0$ 冻住不动，旁边并一条“先压窄到 $r$ 维、再放宽回来”的小支路，训练只调这条支路；$\alpha/r$ 像支路的音量旋钮。
+
+其中：$A$ 是把输入压到 $r$ 维的下投影，$B$ 是放回 $d_{\mathrm{out}}$ 维的上投影（$A$、$B$ 是 LoRA 的局部记号，沿用原论文和代码里的 A/B，这里的 $B$ **不是** batch 大小）；$r$ 是秩，即支路宽度；$\alpha$ 是缩放超参数；$\Delta W$ 是这次更新给原权重带来的增量。
+
+可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是**这次更新**：$\operatorname{rank}(BA)\le r$，还可能低于 $r$。
 
 这里是 [LoRA 原论文 v2](https://arxiv.org/abs/2106.09685v2) 的普通低秩更新及 alpha/r 缩放形式。PyTorch 的 Linear 接受行式 batch，所以实现写成先 `F.linear(x,A)` 再 `F.linear(...,B)`；不要因为记法切换就把 BA 的乘法顺序颠倒。
 
@@ -197,8 +209,12 @@ $$
 不计 bias 等额外可训练项时：
 
 $$
-P_{full}=d_{out}d_{in},\qquad P_{LoRA}=r(d_{in}+d_{out}).
+P_{\mathrm{full}}=d_{\mathrm{out}}d_{\mathrm{in}},\qquad P_{\mathrm{LoRA}}=r(d_{\mathrm{in}}+d_{\mathrm{out}}).
 $$
+
+**大白话：**全量更新时原矩阵每一格都是可训练参数；LoRA 只多出两条细长矩阵，一条 $r\times d_{\mathrm{in}}$，一条 $d_{\mathrm{out}}\times r$。
+
+其中：$P_{\mathrm{full}}$ 是全量更新这一层时的可训练参数数；$P_{\mathrm{LoRA}}$ 是 LoRA 新增的可训练参数数；$r$、$d_{\mathrm{in}}$、$d_{\mathrm{out}}$ 同上。
 
 例如 `d_in=d_out=4096，r=8`：原矩阵有 16,777,216 个参数，A/B 合计 65,536 个，是原矩阵的 1/256，约 0.390625%。这只是这一层的**新增可训练参数比例**；冻结的 16,777,216 个原参数仍需保存和参与前向。
 
@@ -219,6 +235,8 @@ A=\begin{bmatrix}1&0&2\end{bmatrix},\quad
 B=\begin{bmatrix}3\\-1\end{bmatrix}.
 $$
 
+其中：这里 $d_{\mathrm{in}}=3$、$d_{\mathrm{out}}=2$、$r=1$、$\alpha=2$，所以缩放系数 $\alpha/r=2$。
+
 逐步相乘：
 
 $$
@@ -228,19 +246,25 @@ Ax=3,\quad
 y=\begin{bmatrix}19.5\\0\end{bmatrix}.
 $$
 
+**大白话：**主路照常算 $W_0x$；支路先把三维输入压成一个数 $Ax=3$，乘上缩放 2，再由 $B$ 放回两维；两路相加就是输出。
+
 只写一句“输出等于基础输出加 adapter 输出”很容易让两个实现一起错。
 
 ### 冻结参数不等于关闭整条计算图
 
 `requires_grad_(False)` 让基础参数不接收梯度更新；它不等于把经过基础层的全部运算包进 `no_grad()`。有些早先层的 adapter 仍需要通过后面的冻结层回传梯度。把整条主路断开，可能切断正确的学习路径。
 
-令这个手算例子的标量目标为 `L=y₁+y₂`，链式法则给出：
+令这个手算例子的标量目标为 $\mathcal L=y_1+y_2$，链式法则给出：
 
 $$
-\frac{\partial L}{\partial B}=\begin{bmatrix}6\\6\end{bmatrix},\quad
-\frac{\partial L}{\partial A}=\begin{bmatrix}8&-4&2\end{bmatrix},\quad
-\frac{\partial L}{\partial x}=\begin{bmatrix}9\\7\\17\end{bmatrix}.
+\frac{\partial \mathcal L}{\partial B}=\begin{bmatrix}6\\6\end{bmatrix},\quad
+\frac{\partial \mathcal L}{\partial A}=\begin{bmatrix}8&-4&2\end{bmatrix},\quad
+\frac{\partial \mathcal L}{\partial x}=\begin{bmatrix}9\\7\\17\end{bmatrix}.
 $$
+
+**大白话：**把两个输出加起来当“考分”，问每个数字轻轻动一下，考分会跟着变多少。比如 $B$ 的每一项都乘着同一个 $\frac{\alpha}{r}(Ax)=2\times3=6$，所以梯度都是 6。
+
+其中：$y_1$、$y_2$ 是输出 $y$ 的两个分量；$\partial\mathcal L/\partial B$ 等是 $\mathcal L$ 对该矩阵（或向量）逐元素的偏导，形状与它本身相同。逐项来源：$\partial\mathcal L/\partial A=\frac{\alpha}{r}(B^\top\mathbf 1)\,x^\top=2\times2\times[2,-1,0.5]$，$\partial\mathcal L/\partial x=W_0^\top\mathbf 1+\frac{\alpha}{r}A^\top(B^\top\mathbf 1)=[5,7,9]^\top+4\times[1,0,2]^\top$，$\mathbf 1$ 是全 1 向量。
 
 W0 的梯度为 None，因为它被显式冻结。输入 x 仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。
 
@@ -324,14 +348,20 @@ python -m unittest discover -s tests -p 'test_sft_lora.py' -v
 普通、无量化、无 LoRA dropout 的线性层，可以构造：
 
 $$
-W_{merged}=W_0+\frac{\alpha}{r}BA.
+W_{\mathrm{merged}}=W_0+\frac{\alpha}{r}BA.
 $$
+
+**大白话：**支路说到底只是给 $W_0$ 加了一个固定增量；训练完把增量直接加回原矩阵，以后只走一条路，算出来一样。
+
+其中：$W_{\mathrm{merged}}$ 是合并后的普通权重；$W_0$、$B$、$A$、$\alpha$、$r$ 同上。
 
 于是 `W_merged x` 与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：
 
 $$
-W_{merged}=\begin{bmatrix}7&2&15\\2&5&2\end{bmatrix}.
+W_{\mathrm{merged}}=\begin{bmatrix}7&2&15\\2&5&2\end{bmatrix}.
 $$
+
+其中：$BA=\begin{bmatrix}3&0&6\\-1&0&-2\end{bmatrix}$，乘以 $\alpha/r=2$ 后逐元素加到 $W_0$ 上。
 
 代码的 `merged()` 返回一个**新的普通 Linear**，保留原来的 bias，不改原 adapter 或基础层。调用两次也各自从同一个原始 W0 出发，不会把 BA 重复加两遍。合并后的模型不再额外执行 adapter 支路；若既改了原权重又保留支路，更新就会被算两次。
 
@@ -402,7 +432,7 @@ LoRA 不是数据审校器，也不能保证不遗忘既有能力。SFT 通过�
 
 ### 题 6：梯度到哪里
 
-仍用该例子，令 L=y₁+y₂，求 A、B、x 的梯度。为什么冻结 W0 后 x 仍可能有梯度？
+仍用该例子，令 $\mathcal L=y_1+y_2$，求 A、B、x 的梯度。为什么冻结 W0 后 x 仍可能有梯度？
 
 **参考答案：** A 梯度 `[8,-4,2]`，B 梯度 `[6,6]`，x 梯度 `[9,7,17]`；固定 W0 不等于切断对输入的导数。`test_lora_gradients_match_manual_chain_rule` 逐项核对。另一个测试验证 user 内容虽然不被当成标签，仍可通过上下文影响 loss。
 
