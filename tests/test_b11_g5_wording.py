@@ -8,7 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 G4 = [
 ("chapters/08a_kv_cache.md","参数更新后旧缓存无效。实现核对参数对象身份、版本、dtype 与 device，包含 `assign=True` 替换参数的情况；不支持通过 `.data` 等方式故意绕过 PyTorch 版本跟踪。","参数更新或替换后，旧缓存会被拒绝。"),
 ("chapters/08b_rope_yarn.md","源码 `rotation_walkthrough()` 用 float64 生成上表，`test_rotation_matches_independent_float64_matrix_and_preserves_tail` 还用独立的 2×2 矩阵验证实现，","源码 `rotation_walkthrough()` 用 float64 生成上表；本章另用独立的 2×2 矩阵核对实现，"),
-("chapters/08b_rope_yarn.md","点积会乘 **a²**，不是 a。","点积会乘 **a²**，不是 a。s>1 时 a>1，即 t<1，logits 被放大，注意力分布变得更尖。"),
+# bot-hub#126 F5：扩展倍数 s→κ、温度 t→τ（附录 A.5），句意不变。
+("chapters/08b_rope_yarn.md","s>1 时 a>1，即 t<1","点积会乘 **a²**，不是 a。$\\kappa>1$ 时 $a>1$，即 $\\tau<1$，logits 被放大，注意力分布变得更尖。"),
 ]
 
 # G5 机械修正

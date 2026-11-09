@@ -86,7 +86,7 @@ MOVED = {
 # B6 review B2（Wu 2026-11-05 决定「全搬」）：其他组章节中同类段尾测试句，原文移入 docs/testing.md。
 MOVED_B2 = {
  "08c_modern_block.md": [
-  "为守住旧行为，测试还构建一个兼容设置：`norm_kind='layernorm'`、`ffn_kind='gelu'`、`norm_bias=True`、`ffn_bias=True`、ε=1e-5、H=4D。它在相同 seed 下与 S2 的每个 state tensor、每个输出 logit 精确相同。",
+  "为守住旧行为，测试还构建一个兼容设置：`norm_kind='layernorm'`、`ffn_kind='gelu'`、`norm_bias=True`、`ffn_bias=True`、ε=1e-5、$d_{\mathrm{ff}}=4D$。它在相同 seed 下与 S2 的每个 state tensor、每个输出 logit 精确相同。",
   "源码的计数函数包含这两种情况，测试再用真实 `numel()` 交叉检查。",
   "`gate_walkthrough()` 打印每一层，测试把最终结果独立写成 `-3/(1+e)` 和 `8/(1+exp(-2))` 核对。"
  ],
@@ -198,7 +198,8 @@ NARRATION_ALLOWLIST = [
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
     ("08b_rope_yarn.md", "浮点 cos(π/2) 未必严格等于 0，因此测试使用小容差，不要求每一位相等。",
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
-    ("08b_rope_yarn.md", "- **直接外推**：仍用 pθ，不改变转速；测试会出现训练未覆盖的相对距离。",
+    # bot-hub#126 F5: RoPE position letter p→t (F0 r2) and frequency θ→ω_i (F0 r4) per A.5 rename table; same ledger entry, text only.
+    ("08b_rope_yarn.md", "- **直接外推**：仍用 tω_i，不改变转速；测试会出现训练未覆盖的相对距离。",
      "decided-kept", "测试 means test/inference time, not the repository tests"),
     ("08b_rope_yarn.md", "不同硬件/数值库末位可能有差异，测试对记录值使用明确的 CPU 容差。",
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
