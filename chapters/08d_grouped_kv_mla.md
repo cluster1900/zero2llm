@@ -139,12 +139,12 @@ layers.append((k, v))
 本章 K、V 每头同宽，且不量化。$L$ 层、batch $B$、长度 $T$、每个数 $b_{\mathrm{elem}}$ 字节时：
 
 $$
-\text{KV 字节数}=2\times L\times B\times T\times H_{kv}\times d_h\times b_{\mathrm{elem}}
+\text{KV 字节数}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}
 $$
 
 它和 P11.6 的 MHA 账本是同一张表，只是把“每层存几份头”从 $H$ 换成真正保存的 $H_{kv}$：query 头再多，只要共用 KV 头，缓存就按 KV 头数算。
 
-其中：$L$ 是层数；$B$ 是 batch 大小；$T$ 是缓存的 token 数；$H_{kv}$ 是 KV 头数；$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是每个元素的字节数；开头的 2 表示 K、V 两份。
+其中：$L$ 是层数；$B$ 是批大小；$T$ 是缓存的 token 数；$H_{kv}$ 是 KV 头数；$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是每个元素的字节数；开头的 2 表示 K、V 两份。
 
 固定 $H_q$ 和 $d_h$，缓存相对 MHA 的比例是 $H_{kv}/H_q$，不是其平方。query 不在这个缓存里。
 
@@ -156,7 +156,7 @@ $$
 | GQA | 2 | 4608 | 9216 | 1/2 |
 | MQA | 1 | 2304 | 4608 | 1/4 |
 
-例如中间一行的参数数目是 $2\times L\times D\times H_{kv}\times d_h=2\times2\times48\times2\times12=4608$（两张矩阵 W_k、W_v，每张 $D$ 行、$H_{kv}d_h$ 列，再乘层数）。它只数 W_k/W_v，不是整模型参数。缓存则是 `2×2×2×12×2×12×4=9216` 字节。两者恰好在这个例子相差 2 倍，没有普遍意义。
+例如中间一行的参数数目是 $2\times L\times D\times H_{kv}\times d_h=2\times2\times48\times2\times12=4608$（两张矩阵 W_k、W_v，每张 $D$ 行、$H_{kv}d_h$ 列，再乘层数）。它只数 W_k/W_v，不是整模型参数。缓存则是 `2×2×2×2×12×12×4=9216` 字节（按 $2LBH_{kv}Td_hb_{\mathrm{elem}}$ 的顺序）。两者恰好在这个例子相差 2 倍，没有普遍意义。
 
 源码用 `numel() * element_size()` 实测每层 K/V。统计不包含模型权重、临时注意力矩阵、分配器和 Python 对象开销。float64 改为每数 8 字节，缓存字节数翻倍。
 

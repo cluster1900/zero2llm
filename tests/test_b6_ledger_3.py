@@ -198,7 +198,8 @@ NARRATION_ALLOWLIST = [
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
     ("08b_rope_yarn.md", "浮点 cos(π/2) 未必严格等于 0，因此测试使用小容差，不要求每一位相等。",
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),
-    ("08b_rope_yarn.md", "- **直接外推**：仍用 pθ，不改变转速；测试会出现训练未覆盖的相对距离。",
+    # bot-hub#126 F5: RoPE position letter p→t per A.5 rename table (F0 r2); same ledger entry, text only.
+    ("08b_rope_yarn.md", "- **直接外推**：仍用 tθ，不改变转速；测试会出现训练未覆盖的相对距离。",
      "decided-kept", "测试 means test/inference time, not the repository tests"),
     ("08b_rope_yarn.md", "不同硬件/数值库末位可能有差异，测试对记录值使用明确的 CPU 容差。",
      "decided-kept", "Wu 2026-11-05 17:12 keep: tolerance statement (independent-check class)"),

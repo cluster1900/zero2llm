@@ -100,12 +100,12 @@ return (work * inv_rms * self.weight.to(work.dtype)).to(x.dtype)
 
 SwiGLU 在同一个输入上走两条 $D\to d_{\mathrm{ff}}'$ 支路（加撇是为了和 GELU FFN 的宽度 $d_{\mathrm{ff}}$ 区分）。一条产生内容 `up(x)`，另一条经过 SiLU 后调节内容 `gate(x)`，最后通过 `down` 回到 D：
 
-$$g=xW_g,\quad c=xW_u,\quad z=\operatorname{SiLU}(g)\odot c,\quad y=zW_d$$
+$$g=xW_g,\quad a_{\mathrm{up}}=xW_{\mathrm{up}},\quad z=\operatorname{SiLU}(g)\odot a_{\mathrm{up}},\quad y=zW_d$$
 $$\operatorname{SiLU}(t)=t\sigma(t)=\frac{t}{1+e^{-t}}$$
 
-第一行像“内容 × 音量旋钮”：c 是要传的内容，SiLU(g) 决定每个坐标放大、缩小还是反向；相乘后再用 $W_d$ 压回主干宽度。第二行给出 SiLU 本身：输入乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近 0。
+第一行像“内容 × 音量旋钮”：$a_{\mathrm{up}}$ 是要传的内容，SiLU(g) 决定每个坐标放大、缩小还是反向；相乘后再用 $W_d$ 压回主干宽度。第二行给出 SiLU 本身：输入乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近 0。
 
-其中：x 是一个 token 的输入行向量，宽 $D$；$W_g$、$W_u$ 是门支路和内容支路的投影，形状 $[D,d_{\mathrm{ff}}']$；$W_d$ 是下投影，形状 $[d_{\mathrm{ff}}',D]$；g、c 是两条支路的中间结果（本节局部记号；c 取 content 之意，不用 u，免得和上面的残差 u 撞名），z 是相乘后的结果，y 是输出；$\odot$ 是逐坐标相乘；t 是 SiLU 的任意实数输入；$\sigma(t)=1/(1+e^{-t})$ 是 sigmoid 函数（本节局部符号）。
+其中：x 是一个 token 的输入行向量，宽 $D$；$W_g$、$W_{\mathrm{up}}$ 是门支路和内容支路的投影，形状 $[D,d_{\mathrm{ff}}']$；$W_d$ 是下投影，形状 $[d_{\mathrm{ff}}',D]$；g、$a_{\mathrm{up}}$ 是两条支路的中间结果（本节局部记号；不用 u，因为 u 只指上面的残差结果），z 是相乘后的结果，y 是输出；$\odot$ 是逐坐标相乘；t 是 SiLU 的任意实数输入；$\sigma(t)=1/(1+e^{-t})$ 是 sigmoid 函数（本节局部符号）。
 
 这里公式采用行向量右乘矩阵的记法，PyTorch `nn.Linear` 则储存转置方向的权重。`gate.weight` 与 `up.weight` 的形状是 `[d_ff',D]`，`down.weight` 是 `[D,d_ff']`。源码只有一行核心计算：
 
@@ -129,7 +129,7 @@ down.weight = [[1, 0], [0,1]]
 
 于是 gate 的第一坐标是 1×1+2×(−1)=−1，第二坐标是 1×0+2×1=2；up 的两坐标分别是 3 和 4。
 
-| 中间坐标 | gate 投影 g | sigmoid(g) | SiLU(g)=g×sigmoid(g) | up 内容 c | 相乘结果 z |
+| 中间坐标 | gate 投影 g | sigmoid(g) | SiLU(g)=g×sigmoid(g) | up 内容 $a_{\mathrm{up}}$ | 相乘结果 z |
 | --- | --- | --- | --- | --- | --- |
 | 0 | -1 | 0.268941 | -0.268941 | 3 | -0.806824 |
 | 1 | 2 | 0.880797 | 1.761594 | 4 | 7.046377 |

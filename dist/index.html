@@ -5883,7 +5883,7 @@ class="math inline">\(D\)</span>，所以缓存按头存和按主干宽度存，
 <p>其中：<span class="math inline">\(P\)</span>
 是缓存里已有的位置数，<span class="math inline">\(C\)</span>
 是本次新块的长度（两者都是本章的局部记号）；<span
-class="math inline">\(B\)</span> 是 batch 大小；<span
+class="math inline">\(B\)</span> 是批大小；<span
 class="math inline">\(H\)</span> 是注意力头数；<span
 class="math inline">\(d_h\)</span> 是每个头的宽度；<span
 class="math inline">\(D\)</span> 是模型宽度。</p>
@@ -6073,7 +6073,8 @@ class="math inline">\(H\)</span> 个头，每头 <span
 class="math inline">\(d_h\)</span> 个数，每个元素 <span
 class="math inline">\(b_{\mathrm{elem}}\)</span> 字节，则：</p>
 <p><span
-class="math display">\[\mathrm{bytes}_{\mathrm{KV}}=2LBHTd_hb_{\mathrm{elem}}=2LBTDb_{\mathrm{elem}}\]</span></p>
+class="math display">\[\mathrm{bytes}_{\mathrm{KV}}=2LBH_{kv}Td_hb_{\mathrm{elem}}=2LBTDb_{\mathrm{elem}}\qquad(\text{MHA：}H_{kv}=H,\
+Hd_h=D)\]</span></p>
 <p>前面的 2 是 K 和 V 两份，不是两个 Block。默认 <span
 class="math inline">\(L=2\)</span>、<span
 class="math inline">\(B=1\)</span>、<span
@@ -6083,15 +6084,19 @@ class="math inline">\(b_{\mathrm{elem}}=4\)</span>。</p>
 <p>这条式子就是“数格子再乘格子大小”：每层、每条序列、每个缓存位置、每个头都要存一个
 <span class="math inline">\(d_h\)</span> 维的 K 和一个 <span
 class="math inline">\(d_h\)</span> 维的
-V，元素个数连乘起来，再乘每个元素占的字节。因为 <span
+V，元素个数连乘起来，再乘每个元素占的字节。MHA 里每个 query 头都有自己的
+KV 头，<span
+class="math inline">\(H_{kv}=H\)</span>；本章各头等宽、拼起来正好是
+<span class="math inline">\(D\)</span>，所以 <span
 class="math inline">\(Hd_h=D\)</span>，后半个等号只是把头数和每头宽度合并成主干宽度。</p>
 <p>其中：<span
 class="math inline">\(\mathrm{bytes}_{\mathrm{KV}}\)</span> 是全部层 K/V
 缓存的逻辑字节数；<span class="math inline">\(L\)</span> 是层数；<span
-class="math inline">\(B\)</span> 是 batch 大小；<span
+class="math inline">\(B\)</span> 是批大小；<span
 class="math inline">\(T\)</span> 是已缓存的 token 数；<span
-class="math inline">\(H\)</span> 是头数（MHA 里 KV 头数等于 query
-头数）；<span class="math inline">\(d_h\)</span> 是每头宽度；<span
+class="math inline">\(H_{kv}\)</span> 是 KV 头数（MHA 里等于 query 头数
+<span class="math inline">\(H\)</span>）；<span
+class="math inline">\(d_h\)</span> 是每头宽度；<span
 class="math inline">\(D=Hd_h\)</span> 是模型宽度；<span
 class="math inline">\(b_{\mathrm{elem}}\)</span>
 是每个元素的字节数（float32 为 4）。</p>
@@ -6338,18 +6343,18 @@ query、key 所在的 token 位置；θ 是这一对坐标每前进一个 token
 q、k 当作固定的内容向量；真实 q、k
 由上下文产生，不能据此说整个模型输出只由距离决定。</p>
 <p>这个性质也让“搬动”缓存里的 key 变得便宜：已经转到位置 <span
-class="math inline">\(p\)</span> 的 key，再乘 <span
-class="math inline">\(R(p&#39;)R(p)^{-1}\)</span> 就等于直接转到位置
-<span class="math inline">\(p&#39;\)</span>，不必重算（<span
-class="math inline">\(R(p)^{-1}\)</span> 先把它转回位置 0，<span
-class="math inline">\(R(p&#39;)\)</span> 再转到新位置，合起来就是 <span
-class="math inline">\(R(p&#39;-p)\)</span>）。其中：<span
-class="math inline">\(p\)</span> 是 key 原来的位置，<span
-class="math inline">\(p&#39;\)</span> 是要挪去的新位置；<span
-class="math inline">\(R(p)\)</span> 表示按位置 <span
-class="math inline">\(p\)</span> 的角度（每对坐标转 <span
-class="math inline">\(p\theta_i\)</span>）旋转；<span
-class="math inline">\(R(p)^{-1}\)</span> 是它的逆，即反向旋转。P11.10 的
+class="math inline">\(m\)</span> 的 key，再乘 <span
+class="math inline">\(R(n)R(m)^{-1}\)</span> 就等于直接转到位置 <span
+class="math inline">\(n\)</span>，不必重算（<span
+class="math inline">\(R(m)^{-1}\)</span> 先把它转回位置 0，<span
+class="math inline">\(R(n)\)</span> 再转到新位置，合起来就是 <span
+class="math inline">\(R(n-m)\)</span>）。其中：<span
+class="math inline">\(m\)</span> 是 key 原来的位置，<span
+class="math inline">\(n\)</span> 是要挪去的新位置；<span
+class="math inline">\(R(t)\)</span> 表示按位置 <span
+class="math inline">\(t\)</span> 的角度（第 i 对坐标转 <span
+class="math inline">\(t\theta_i\)</span>）旋转；<span
+class="math inline">\(R(m)^{-1}\)</span> 是它的逆，即反向旋转。P11.10 的
 <a href="#p11.10-cache-engineering">KV 编辑</a>正是这样用 RoPE
 旋转把保留的 key
 挪到新位置，压紧被删内容留下的空位；但它只改位置，改不掉 K/V
@@ -6408,16 +6413,16 @@ class="math inline">\(d_h-r\)</span> 个坐标保持原样。</p>
 <p>我们使用相邻配对：<code>(x0,x1)、(x2,x3)、…</code>。对下标 i 的对，i
 从 0 开始：</p>
 <pre class="text"><code>θ_i = base^(−2i/r)
-φ_i(p) = p × θ_i</code></pre>
+φ_i(t) = t × θ_i</code></pre>
 <p>第一式给第 i 对坐标定“转速”：i
 越大，指数越负，转得越慢，于是低编号的对像秒针，高编号的对像时针。第二式说位置
-p 处的角度就是“转速 ×
+t 处的角度就是“转速 ×
 走了几步”。快慢不同的钟放在一起，既能分辨近处的细微差别，也能照顾到远处。</p>
 <p>其中：i 是坐标对编号，从 0 数到 r/2−1；r 是旋转宽度
 <code>rotary_dim</code>；base 是频率底数；θ_i 是第 i 对每前进一个 token
-的转角（弧度）；p 是 token 位置；φ_i(p) 是位置 p 时第 i 对的总转角。</p>
+的转角（弧度）；t 是 token 位置；φ_i(t) 是位置 t 时第 i 对的总转角。</p>
 <p><code>base=10000</code> 是本例的设定，不是所有模型统一的常数。r=8
-时有四对，而不是八对。位置 p=10 时：</p>
+时有四对，而不是八对。位置 t=10 时：</p>
 <h3 id="表-p12-3快钟和慢钟">表 P12-3：快钟和慢钟</h3>
 <div class="table-wrapper"><table>
 <colgroup>
@@ -6432,7 +6437,7 @@ p 处的角度就是“转速 ×
 <th>i</th>
 <th>坐标对</th>
 <th>θ_i：每 token 转角</th>
-<th>p=10 的角度</th>
+<th>t=10 的角度</th>
 <th>转一圈所需 token 数 2π/θ_i</th>
 </tr>
 </thead>
@@ -6603,11 +6608,12 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb81-1"><a h
 </table></div>
 <p><code>key_position &lt;= query_position</code>
 使用真实整数位置。缓存内存仍是 MHA 的 <span
-class="math inline">\(2LBHTd_hb_{\mathrm{elem}}\)</span>（符号同 <a
+class="math inline">\(2LBH_{kv}Td_hb_{\mathrm{elem}}\)</span>（MHA 时
+<span class="math inline">\(H_{kv}=H\)</span>；符号同 <a
 href="#p11.6-用空间换计算先算真实-kv-负担">P11.6</a>：<span
 class="math inline">\(L\)</span> 层数、<span
-class="math inline">\(B\)</span> batch、<span
-class="math inline">\(H\)</span> 头数、<span
+class="math inline">\(B\)</span> 批大小、<span
+class="math inline">\(H_{kv}\)</span> KV 头数、<span
 class="math inline">\(T\)</span> 缓存长度、<span
 class="math inline">\(d_h\)</span> 每头宽度、<span
 class="math inline">\(b_{\mathrm{elem}}\)</span> 每元素字节数）。上节 2
@@ -6639,9 +6645,9 @@ class="math inline">\(\kappa=T&#39;/T_{\mathrm{train}}=4\)</span>（PI、YaRN
 class="math inline">\(\kappa\)</span>）：</p>
 <ul>
 <li><strong>直接外推</strong>：仍用
-pθ，不改变转速；测试会出现训练未覆盖的相对距离。</li>
+tθ，不改变转速；测试会出现训练未覆盖的相对距离。</li>
 <li><strong>位置插值（PI）</strong>：用 <span
-class="math inline">\((p/\kappa)\theta\)</span>，等价于把频率改为 <span
+class="math inline">\((t/\kappa)\theta\)</span>，等价于把频率改为 <span
 class="math inline">\(\theta/\kappa\)</span>。这里缩放的是旋转相位，不是删除
 token，也不是把注意力矩阵缩成八个位置。</li>
 </ul>
@@ -6650,14 +6656,14 @@ token，也不是把注意力矩阵缩成八个位置。</li>
 <p>其中：<span class="math inline">\(T_{\mathrm{train}}\)</span>
 是训练时见过的最长长度；<span class="math inline">\(T&#39;\)</span>
 是想用的新长度；<span class="math inline">\(\kappa\)</span>
-是扩展倍数；p 是 token 位置；θ 是某一对坐标原来每 token 的转角。</p>
+是扩展倍数；t 是 token 位置；θ 是某一对坐标原来每 token 的转角。</p>
 <h3 id="表-p12-4同一个位置新的转角">表 P12-4：同一个位置，新的转角</h3>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
-<th>token 位置 p</th>
-<th>外推的 pθ</th>
-<th>PI 的 (p/4)θ</th>
+<th>token 位置 t</th>
+<th>外推的 tθ</th>
+<th>PI 的 (t/4)θ</th>
 </tr>
 </thead>
 <tbody>
@@ -7184,10 +7190,12 @@ d_{\mathrm{ff}}&#39;\)</span> 支路（加撇是为了和 GELU FFN 的宽度 <sp
 class="math inline">\(d_{\mathrm{ff}}\)</span> 区分）。一条产生内容
 <code>up(x)</code>，另一条经过 SiLU 后调节内容
 <code>gate(x)</code>，最后通过 <code>down</code> 回到 D：</p>
-<p><span class="math display">\[g=xW_g,\quad c=xW_u,\quad
-z=\operatorname{SiLU}(g)\odot c,\quad y=zW_d\]</span> <span
+<p><span class="math display">\[g=xW_g,\quad
+a_{\mathrm{up}}=xW_{\mathrm{up}},\quad z=\operatorname{SiLU}(g)\odot
+a_{\mathrm{up}},\quad y=zW_d\]</span> <span
 class="math display">\[\operatorname{SiLU}(t)=t\sigma(t)=\frac{t}{1+e^{-t}}\]</span></p>
-<p>第一行像“内容 × 音量旋钮”：c 是要传的内容，SiLU(g)
+<p>第一行像“内容 × 音量旋钮”：<span
+class="math inline">\(a_{\mathrm{up}}\)</span> 是要传的内容，SiLU(g)
 决定每个坐标放大、缩小还是反向；相乘后再用 <span
 class="math inline">\(W_d\)</span> 压回主干宽度。第二行给出 SiLU
 本身：输入乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近
@@ -7195,12 +7203,14 @@ class="math inline">\(W_d\)</span> 压回主干宽度。第二行给出 SiLU
 <p>其中：x 是一个 token 的输入行向量，宽 <span
 class="math inline">\(D\)</span>；<span
 class="math inline">\(W_g\)</span>、<span
-class="math inline">\(W_u\)</span> 是门支路和内容支路的投影，形状 <span
+class="math inline">\(W_{\mathrm{up}}\)</span>
+是门支路和内容支路的投影，形状 <span
 class="math inline">\([D,d_{\mathrm{ff}}&#39;]\)</span>；<span
 class="math inline">\(W_d\)</span> 是下投影，形状 <span
-class="math inline">\([d_{\mathrm{ff}}&#39;,D]\)</span>；g、c
-是两条支路的中间结果（本节局部记号；c 取 content 之意，不用
-u，免得和上面的残差 u 撞名），z 是相乘后的结果，y 是输出；<span
+class="math inline">\([d_{\mathrm{ff}}&#39;,D]\)</span>；g、<span
+class="math inline">\(a_{\mathrm{up}}\)</span>
+是两条支路的中间结果（本节局部记号；不用 u，因为 u
+只指上面的残差结果），z 是相乘后的结果，y 是输出；<span
 class="math inline">\(\odot\)</span> 是逐坐标相乘；t 是 SiLU
 的任意实数输入；<span
 class="math inline">\(\sigma(t)=1/(1+e^{-t})\)</span> 是 sigmoid
@@ -7242,7 +7252,7 @@ down.weight = [[1, 0], [0,1]]</code></pre>
 <th>gate 投影 g</th>
 <th>sigmoid(g)</th>
 <th>SiLU(g)=g×sigmoid(g)</th>
-<th>up 内容 c</th>
+<th>up 内容 <span class="math inline">\(a_{\mathrm{up}}\)</span></th>
 <th>相乘结果 z</th>
 </tr>
 </thead>
@@ -7913,7 +7923,7 @@ forward。</p>
 class="math inline">\(T\)</span>、每个数 <span
 class="math inline">\(b_{\mathrm{elem}}\)</span> 字节时：</p>
 <p><span class="math display">\[
-\text{KV 字节数}=2\times L\times B\times T\times H_{kv}\times d_h\times
+\text{KV 字节数}=2\times L\times B\times H_{kv}\times T\times d_h\times
 b_{\mathrm{elem}}
 \]</span></p>
 <p>它和 P11.6 的 MHA 账本是同一张表，只是把“每层存几份头”从 <span
@@ -7921,7 +7931,7 @@ class="math inline">\(H\)</span> 换成真正保存的 <span
 class="math inline">\(H_{kv}\)</span>：query 头再多，只要共用 KV
 头，缓存就按 KV 头数算。</p>
 <p>其中：<span class="math inline">\(L\)</span> 是层数；<span
-class="math inline">\(B\)</span> 是 batch 大小；<span
+class="math inline">\(B\)</span> 是批大小；<span
 class="math inline">\(T\)</span> 是缓存的 token 数；<span
 class="math inline">\(H_{kv}\)</span> 是 KV 头数；<span
 class="math inline">\(d_h\)</span> 是每头宽度；<span
@@ -7980,8 +7990,10 @@ D\times H_{kv}\times
 d_h=2\times2\times48\times2\times12=4608\)</span>（两张矩阵
 W_k、W_v，每张 <span class="math inline">\(D\)</span> 行、<span
 class="math inline">\(H_{kv}d_h\)</span> 列，再乘层数）。它只数
-W_k/W_v，不是整模型参数。缓存则是 <code>2×2×2×12×2×12×4=9216</code>
-字节。两者恰好在这个例子相差 2 倍，没有普遍意义。</p>
+W_k/W_v，不是整模型参数。缓存则是 <code>2×2×2×2×12×12×4=9216</code>
+字节（按 <span
+class="math inline">\(2LBH_{kv}Td_hb_{\mathrm{elem}}\)</span>
+的顺序）。两者恰好在这个例子相差 2 倍，没有普遍意义。</p>
 <p>源码用 <code>numel() * element_size()</code> 实测每层
 K/V。统计不包含模型权重、临时注意力矩阵、分配器和 Python
 对象开销。float64 改为每数 8 字节，缓存字节数翻倍。</p>
