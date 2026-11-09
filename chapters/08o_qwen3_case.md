@@ -38,12 +38,12 @@
 | 字段／含义 | 0.6B dense | 30B-A3B MoE |
 | --- | ---: | ---: |
 | `model_type` | `qwen3` | `qwen3_moe` |
-| 层数 L | 28 | 48 |
-| 隐藏宽度 D | 1024 | 2048 |
-| Q 头数 Hq | 16 | 32 |
-| KV 头数 Hkv | 8 | 4 |
-| `head_dim`，每头宽度 d | 128 | 128 |
-| `vocab_size`，embedding 行数 V | 151936 | 151936 |
+| 层数 $L$ | 28 | 48 |
+| 隐藏宽度 $D$ | 1024 | 2048 |
+| Q 头数 $H_q$ | 16 | 32 |
+| KV 头数 $H_{kv}$ | 8 | 4 |
+| `head_dim`，每头宽度 $d_h$ | 128 | 128 |
+| `vocab_size`，embedding 行数 $\lvert\mathcal V\rvert$ | 151936 | 151936 |
 | dense FFN `intermediate_size` | 3072 | 6144，当前全 MoE 层不使用它 |
 | 单专家 `moe_intermediate_size` | 不适用 | 768 |
 | 专家总数／每 token 选中数 | 不适用 | 128 / 8 |
@@ -62,9 +62,12 @@
 
 ![两份固定配置如何映射到注意力、FFN 和输出预算](assets/diagrams/p25-qwen3.svg)
 
-## P25.3 一个最容易算错的维度：D 不一定等于 Hq × d
+## P25.3 一个最容易算错的维度：$D$ 不一定等于 $H_q \times d_h$ {#p25.3}
 
-以前的小型教学模型常把 `head_dim` 写成 `D // Hq`。本章两个 checkpoint **显式指定 d=128**，所以：
+以前的小型教学模型常把 `head_dim` 写成 `D // Hq`。本章两个 checkpoint **显式指定 $d_h=128$**，所以：
+
+其中：$H_q$ 是 Q 头数，$d_h$ 是每头宽度，$D$ 是隐藏宽度；本章的 $H_qd_h$ 不等于 $D$，这正是要强调的地方。
+
 
 - dense：D=1024，但 Q 投影宽度为 16×128=2048；
 - MoE：D=2048，但 Q 投影宽度为 32×128=4096。
@@ -82,9 +85,9 @@ k_proj.weight / v_proj      [1024,1024]  → K/V [B,8,T,128]
 o_proj.weight               [1024,2048]  → 输出 [B,T,1024]
 ```
 
-因此不能只把 [S4](#p14-grouped-kv) 的模型尺寸改成 1024，就称它为“Qwen3-0.6B 实现”。S4 的旧假设是 `D=Hq*d`；本章的微型探针另写显式 head dimension，并且仍不提供官方 checkpoint 兼容性承诺。
+因此不能只把 [S4](#p14-grouped-kv) 的模型尺寸改成 1024，就称它为“Qwen3-0.6B 实现”。S4 的旧假设是 $D=H_qd_h$；本章的微型探针另写显式 head dimension，并且仍不提供官方 checkpoint 兼容性承诺。
 
-Q/K 的头数关系遵循 GQA：dense 每组 2 个 Q 头共用 1 个 KV 头，MoE 每组 8 个 Q 头共用 1 个 KV 头。分组按连续顺序，例子 Hq=4、Hkv=2 的对应关系是 `[0,0,1,1]`，不是轮流的 `[0,1,0,1]`。
+Q/K 的头数关系遵循 GQA：dense 每组 2 个 Q 头共用 1 个 KV 头，MoE 每组 8 个 Q 头共用 1 个 KV 头。分组按连续顺序，例子 $H_q=4$、$H_{kv}=2$ 的对应关系是 `[0,0,1,1]`，不是轮流的 `[0,1,0,1]`。
 
 ## P25.4 走一遍 block：QK-norm 不是又一个 LayerNorm
 
@@ -100,20 +103,28 @@ x → RMSNorm → Attention → 加回 x
 RMSNorm 对最后一维计算：
 
 $$
-\operatorname{RMSNorm}(z)_j
-= g_j\frac{z_j}{\sqrt{\frac{1}{d}\sum_{i=1}^{d}z_i^2+\epsilon}}.
+\operatorname{RMSNorm}(z)_k
+= \gamma_k\frac{z_k}{\sqrt{\operatorname{mean}(z^2)+\epsilon}}.
 $$
 
-对 block 输入，最后一维是 D；对单个 Q/K 头，最后一维是 d。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 d 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 Hq×d 或 Hkv×d 的 gain**。这会直接影响参数统计。
+**大白话：**先算这一行数字的“均方根”当作音量，把整行除以它统一音量，再让每一维乘上自己可学的增益。不减均值，所以比 LayerNorm 少一步。
+
+其中：$z$ 是被归一化的那一行向量，$z_k$ 是它的第 $k$ 维；$\operatorname{mean}(z^2)$ 是对该行最后一维各分量平方取平均；$\gamma_k$ 是第 $k$ 维的可学习 gain（代码里的 `weight`）；$\epsilon$ 是防止除以零的小常数（配置里的 `rms_norm_eps`）。
+
+对 block 输入，最后一维长度是 $D$；对单个 Q/K 头，最后一维长度是 $d_h$。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 $d_h$ 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 $H_q\times d_h$ 或 $H_{kv}\times d_h$ 的 gain**。这会直接影响参数统计。
 
 本章探针保留 float64 精度来做标量对照；固定官方实现的 RMSNorm 有转到 float32 求统计量再转回的逻辑。即使数学结构一样，两种数值路径也不能宣称逐位等价，更不代表 BF16 GPU kernel 的误差行为已经复现。
 
-RoPE 也有布局约定。本快照使用 **split-half** 配对：d=4 时，维度 0 与 2 配一对，1 与 3 配一对。若记角度为 θ，第一对是：
+RoPE 也有布局约定。本快照使用 **split-half** 配对：$d_h=4$ 时，维度 0 与 2 配一对，1 与 3 配一对。若记角度为 θ，第一对是：
 
 $$
 (z_0,z_2) \mapsto
 (z_0\cos\theta-z_2\sin\theta,\ z_2\cos\theta+z_0\sin\theta).
 $$
+
+**大白话：**把第 0 维和第 2 维看成平面上一个点的两个坐标，绕原点转 $\theta$ 角；长度不变，只改方向。
+
+其中：$z_0,z_2$ 是一个 Q/K 头向量的第 0、2 维；$\theta$ 是这一对维度在当前位置的旋转角（局部符号），等于位置乘以这一对维度的角频率 $\omega_i$（附录 A.5；$i$ 是频率对的编号）。
 
 另一种实现可能把相邻维度 0/1、2/3 配对。它们都能表达旋转位置机制，但权重布局、旋转方式和 checkpoint 转换必须一致；不能把一种公式塞进另一种布局，再仅凭“都叫 RoPE”认定兼容。
 
@@ -124,13 +135,17 @@ $$
 Dense FFN 与每个 MoE 专家都使用三矩阵的 SwiGLU 结构：
 
 $$
-\operatorname{FFN}(x)=W_{down}
-\big[\operatorname{SiLU}(W_{gate}x)\odot(W_{up}x)\big].
+\operatorname{FFN}(x)=
+\big[\operatorname{SiLU}(xW_{\mathrm{gate}})\odot(xW_{\mathrm{up}})\big]W_{\mathrm{down}}.
 $$
 
-宽度为 M 时，三个无偏置矩阵一共 `3*D*M` 个参数。**gate_proj 是 SwiGLU 的门，不是 MoE 的路由器。** MoE 另有一个从 D 到专家数 E 的 `mlp.gate`，它决定调用哪些完整专家。
+**大白话：**一路（up）准备内容，另一路（gate）过 SiLU 后当“音量旋钮”逐元素调节它，最后用 down 投影压回原宽度。
 
-对本章的 30B-A3B，固定配置是：E=128、k=8、每个专家 M=768，`decoder_sparse_step=1`、`mlp_only_layers=[]`。因此 48 层均使用 MoE；固定实现中没有额外的 shared expert 分支。不要把 [S5 教学 MoE](#p18-moe) 默认的共享专家设置照搬进来。
+其中：$x$ 是一个位置的输入行向量，长 $D$；$W_{\mathrm{gate}},W_{\mathrm{up}}\in\mathbb R^{D\times d_{\mathrm{ff}}}$，$W_{\mathrm{down}}\in\mathbb R^{d_{\mathrm{ff}}\times D}$（按全书行向量写法；checkpoint 里按 `[输出,输入]` 存的是它们的转置）；$\odot$ 是逐元素乘法；$d_{\mathrm{ff}}$ 是中间宽度。
+
+宽度为 $d_{\mathrm{ff}}$ 时，三个无偏置矩阵一共 $3Dd_{\mathrm{ff}}$ 个参数。**gate_proj 是 SwiGLU 的门，不是 MoE 的路由器。** MoE 另有一个从 $D$ 到专家数 $N_E$ 的 `mlp.gate`，它决定调用哪些完整专家。
+
+对本章的 30B-A3B，固定配置是：$N_E=128$、$k=8$、每个专家 $d_{\mathrm{ff}}=768$，`decoder_sparse_step=1`、`mlp_only_layers=[]`。因此 48 层均使用 MoE；固定实现中没有额外的 shared expert 分支。不要把 [S5 教学 MoE](#p18-moe) 默认的共享专家设置照搬进来。
 
 单个 token 的路由流程是：
 
@@ -150,12 +165,16 @@ $$
 对这两个对象，一层的注意力投影参数为：
 
 $$
-P_{attn}=2D(H_qd)+2D(H_{kv}d).
+N_{\mathrm{attn}}=2D(H_qd_h)+2D(H_{kv}d_h).
 $$
 
-前一项对应 Q 与 O，后一项对应 K 与 V。再加 Q/K norm 的 `2d`、两个 block RMSNorm 的 `2D`。最终输出前的 RMSNorm 另加 D。
+**大白话：**Q 投影把 $D$ 维映到 $H_q$ 个头、每头 $d_h$ 维，O 投影再映回来，所以是两份 $D\times H_qd_h$；K、V 只有 $H_{kv}$ 个头，是两份 $D\times H_{kv}d_h$。
 
-Dense 每层再加 `3DM`。MoE 每层再加 router 的 `DE` 与全部专家的 `E*3DM`。embedding 为 `VD`；输出 head 也是 `VD`，但只有未绑定时才新增一份独立参数。
+其中：$N_{\mathrm{attn}}$ 是一层注意力投影的参数数；$D$ 是隐藏宽度，$H_q$、$H_{kv}$ 是 Q 头数与 KV 头数，$d_h$ 是每头宽度。本章 $H_qd_h\ne D$，所以不能化简成 $2D^2$ 之类。
+
+前一项对应 Q 与 O，后一项对应 K 与 V。再加 Q/K norm 的 $2d_h$、两个 block RMSNorm 的 $2D$。最终输出前的 RMSNorm 另加 $D$。
+
+Dense 每层再加 $3Dd_{\mathrm{ff}}$。MoE 每层再加 router 的 $DN_E$ 与全部专家的 $N_E\cdot3Dd_{\mathrm{ff}}$。embedding 为 $\lvert\mathcal V\rvert D$；输出 head 也是 $\lvert\mathcal V\rvert D$，但只有未绑定时才新增一份独立参数。
 
 | 组件 | 0.6B dense | 30B-A3B MoE |
 | --- | ---: | ---: |
@@ -181,26 +200,32 @@ $$
 = 3,353,032,704.
 $$
 
+**大白话：**从总数里先拿掉全部专家，再按“每个 token 只用 128 个专家中的 8 个”的比例把专家加回来，就是这一口径下的激活参数。
+
+其中：30,532,122,624 是唯一架构参数总数，28,991,029,248 是全部专家 FFN 的参数，$8/128=k/N_E$。
+
 这与[该版本模型卡](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md)描述的约 30.5B 总参数、3.3B 激活参数处在相应量级，但我们明确保留自己的完整计算口径，不把近似标签当作严格恒等式。
 
 为何强调“完整矩阵”？输入 embedding 实际查表只访问选中 token 的行；计算次数、内存读取、算术 FLOPs 不等于这一参数计数。一个 batch 中不同 token 还可能走不同专家，选中专家的并集超过 k。**A3B 不等于只需装下 3B 权重，更不意味着它一定比某个 dense 3B 更快。**
 
-## P25.7 KV cache：这次真的按 Hkv 计算
+## P25.7 KV cache：这次真的按 $H_{kv}$ 计算 {#p25.7}
 
 不量化、各层都保存 K/V 时，逻辑 payload 为：
 
 $$
-\text{bytes}=2\times L\times B\times T\times H_{kv}\times d\times s,
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}},
 $$
 
-其中 2 对应 K 与 V，s 是每个元素的字节数。假设 B=1、T=4096、BF16 的 s=2：
+**大白话：**和 P24 的 KV 账本是同一个乘法：K、V 两份，每层、每条序列、每个 KV 头、每个 token 存一条长 $d_h$ 的向量。
+
+其中：2 对应 K 与 V；$L$ 是层数，$B$ 是批大小，$H_{kv}$ 是 KV 头数，$T$ 是缓存的 token 数，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是 K/V 张量每个元素的字节数。假设 $B=1$、$T=4096$、BF16 的 $b_{\mathrm{elem}}=2$：
 
 - 0.6B：469,762,048 字节，即 **448 MiB**；
 - 30B-A3B：402,653,184 字节，即 **384 MiB**。
 
 这是一个很好的反直觉检查：**总参数更多，不代表每条序列的 KV cache 一定更大。** MoE 对象有更多层，但 KV 头数更少。缓存量主要取决于上述维度，不直接由专家总参数推出来。
 
-如果误把 Hq 代替 Hkv，dense 会多算 2 倍，MoE 会多算 8 倍。本章注意力在运算时临时展开 KV 头，返回的缓存仍是 `[B,Hkv,T,d]`；这不是 FlashAttention，不声称避免了注意力矩阵或临时展开的内存。
+如果误把 $H_q$ 代替 $H_{kv}$，dense 会多算 2 倍，MoE 会多算 8 倍。本章注意力在运算时临时展开 KV 头，返回的缓存仍是 $[B,H_{kv},T,d_h]$；这不是 FlashAttention，不声称避免了注意力矩阵或临时展开的内存。
 
 数字只覆盖张量逻辑内容，不包括权重、临时工作区、allocator、页面碎片、通信缓冲、padding、量化 scale 或多请求调度。不要据此直接宣布“某张显卡一定装得下”。
 
@@ -278,7 +303,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p test_qwen3_case.py -v
 
 `--torch` 使用 CPU、附录 H 所列 PyTorch、Jinja2 `3.1.6`、种子 250、单线程、float64。缺少 PyTorch 或 Jinja2 时给出安装 `requirements.txt` 的提示并以状态 2 退出；不是“只打印配置就算可选实验通过”。本章没有额外安装 Transformers，也不修改仓库的依赖锁定。
 
-微型配置为 D=8、Hq=4、Hkv=2、d=4、2 层、词表 17，仍然保留 `Hq*d != D` 的关键结构。dense 的 FFN 宽度 12；MoE 是 4 个宽度 6 的专家、每 token 选 2 个，没有共享专家。它们只随机初始化，没有训练。
+微型配置为 $D=8$、$H_q=4$、$H_{kv}=2$、$d_h=4$、2 层、词表 17，仍然保留 $H_qd_h\ne D$ 的关键结构。dense 的 FFN 宽度 12；MoE 是 4 个宽度 6 的专家、每 token 选 2 个，没有共享专家。它们只随机初始化，没有训练。
 
 本次实际输出的稳定字段为：
 
@@ -317,7 +342,7 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 
 先手算，再在 `tests/test_qwen3_case.py` 中找到同名测试。
 
-1. **0.6B 的 Q 投影输出为什么不是 1024？** 因为显式 d=128、Hq=16，输出为 2048；O 再映回 1024。见 `test_exercise_explicit_head_width_and_qk_norm_weights`。
+1. **0.6B 的 Q 投影输出为什么不是 1024？** 因为显式 $d_h=128$、$H_q=16$，输出为 2048；O 再映回 1024。见 `test_exercise_explicit_head_width_and_qk_norm_weights`。
 2. **Q norm 是否有 16×128 个 gain？** 没有，本快照只有 128 个，按最后一维归一化、跨头共享。对应同一形状测试及 `test_exercise_qk_norm_and_split_half_rotation_hand_reference`。
 3. **0.6B 的输入／输出 embedding 是否应该计算两遍？** 不应，绑定后唯一架构参数为 596,049,920。见 `test_exact_real_parameter_totals_independent_hand_arithmetic`。
 4. **30B-A3B 应该再加宽度 6144 的 dense FFN 吗？** 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成 4，并排除下标 1 的层后，只有下标 3 的层是 MoE。见 `test_mixed_sparse_layer_selection_no_unused_dense_mlp_count`。
