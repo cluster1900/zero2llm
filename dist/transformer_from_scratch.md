@@ -1281,9 +1281,15 @@ flowchart TD
     %% id: ch04-three-ledgers
     accTitle: 固定 D 改 H 时，参数、运算与显式分数表三本账结论不同
     accDescr: 起点是 D 固定、d_h=D/H、四个投影无偏置。参数 4D² 与 H 无关；运算量级不随 H 变；显式分数表 B·H·T² 随 H 线性增长。
-    S["D 固定 · d_h=D/H · 四投影无偏置"] --> P["① 参数 4D²：与 H 无关"]
-    P --> C["② 运算 O(BTD²+BT²D)：量级不随 H 变"]
-    C --> M["③ 显式分数表 B·H·T²：随 H 线性增长"]
+    S["D 固定 · d_h=D/H ·<br/>四投影无偏置"] --> G
+    subgraph G["三本账结论不同"]
+      direction TB
+      P["① 参数：4D² 与 H 无关"]
+      C["② 运算：<br/>量级不随 H 变"]
+      M["③ 分数表：B·H·T² 随 H 增"]
+      P ~~~ C
+      C ~~~ M
+    end
 ```
 
 
