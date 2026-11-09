@@ -2995,6 +2995,18 @@ equivariance）</strong>，不是“所有输出完全不变”。用 <span
 class="math inline">\(P\)</span> 表示重新排列表格行的操作：</p>
 <p><span
 class="math display">\[\operatorname{Attention}(PX)=P\operatorname{Attention}(X).\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(X\)</span>
+是输入表示，形状 <span class="math inline">\([T,D]\)</span>，一行一个
+token；<span class="math inline">\(T\)</span> 是序列长度（token
+个数），<span class="math inline">\(D\)</span> 是模型宽度；<span
+class="math inline">\(P\)</span> 是 <span
+class="math inline">\([T,T]\)</span> 的置换矩阵，每行、每列恰好有一个
+1，左乘 <span class="math inline">\(PX\)</span> 就是把 <span
+class="math inline">\(X\)</span> 的行换个顺序；<span
+class="math inline">\(\operatorname{Attention}\)</span>
+是上面限定条件下的自注意力。</p>
+<p><strong>白话：</strong>
+先换座位再算注意力，和先算注意力再换座位，结果一模一样。注意力只认“谁和谁在一桌”，不认“谁坐在哪”。</p>
 <p>跟着形状走一遍：</p>
 <ol type="1">
 <li><span class="math inline">\(X\)</span> 的形状是 <span
@@ -3002,7 +3014,7 @@ class="math inline">\([T,D]\)</span>，换序后仍是 <span
 class="math inline">\([T,D]\)</span>。</li>
 <li>共用投影使 <span class="math inline">\(Q,K,V\)</span>
 的行也一起换序。</li>
-<li><span class="math inline">\(QK^T\)</span>
+<li><span class="math inline">\(QK^\top\)</span>
 的查询行、键列同步换序；Softmax 只是在每行内重新排列同一批分数。</li>
 <li>加权时，权重列和 <span class="math inline">\(V\)</span>
 的行同步换序，因此各 token 收集的内容并没改变；输出只跟着输入换行。</li>
@@ -3016,7 +3028,19 @@ class="math inline">\(Q=K=V=X\)</span>，三行分别表示小猫、吃、小鱼
      [1, 1]]        形状 [3, 2]
 换序 order = [2, 1, 0]</code></pre>
 <p>脚本的 <code>permutation_example()</code> 计算 <span
-class="math inline">\(\operatorname{softmax}(XX^T/\sqrt{2})X\)</span>。“吃”的输出在换序前后都是约
+class="math inline">\(\operatorname{softmax}(XX^\top/\sqrt{2})X\)</span>。</p>
+<p><strong>其中：</strong> <span class="math inline">\(XX^\top\)</span>
+是三行两两做点积得到的 <span class="math inline">\([3,3]\)</span>
+分数表；除以 <span class="math inline">\(\sqrt{2}\)</span> 是第 3
+章的缩放，因为这里每行宽度 <span
+class="math inline">\(d_k=2\)</span>；<span
+class="math inline">\(\operatorname{softmax}\)</span>
+沿每一行归一化成权重；最后乘 <span
+class="math inline">\(X\)</span>，按权重把各行加起来。</p>
+<p><strong>白话：</strong> 这就是第 3
+章的缩放点积注意力，只是把三个投影都省掉，让 <span
+class="math inline">\(Q=K=V=X\)</span>，好让换序的效果一眼看清。</p>
+<p>“吃”的输出在换序前后都是约
 <code>[0.5989, 0.8022]</code>。然后给各座位加入本章的正弦编码，只换词、保持座位号不动：</p>
 <pre class="text"><code>不加位置，换序误差=0.000000
 固定座位编码，只换词，换序误差=0.971712</code></pre>
@@ -3047,9 +3071,9 @@ mask：一个告诉模型位置，一个限制哪些内容可见。</p>
 <tr>
 <td style="text-align: left;">可学习绝对位置</td>
 <td style="text-align: left;">“我坐在下标 <span
-class="math inline">\(pos\)</span> 的座位”</td>
+class="math inline">\(t\)</span> 的座位”</td>
 <td style="text-align: left;">一张 <span
-class="math inline">\([L_{max},D]\)</span>
+class="math inline">\([T_{\max},D]\)</span>
 参数表，按位置查行，再与词向量相加</td>
 <td
 style="text-align: left;">表有固定行数；未训练过的行也不会自动具有有用含义</td>
@@ -3074,12 +3098,21 @@ style="text-align: left;">有不同实现；距离可被分桶或截断，不一
 </tr>
 </tbody>
 </table></div>
+<p><strong>其中：</strong> <span class="math inline">\(t\)</span>
+是位置下标（从 0 起，代码里叫 <code>pos</code>）；<span
+class="math inline">\(T_{\max}\)</span>
+是可学习位置表预留的最多位置数，也就是表的行数；<span
+class="math inline">\(T\)</span> 是当前序列长度，<span
+class="math inline">\(D\)</span> 是模型宽度；<span
+class="math inline">\(i\)</span>、<span class="math inline">\(j\)</span>
+分别是查询（query）和键（key）的位置，<span
+class="math inline">\(j-i&gt;0\)</span> 表示键在查询右边。</p>
 <p>原版 Transformer
 对固定正弦与可学习绝对位置都做过实验；论文报告二者在所测翻译设置下效果接近，不能把正弦写成唯一正确答案。[来源
 1，§3.5；表 3(E) 见 §6.2]</p>
 <p>可学习表与词表类似，但索引不同：词向量用 token ID
 查表，位置向量用位置索引查表。例如 <span
-class="math inline">\(L_{max}=8,D=8\)</span> 时，位置表有 <span
+class="math inline">\(T_{\max}=8,D=8\)</span> 时，位置表有 <span
 class="math inline">\(8\times8=64\)</span>
 个可训练参数。固定正弦表没有这 64
 个可训练参数，但把它预先存成矩阵仍然占内存。</p>
@@ -3093,50 +3126,77 @@ class="math inline">\(j-i=3\)</span>；二者同时右移一格，差仍是 3。
 <h3 id="为什么不直接写一个整数">为什么不直接写一个整数？</h3>
 <p>当然可以把位置写成一个标量特征，不是数学上禁止。只是需要处理两个问题：</p>
 <ul>
-<li>直接用 <span class="math inline">\(pos\)</span>
+<li>直接用 <span class="math inline">\(t\)</span>
 时，较大位置可能与词向量分量处于不同尺度；还要决定如何把一个数送进 <span
 class="math inline">\(D\)</span>
 维网络。这是尺度与建模设计问题，不是“整数必然让网络爆炸”。</li>
 <li>若改成 <span
-class="math inline">\(pos/T\)</span>，相邻位置的步长随句长变化：<span
+class="math inline">\(t/T\)</span>，相邻位置的步长随句长变化：<span
 class="math inline">\(T=3\)</span> 时是 <span
 class="math inline">\(1/3\)</span>，<span
 class="math inline">\(T=100\)</span> 时是 <span
 class="math inline">\(1/100\)</span>。同样的“隔一个
 token”，数值差却不同。</li>
 </ul>
+<p><strong>白话：</strong> 相邻两个位置在 <span
+class="math inline">\(t/T\)</span> 下相差 <span
+class="math inline">\(\frac{t+1}{T}-\frac{t}{T}=\frac1T\)</span>，尺子的刻度跟着句长伸缩，模型就没法记住“一格有多长”。</p>
 <p>接下来学习的正弦方案给每个位置一组有界、且不依赖当前句长 <span
 class="math inline">\(T\)</span> 的数字，便于观察这些取舍。</p>
 <h2 id="不同频率把一根指针变成一组指针">5.3
 不同频率：把一根指针变成一组指针</h2>
-<p>本章位置从 0 开始，<span
-class="math inline">\(D=d_{model}\)</span>。公式中的 <span
-class="math inline">\(i\)</span>
+<p>本章位置从 0 开始，<span class="math inline">\(D\)</span>
+是模型宽度（代码里叫 <code>d_model</code>）。公式中的 <span
+class="math inline">\(k\)</span>
 是<strong>维度对的下标</strong>，不是已经乘过 2 的列号：</p>
 <p><span
-class="math display">\[PE_{(pos,2i)}=\sin\left(\frac{pos}{10000^{2i/D}}\right),\]</span></p>
+class="math display">\[PE_{(t,2k)}=\sin\left(\frac{t}{10000^{2k/D}}\right),\]</span></p>
 <p><span
-class="math display">\[PE_{(pos,2i+1)}=\cos\left(\frac{pos}{10000^{2i/D}}\right).\]</span></p>
+class="math display">\[PE_{(t,2k+1)}=\cos\left(\frac{t}{10000^{2k/D}}\right).\]</span></p>
+<p><strong>其中：</strong> <span
+class="math inline">\(PE_{(t,2k)}\)</span>、<span
+class="math inline">\(PE_{(t,2k+1)}\)</span> 是位置编码表中下标 <span
+class="math inline">\(t\)</span> 的那一行里，下标 <span
+class="math inline">\(2k\)</span>（偶数列）和 <span
+class="math inline">\(2k+1\)</span>（紧挨着的奇数列）两格的数；<span
+class="math inline">\(t\)</span> 是位置下标；<span
+class="math inline">\(k=0,1,2,\dots\)</span> 是维度对的下标；<span
+class="math inline">\(D\)</span> 是模型宽度；10000
+是原论文选定的常数，决定最慢那一对转得有多慢。</p>
+<p><strong>白话：</strong> 每两列组成一对“指针”，偶数列读 sin、奇数列读
+cos；<span class="math inline">\(k\)</span>
+越大，分母越大，这对指针转得越慢。同一个位置在快针、慢针上各有一个读数，合起来就是它的座位号。</p>
 <p>两式来自原版 Transformer 的 §3.5。[来源 1]
 这里的角度单位是<strong>弧度</strong>。一个整圆是 <span
 class="math inline">\(2\pi\)</span> 弧度；<span
-class="math inline">\(pos=1\)</span>、分母为 1 时走了 1 弧度，约 57
+class="math inline">\(t=1\)</span>、分母为 1 时走了 1 弧度，约 57
 度，不是一整圈。</p>
-<p>把 <span class="math inline">\(\omega_i=10000^{-2i/D}\)</span>
+<p>把 <span class="math inline">\(\omega_k=10000^{-2k/D}\)</span>
 叫作角频率，就可以写成 <span
-class="math inline">\(\sin(pos\,\omega_i)\)</span>、<span
-class="math inline">\(\cos(pos\,\omega_i)\)</span>。同一对 sin/cos
+class="math inline">\(\sin(t\,\omega_k)\)</span>、<span
+class="math inline">\(\cos(t\,\omega_k)\)</span>。同一对 sin/cos
 使用同一个频率；分母越大，每前进一个位置转过的角度越小。每圈所需的位置间隔，也就是周期，为
-<span class="math inline">\(2\pi/\omega_i\)</span>。</p>
+<span class="math inline">\(2\pi/\omega_k\)</span>。</p>
+<p><strong>其中：</strong> <span class="math inline">\(\omega_k\)</span>
+是维度对 <span class="math inline">\(k\)</span>
+的角频率，即每前进一个位置这对指针转过的弧度，就是附录 A.5 的 <span
+class="math inline">\(\omega_i\)</span>（本章 <span
+class="math inline">\(i\)</span> 已用作查询位置，所以维度对的编号写成
+<span class="math inline">\(k\)</span>）；<span
+class="math inline">\(2\pi\)</span> 是一整圈的弧度；周期 <span
+class="math inline">\(2\pi/\omega_k\)</span> 就是 A.5 所说的波长 <span
+class="math inline">\(\lambda_k\)</span>。<strong>白话：</strong> <span
+class="math inline">\(\omega_k\)</span>
+是这对指针的“转速”，周期就是“转一圈要走几个座位”。</p>
 <p>令 <span class="math inline">\(D=8\)</span>，逐对代入：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
 <th style="text-align: left;">维度对</th>
 <th style="text-align: center;"><span
-class="math inline">\(i\)</span></th>
+class="math inline">\(k\)</span></th>
 <th style="text-align: center;">分母 <span
-class="math inline">\(10000^{2i/8}\)</span></th>
+class="math inline">\(10000^{2k/8}\)</span></th>
 <th style="text-align: center;">角频率</th>
 <th style="text-align: center;">周期，约多少个位置</th>
 </tr>
@@ -3187,10 +3247,10 @@ width="720" alt="图 5-1：不同频率的正弦波形示意" /></a>
 <figcaption>图 5-1：不同频率的正弦波形示意</figcaption>
 </figure>
 <p>图 5-1 为了在位置 0 到 24 的同一画布上看清变化，使用 <span
-class="math inline">\(\sin(pos)\)</span>、<span
-class="math inline">\(\sin(pos/8)\)</span>、<span
-class="math inline">\(\sin(pos/80)\)</span>
-三条示意曲线；<strong>不是下方 <span class="math inline">\(D=8\)</span>
+class="math inline">\(\sin(t)\)</span>、<span
+class="math inline">\(\sin(t/8)\)</span>、<span
+class="math inline">\(\sin(t/80)\)</span> 三条示意曲线；<strong>不是下方
+<span class="math inline">\(D=8\)</span>
 表格中的三个实际列</strong>。图中红点表示算出的函数值。</p>
 <p>这个类比不保证“无限多个座位都有永不重复、容易识别的指纹”。周期分量会回头，组合也可能很接近；浮点精度有限，模型还需要学习如何利用它。我们能核验的是指定长度内的具体数值与关系，而不是任意长上下文的唯一性或可辨识性。</p>
 <h3 id="表-5-2前-8-个位置与全部-8-个维度d8保留两位小数">表 5-2：前 8
@@ -3211,7 +3271,7 @@ class="math inline">\(D=8\)</span>（保留两位小数）</h3>
 <thead>
 <tr>
 <th style="text-align: center;">位置序号 <span
-class="math inline">\(pos\)</span></th>
+class="math inline">\(t\)</span></th>
 <th style="text-align: center;">d0 (<span
 class="math inline">\(\sin\)</span>)</th>
 <th style="text-align: center;">d1 (<span
@@ -3323,13 +3383,13 @@ class="math inline">\(\cos\)</span>)</th>
 </table></div>
 <p>用位置 1 跟算：</p>
 <ul>
-<li>d0：<span class="math inline">\(i=0\)</span>，<span
+<li>d0：<span class="math inline">\(k=0\)</span>，<span
 class="math inline">\(\sin(1/1)\approx0.84\)</span>。</li>
-<li>d2：<span class="math inline">\(i=1\)</span>，<span
+<li>d2：<span class="math inline">\(k=1\)</span>，<span
 class="math inline">\(\sin(1/10)\approx0.10\)</span>。</li>
-<li>d4：<span class="math inline">\(i=2\)</span>，<span
+<li>d4：<span class="math inline">\(k=2\)</span>，<span
 class="math inline">\(\sin(1/100)\approx0.01\)</span>。</li>
-<li>d6：<span class="math inline">\(i=3\)</span>，<span
+<li>d6：<span class="math inline">\(k=3\)</span>，<span
 class="math inline">\(\sin(1/1000)\approx0.001\)</span>，保留两位小数显示为
 0.00，<strong>不是真正的零</strong>。</li>
 </ul>
@@ -3343,13 +3403,39 @@ class="math inline">\(D\)</span>，每对满足 <span
 class="math inline">\(\sin^2\theta+\cos^2\theta=1\)</span>，所以每行的平方范数为
 <span class="math inline">\(D/2\)</span>。当 <span
 class="math inline">\(D=8\)</span>，每行范数都是 2。</p>
+<p><strong>其中：</strong> <span class="math inline">\(\theta\)</span>
+代表某一对在该位置的角度 <span
+class="math inline">\(t\,\omega_k\)</span>；平方范数是一行所有数的平方和，范数是它的平方根。<strong>白话：</strong>
+每对 sin/cos 的平方和固定是 1，<span class="math inline">\(D/2\)</span>
+对加起来就是 <span
+class="math inline">\(D/2\)</span>，所以每个座位向量一样长，谁也不比谁“嗓门大”。</p>
 <p>两行的点积可以按维度对拆开：</p>
 <p><span
-class="math display">\[\sin(p\omega_i)\sin(q\omega_i)+\cos(p\omega_i)\cos(q\omega_i)
-=\cos((p-q)\omega_i).\]</span></p>
+class="math display">\[\sin(m\omega_k)\sin(n\omega_k)+\cos(m\omega_k)\cos(n\omega_k)
+=\cos((m-n)\omega_k).\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(m\)</span>、<span
+class="math inline">\(n\)</span> 是要比较的两个位置下标；<span
+class="math inline">\(\omega_k\)</span> 是维度对 <span
+class="math inline">\(k\)</span> 的角频率。</p>
+<p><strong>白话：</strong> 一对 sin/cos 就是一根长度为 1
+的指针，两根指针的点积只看它们的夹角 <span
+class="math inline">\((m-n)\omega_k\)</span>，与各自从哪儿开始转无关。</p>
 <p>因此对完整的 sin/cos 对：</p>
-<p><span class="math display">\[\operatorname{cosine}(PE_p,PE_q)
-=\frac{1}{D/2}\sum_{i=0}^{D/2-1}\cos((p-q)\omega_i).\]</span></p>
+<p><span class="math display">\[\operatorname{cosine}(PE_m,PE_n)
+=\frac{1}{D/2}\sum_{k=0}^{D/2-1}\cos((m-n)\omega_k).\]</span></p>
+<p><strong>其中：</strong> <span
+class="math inline">\(PE_m\)</span>、<span
+class="math inline">\(PE_n\)</span> 是位置 <span
+class="math inline">\(m\)</span>、<span class="math inline">\(n\)</span>
+的整行编码向量；<span
+class="math inline">\(\operatorname{cosine}(a,b)\)</span>
+是余弦相似度，即点积除以两个向量范数的乘积；两行范数都是 <span
+class="math inline">\(\sqrt{D/2}\)</span>，相乘正好是分母 <span
+class="math inline">\(D/2\)</span>；求和遍历全部 <span
+class="math inline">\(D/2\)</span> 个维度对。</p>
+<p><strong>白话：</strong> 余弦相似度就是把 <span
+class="math inline">\(D/2\)</span>
+根指针各自的“夹角余弦”取平均。快针可能已经转回来，慢针几乎没动，平均下来自然忽高忽低。</p>
 <p>右边是一组不同频率余弦的平均，<strong>不是必然随距离下降的函数</strong>。分数与距离有关，并不等于它能直接充当距离。</p>
 <h3 id="表-5-3位置-0-与后面各位置的余弦相似度d8">表 5-3：位置 0
 与后面各位置的余弦相似度（<span
@@ -3423,7 +3509,9 @@ style="text-align: left;"><code>████████████████
 </table></div>
 <p>表中数值保留三位小数，条形长度由脚本按 <span
 class="math inline">\(\lfloor25\times\text{相似度}\rfloor\)</span>
-生成。位置 3 的相似度约 0.491，距离更远的位置 6 却约
+生成（<span class="math inline">\(\lfloor\cdot\rfloor\)</span>
+是向下取整，例如 <span class="math inline">\(25\times0.884=22.1\)</span>
+画 22 格）。位置 3 的相似度约 0.491，距离更远的位置 6 却约
 0.946，已经给出一个明确反例。</p>
 <p>为什么？最快的一对在 6
 附近快转完一圈，较慢的几对又还比较接近起点。相似度很高不等于编码相同：d2
@@ -3435,22 +3523,36 @@ sine，没有 d5 的
 cosine。这个选择保留公式的每个合法列，但最后一列没有配对，所以恒定范数与上面的成对余弦平均公式不能直接套用。本章两个数值表都使用偶数宽度
 8。</p>
 <h2 id="用和角公式看相隔几格">5.5 用和角公式看“相隔几格”</h2>
-<p>正弦编码按绝对位置生成，却含有便于表达相对偏移的结构。固定一个维度对、一个偏移量
-<span class="math inline">\(k\)</span>，令 <span
-class="math inline">\(\alpha=p\omega_i\)</span>、<span
-class="math inline">\(\beta=k\omega_i\)</span>：</p>
+<p>正弦编码按绝对位置生成，却含有便于表达相对偏移的结构。固定一个维度对
+<span class="math inline">\(k\)</span>、一个偏移量 <span
+class="math inline">\(\Delta\)</span>，令 <span
+class="math inline">\(\alpha=t\omega_k\)</span>、<span
+class="math inline">\(\beta=\Delta\omega_k\)</span>，代入和角公式 <span
+class="math inline">\(\sin(\alpha+\beta)=\sin\alpha\cos\beta+\cos\alpha\sin\beta\)</span>、<span
+class="math inline">\(\cos(\alpha+\beta)=\cos\alpha\cos\beta-\sin\alpha\sin\beta\)</span>：</p>
 <p><span
-class="math display">\[\sin((p+k)\omega_i)=\sin(p\omega_i)\cos(k\omega_i)+\cos(p\omega_i)\sin(k\omega_i),\]</span></p>
+class="math display">\[\sin((t+\Delta)\omega_k)=\sin(t\omega_k)\cos(\Delta\omega_k)+\cos(t\omega_k)\sin(\Delta\omega_k),\]</span></p>
 <p><span
-class="math display">\[\cos((p+k)\omega_i)=\cos(p\omega_i)\cos(k\omega_i)-\sin(p\omega_i)\sin(k\omega_i).\]</span></p>
-<p>当 <span class="math inline">\(k\)</span> 固定时，右边的两个系数
-<span class="math inline">\(\sin(k\omega_i)\)</span>、<span
-class="math inline">\(\cos(k\omega_i)\)</span> 不依赖 <span
-class="math inline">\(p\)</span>。所以每一个完整维度对都可以通过<strong>相同的线性变换</strong>，从位置
-<span class="math inline">\(p\)</span> 推到位置 <span
-class="math inline">\(p+k\)</span>。例如最快的那一对，从位置 0 的
+class="math display">\[\cos((t+\Delta)\omega_k)=\cos(t\omega_k)\cos(\Delta\omega_k)-\sin(t\omega_k)\sin(\Delta\omega_k).\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(t\)</span>
+是出发的位置；<span class="math inline">\(\Delta\)</span>
+是往后挪的格数（整数）；<span class="math inline">\(\omega_k\)</span>
+是维度对 <span class="math inline">\(k\)</span> 的角频率；<span
+class="math inline">\(\alpha\)</span>、<span
+class="math inline">\(\beta\)</span> 只是代入和角公式时的临时记号。</p>
+<p>当 <span class="math inline">\(\Delta\)</span> 固定时，右边的两个系数
+<span class="math inline">\(\sin(\Delta\omega_k)\)</span>、<span
+class="math inline">\(\cos(\Delta\omega_k)\)</span> 不依赖 <span
+class="math inline">\(t\)</span>。所以每一个完整维度对都可以通过<strong>相同的线性变换</strong>，从位置
+<span class="math inline">\(t\)</span> 推到位置 <span
+class="math inline">\(t+\Delta\)</span>。例如最快的那一对，从位置 0 的
 <code>[0, 1]</code> 走一步，得到 <code>[sin(1), cos(1)]</code>，约
 <code>[0.841, 0.540]</code>。</p>
+<p><strong>白话：</strong>
+这就像拨表针：不管现在指几点，拨快同样的格数用的都是同一个动作。“往后挪
+<span class="math inline">\(\Delta\)</span> 格”对应一个只由 <span
+class="math inline">\(\Delta\)</span> 决定的固定旋转，与出发点 <span
+class="math inline">\(t\)</span> 无关。</p>
 <p>这是“模型有机会利用相对关系”的数学依据，不是“训练一定会学会距离”的证明，也不是“加法位置编码的整个注意力分数只取决于距离”。加入内容并经过不同的
 <span class="math inline">\(W_Q,W_K\)</span>
 后，还会出现内容与位置的交叉项。</p>
@@ -3470,6 +3572,18 @@ class="math inline">\(X\)</span>，不再额外乘缩放系数：</p>
 PE[0] = [0, 1, 0, 1]
 PE[1] = [sin(1), cos(1), sin(0.01), cos(0.01)]
                                          PE: [2, 4]</code></pre>
+<p><strong>其中：</strong> <span class="math inline">\(X\)</span>
+是词向量，形状 <span
+class="math inline">\([B,T,D]=[1,2,4]\)</span>，<span
+class="math inline">\(B\)</span> 是批大小；<span
+class="math inline">\(PE\)</span> 是位置表，<span
+class="math inline">\(PE[t]\)</span> 是下标 <span
+class="math inline">\(t\)</span> 的那一行。<span
+class="math inline">\(D=4\)</span> 时第二对（<span
+class="math inline">\(k=1\)</span>）的分母是 <span
+class="math inline">\(10000^{2/4}=100\)</span>，所以位置 1 的后两格是
+<span class="math inline">\(\sin(0.01)\)</span>、<span
+class="math inline">\(\cos(0.01)\)</span>。</p>
 <p>先为 PE 加一个 batch 轴，变成 <span
 class="math inline">\([1,T,D]\)</span>。若 <span
 class="math inline">\(B&gt;1\)</span>，加法广播会把同一张位置表应用到每个样本，本身不新增训练参数。这里假设每个样本的有效序列都从位置
@@ -3477,6 +3591,10 @@ class="math inline">\(B&gt;1\)</span>，加法广播会把同一张位置表应�
 <p>对位置 0，逐项算：</p>
 <p><span
 class="math display">\[[0.2,-0.1,0.4,0.0]+[0,1,0,1]=[0.2,0.9,0.4,1.0].\]</span></p>
+<p><strong>白话：</strong>
+对应格子相加，词向量的每一格都被“座位号”推了一下，宽度仍是 4。左边是
+<span class="math inline">\(X\)</span> 的位置 0 行，右边加上的是 <span
+class="math inline">\(PE[0]\)</span>。</p>
 <p>两个位置的结果由 <code>addition_concat_example()</code> 打印为：</p>
 <pre class="text"><code>Add 位置 0: [0.200, 0.900, 0.400, 1.000]
 Add 位置 1: [1.341, 0.840, -0.190, 1.100]
@@ -3522,6 +3640,14 @@ class="math inline">\(W_Q:[2D,D]\)</span></td>
 </tr>
 </tbody>
 </table></div>
+<p><strong>其中：</strong> <span class="math inline">\(X+PE\)</span>
+是逐格相加；<span class="math inline">\([X;PE]\)</span>
+表示沿最后一维把两张表左右拼接；<span class="math inline">\(W_Q\)</span>
+是 Q 投影矩阵，<span class="math inline">\([D,D]\)</span> 表示 <span
+class="math inline">\(D\)</span> 行 <span
+class="math inline">\(D\)</span> 列，参数量就是行数乘列数：<span
+class="math inline">\(4\times4=16\)</span>，<span
+class="math inline">\(8\times4=32\)</span>。</p>
 <p>这里仅比较<strong>同样保持 Q 输出宽度为 <span
 class="math inline">\(D\)</span>
 的一张投影矩阵</strong>，不是宣称整个模型参数、显存、运行时间都翻倍。也可以用较窄的两部分再拼成
@@ -3532,13 +3658,23 @@ class="math inline">\(D\)</span>，但那已经改变了本例的维度分配。
 <code>[1,1]</code>，因此只给一个和，不能一般性地恢复两个任意输入。不要用“高维向量天生正交”来保证词义与位置能无损拆开；学习到的词向量和固定
 PE 并没有这种自动保证。</p>
 <p>它仍然是一个可训练的设计选择：加法保持输入宽度，词向量与后续层共同适应这种混合。对一个线性投影，<span
-class="math inline">\((X+PE)W=XW+PEW\)</span>；拼接则允许使用分别作用于内容和位置的
-<span
-class="math inline">\(W_x,W_p\)</span>。二者约束不同，是否更好需要实验。原论文采用相加。注意：原论文在相加前先把词嵌入乘以
+class="math inline">\((X+PE)W=XW+PE\,W\)</span>；拼接则相当于 <span
+class="math inline">\([X;PE]W=XW_x+PE\,W_p\)</span>，允许内容和位置各用一块权重。二者约束不同，是否更好需要实验。原论文采用相加。注意：原论文在相加前先把词嵌入乘以
 <span
 class="math inline">\(\sqrt{D}\)</span>。本例为便于手算不做这一步，把
 <span class="math inline">\(X\)</span> 直接当作待相加的输入。[来源
 1，§3.4–3.5]</p>
+<p><strong>其中：</strong> <span class="math inline">\(W\)</span>
+是线性层的权重；拼接时 <span class="math inline">\(W\)</span> 有 <span
+class="math inline">\(2D\)</span> 行，上面 <span
+class="math inline">\(D\)</span> 行记 <span
+class="math inline">\(W_x\)</span>，下面 <span
+class="math inline">\(D\)</span> 行记 <span
+class="math inline">\(W_p\)</span>；<span
+class="math inline">\(\sqrt{D}\)</span>
+是原论文给词嵌入乘的缩放系数。<strong>白话：</strong>
+相加时内容和位置只能共用同一块 <span
+class="math inline">\(W\)</span>，拼接时可以各配一块，代价是输入变宽。</p>
 <h2 id="长度要分三本账">5.7 长度要分三本账</h2>
 <p>假设训练样本最长为 8 个 token，位置都从 0 开始；现在想测试 12 个
 token。</p>
@@ -3574,6 +3710,12 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb41-1"><a h
 <span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>        pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
 <span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
 <span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span></code></pre></div>
+<p><strong>对照公式：</strong> 代码的 <code>pos</code> 就是位置 <span
+class="math inline">\(t\)</span>，<code>k</code> 就是维度对下标 <span
+class="math inline">\(k\)</span>，<code>d_model</code> 是 <span
+class="math inline">\(D\)</span>，<code>div_term</code> 是分母 <span
+class="math inline">\(10000^{2k/D}\)</span>，<code>max_seq_len</code>
+是要生成的行数 <span class="math inline">\(T\)</span>。</p>
 <p>逐行核对：</p>
 <ul>
 <li>外层遍历位置 0 到 <span
@@ -3602,13 +3744,13 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb42-1"><a href=
 <li>无 mask、无位置的双向注意力，把三个 token 按 <code>[2,1,0]</code>
 换序后，输出是完全不变，还是跟着换行？固定因果 mask
 后还可以直接套同一结论吗？</li>
-<li><span class="math inline">\(D=8,pos=1\)</span> 时，d2 的分母是 10
-还是 100？这个分量保留三位小数是多少？</li>
+<li><span class="math inline">\(D=8,t=1\)</span> 时，d2 的分母是 10 还是
+100？这个分量保留三位小数是多少？</li>
 <li>表 5-3 中，哪个更像位置 0：位置 3 还是位置
 6？能否由此判断模型更关注谁？</li>
 <li>用 §5.6 的输入算位置 0 的加法结果。Add 与 Concat
 分别是什么形状？输出宽度都保持为 4 的无 bias Q 投影各有多少个参数？</li>
-<li>如果 <span class="math inline">\(D=5,pos=1\)</span>，最后的 d4
+<li>如果 <span class="math inline">\(D=5,t=1\)</span>，最后的 d4
 是什么？为什么不能直接套“每行范数为 <span
 class="math inline">\(\sqrt{D/2}\)</span>”？</li>
 <li>8 行的可学习位置表有多少参数（<span
@@ -3619,7 +3761,8 @@ class="math inline">\(D=8\)</span>）？正弦编码能生成 12
 <ol type="1">
 <li>输出跟着换行，这是置换等变，不是每个格子不变。固定因果 mask
 的可见前缀与顺序有关，不能直接套用。</li>
-<li>分母是 <span class="math inline">\(10000^{2/8}=10\)</span>；<span
+<li>d2 属于维度对 <span class="math inline">\(k=1\)</span>，分母是 <span
+class="math inline">\(10000^{2k/D}=10000^{2/8}=10\)</span>；<span
 class="math inline">\(\sin(0.1)\approx\mathbf{0.100}\)</span>。不要把“第二个偶数列”误写成指数里的
 <span class="math inline">\(4/8\)</span>。</li>
 <li>位置 6 更像：约 <strong>0.946 &gt;
@@ -3627,7 +3770,8 @@ class="math inline">\(\sin(0.1)\approx\mathbf{0.100}\)</span>。不要把“第�
 <li><strong>[0.200, 0.900, 0.400, 1.000]</strong>；形状为
 <strong>[1,2,4]</strong> 与 <strong>[1,2,8]</strong>；Q 投影分别有
 <strong>16</strong> 与 <strong>32</strong> 个参数。</li>
-<li><span
+<li>d4 属于维度对 <span class="math inline">\(k=2\)</span>，指数 <span
+class="math inline">\(2k/D=4/5\)</span>，所以是 <span
 class="math inline">\(\sin(1/10000^{4/5})\approx\mathbf{0.000631}\)</span>，不是零。最后的
 sine 没有 cosine 配对，不能用每对平方和为 1 来计算整行范数。</li>
 <li><strong>64</strong> 个可训练参数。生成 12
