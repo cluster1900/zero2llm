@@ -8420,29 +8420,59 @@ alt="注意力服务的计算、KV 存储与请求调度三个层次；共享尾
 <h2 id="p15.2-算术不变搬运量可以改变">P15.2
 算术不变，搬运量可以改变</h2>
 <p>普通注意力的熟悉写法是：</p>
-<pre class="text"><code>S = Q Kᵀ / √d
-P = softmax(S + mask)
-O = P V</code></pre>
-<p>如果 Q、K 都有 N 个位置，S 和 P 各有 N×N 个数。以单个
+<p><span class="math display">\[
+S=\frac{QK^\top}{\sqrt{d_k}},\qquad P=\operatorname{softmax}(S+M),\qquad
+O=PV
+\]</span></p>
+<p>三步各干一件事：先给每个 query–key 配对打分，再把每行分数变成加起来为
+1 的权重（mask 让不许看的位置权重为 0），最后按权重把 value
+加起来。本章所有技巧都不改这三步算出的结果，只改“中间那两张大表放在哪里、怎么搬”。</p>
+<p>其中：<span class="math inline">\(Q\)</span>、<span
+class="math inline">\(K\)</span>、<span class="math inline">\(V\)</span>
+是一个头的查询、键、值矩阵；<span class="math inline">\(K^\top\)</span>
+是 <span class="math inline">\(K\)</span> 的转置；<span
+class="math inline">\(d_k\)</span> 是 Q/K 的宽度；<span
+class="math inline">\(S\)</span> 是缩放后的分数表，第 <span
+class="math inline">\(i\)</span> 行第 <span
+class="math inline">\(j\)</span> 列就是 <span
+class="math inline">\(s_{ij}\)</span>；<span
+class="math inline">\(M\)</span> 是加性 mask（允许为 0，禁止为 <span
+class="math inline">\(-\infty\)</span>）；<span
+class="math inline">\(\operatorname{softmax}\)</span> 沿每行（key
+所在的维）归一化；<span class="math inline">\(P\)</span>
+是注意力权重表（本章局部记号）；<span class="math inline">\(O\)</span>
+是输出。</p>
+<p>如果 Q、K 都有 <span class="math inline">\(T\)</span> 个位置，<span
+class="math inline">\(S\)</span> 和 <span
+class="math inline">\(P\)</span> 各有 <span
+class="math inline">\(T\times T\)</span> 个数。以单个
 batch、单个头、每数 2 字节举例：</p>
 <ul>
-<li>N=4096：一张矩阵有 16,777,216 个数，占 33,554,432 字节，也就是 32
-MiB。</li>
-<li>N=8192：一张矩阵占 128 MiB；长度翻倍，面积变成 4 倍。</li>
+<li><span class="math inline">\(T=4096\)</span>：一张矩阵有 16,777,216
+个数，占 33,554,432 字节，也就是 32 MiB。</li>
+<li><span class="math inline">\(T=8192\)</span>：一张矩阵占 128
+MiB；长度翻倍，面积变成 4 倍。</li>
 <li>如果实现同时保存 S 和
 P，这两张矩阵的容量还要相加；实际峰值取决于实现，不能只靠这个公式断言。</li>
 </ul>
-<p>这里 MiB=2²⁰ 字节，不是十进制 MB。多
+<p>账本就是 <span class="math inline">\(T^2\times
+b_{\mathrm{elem}}\)</span>：长度翻倍，表的边长翻倍，面积变成 4 倍。其中
+<span class="math inline">\(T\)</span> 是序列长度，<span
+class="math inline">\(b_{\mathrm{elem}}\)</span>
+是每个数的字节数（这里为 2）。这里 MiB=2²⁰ 字节，不是十进制 MB。多
 batch、多头会继续乘上相应维度。</p>
 <p>GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU
 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S
 写回显存、再读回来做 Softmax、再写 P，会产生额外
 IO。<strong>FlashAttention 的核心是按片上存储条件分块组织计算，用在线
-Softmax 累积输出，避免把完整 N×N 中间矩阵写到 HBM。</strong>
+Softmax 累积输出，避免把完整 <span class="math inline">\(T\times
+T\)</span> 中间矩阵写到 HBM。</strong>
 它没有因此跳过普通稠密注意力的所有合法 QK
-配对；标准稠密情形的算术复杂度仍为 O(N²d)，不是 O(Nd)。<a
-href="https://arxiv.org/pdf/2205.14135v2">FlashAttention 原论文（arXiv
-2205.14135v2），§3</a></p>
+配对；标准稠密情形的算术复杂度仍为 <span
+class="math inline">\(O(T^2d_k)\)</span>，不是 <span
+class="math inline">\(O(Td_k)\)</span>（论文把长度记作 N、宽度记作
+d）。<a href="https://arxiv.org/pdf/2205.14135v2">FlashAttention
+原论文（arXiv 2205.14135v2），§3</a></p>
 <p>这还涉及 GPU
 内核融合、线程组织、反向传播重计算等。本章只实现其中容易手算的<strong>前向归一化递推</strong>。</p>
 <h2 id="p15.3-先把形状缩到一个头">P15.3 先把形状缩到一个头</h2>
@@ -8459,36 +8489,42 @@ href="https://arxiv.org/pdf/2205.14135v2">FlashAttention 原论文（arXiv
 <tbody>
 <tr>
 <td>Q</td>
-<td>[Nq,d]</td>
+<td><span class="math inline">\([T_q,d_k]\)</span></td>
 <td>当前要计算的 query</td>
 </tr>
 <tr>
 <td>K</td>
-<td>[Nk,d]</td>
+<td><span class="math inline">\([T_{kv},d_k]\)</span></td>
 <td>可读取的全部 key</td>
 </tr>
 <tr>
 <td>V</td>
-<td>[Nk,dv]</td>
+<td><span class="math inline">\([T_{kv},d_v]\)</span></td>
 <td>对应 value</td>
 </tr>
 <tr>
 <td>allowed</td>
-<td>[Nq,Nk]</td>
+<td><span class="math inline">\([T_q,T_{kv}]\)</span></td>
 <td>布尔 mask；True 表示允许读取</td>
 </tr>
 <tr>
 <td>O</td>
-<td>[Nq,dv]</td>
+<td><span class="math inline">\([T_q,d_v]\)</span></td>
 <td>每个 query 的加权输出</td>
 </tr>
 </tbody>
 </table></div>
-<p>本例默认 query block 为 2 行，key block 为 3 行。Nq=5、Nk=7 时，query
-分成 <code>[2,2,1]</code>，key 分成
+<p>这里 <span class="math inline">\(T_q\)</span> 是 query 的个数，<span
+class="math inline">\(T_{kv}\)</span> 是可读 key/value 的个数，<span
+class="math inline">\(d_k\)</span> 是 Q/K 宽度，<span
+class="math inline">\(d_v\)</span> 是 V 的宽度。</p>
+<p>本例默认 query block 为 2 行，key block 为 3 行。<span
+class="math inline">\(T_q=5\)</span>、<span
+class="math inline">\(T_{kv}=7\)</span> 时，query 分成
+<code>[2,2,1]</code>，key 分成
 <code>[3,3,1]</code>。最后一块不满也必须处理，不能直接用整数除法把它丢掉。</p>
-<p>为方便观察，脚本可接收完整布尔 mask；这张教学 mask 本身仍可能占
-O(Nq×Nk) 空间。生产 kernel
+<p>为方便观察，脚本可接收完整布尔 mask；这张教学 mask 本身仍可能占 <span
+class="math inline">\(O(T_qT_{kv})\)</span> 空间。生产 kernel
 可以由位置索引直接形成因果约束。本实验没有宣称整个 Python
 程序只占线性内存。</p>
 <p>对于已有 3 个历史位置、当前有 2 个新 query、总共 5 个 key
@@ -8502,26 +8538,44 @@ query 的局部编号 0、1 当成绝对位置，否则第一行会误删历史�
 <h2 id="p15.4-在线-softmax只记三本账">P15.4 在线
 Softmax：只记三本账</h2>
 <p>只看某一行 query。对已经处理过的合法分数 s_j，记录：</p>
-<pre class="text"><code>m   = 已处理分数的最大值
-ell = Σ exp(s_j - m)
-acc = Σ exp(s_j - m) × v_j</code></pre>
-<p>m 和 ell 是标量；acc 是 dv 维向量。最后输出
-<code>acc / ell</code>。注意 acc
+<pre class="text"><code>s_max = 已处理分数的最大值
+ell = Σ exp(s_j - s_max)
+acc = Σ exp(s_j - s_max) × v_j</code></pre>
+<p>三本账各有分工：s_max 是“目前见过的最高分”，用来防止指数溢出；ell 是
+Softmax 分母（已减去 s_max）；acc 是分子，即按同样指数权重累加的
+value。</p>
+<p>其中：<span class="math inline">\(s_j\)</span> 是这一行 query 对第
+<span class="math inline">\(j\)</span> 个合法 key 的缩放分数；<span
+class="math inline">\(v_j\)</span> 是对应的 value 向量；Σ 对已处理的合法
+key 求和；s_max 是这一行已处理分数里的最大值（附录 A.5 的 <span
+class="math inline">\(s_{\max}\)</span>；P15.6 的代码里变量名是
+<code>m</code>、<code>next_m</code>）；ell（即 ℓ）、acc
+是本节的局部记号。</p>
+<p>s_max 和 ell 是标量；acc 是 <span class="math inline">\(d_v\)</span>
+维向量。最后输出 <code>acc / ell</code>。注意 acc
 还没有归一化，不是当前已经算好的概率均值。</p>
 <p>现在读到下一块，合法分数为 s_new。新的最大值可能变大：</p>
-<pre class="text"><code>next_m = max(m, max(s_new))
-alpha  = exp(m - next_m)
-p_new  = exp(s_new - next_m)
+<pre class="text"><code>next_s_max = max(s_max, max(s_new))
+alpha  = exp(s_max - next_s_max)
+p_new  = exp(s_new - next_s_max)
 
 next_ell = alpha × ell + Σ p_new
 next_acc = alpha × acc + Σ p_new × v_new</code></pre>
-<p>为什么必须乘 alpha？旧账用的是 exp(s−m)，新账用的是
-exp(s−next_m)。利用指数运算：</p>
-<pre class="text"><code>exp(s - next_m) = exp(s - m) × exp(m - next_m)</code></pre>
+<p>每读一块就做三件事：更新最高分；把旧账按新最高分“换汇”（乘
+alpha）；再把这一块的指数权重加进分母和分子。</p>
+<p>其中：s_new 是新块里的合法分数，v_new 是对应
+value；next_s_max、next_ell、next_acc 是更新后的三本账；alpha
+是旧账的换算系数（局部记号）；p_new 是新块的未归一化指数权重。</p>
+<p>为什么必须乘 alpha？旧账用的是 exp(s−s_max)，新账用的是
+exp(s−next_s_max)。利用指数运算：</p>
+<pre class="text"><code>exp(s - next_s_max) = exp(s - s_max) × exp(s_max - next_s_max)</code></pre>
+<p>白话说，换了参照的最高分，旧账上的每一项都要乘同一个系数 <span
+class="math inline">\(e^{s_{\max}-\text{next\_s\_max}}\)</span>
+才能和新账对齐，就像不同币种先换汇再相加。</p>
 <p>所以旧分母和旧分子必须一起换到新尺度。只缩放其中一个，或者把每块
 Softmax 后的输出直接相加，都不对。</p>
-<p>初始状态设
-<code>m=-∞, ell=0, acc=0</code>。第一次读到合法分数时，代码直接令
+<p>初始状态设 s_max=−∞、ell=0、acc=0（代码里是
+<code>m, ell = -math.inf, 0.0</code>）。第一次读到合法分数时，代码直接令
 alpha=0，不去做不必要的无穷运算。</p>
 <div class="diagram-figure">
 <a href="assets/rendered/flow-p15-online-softmax.svg"
@@ -8535,20 +8589,21 @@ alt="在线 Softmax 每读一块都把旧账换到新尺度。初始 s_max=−�
 </div>
 <h2 id="p15.5-手算分成两块仍然得到-6">P15.5 手算：分成两块，仍然得到
 6</h2>
-<p>设
-d=dv=1，Q=<code>[1]</code>，K=<code>[0, ln 2, ln 4]</code>，V=<code>[2,4,8]</code>。缩放分母
-√d=1，三个分数正好就是 K。没有 mask。</p>
+<p>设 <span
+class="math inline">\(d_k=d_v=1\)</span>，Q=<code>[1]</code>，K=<code>[0, ln 2, ln 4]</code>，V=<code>[2,4,8]</code>。缩放分母
+<span class="math inline">\(\sqrt{d_k}=1\)</span>，三个分数正好就是
+K。没有 mask。</p>
 <p>先做完整计算：三个指数之比为 1:2:4，因此：</p>
 <pre class="text"><code>权重 = [1/7, 2/7, 4/7]
 输出 = (1×2 + 2×4 + 4×8) / 7 = 42/7 = 6</code></pre>
 <p>现在把 key 分成前两个和最后一个，块长 <code>[2,1]</code>。</p>
 <p>第一块：</p>
-<pre class="text"><code>m = ln 2
+<pre class="text"><code>s_max = ln 2
 p = [1/2, 1]
 ell = 1/2 + 1 = 1.5
 acc = (1/2)×2 + 1×4 = 5</code></pre>
 <p>第二块的分数 ln 4 更大：</p>
-<pre class="text"><code>next_m = ln 4
+<pre class="text"><code>next_s_max = ln 4
 alpha = exp(ln 2 - ln 4) = 1/2
 p_new = [1]
 next_ell = (1/2)×1.5 + 1 = 1.75
@@ -8561,17 +8616,18 @@ next_acc = (1/2)×5 + 1×8 = 10.5
 逐行看实现，不要只记公式</h2>
 <p><code>blocked_attention()</code>
 的核心如下；完整输入校验和循环在配套脚本中：</p>
-<div class="sourceCode" id="cb101"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb101-1"><a href="#cb101-1" aria-hidden="true" tabindex="-1"></a>next_m <span class="op">=</span> <span class="bu">max</span>(m, <span class="bu">max</span>(scores))</span>
-<span id="cb101-2"><a href="#cb101-2" aria-hidden="true" tabindex="-1"></a>alpha <span class="op">=</span> <span class="fl">0.0</span> <span class="cf">if</span> ell <span class="op">==</span> <span class="fl">0.0</span> <span class="cf">else</span> math.exp(m <span class="op">-</span> next_m)</span>
-<span id="cb101-3"><a href="#cb101-3" aria-hidden="true" tabindex="-1"></a>weights <span class="op">=</span> [math.exp(s <span class="op">-</span> next_m) <span class="cf">for</span> s <span class="kw">in</span> scores]</span>
-<span id="cb101-4"><a href="#cb101-4" aria-hidden="true" tabindex="-1"></a>ell <span class="op">=</span> alpha <span class="op">*</span> ell <span class="op">+</span> math.fsum(weights)</span>
-<span id="cb101-5"><a href="#cb101-5" aria-hidden="true" tabindex="-1"></a>acc <span class="op">=</span> [alpha <span class="op">*</span> acc[c] <span class="op">+</span> math.fsum(w <span class="op">*</span> v[j][c] <span class="cf">for</span> w, j <span class="kw">in</span> <span class="bu">zip</span>(weights, visible))</span>
-<span id="cb101-6"><a href="#cb101-6" aria-hidden="true" tabindex="-1"></a>       <span class="cf">for</span> c <span class="kw">in</span> <span class="bu">range</span>(<span class="bu">len</span>(acc))]</span>
-<span id="cb101-7"><a href="#cb101-7" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> next_m</span></code></pre></div>
+<div class="sourceCode" id="cb100"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb100-1"><a href="#cb100-1" aria-hidden="true" tabindex="-1"></a>next_m <span class="op">=</span> <span class="bu">max</span>(m, <span class="bu">max</span>(scores))</span>
+<span id="cb100-2"><a href="#cb100-2" aria-hidden="true" tabindex="-1"></a>alpha <span class="op">=</span> <span class="fl">0.0</span> <span class="cf">if</span> ell <span class="op">==</span> <span class="fl">0.0</span> <span class="cf">else</span> math.exp(m <span class="op">-</span> next_m)</span>
+<span id="cb100-3"><a href="#cb100-3" aria-hidden="true" tabindex="-1"></a>weights <span class="op">=</span> [math.exp(s <span class="op">-</span> next_m) <span class="cf">for</span> s <span class="kw">in</span> scores]</span>
+<span id="cb100-4"><a href="#cb100-4" aria-hidden="true" tabindex="-1"></a>ell <span class="op">=</span> alpha <span class="op">*</span> ell <span class="op">+</span> math.fsum(weights)</span>
+<span id="cb100-5"><a href="#cb100-5" aria-hidden="true" tabindex="-1"></a>acc <span class="op">=</span> [alpha <span class="op">*</span> acc[c] <span class="op">+</span> math.fsum(w <span class="op">*</span> v[j][c] <span class="cf">for</span> w, j <span class="kw">in</span> <span class="bu">zip</span>(weights, visible))</span>
+<span id="cb100-6"><a href="#cb100-6" aria-hidden="true" tabindex="-1"></a>       <span class="cf">for</span> c <span class="kw">in</span> <span class="bu">range</span>(<span class="bu">len</span>(acc))]</span>
+<span id="cb100-7"><a href="#cb100-7" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> next_m</span></code></pre></div>
 <ol type="1">
 <li>scores 只包含当前块中允许读取的 key。</li>
-<li>next_m 取旧块、新块的共同最大值，不是只记新块的最大值。</li>
+<li><code>next_m</code>（上文的
+next_s_max）取旧块、新块的共同最大值，不是只记新块的最大值。</li>
 <li>alpha 把旧的 ell、acc 转换到同一个尺度。</li>
 <li>weights 仍是未归一化的指数权重，不是单块概率。</li>
 <li>每个 value 通道 c 有自己的分子，但共享分母 ell。</li>
@@ -8596,12 +8652,14 @@ exp(10002)。减去最大值后，最大指数是 exp(0)=1。输入 Q/K/V
 相同”</h2>
 <p>这里的精确，是指没有用稀疏采样、低秩近似等方法改变这条注意力公式所包含的合法配对。换一种加法顺序、分块顺序或累积精度，浮点末位仍可能不同。</p>
 <p>必修实验用 Python float，通常对应双精度浮点；随机例子固定 seed=15。5
-个 query、7 个 key、d=3、dv=2 时，本次 full/block 最大差值为
+个 query、7 个 key、<span class="math inline">\(d_k=3\)</span>、<span
+class="math inline">\(d_v=2\)</span> 时，本次 full/block 最大差值为
 <code>1.11e-16</code>，检查阈值为
 <code>1e-12</code>。这是这组小输入的数值检查，不是任意长度、任意 dtype
 都具有相同误差的证明。</p>
-<p>只有 full/block 相等还不够：两条路径可能一起忘记 √d。所以还需要标准库
-Decimal 的 <strong>65 位十进制有效数字精度独立参考</strong>：逐 query
+<p>只有 full/block 相等还不够：两条路径可能一起忘记 <span
+class="math inline">\(\sqrt{d_k}\)</span>。所以还需要标准库 Decimal 的
+<strong>65 位十进制有效数字精度独立参考</strong>：逐 query
 直接算点积、指数和归一化，不经过生产实现的 Softmax 或 block 更新。</p>
 <p>这与 GQA 的区别也很重要：GQA 改变 KV 头的组织方式；在线 Softmax
 只是计算同一组 Q/K/V 的方式。不能用这章的数值等价实验证明任意 MHA 改 GQA
@@ -8618,6 +8676,11 @@ token 的信息路径</strong>。</p>
 <pre class="text"><code>逻辑块号 = t // b
 块内偏移 = t % b
 物理块号 = block_table[逻辑块号]</code></pre>
+<p>整除给出“第几页”，余数给出“页内第几行”，再查块表把逻辑页换成真实的物理页，就像查目录找到书页。</p>
+<p>其中：b 是每个物理块能放的 token 数（块大小，局部记号）；t 是 token
+在本请求里的逻辑位置，从 0 开始；<code>//</code>
+是向下取整除法，<code>%</code> 是取余数；block_table
+是本请求的块表。</p>
 <p>例如 b=2，块表是 <code>[1,2,0]</code>。逻辑位置 4 在逻辑块 2、偏移
 0，对应物理块 0。读取时必须按
 <code>[1,2,0]</code>，不能为了“排序整齐”改成 <code>[0,1,2]</code>。</p>
@@ -8743,13 +8806,18 @@ alt="写入前先看尾块满不满、引用是否大于 1。尾块已满就新�
 <p>最后一行不是物理存了 7 个 token，因为 <code>[10,20]</code>
 仍共享；也不是只存 4 个，因为尾部的 30 已各有一份。</p>
 <p>若每个物理载荷只有一个 K 标量和一个 V 标量，且真正使用 float32
-数组，则“5 个已写载荷”的理想 payload 是 <code>5×2×4=40</code> 字节，“6
+数组，则“5 个已写载荷”的理想 payload 是 <code>5×2×4=40</code>
+字节（载荷数 × K、V 两个标量 × 每个 float32 占 4 字节），“6
 个已分配槽位”的理想容量是 48 字节。<strong>本脚本使用 Python
 对象，不实际只占这些字节。</strong>
 块表、引用计数、对象开销、分配器、临时工作区和模型权重都不在这个理想账本里。</p>
-<p>对没有共享的一个长度为 T 的请求，分配槽位是
-<code>ceil(T/b)×b</code>，尾块空槽位范围为 0 到 b−1。例如 b=4、T=9，需要
-3 块，共 12 槽位，空 3
+<p>对没有共享的一个长度为 T 的请求，分配槽位是 <span
+class="math inline">\(\lceil T/b\rceil\times b\)</span>（<span
+class="math inline">\(\lceil\cdot\rceil\)</span>
+是向上取整：不满一块也要占一整块），尾块空槽位范围为 0 到 <span
+class="math inline">\(b-1\)</span>。其中 <span
+class="math inline">\(T\)</span> 是请求的 token 数，b 是块大小。例如
+b=4、T=9，需要 3 块，共 12 槽位，空 3
 个。分页不是“所有浪费严格等于零”；块越大、越小也有不同管理和访问开销。</p>
 <p>池容量不足时，<code>append()</code> 会在改变块表和引用计数前报告
 <code>MemoryError</code>。这里没有实现 GPU 抢占、交换到 CPU
@@ -8850,7 +8918,7 @@ tokens/s。注意两个窗口不一样长：各自从 t=0 算到自己最后一�
 token，静态 60 ms，连续 40 ms。若同用 0–60 ms 窗口，两者都完成 8 个
 token，都是 <code>8/0.06≈133.333</code> tokens/s；200 只是来自更短的 40
 ms 窗口。</p>
-<p>真实 batch 大小会影响轮时，KV
+<p>真实批大小会影响轮时，KV
 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token
 间隔可能变长。必须把每轮执行时间和排队一起看。</p>
 <div class="diagram-figure">
@@ -8883,12 +8951,22 @@ alt="连续 batch 在空位出现时立刻补位，静态 batch 要等整桌结�
 <h2 id="p15.14-ttfttpot吞吐用时间戳而不是印象">P15.14
 TTFT、TPOT、吞吐：用时间戳而不是印象</h2>
 <p>本章固定采用<strong>客户端可观察时间</strong>：请求到达时间为 a，输出
-token 接收时间依次为
-t₁…tₙ。不同工具可能采用不同统计口径，比较前先写清楚。</p>
-<pre class="text"><code>TTFT = t₁ - a                         首 token 等待
-TPOT = (tₙ - t₁) / (n - 1)，n&gt;1       后续每 token 平均间隔
-E2E  = tₙ - a                         整个请求耗时
+token 接收时间依次为 <span
+class="math inline">\(t_1,\ldots,t_{T_{\mathrm{out}}}\)</span>。不同工具可能采用不同统计口径，比较前先写清楚。</p>
+<pre class="text"><code>TTFT = t_1 - a                                     首 token 等待
+TPOT = (t_{T_out} - t_1) / (T_out - 1)，T_out&gt;1    后续每 token 平均间隔
+E2E  = t_{T_out} - a                               整个请求耗时
 输出吞吐 = 观察窗口内输出 token 数 / 窗口秒数</code></pre>
+<p>四个指标都只是“时间戳相减”：TTFT 看第一个字等了多久，TPOT
+把首字之后的总时长平摊到每个间隔上，E2E
+是整单用时，吞吐是“窗口里出了几个字 ÷ 窗口多长”。</p>
+<p>其中：a 是请求到达时刻；<span
+class="math inline">\(t_1,\ldots,t_{T_{\mathrm{out}}}\)</span>
+是依次收到各输出 token 的时刻（局部记号）；<span
+class="math inline">\(T_{\mathrm{out}}\)</span> 是这个请求的输出 token
+数，同时也是最后一个时刻的下标（代码块里写作 T_out）；分母 <span
+class="math inline">\(T_{\mathrm{out}}-1\)</span>
+是首字之后的间隔个数。</p>
 <p>TTFT 可以包含排队、prefill、采样与网络等延迟，不等于纯 prefill kernel
 时间。TPOT 这里排除了第一 token 的等待。只有一个输出 token
 时，没有后续间隔，所以脚本返回 <code>None</code>，不是除以零，也不是假装
@@ -8947,9 +9025,9 @@ TTFT 量到首字，TPOT 平摊首字之后的间隔，E2E 量整单
 <h2 id="p15.15-运行与输出哪些确实测过">P15.15
 运行与输出：哪些确实测过</h2>
 <p>在仓库根目录直接运行：</p>
-<div class="sourceCode" id="cb106"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb106-1"><a href="#cb106-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/16_attention_systems.py</span>
-<span id="cb106-2"><a href="#cb106-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_attention_systems.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb105"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb105-1"><a href="#cb105-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/16_attention_systems.py</span>
+<span id="cb105-2"><a href="#cb105-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_attention_systems.py <span class="at">-v</span></span></code></pre></div>
 <p>核心只需要 Python 标准库。</p>
 <p>在附录 H 所列环境下（随机部分 seed=15）运行。环境中的 PyTorch 见附录
 H，没有可用 CUDA。关键输出为：</p>
@@ -8969,8 +9047,8 @@ GPU SDPA: not requested, not run. This CPU script is not a performance benchmark
 CPU SDPA 检查通过不代表执行了 CUDA FlashAttention。</p>
 <p>如果你已经有兼容的 GPU、驱动与官方 CUDA 版
 PyTorch，可以单独尝试：</p>
-<div class="sourceCode" id="cb108"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb108-1"><a href="#cb108-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/16_attention_systems.py <span class="at">--gpu-sdpa</span></span></code></pre></div>
+<div class="sourceCode" id="cb107"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb107-1"><a href="#cb107-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/16_attention_systems.py <span class="at">--gpu-sdpa</span></span></code></pre></div>
 <p>不要为这一章把现有 CPU 环境强行替换掉；GPU
 环境的安装要按官方硬件/驱动要求单独配置。脚本会打印实际
 PyTorch、CUDA、设备、dtype 和形状，并在缺少依赖或 CUDA 时明确
@@ -8981,10 +9059,10 @@ PyTorch、CUDA、设备、dtype 和形状，并在缺少依赖或 CUDA 时明确
 字节，但运行时上下文、工作区和 profiler 远不止这点，不能把 768
 字节写成显存需求。它不下载模型，不承诺耗时或 GPU 总显存上限。</p>
 <p>其核心调用明确限定后端：</p>
-<div class="sourceCode" id="cb110"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb110-1"><a href="#cb110-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> sdpa_kernel(backends<span class="op">=</span>[SDPBackend.FLASH_ATTENTION]):</span>
-<span id="cb110-2"><a href="#cb110-2" aria-hidden="true" tabindex="-1"></a>    actual <span class="op">=</span> torch.nn.functional.scaled_dot_product_attention(</span>
-<span id="cb110-3"><a href="#cb110-3" aria-hidden="true" tabindex="-1"></a>        q, k, v, dropout_p<span class="op">=</span><span class="fl">0.0</span>, is_causal<span class="op">=</span><span class="va">True</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb109"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb109-1"><a href="#cb109-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> sdpa_kernel(backends<span class="op">=</span>[SDPBackend.FLASH_ATTENTION]):</span>
+<span id="cb109-2"><a href="#cb109-2" aria-hidden="true" tabindex="-1"></a>    actual <span class="op">=</span> torch.nn.functional.scaled_dot_product_attention(</span>
+<span id="cb109-3"><a href="#cb109-3" aria-hidden="true" tabindex="-1"></a>        q, k, v, dropout_p<span class="op">=</span><span class="fl">0.0</span>, is_causal<span class="op">=</span><span class="va">True</span>)</span></code></pre></div>
 <p>这里 Q/K 等长，才使用简单的
 <code>is_causal=True</code>；带缓存偏移的矩形 mask
 不应不加分析地照抄。函数的 dropout 参数明确设为 0，不依赖外部模型的 eval
@@ -9002,10 +9080,10 @@ TTFT、TPOT、E2E、输出吞吐和失败请求，分项记录显存，并用 pr
 核验实际后端。</p>
 <h2 id="p15.17-自测题与参考答案">P15.17 自测题与参考答案</h2>
 <ol type="1">
-<li>FlashAttention 为什么不等于把稠密 attention 改成 O(Nd)？与 GQA
-分别改了什么？</li>
-<li>N 从 4096 变为 8192，单头一张 2 字节 score 矩阵从多少 MiB
-变成多少？</li>
+<li>FlashAttention 为什么不等于把稠密 attention 改成 <span
+class="math inline">\(O(Td_k)\)</span>？与 GQA 分别改了什么？</li>
+<li><span class="math inline">\(T\)</span> 从 4096 变为 8192，单头一张 2
+字节 score 矩阵从多少 MiB 变成多少？</li>
 <li>手算例子第二块到来时，alpha、ell、acc、最终输出各是多少？若平均两块各自均值，会得到多少？</li>
 <li>第一块全 mask，后块才出现合法 key，该怎样初始化？若整行全 mask，本
 API 输出什么？</li>
@@ -9024,8 +9102,9 @@ FlashAttention，并证明线上请求更快？</li>
 </ol>
 <p>参考答案：</p>
 <ol type="1">
-<li>它保留全部合法 QK 配对，标准稠密算术量仍为 O(N²d)，重点是计算组织与
-IO。GQA 改变 KV 头共享方式，属于模型表示的改变。</li>
+<li>它保留全部合法 QK 配对，标准稠密算术量仍为 <span
+class="math inline">\(O(T^2d_k)\)</span>，重点是计算组织与 IO。GQA 改变
+KV 头共享方式，属于模型表示的改变。</li>
 <li>32 MiB → 128 MiB，增长 4 倍；这只是单张矩阵，不是完整模型峰值。</li>
 <li>alpha=0.5，ell=1.75，acc=10.5，输出=6。错误的块均值平均是 17/3，约
 5.6667。</li>
@@ -9098,15 +9177,29 @@ alt="左侧窗口只保留允许读取的边，叠层扩展可达范围；右侧
 <figcaption>左侧窗口只保留允许读取的边，叠层扩展可达范围；右侧线性注意力累计
 S 和 z，再由当前 query 读取</figcaption>
 </figure>
-<h2 id="p16.2-先约定-w-到底数什么">P16.2 先约定 W 到底数什么</h2>
-<p>本书采用一个贯穿代码、图和手算的约定：<strong>窗口 W
+<h2 id="p16.2-先约定窗口长度到底数什么">P16.2
+先约定窗口长度到底数什么</h2>
+<p>本书采用一个贯穿代码、图和手算的约定：<strong>窗口 <span
+class="math inline">\(T_{\mathrm{win}}\)</span>
 包含当前位置自己</strong>。位置从 0 开始，query i 可以看 key
 j，当且仅当：</p>
 <p><span class="math display">\[
-\max(0,i-W+1)\le j\le i
+\max(0,i-T_{\mathrm{win}}+1)\le j\le i
 \]</span></p>
-<p>例如 W=3，是“当前位 + 前面至多两位”，不是“前三位 + 当前位”。T=6 的
-mask 如下，1 表示允许读取：</p>
+<p>这条不等式就是一扇“往回开 <span
+class="math inline">\(T_{\mathrm{win}}\)</span> 格的窗”：右端 <span
+class="math inline">\(j\le i\)</span> 保证不看未来，左端 <span
+class="math inline">\(i-T_{\mathrm{win}}+1\)</span> 让窗口连自己共 <span
+class="math inline">\(T_{\mathrm{win}}\)</span> 格；外面套 max(0, ·)
+只是防止序列开头时下标变成负数。</p>
+<p>其中：i 是 query 的位置，j 是 key 的位置，都从 0 开始；<span
+class="math inline">\(T_{\mathrm{win}}\)</span>
+是窗口长度（包含当前位置自己；全书统一记号，见附录 A.5，不写 W，W
+只指权重）。</p>
+<p>例如 <span
+class="math inline">\(T_{\mathrm{win}}=3\)</span>，是“当前位 +
+前面至多两位”，不是“前三位 + 当前位”。T=6 的 mask 如下，1
+表示允许读取：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -9183,26 +9276,30 @@ mask 如下，1 表示允许读取：</p>
 </tr>
 </tbody>
 </table></div>
-<p>因此 W=1 退化为只看自己；W≥T 退化为普通因果
-mask，仍然不能看未来。</p>
+<p>因此 <span class="math inline">\(T_{\mathrm{win}}=1\)</span>
+退化为只看自己；<span class="math inline">\(T_{\mathrm{win}}\ge
+T\)</span> 退化为普通因果 mask，仍然不能看未来。</p>
 <p>窗口是论文和库之间常见的差一位陷阱。<a
 href="https://arxiv.org/html/2310.06825v1#S2">Mistral 7B v1，§2</a> 用
-SWA 解释层间信息传播，但其正文的 i−W 到 i
-与图示的窗口槽数表述不能直接当作本章函数契约。复现具体库时，应检查实际不等式，不能只复制名为
+SWA 解释层间信息传播，但其正文的 <span
+class="math inline">\(i-T_{\mathrm{win}}\)</span> 到 i（论文把窗口写作
+W）与图示的窗口槽数表述不能直接当作本章函数契约。复现具体库时，应检查实际不等式，不能只复制名为
 window_size 的数字。本章不声称复刻该模型。</p>
 <p>代码中的矩形版本还允许已有 P 个历史位置、本次处理 C 个新位置：</p>
-<div class="sourceCode" id="cb111"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb111-1"><a href="#cb111-1" aria-hidden="true" tabindex="-1"></a>query_pos <span class="op">=</span> torch.arange(offset, offset <span class="op">+</span> length)[:, <span class="va">None</span>]</span>
-<span id="cb111-2"><a href="#cb111-2" aria-hidden="true" tabindex="-1"></a>key_pos <span class="op">=</span> torch.arange(offset <span class="op">+</span> length)[<span class="va">None</span>, :]</span>
-<span id="cb111-3"><a href="#cb111-3" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> (key_pos <span class="op">&lt;=</span> query_pos) <span class="op">&amp;</span> (key_pos <span class="op">&gt;</span> query_pos <span class="op">-</span> window)</span></code></pre></div>
+<div class="sourceCode" id="cb110"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb110-1"><a href="#cb110-1" aria-hidden="true" tabindex="-1"></a>query_pos <span class="op">=</span> torch.arange(offset, offset <span class="op">+</span> length)[:, <span class="va">None</span>]</span>
+<span id="cb110-2"><a href="#cb110-2" aria-hidden="true" tabindex="-1"></a>key_pos <span class="op">=</span> torch.arange(offset <span class="op">+</span> length)[<span class="va">None</span>, :]</span>
+<span id="cb110-3"><a href="#cb110-3" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> (key_pos <span class="op">&lt;=</span> query_pos) <span class="op">&amp;</span> (key_pos <span class="op">&gt;</span> query_pos <span class="op">-</span> window)</span></code></pre></div>
 <p>这里 <code>offset=P</code>、<code>length=C</code>。第一行生成 [C,1]
 的绝对 query 位置，第二行生成 [1,P+C] 的 key 位置，广播后得到
-[C,P+C]。P=4、C=2、W=3 时，正好是手算表的最后两行，不能用一个从 0 开始的
-C×C 三角形代替。</p>
+[C,P+C]。P=4、C=2、<span
+class="math inline">\(T_{\mathrm{win}}=3\)</span>
+时，正好是手算表的最后两行，不能用一个从 0 开始的 C×C 三角形代替。</p>
 <h2 id="p16.3-一层看不见不等于多层完全没有路径">P16.3
 一层看不见，不等于多层完全没有路径</h2>
-<p>设每层都用 W=3，且没有别的跨位置连接。输出位置 5
-在第一层读取上一层位置
+<p>设每层都用 <span
+class="math inline">\(T_{\mathrm{win}}=3\)</span>，且没有别的跨位置连接。输出位置
+5 在第一层读取上一层位置
 3、4、5；第二层读取这些位置携带的信息，就可能间接收到输入位置 1、2
 的内容。</p>
 <div class="table-wrapper"><table>
@@ -9231,12 +9328,20 @@ C×C 三角形代替。</p>
 </tr>
 </tbody>
 </table></div>
-<p>按本章约定，每层最多向前跨 W−1 个位置，所以 L
+<p>按本章约定，每层最多向前跨 <span
+class="math inline">\(T_{\mathrm{win}}-1\)</span> 个位置，所以 L
 层的结构可达区间是：</p>
 <p><span class="math display">\[
-[\max(0,i-L(W-1)),\ i]
+[\max(0,i-L(T_{\mathrm{win}}-1)),\ i]
 \]</span></p>
-<p>区间长度最多是 <code>1+L×(W−1)</code>。逐位置
+<p>每叠一层，信息最多再往回“跳” <span
+class="math inline">\(T_{\mathrm{win}}-1\)</span> 格，跳 L 次就是 <span
+class="math inline">\(L(T_{\mathrm{win}}-1)\)</span> 格；同样用 max
+截在位置 0。</p>
+<p>其中：<span class="math inline">\(L\)</span> 是层数；i、<span
+class="math inline">\(T_{\mathrm{win}}\)</span> 同上。</p>
+<p>区间长度最多是 <span
+class="math inline">\(1+L(T_{\mathrm{win}}-1)\)</span>。逐位置
 FFN、归一化和残差不增加新的跨位置边。代码
 <code>receptive_positions()</code> 逐层合并可达集合。</p>
 <p><strong>结构上存在一条路径，不等于信息一定被学会、保留或准确检索。</strong>
@@ -9254,12 +9359,24 @@ decoder。<a href="https://arxiv.org/html/2004.05150v2#S3.SS1">Longformer
 v2，§3.1</a></p>
 <p>本章定义一个更简单的因果教学图样，设全局位置集合为 G：</p>
 <p><span class="math display">\[
-M_{ij}=(j\le i)\ \land\ [(j&gt;i-W)\ \lor\ (j\in G)\ \lor\ (i\in G)]
+A_{ij}=(j\le i)\ \land\ [(j&gt;i-T_{\mathrm{win}})\ \lor\ (j\in G)\
+\lor\ (i\in G)]
 \]</span></p>
+<p>读法：先过“不看未来”这道总闸，再满足三个条件之一就放行——key
+在窗口里、key 是全局位置、或者 query 自己是全局位置。</p>
+<p>其中：<span class="math inline">\(A_{ij}\)</span> 是布尔可见性（True
+表示 query i 可以读 key j；为了和全书的加性 mask <span
+class="math inline">\(M\)</span> 区分，这里写作 A；本节局部记号，和 GRPO
+的优势 <span class="math inline">\(A_i\)</span> 无关）；G
+是全局位置集合；<span class="math inline">\(\land\)</span> 是“且”，<span
+class="math inline">\(\lor\)</span> 是“或”，<span
+class="math inline">\(\in\)</span> 是“属于”；i、j、<span
+class="math inline">\(T_{\mathrm{win}}\)</span> 同上。</p>
 <ul>
 <li>普通 query 可以读局部窗口，以及已经出现的全局 key。</li>
 <li>全局 query 可以读全部过去和自己，但仍然不能读未来。</li>
-<li>W=3、G={0} 时，query 5 的可见位置为 <code>{0,3,4,5}</code>。</li>
+<li><span class="math inline">\(T_{\mathrm{win}}=3\)</span>、G={0}
+时，query 5 的可见位置为 <code>{0,3,4,5}</code>。</li>
 <li>若 4 也是全局位置，query 4 可读 <code>{0,1,2,3,4}</code>；query 0
 仍只能读自己。</li>
 </ul>
@@ -9297,13 +9414,25 @@ payload、索引和临时工作区，不能把同一份节省算两遍。</li>
 0，并不能证明存储已经减少。</p>
 <h2 id="p16.6-线性注意力先改相似度再移动括号">P16.6
 线性注意力先改相似度，再移动括号</h2>
-<p>普通 Softmax 注意力的未归一化权重是
-<code>exp(q·k/√d)</code>。本章换成正特征的内积：</p>
+<p>普通 Softmax 注意力的未归一化权重是 <span
+class="math inline">\(\exp(q\cdot
+k/\sqrt{d_k})\)</span>。本章换成正特征的内积：</p>
 <p><span class="math display">\[
 \phi(x)=\operatorname{ELU}(x)+1
 =\begin{cases}x+1,&amp;x\ge0\\e^x,&amp;x&lt;0\end{cases},\qquad
 w_{tj}=\phi(q_t)^\top\phi(k_j)
 \]</span></p>
+<p>φ 把任意实数变成正数：正半轴平移 1，负半轴用 <span
+class="math inline">\(e^x\)</span> 平滑地压向
+0。于是两个特征向量的内积一定为正，可以像 exp 分数一样当作“权重”用。</p>
+<p>其中：x 是 φ 的输入（向量时逐坐标计算）；ELU 是指数线性单元；<span
+class="math inline">\(q_t\)</span> 是位置 t 的 query，<span
+class="math inline">\(k_j\)</span> 是位置 j 的
+key（这里按列向量写）；<span
+class="math inline">\(\phi(q_t)^\top\phi(k_j)\)</span>
+是两者特征的内积；<span class="math inline">\(w_{tj}\)</span> 是 query t
+给 key j 的未归一化权重；<span class="math inline">\(d_k\)</span> 是 Q/K
+宽度。</p>
 <p>这是一个新的核函数，<strong>不与原来的 Softmax
 注意力精确等价</strong>。它的“线性”指固定特征宽度时，计算量可对序列长度
 T
@@ -9316,11 +9445,19 @@ Transformer 原论文，ICML 2020，§3.2–3.4、式 7–12</a>。</p>
 y_t=\frac{\sum_{j=0}^{t}\bigl(\phi(q_t)^\top\phi(k_j)\bigr)v_j}
 {\sum_{j=0}^{t}\phi(q_t)^\top\phi(k_j)}
 \]</span></p>
+<p>这和普通注意力的“加权平均”是同一个形状，只是把 exp 分数换成了 <span
+class="math inline">\(w_{tj}\)</span>；分子按权重把 value
+加起来，分母把权重本身加起来。</p>
+<p>其中：<span class="math inline">\(y_t\)</span> 是位置 t 的输出；<span
+class="math inline">\(v_j\)</span> 是位置 j 的 value；求和从 <span
+class="math inline">\(j=0\)</span> 到 <span
+class="math inline">\(t\)</span>，体现因果性。</p>
 <p>正权重除以总和后加起来为
 1。分母不能省略，否则重复历史会改变输出尺度，且不再是这个算式。</p>
 <p>本章省略头轴，只保留一个头；多头可在 B 之外再增加 H 轴。设特征宽度为
-r、value 宽度为 d_v。本例 φ 不改变维度，所以
-r=d，但别把这个特例当成所有核映射的定义。</p>
+r、value 宽度为 <span class="math inline">\(d_v\)</span>。本例 φ
+不改变维度，所以 <span
+class="math inline">\(r=d_k\)</span>，但别把这个特例当成所有核映射的定义。</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -9374,8 +9511,23 @@ S_t=S_{t-1}+\phi(k_t)v_t^\top,\qquad
 z_t=z_{t-1}+\phi(k_t),\qquad
 y_t=\frac{\phi(q_t)^\top S_t}{\phi(q_t)^\top z_t}
 \]</span></p>
-<p>外积把 r 个 key 特征与 d_v 个 value 分量两两相乘，产生 r×d_v
-个数。先把当前 k、v 加入状态，再读取，才能包含
+<p>这三步就是把上一节的两个求和“做成存折”：<span
+class="math inline">\(S_t\)</span> 存分子里与 query 无关的部分，<span
+class="math inline">\(z_t\)</span> 存分母里与 query 无关的部分，每来一个
+token 往里存一笔；读的时候只需拿 <span
+class="math inline">\(\phi(q_t)\)</span>
+和两本存折各做一次内积，不用回头翻历史。</p>
+<p>其中：<span class="math inline">\(S_t\)</span> 是 <span
+class="math inline">\([r,d_v]\)</span> 的状态矩阵，<span
+class="math inline">\(z_t\)</span> 是 <span
+class="math inline">\(r\)</span> 维的归一化状态，下标 <span
+class="math inline">\(t\)</span> 表示已存入位置 0…t；<span
+class="math inline">\(\phi(k_t)v_t^\top\)</span> 是外积；<span
+class="math inline">\(v_t^\top\)</span> 是 <span
+class="math inline">\(v_t\)</span> 的转置；其余符号同上。</p>
+<p>外积把 r 个 key 特征与 <span class="math inline">\(d_v\)</span> 个
+value 分量两两相乘，产生 r×d_v 个数。先把当前 k、v
+加入状态，再读取，才能包含
 j=t。这里的矩阵结合律对<strong>选定的核</strong>精确成立；它不能把已经改掉的核变回
 Softmax。</p>
 <p>手算 B=1、r=2、d_v=1：</p>
@@ -9418,13 +9570,13 @@ Softmax。</p>
 <code>1×3+2×2=7</code>。也可以直接对两条历史算权重 3、4，得到
 <code>(3×2+4×4)/(3+4)=22/7</code>。</p>
 <p>对应源码的循环核心：</p>
-<div class="sourceCode" id="cb112"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb112-1"><a href="#cb112-1" aria-hidden="true" tabindex="-1"></a>qt, kt <span class="op">=</span> positive_features(q[:, t]), positive_features(k[:, t])</span>
-<span id="cb112-2"><a href="#cb112-2" aria-hidden="true" tabindex="-1"></a>state <span class="op">=</span> state <span class="op">+</span> kt[:, :, <span class="va">None</span>] <span class="op">*</span> v[:, t, <span class="va">None</span>, :]</span>
-<span id="cb112-3"><a href="#cb112-3" aria-hidden="true" tabindex="-1"></a>normalizer <span class="op">=</span> normalizer <span class="op">+</span> kt</span>
-<span id="cb112-4"><a href="#cb112-4" aria-hidden="true" tabindex="-1"></a>numerator <span class="op">=</span> (qt[:, :, <span class="va">None</span>] <span class="op">*</span> state).<span class="bu">sum</span>(dim<span class="op">=</span><span class="dv">1</span>)</span>
-<span id="cb112-5"><a href="#cb112-5" aria-hidden="true" tabindex="-1"></a>denominator <span class="op">=</span> (qt <span class="op">*</span> normalizer).<span class="bu">sum</span>(dim<span class="op">=</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb112-6"><a href="#cb112-6" aria-hidden="true" tabindex="-1"></a>outputs.append(_normalized(numerator, denominator))</span></code></pre></div>
+<div class="sourceCode" id="cb111"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb111-1"><a href="#cb111-1" aria-hidden="true" tabindex="-1"></a>qt, kt <span class="op">=</span> positive_features(q[:, t]), positive_features(k[:, t])</span>
+<span id="cb111-2"><a href="#cb111-2" aria-hidden="true" tabindex="-1"></a>state <span class="op">=</span> state <span class="op">+</span> kt[:, :, <span class="va">None</span>] <span class="op">*</span> v[:, t, <span class="va">None</span>, :]</span>
+<span id="cb111-3"><a href="#cb111-3" aria-hidden="true" tabindex="-1"></a>normalizer <span class="op">=</span> normalizer <span class="op">+</span> kt</span>
+<span id="cb111-4"><a href="#cb111-4" aria-hidden="true" tabindex="-1"></a>numerator <span class="op">=</span> (qt[:, :, <span class="va">None</span>] <span class="op">*</span> state).<span class="bu">sum</span>(dim<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb111-5"><a href="#cb111-5" aria-hidden="true" tabindex="-1"></a>denominator <span class="op">=</span> (qt <span class="op">*</span> normalizer).<span class="bu">sum</span>(dim<span class="op">=</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb111-6"><a href="#cb111-6" aria-hidden="true" tabindex="-1"></a>outputs.append(_normalized(numerator, denominator))</span></code></pre></div>
 <p>新增的 <code>None</code> 轴把 <code>[B,r]</code> 与
 <code>[B,d_v]</code> 变成可广播的 <code>[B,r,1]</code> 和
 <code>[B,1,d_v]</code>。读取时沿 r 求和，得到
@@ -9459,7 +9611,8 @@ token。</p>
 <tr>
 <th>T</th>
 <th>全量 Softmax</th>
-<th>W=4 的局部 Softmax</th>
+<th><span class="math inline">\(T_{\mathrm{win}}=4\)</span> 的局部
+Softmax</th>
 <th>本章线性核</th>
 <th>线性 S+z 的 payload</th>
 </tr>
@@ -9501,9 +9654,20 @@ token。</p>
 <p><span class="math display">\[
 y_{T-1}=\frac{a}{a+(T-1)b}
 \]</span></p>
-<p>Softmax 的目标与干扰打分差是 <code>64/√2</code>，所以对应输出为
-<code>1/[1+(T−1)exp(−64/√2)]</code>，这些长度下打印成 1。W=4
-的单层路径在 T&gt;4 时彻底读不到位置 0，因此输出为
+<p>目标的 value 是 1、干扰项是
+0，所以输出就是“目标权重占总权重的比例”。每条干扰的 b 很小，但 T
+一大就积少成多，把比例拉下来。</p>
+<p>其中：a 是目标 key 得到的权重，b 是每条干扰 key
+得到的权重（本节局部记号）；<span class="math inline">\(T\)</span>
+是序列长度，<span class="math inline">\(T-1\)</span> 是干扰项条数；<span
+class="math inline">\(y_{T-1}\)</span> 是最后一个位置的输出。</p>
+<p>Softmax 的目标与干扰打分差是 <span
+class="math inline">\(64/\sqrt2\)</span>（点积 32 与 −32 之差，再除以
+<span class="math inline">\(\sqrt{d_k}=\sqrt2\)</span>），所以对应输出为
+<span
+class="math inline">\(1/[1+(T-1)e^{-64/\sqrt2}]\)</span>，这些长度下打印成
+1。<span class="math inline">\(T_{\mathrm{win}}=4\)</span> 的单层路径在
+T&gt;4 时彻底读不到位置 0，因此输出为
 0。三者并没有被要求使用相同核或相同存储量，那正是实验改变的因素。</p>
 <p>状态只含 S 的 2×1 个数和 z 的 2 个数，float64 每数 8 字节，共
 <code>(2×1+2)×8=32</code>。这不包含输入、输出、模型参数、Python 对象或
@@ -9518,7 +9682,8 @@ SWA 信息传递能力。</p>
 <h2 id="p16.9-复杂度是账本不是速度承诺">P16.9
 复杂度是账本，不是速度承诺</h2>
 <p>下面只数单层、单头的注意力主体，忽略投影、FFN 和常数；batch 可另外乘
-B。全量 Q/K 宽度 d、value 宽度 d_v；全局位置数量为 g。</p>
+B。全量 Q/K 宽度 <span class="math inline">\(d_k\)</span>、value 宽度
+<span class="math inline">\(d_v\)</span>；全局位置数量为 g。</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -9535,26 +9700,37 @@ B。全量 Q/K 宽度 d、value 宽度 d_v；全局位置数量为 g。</p>
 <tbody>
 <tr>
 <td>全量注意力</td>
-<td>O(T²(d+d_v))</td>
-<td>O(T(d+d_v))</td>
+<td><span class="math inline">\(O(T^2(d_k+d_v))\)</span></td>
+<td><span class="math inline">\(O(T(d_k+d_v))\)</span></td>
 </tr>
 <tr>
 <td>真正按窗口执行的 SWA</td>
-<td>O(TW(d+d_v))</td>
-<td>可用至多 W 位置的 K/V</td>
+<td><span
+class="math inline">\(O(T\,T_{\mathrm{win}}(d_k+d_v))\)</span></td>
+<td>可用至多 <span class="math inline">\(T_{\mathrm{win}}\)</span>
+位置的 K/V</td>
 </tr>
 <tr>
 <td>局部 + 固定数量全局位置</td>
-<td>O(T(W+g)(d+d_v))</td>
+<td><span
+class="math inline">\(O(T(T_{\mathrm{win}}+g)(d_k+d_v))\)</span></td>
 <td>局部与全局位置的 K/V；全局 query 另需审查</td>
 </tr>
 <tr>
 <td>本章的线性递推</td>
-<td>O(Trd_v+Tr)</td>
-<td>S、z，共 r×d_v+r 个数</td>
+<td><span class="math inline">\(O(Trd_v+Tr)\)</span></td>
+<td>S、z，共 <span class="math inline">\(rd_v+r\)</span> 个数</td>
 </tr>
 </tbody>
 </table></div>
+<p>读这张表的诀窍：全量注意力每个位置都要和 T 个位置配对，所以是 <span
+class="math inline">\(T^2\)</span>；窗口和全局位置把“配对数”降到 <span
+class="math inline">\(T_{\mathrm{win}}\)</span> 或 <span
+class="math inline">\(T_{\mathrm{win}}+g\)</span>；线性递推每步只更新、读取固定大小的状态。其中：<span
+class="math inline">\(T\)</span> 序列长度，<span
+class="math inline">\(T_{\mathrm{win}}\)</span> 窗口，g 全局位置数，r
+特征宽度，<span class="math inline">\(d_k\)</span>、<span
+class="math inline">\(d_v\)</span> 同上。</p>
 <p>第三行需特别注意：如果未来有一个全局 query 要直接读取全部旧
 key，就不能提前只留窗口与若干全局 key。本章只画
 mask，没有实现这种缓存生命周期；不能拿稀疏边数代替完整的存储证明。g 若随
@@ -9572,10 +9748,10 @@ href="#p15-attention-systems">P15</a> 的 FlashAttention
 作为实现阅读入口，不安装、不调用，也不把库中的其他架构或速度声明算作本章实验结果。</p>
 <h2 id="p16.10-运行与数值边界">P16.10 运行与数值边界</h2>
 <p>在仓库根目录：</p>
-<div class="sourceCode" id="cb113"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb113-1"><a href="#cb113-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
-<span id="cb113-2"><a href="#cb113-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/17_sparse_linear_attention.py</span>
-<span id="cb113-3"><a href="#cb113-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_sparse_linear_attention.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb112"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb112-1"><a href="#cb112-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
+<span id="cb112-2"><a href="#cb112-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/17_sparse_linear_attention.py</span>
+<span id="cb112-3"><a href="#cb112-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_sparse_linear_attention.py <span class="at">-v</span></span></code></pre></div>
 <p>实际在附录 H 所列环境下（单线程、seed=16、float64）运行。随机
 B=2、T=7、r=3、d_v=2 对照得到最大误差 <code>3.33e-16</code>，S/z
 形状分别为
@@ -9605,11 +9781,15 @@ padding。先把这些语义补齐并测试，才可以谈替换真实层。</li
 <code>docs/testing.md</code>。</p>
 <h2 id="p16.12-自测题与参考答案">P16.12 自测题与参考答案</h2>
 <ol type="1">
-<li>W=3、query=5 时，位置 2 是否可见？W=1 是否只看前一位？</li>
-<li>W=3、两层、输出位置
+<li><span class="math inline">\(T_{\mathrm{win}}=3\)</span>、query=5
+时，位置 2 是否可见？<span
+class="math inline">\(T_{\mathrm{win}}=1\)</span> 是否只看前一位？</li>
+<li><span
+class="math inline">\(T_{\mathrm{win}}=3\)</span>、两层、输出位置
 5，最早可达哪个输入位置？这是否保证能回答那个位置的事实？</li>
 <li>因果全局位置 0 能否先汇总位置 5，再把它传回位置 2？</li>
-<li>“三层窗口 + 一层全量”能否把所有层的历史缓存都限制为 W？</li>
+<li>“三层窗口 + 一层全量”能否把所有层的历史缓存都限制为 <span
+class="math inline">\(T_{\mathrm{win}}\)</span>？</li>
 <li>B=2、r=3、d_v=2、float64，S+z 的 payload 是多少字节？T
 翻倍会怎样？</li>
 <li>手算例第二个位置的输出为什么是 22/7，而不是 22？</li>
@@ -9620,7 +9800,9 @@ padding。先把这些语义补齐并测试，才可以谈替换真实层。</li
 </ol>
 <p>参考答案：</p>
 <ol type="1">
-<li>不可见，可见的是 3、4、5。W=1 只看当前位，不是前一位。</li>
+<li>不可见，可见的是 3、4、5。<span
+class="math inline">\(T_{\mathrm{win}}=1\)</span>
+只看当前位，不是前一位。</li>
 <li>最早位置 1，因为
 <code>5−2×(3−1)=1</code>。只证明路径存在，不保证学习和保存了事实。</li>
 <li>不能。每条边都必须满足 key 位置不晚于
@@ -9654,7 +9836,8 @@ Linear，arXiv:2510.26692</a>。</p>
 <ul>
 <li><a href="https://arxiv.org/html/2310.06825v1#S2">Mistral
 7B，arXiv:2310.06825v1，§2</a>：窗口及叠层传播的原始模型说明；本章另行固定
-W 包含当前位的契约，不复制论文性能数字。</li>
+<span class="math inline">\(T_{\mathrm{win}}\)</span>
+包含当前位的契约，不复制论文性能数字。</li>
 <li><a
 href="https://arxiv.org/html/2004.05150v2#S3.SS1">Longformer，arXiv:2004.05150v2，§3.1</a>：局部与全局图样的原始来源；本章是显式因果约束的简化
 mask，不复现完整 Longformer。</li>
@@ -9782,12 +9965,24 @@ README</a> 明确定位为可读参考实现；其 generation
 连接。本书没有运行官方权重或用该 self-test 证明数值正确性。</p>
 <h2 id="p17.3-普通-decoder-only-的依赖链">P17.3 普通 decoder-only
 的依赖链</h2>
-<p>设位置 i 的输入向量是 x_i，第 l 层的输入表示是
-h_i^(l)。先忽略归一化与多头，普通 self-attention 的 K/V
-通常来自本层输入：</p>
+<p>设位置 i 的输入向量是 <span class="math inline">\(x_i\)</span>，第 l
+层的输入表示是 <span
+class="math inline">\(x_i^{(l)}\)</span>，把所有位置的 <span
+class="math inline">\(x_i^{(l)}\)</span> 一行一行叠起来就是矩阵 <span
+class="math inline">\(X^{(l)}\)</span>。先忽略归一化与多头，普通
+self-attention 的 K/V 通常来自本层输入：</p>
 <p><span class="math display">\[
-K^{(l)}=H^{(l)}W_K^{(l)},\qquad V^{(l)}=H^{(l)}W_V^{(l)}.
+K^{(l)}=X^{(l)}W_K^{(l)},\qquad V^{(l)}=X^{(l)}W_V^{(l)}.
 \]</span></p>
+<p>白话：第 l 层要查的“资料卡”由第 l
+层自己的输入现做——想要高层的卡，就得先把下面各层都走一遍。</p>
+<p>其中：上标 <span class="math inline">\((l)\)</span> 表示第 l
+层；<span class="math inline">\(X^{(l)}\)</span> 是该层输入，形状 <span
+class="math inline">\([T,D]\)</span>（一行一个位置）；<span
+class="math inline">\(W_K^{(l)}\)</span>、<span
+class="math inline">\(W_V^{(l)}\)</span> 是该层的 key、value 投影；<span
+class="math inline">\(K^{(l)}\)</span>、<span
+class="math inline">\(V^{(l)}\)</span> 是得到的键、值矩阵。</p>
 <p>因此，如果想得到很高一层的历史 K/V，通常要先算完历史 token
 在下面各层的表示。KV cache
 可以避免“已经算过又重算”，但没有缓存的新输入仍要经过这条层间链。</p>
@@ -9795,14 +9990,37 @@ K^{(l)}=H^{(l)}W_K^{(l)},\qquad V^{(l)}=H^{(l)}W_V^{(l)}.
 允许同一层的多个位置并行计算；<strong>沿层的依赖</strong>和<strong>沿时间的可见性</strong>是两个不同问题。CED
 改变的是前者中的 KV 来源，而不是放弃后者的因果约束。</p>
 <h2 id="p17.4-ced-改了哪条边">P17.4 CED 改了哪条边</h2>
-<p>把下半部分的最终输出记为 E，形状 [B,N,D]。B 是 batch，N 是输入长度，D
-是每个 token 的表示宽度。上半部分 decoder 的某层输入仍记为 H^(l)。</p>
+<p>把下半部分的最终输出记为 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span>，形状 <span
+class="math inline">\([B,T,D]\)</span>。<span
+class="math inline">\(B\)</span> 是批大小，<span
+class="math inline">\(T\)</span> 是输入长度，<span
+class="math inline">\(D\)</span> 是每个 token 的表示宽度。上半部分
+decoder 的某层输入仍记为 <span
+class="math inline">\(X^{(l)}\)</span>。（全书 <span
+class="math inline">\(E\)</span> 专指 embedding 表，所以这里不用
+E；配图里的“E”“N”就是这里的 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span>、<span
+class="math inline">\(T\)</span>。）</p>
 <p>为了先看清路径，本章教学模型使用分开的 K、V：</p>
 <p><span class="math display">\[
-K_g^{(l)}=E W_{Kg}^{(l)},\qquad V_g^{(l)}=E W_{Vg}^{(l)}.
+K_g^{(l)}=X_{\mathrm{enc}}W_{Kg}^{(l)},\qquad
+V_g^{(l)}=X_{\mathrm{enc}}W_{Vg}^{(l)}.
 \]</span></p>
-<p>下标 g 是 global。<strong>右边是 E，不是 H^(l)。</strong> 查询 Q
-则仍由当前 decoder
+<p>和上一节的式子比，只换了乘号左边的那一项：资料卡不再用本层输入现做，而是统一用
+encoder 的最终输出来做，所以能在 decoder 开工前一次备好。</p>
+<p>其中：<span class="math inline">\(X_{\mathrm{enc}}\)</span> 是 causal
+encoder 的最终输出；<span
+class="math inline">\(W_{Kg}^{(l)}\)</span>、<span
+class="math inline">\(W_{Vg}^{(l)}\)</span> 是第 l 个 decoder 层的
+global key、value 投影；<span
+class="math inline">\(K_g^{(l)}\)</span>、<span
+class="math inline">\(V_g^{(l)}\)</span> 是该层读取的 global
+键、值。</p>
+<p>下标 g 是 global。<strong>右边是 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span>，不是 <span
+class="math inline">\(X^{(l)}\)</span>。</strong> 查询 Q 则仍由当前
+decoder
 层提出。可以把它理解成：多个深层处理步骤各自提问，但查阅的历史资料可以先由下面的网络准备好。</p>
 <p>生产模型的报告用 KV latent C 和压缩权重 Z
 表达投影，不是本章这两块独立矩阵；CSA2 还会跨层复用，因此并非每个
@@ -9810,9 +10028,15 @@ decoder 层都独占一份 global cache。先分开写 K/V
 是为了看清来源，不是对官方 checkpoint 的逐张量复刻。</p>
 <p>与此同时，局部路径仍保留原来的依赖：</p>
 <p><span class="math display">\[
-K_{local}^{(l)}=H^{(l)}W_{Kl}^{(l)},\qquad
-V_{local}^{(l)}=H^{(l)}W_{Vl}^{(l)}.
+K_{local}^{(l)}=X^{(l)}W_{Kl}^{(l)},\qquad
+V_{local}^{(l)}=X^{(l)}W_{Vl}^{(l)}.
 \]</span></p>
+<p>其中：<span class="math inline">\(W_{Kl}^{(l)}\)</span>、<span
+class="math inline">\(W_{Vl}^{(l)}\)</span> 是第 l 层的局部 key、value
+投影；<span class="math inline">\(K_{local}^{(l)}\)</span>、<span
+class="math inline">\(V_{local}^{(l)}\)</span>
+是滑动窗口里读取的局部键、值；<span
+class="math inline">\(X^{(l)}\)</span> 同上。</p>
 <p>local 的意思是滑动窗口，不是“来自另一台本地机器”。这两套 KV
 不能互换：global 可以承接较远的历史，local
 保留本层对最近上下文的加工。</p>
@@ -9828,10 +10052,15 @@ KV；decoder 本层输入产生 local KV；有界 replay
 <h3 id="因果-encoder-为什么不会偷看未来">因果 encoder
 为什么不会偷看未来</h3>
 <p>“encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的
-encoder 是因果的：E_j 只依赖 x_0 到 x_j。</p>
+encoder 是因果的：<span class="math inline">\(X_{\mathrm{enc}}\)</span>
+的第 j 行只依赖 <span class="math inline">\(x_0\)</span> 到 <span
+class="math inline">\(x_j\)</span>。</p>
 <p>decoder 在位置 i 又只读取位置 j≤i 的 global
-条目。两条规则串起来，任何可读条目 E_j 都不可能包含 x_(i+1)
-之后的信息。局部路径同样必须满足 j≤i。因此允许提前算出整段 E 和 global
+条目。两条规则串起来，任何可读条目（<span
+class="math inline">\(X_{\mathrm{enc}}\)</span> 的第 j 行）都不可能包含
+<span class="math inline">\(x_{i+1}\)</span>
+之后的信息。局部路径同样必须满足 j≤i。因此允许提前算出整段 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span> 和 global
 bank，<strong>不代表每个 query 都可以读 bank 的所有行</strong>。</p>
 <p>这里的 global
 指覆盖历史的范围，不保证生产系统每次读取所有历史条目。真实模型还会做稀疏选择；本章为了隔离数据来源，用稠密的因果
@@ -9842,20 +10071,32 @@ global attention，省去索引器。</p>
 KV</strong>。高层 local KV 依赖低层处理后的表示，不能直接拿 encoder 的
 global KV 充当替身。</p>
 <p>replay（重放）就是重新运行一段历史的计算，用它恢复当前需要的状态。它不是把历史文字再生成一遍，也不是修改用户输入。</p>
-<p>设局部窗口 W 包含当前 token，每层最多再读取 W−1
+<p>设局部窗口 <span class="math inline">\(T_{\mathrm{win}}\)</span>
+包含当前 token，每层最多再读取 <span
+class="math inline">\(T_{\mathrm{win}}-1\)</span>
 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部
-value 已经混合了第一层更早的信息。因此“最后 W 行还在”不等于“能从这 W
+value 已经混合了第一层更早的信息。因此“最后 <span
+class="math inline">\(T_{\mathrm{win}}\)</span> 行还在”不等于“能从这
+<span class="math inline">\(T_{\mathrm{win}}\)</span>
 个原始输入精确重建所有深层状态”。<a
 href="https://arxiv.org/html/2609.19969v1#S1">报告 §1</a>
 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win
 为窗口大小）。</p>
 <p><a href="https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2">报告
 §3.2.2</a> 的 Bounded Replay
-只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 s、当前
-query 为 i，局部可见范围变成：</p>
+只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 <span
+class="math inline">\(i_0\)</span>、当前 query 为
+i，局部可见范围变成：</p>
 <p><span class="math display">\[
-\max(s,i-W+1)\le j\le i.
+\max(i_0,i-T_{\mathrm{win}}+1)\le j\le i.
 \]</span></p>
+<p>和 P16 的窗口不等式相比，只是把左边的“0”换成了段起点：replay
+从哪里开始，窗口就最多退到哪里，段外的旧位置一律看不见。</p>
+<p>其中：<span class="math inline">\(i_0\)</span> 是 replay
+段的起点位置（本节局部记号；全书 <span class="math inline">\(s\)</span>
+留给注意力分数）；i 是 query 位置，j 是 key 位置；<span
+class="math inline">\(T_{\mathrm{win}}\)</span>
+是包含当前位置的窗口长度（全书统一记号，见附录 A.5）。</p>
 <p>这会丢掉 replay
 边界之前的局部依赖。<strong>报告明确说这不是全量计算的数学等价重建。</strong>
 官方对响应质量影响的判断来自其模型与评估，本书的小矩阵误差不能验证或否定那项质量结论。</p>
@@ -9945,12 +10186,14 @@ CSA2 三种模式差在谁写 global KV、谁重选索引
 <h2 id="p17.7-先把教学模型的边界写在前面">P17.7
 先把教学模型的边界写在前面</h2>
 <p>ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两层
-encoder、两层 decoder，窗口 W=3；所有权重都显式初始化并固定，全部在 CPU
-上用 float64 运算。</p>
+encoder、两层 decoder，窗口 <span
+class="math inline">\(T_{\mathrm{win}}=3\)</span>；所有权重都显式初始化并固定，全部在
+CPU 上用 float64 运算。</p>
 <p>本模型故意只保留：</p>
 <ol type="1">
 <li>因果的局部 encoder。</li>
-<li>每个 decoder 层从同一个最终 E 投影 global K/V。</li>
+<li>每个 decoder 层从同一个最终 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span> 投影 global K/V。</li>
 <li>decoder 本层输入产生 local K/V。</li>
 <li>完整前向、增量缓存和近似后缀 replay 三条路径。</li>
 </ol>
@@ -9973,18 +10216,26 @@ RoPE，也不提供长上下文外推能力。</li>
 <p>因此这是“保留关键依赖边”的实验，不是通过换小维度就自动忠实复现完整模型。</p>
 <h2 id="p17.8-手算三行输入如何走完两条路径">P17.8
 手算：三行输入如何走完两条路径</h2>
-<p>先使用更简单的配置：encoder 一层、decoder 一层、W=2，位置项关闭；所有
-Q、K 投影为零，所有 V 投影为单位矩阵。分数都是 0，Softmax
+<p>先使用更简单的配置：encoder 一层、decoder 一层、<span
+class="math inline">\(T_{\mathrm{win}}=2\)</span>，位置项关闭；所有 Q、K
+投影为零，所有 V 投影为单位矩阵。分数都是 0，Softmax
 就是可见位置的平均权重。第二个坐标始终为 0，只写第一个坐标：</p>
 <pre class="text"><code>输入 x = [1, 2, 3]</code></pre>
 <p>encoder 只看自身及前一个位置，再加回残差：</p>
 <div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
 <thead>
 <tr>
 <th>位置</th>
 <th>encoder 可见输入</th>
 <th>均值</th>
-<th>加上本位置输入后的 E</th>
+<th>加上本位置输入后的 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span></th>
 </tr>
 </thead>
 <tbody>
@@ -10008,8 +10259,12 @@ Q、K 投影为零，所有 V 投影为单位矩阵。分数都是 0，Softmax
 </tr>
 </tbody>
 </table></div>
-<p>于是 E=[2,7/2,11/2]。decoder 的 global V 直接来自这三行 E，local V
-来自本层输入；第一层的输入恰好也是 E，但多层时不能继续混为一谈。</p>
+<p>于是 <span
+class="math inline">\(X_{\mathrm{enc}}=[2,7/2,11/2]\)</span>。decoder 的
+global V 直接来自这三行 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span>，local V
+来自本层输入；第一层的输入恰好也是 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span>，但多层时不能继续混为一谈。</p>
 <p>位置 2 的完整 decoder 输出为：</p>
 <p><span class="math display">\[
 \underbrace{\frac{11}{2}}_{\text{残差}}
@@ -10017,9 +10272,22 @@ Q、K 投影为零，所有 V 投影为单位矩阵。分数都是 0，Softmax
 +\underbrace{\frac{7/2+11/2}{2}}_{\text{local 平均值 }9/2}
 =\frac{41}{3}.
 \]</span></p>
+<p>三块加起来就是这一层的全部工作：原样保留的残差、读全部历史 global
+条目的平均、读窗口内 local 条目的平均。因为 Q、K 投影都为零，Softmax
+退化成“可见位置一律等权”，所以每块都是简单平均。</p>
+<p>其中：<span class="math inline">\(11/2\)</span> 是位置 2
+自己的输入（第一层 decoder 的输入就是 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span>）；global 平均对位置
+0、1、2 的 <span class="math inline">\(X_{\mathrm{enc}}\)</span>
+取平均；local 平均只对窗口 <span
+class="math inline">\(T_{\mathrm{win}}=2\)</span> 内的位置 1、2
+取平均。</p>
 <p>完整的输出是 <code>[6,9,41/3]</code>。</p>
-<p>现在只 replay 末尾 W=2 个位置，即位置 1、2。<strong>global bank
-仍有全部三行 E</strong>，只是 decoder 的局部计算从位置 1 重新开始。</p>
+<p>现在只 replay 末尾 <span
+class="math inline">\(T_{\mathrm{win}}=2\)</span> 个位置，即位置
+1、2。<strong>global bank 仍有全部三行 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span></strong>，只是 decoder
+的局部计算从位置 1 重新开始。</p>
 <ul>
 <li>replay 位置 1 的 global 均值仍为 (2+7/2)/2=11/4；local
 却只能看到自己，为 7/2。输出是 7/2+11/4+7/2=39/4=9.75，而完整结果是
@@ -10032,29 +10300,34 @@ Q、K 投影为零，所有 V 投影为单位矩阵。分数都是 0，Softmax
 <h2 id="p17.9-对照源码不要只看图上写了-encoder">P17.9
 对照源码：不要只看图上写了 encoder</h2>
 <p>最重要的实现不长：</p>
-<div class="sourceCode" id="cb115"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb115-1"><a href="#cb115-1" aria-hidden="true" tabindex="-1"></a><span class="co"># global_from_encoder()：在运行 decoder 前准备好各层 global bank</span></span>
-<span id="cb115-2"><a href="#cb115-2" aria-hidden="true" tabindex="-1"></a>kv <span class="op">=</span> join_kv(encoder <span class="op">@</span> layer.global_k, encoder <span class="op">@</span> layer.global_v,</span>
-<span id="cb115-3"><a href="#cb115-3" aria-hidden="true" tabindex="-1"></a>             offset, <span class="va">None</span> <span class="cf">if</span> old <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> old[i])</span></code></pre></div>
-<p>这里的 encoder 就是两层 causal encoder 的最终输出，不是把 decoder
+<div class="sourceCode" id="cb114"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb114-1"><a href="#cb114-1" aria-hidden="true" tabindex="-1"></a><span class="co"># global_from_encoder()：在运行 decoder 前准备好各层 global bank</span></span>
+<span id="cb114-2"><a href="#cb114-2" aria-hidden="true" tabindex="-1"></a>kv <span class="op">=</span> join_kv(encoder <span class="op">@</span> layer.global_k, encoder <span class="op">@</span> layer.global_v,</span>
+<span id="cb114-3"><a href="#cb114-3" aria-hidden="true" tabindex="-1"></a>             offset, <span class="va">None</span> <span class="cf">if</span> old <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> old[i])</span></code></pre></div>
+<p>这里的 encoder 变量就是两层 causal encoder 的最终输出 <span
+class="math inline">\(X_{\mathrm{enc}}\)</span>，不是把 decoder
 的输出换个变量名。每层 global bank 都在 decoder 开始前生成，不依赖
 decoder 本身。</p>
 <p>相反，decoder 的局部路径是：</p>
-<div class="sourceCode" id="cb116"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb116-1"><a href="#cb116-1" aria-hidden="true" tabindex="-1"></a>kv <span class="op">=</span> join_kv(h <span class="op">@</span> layer.k, h <span class="op">@</span> layer.v, offset,</span>
-<span id="cb116-2"><a href="#cb116-2" aria-hidden="true" tabindex="-1"></a>             <span class="va">None</span> <span class="cf">if</span> old <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> old[i])</span>
-<span id="cb116-3"><a href="#cb116-3" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> h <span class="op">@</span> layer.q</span>
-<span id="cb116-4"><a href="#cb116-4" aria-hidden="true" tabindex="-1"></a>h <span class="op">=</span> h <span class="op">+</span> attention(q, global_kv[i], offset) <span class="op">+</span> attention(q, kv, offset, window)</span></code></pre></div>
-<p>h 每经过一层就改变。于是第二层 local V
-会跟着第一层的处理改变，而提前准备的 global V 不会。</p>
+<div class="sourceCode" id="cb115"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb115-1"><a href="#cb115-1" aria-hidden="true" tabindex="-1"></a>kv <span class="op">=</span> join_kv(h <span class="op">@</span> layer.k, h <span class="op">@</span> layer.v, offset,</span>
+<span id="cb115-2"><a href="#cb115-2" aria-hidden="true" tabindex="-1"></a>             <span class="va">None</span> <span class="cf">if</span> old <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> old[i])</span>
+<span id="cb115-3"><a href="#cb115-3" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> h <span class="op">@</span> layer.q</span>
+<span id="cb115-4"><a href="#cb115-4" aria-hidden="true" tabindex="-1"></a>h <span class="op">=</span> h <span class="op">+</span> attention(q, global_kv[i], offset) <span class="op">+</span> attention(q, kv, offset, window)</span></code></pre></div>
+<p>代码里的 h 就是正文的 <span
+class="math inline">\(X^{(l)}\)</span>，每经过一层就改变。于是第二层
+local V 会跟着第一层的处理改变，而提前准备的 global V 不会。</p>
 <p>可以对此做“干预”，不只检查变量名：把第一层 decoder 的 local V
 投影放大三倍，重新计算。结果应当是：encoder-derived global banks
 保持不变，第二层 decoder 的 local cache 和最终输出改变。如果 global bank
 也被改变了，说明路径很可能接回了 decoder 自己。</p>
 <h2 id="p17.10-形状和绝对位置必须一起记">P17.10
 形状和绝对位置必须一起记</h2>
-<p>默认例子 B=1、N=6、D=2、W=3。这里 D 始终是向量宽度；后文用 L_e、L_d
-表示 encoder、decoder 的层数。</p>
+<p>默认例子 <span class="math inline">\(B=1\)</span>、<span
+class="math inline">\(T=6\)</span>、<span
+class="math inline">\(D=2\)</span>、<span
+class="math inline">\(T_{\mathrm{win}}=3\)</span>。这里 D
+始终是向量宽度；后文用 L_e、L_d 表示 encoder、decoder 的层数。</p>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
@@ -10101,10 +10374,12 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb116-1"><a 
 </tr>
 </tbody>
 </table></div>
-<p>为什么 local cache 留 W−1=2 行而不是 W=3
+<p>为什么 local cache 留 <span
+class="math inline">\(T_{\mathrm{win}}-1=2\)</span> 行而不是 <span
+class="math inline">\(T_{\mathrm{win}}=3\)</span>
 行？因为下一次会先加入当前新行。处理位置 6 时，局部可见位置正好是
-<code>[4,5,6]</code>。这只是本实验的存储约定；生产实现可以用大小为 W
-的环形缓冲区。</p>
+<code>[4,5,6]</code>。这只是本实验的存储约定；生产实现可以用大小为 <span
+class="math inline">\(T_{\mathrm{win}}\)</span> 的环形缓冲区。</p>
 <p>代码用 KV.start 记录第一行的绝对位置，不能把缓存的行号 0
 当成原序列的位置 0。增量输入 C 行时，位置项要从 offset
 开始；注意力的比较也是
@@ -10118,25 +10393,51 @@ replay
 的状态”，不是错误大小；某些窗口或输入上误差恰好为零，也不能把来源标记擅自改成精确。</p>
 <h2 id="p17.11-算清少走的路径别把路径数叫速度">P17.11
 算清少走的路径，别把路径数叫速度</h2>
-<p>定义：B 为 batch，N 为 prompt 长度，L_e / L_d 分别为 encoder /
-decoder 层数，R=min(N,W) 为 replay 长度。</p>
+<p>定义：<span class="math inline">\(B\)</span> 为批大小，<span
+class="math inline">\(T\)</span> 为 prompt 长度，<span
+class="math inline">\(L_e\)</span> / <span
+class="math inline">\(L_d\)</span> 分别为 encoder / decoder 层数，<span
+class="math inline">\(R=\min(T,T_{\mathrm{win}})\)</span> 为 replay
+长度。</p>
 <p>本实验把“一个 token 的表示经过一个层”记作一次 <strong>token-layer
 visit</strong>。完整和有界路径分别是：</p>
 <p><span class="math display">\[
-C_{full}=BN(L_e+L_d),\qquad
-C_{bounded}=B(NL_e+RL_d).
+C_{full}=BT(L_e+L_d),\qquad
+C_{bounded}=B(TL_e+RL_d).
 \]</span></p>
-<p>令 B=1、L_e=L_d=L/2 且 N≥W，则 C_bounded=NL/2+WL/2，对应报告 §2.2 的
-O(NL/2+n_win·L/2) 路径计数写法；短输入仍应使用 R=min(N,W)。</p>
+<p>这是“人次 × 层数”的点名册：完整路径里每个 token 都要走完 encoder 和
+decoder 的每一层；有界路径里 encoder 照走，decoder 只让最后 R 个 token
+走。</p>
+<p>其中：<span class="math inline">\(C_{full}\)</span>、<span
+class="math inline">\(C_{bounded}\)</span> 是两条路径的 token-layer
+visit 次数（C 取 count 之意，本节局部记号）；<span
+class="math inline">\(B\)</span>、<span
+class="math inline">\(T\)</span>、<span
+class="math inline">\(L_e\)</span>、<span
+class="math inline">\(L_d\)</span>、<span
+class="math inline">\(R\)</span> 同上。</p>
+<p>令 <span class="math inline">\(B=1\)</span>、<span
+class="math inline">\(L_e=L_d=L/2\)</span> 且 <span
+class="math inline">\(T\ge T_{\mathrm{win}}\)</span>，则 <span
+class="math inline">\(C_{bounded}=TL/2+T_{\mathrm{win}}L/2\)</span>，对应报告
+§2.2 的 O(NL/2+n_win·L/2) 路径计数写法（报告里的 N 就是这里的 <span
+class="math inline">\(T\)</span>，n_win 就是 <span
+class="math inline">\(T_{\mathrm{win}}\)</span>）；短输入仍应使用 <span
+class="math inline">\(R=\min(T,T_{\mathrm{win}})\)</span>。</p>
 <p>这里的 full 基线是同一个 CED 教学模型的完整执行，不是另一个普通
 decoder-only
 模型，更不是两个训练模型的质量对比。这是本模型实际循环累计的层处理次数，不是仅打印一条假想公式。被省掉的是
-<code>B(N−R)L_d</code> 次 decoder token-layer visit。</p>
-<p>但不能把所有工作都塞进这个计数：两条路径仍为全部 N 个 encoder 输出做
-global K/V 投影。本教学模型每个 decoder 层各有一对投影，故两边都要
-<code>BNL_d</code> 对投影。<strong>官方 CSA2
+<span class="math inline">\(B(T-R)L_d\)</span> 次 decoder token-layer
+visit。</p>
+<p>但不能把所有工作都塞进这个计数：两条路径仍为全部 <span
+class="math inline">\(T\)</span> 个 encoder 输出做 global K/V
+投影。本教学模型每个 decoder 层各有一对投影，故两边都要 <span
+class="math inline">\(BTL_d\)</span> 对投影。<strong>官方 CSA2
 有跨层复用，不能把本实验这个投影数量直接套到真实模型。</strong></p>
-<p>默认 B=1、N=6、L_e=L_d=2、W=3：</p>
+<p>默认 <span class="math inline">\(B=1\)</span>、<span
+class="math inline">\(T=6\)</span>、<span
+class="math inline">\(L_e=L_d=2\)</span>、<span
+class="math inline">\(T_{\mathrm{win}}=3\)</span>：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -10172,14 +10473,15 @@ global K/V 投影。本教学模型每个 decoder 层各有一对投影，故两
 attention 涉及的 key
 数不同，投影和内存操作也有成本；本脚本甚至显式构造稠密分数矩阵，再用
 mask 遮住局部不可见位置，根本不是稀疏 GPU kernel。</p>
-<p>当 N≤W 时，R=N，有界路径不会省掉 decoder
+<p>当 <span class="math inline">\(T\le T_{\mathrm{win}}\)</span>
+时，<span class="math inline">\(R=T\)</span>，有界路径不会省掉 decoder
 的任何位置。只有输入显著长于窗口时，计数差异才突出。即使如此，也不能由这个固定小矩阵实验推出官方吞吐、TTFT、TPOT、显存节省或语言质量。</p>
 <h2 id="p17.12-运行与验证">P17.12 运行与验证</h2>
 <p>在仓库根目录安装依赖后运行：</p>
-<div class="sourceCode" id="cb117"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb117-1"><a href="#cb117-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
-<span id="cb117-2"><a href="#cb117-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/18_ced_architecture.py</span>
-<span id="cb117-3"><a href="#cb117-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_ced_architecture.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb116"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb116-1"><a href="#cb116-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
+<span id="cb116-2"><a href="#cb116-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/18_ced_architecture.py</span>
+<span id="cb116-3"><a href="#cb116-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_ced_architecture.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>若使用仓库的虚拟环境，把 python 换成
 <code>.venv/bin/python</code>。没有 PyTorch 时，CLI
 给出安装提示并以非零状态退出。</p>
@@ -10203,8 +10505,9 @@ mask，两条路径可能同时看未来，对齐测试仍然会通过。</p>
 实验；生产低精度算子不应照搬这个阈值。</p>
 <h2 id="p17.13-小练习与本章结论">P17.13 小练习与本章结论</h2>
 <ol type="1">
-<li>将 W 从 3 改成 8，输入仍为 6 行。为什么 bounded 输出长度变回
-6、block visits 也不再减少？</li>
+<li>将 <span class="math inline">\(T_{\mathrm{win}}\)</span> 从 3 改成
+8，输入仍为 6 行。为什么 bounded 输出长度变回 6、block visits
+也不再减少？</li>
 <li>不看图，只检查 global_from_encoder 与 decode
 的参数。哪一条调用证明第二层 decoder 的 global KV 不依赖第一层
 decoder？</li>
@@ -10263,12 +10566,22 @@ RoPE、RMSNorm、SwiGLU、GQA 和 compact KV cache。本章回到主线，构造
 <p>回想 Pre-Norm Block 的两条残差支路：</p>
 <p><span class="math display">\[
 u=x+\operatorname{Attention}(\operatorname{Norm}_1(x)),\qquad
-h=u+\operatorname{FFN}(\operatorname{Norm}_2(u)).
+y=u+\operatorname{FFN}(\operatorname{Norm}_2(u)).
 \]</span></p>
 <p>S5 不改变第一条支路，只把第二式的 FFN 换成 MoE：</p>
 <p><span class="math display">\[
-h=u+\operatorname{MoE}(\operatorname{Norm}_2(u)).
+y=u+\operatorname{MoE}(\operatorname{Norm}_2(u)).
 \]</span></p>
+<p>换句话说，只换了第二道工序的师傅班子：工单进出的流程（先归一化、做完再加回残差）原样不动。</p>
+<p>其中：x 是进入本 Block 的一个 token 的行向量，宽 <span
+class="math inline">\(D\)</span>；<span class="math inline">\(u\)</span>
+是注意力子层加完残差后的结果（全书同义）；<span
+class="math inline">\(y\)</span> 是本 Block
+的输出，也就是下一层的输入；<span
+class="math inline">\(\operatorname{Norm}_1\)</span>、<span
+class="math inline">\(\operatorname{Norm}_2\)</span> 是两处
+RMSNorm；<span class="math inline">\(\operatorname{MoE}(\cdot)\)</span>
+是下面要定义的混合专家模块。</p>
 <p>因此，MoE 本身不再加一次输入残差。注意力负责读取其他位置，MoE
 在本层逐 token 加工已经得到的表示。换 FFN 不意味着换掉因果
 mask，也不意味着取消 GQA 的 K/V 缓存。</p>
@@ -10279,31 +10592,64 @@ alt="S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k
 <figcaption>S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k
 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃</figcaption>
 </figure>
-<p>图中标了 N_E=4、k=2；N_E 是可选的路由专家数量，k 是每 token
-选择的数量。共享专家始终参与，数量记
-N_S（图中共享专家框未标具体数）。<strong>N_E 和 k 不能混写。</strong>
-k=2、N_E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。</p>
+<p>图中标了 <span class="math inline">\(N_E=4\)</span>、<span
+class="math inline">\(k=2\)</span>；<span
+class="math inline">\(N_E\)</span> 是可选的路由专家数量，<span
+class="math inline">\(k\)</span> 是每 token
+选择的数量。共享专家始终参与，数量记 <span
+class="math inline">\(N_S\)</span>（图中共享专家框未标具体数；全书 <span
+class="math inline">\(E\)</span> 专指 embedding 表）。<strong><span
+class="math inline">\(N_E\)</span> 和 <span
+class="math inline">\(k\)</span> 不能混写。</strong> <span
+class="math inline">\(k=2\)</span>、<span
+class="math inline">\(N_E=4\)</span> 时，模型保存四个路由专家，单个
+token 只调用其中两个。</p>
 <h2 id="p18.2-路由器先打分再选择再加权">P18.2
 路由器先打分，再选择，再加权</h2>
 <p>设一个 token 的输入是行向量 x，宽度为 D。教学路由器是一层不带 bias 的
 Linear：</p>
 <p><span class="math display">\[
-z=xW_r^\top,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
-p_e=\frac{\exp(z_e)}{\sum_j\exp(z_j)}.
+z=xW_r^\top,\qquad W_r\in\mathbb{R}^{N_E\times D},\qquad
+p_e=\frac{\exp(z_e)}{\sum_{j=0}^{N_E-1}\exp(z_j)}.
 \]</span></p>
 <p>z 是分数，p 是本章选用的 Softmax affinity，意思是 token
-对专家的相对偏好。它不是词表上的下一个 token 概率，维度 E 也不是词表大小
-V。</p>
-<p>接着取 p 最大的 k 个专家，记为集合
-K。本章再把<strong>所选专家</strong>的权重归一化：</p>
+对专家的相对偏好。它不是词表上的下一个 token 概率，维度 <span
+class="math inline">\(N_E\)</span> 也不是词表大小 <span
+class="math inline">\(\lvert\mathcal
+V\rvert\)</span>。路由器像前台给每位师傅打一个“对口分”，Softmax
+再把这些分数换成加起来为 1 的偏好比例。</p>
+<p>其中：x 是一个 token 经 <span
+class="math inline">\(\operatorname{Norm}_2\)</span> 之后的行向量，宽
+<span class="math inline">\(D\)</span>；<span
+class="math inline">\(W_r\)</span> 是路由矩阵，按 <span
+class="math inline">\([N_E,D]\)</span>（输出×输入）存，所以乘的时候写转置；<span
+class="math inline">\(z\)</span> 有 <span
+class="math inline">\(N_E\)</span> 个分量，<span
+class="math inline">\(z_e\)</span> 是第 e 个路由专家的分数；<span
+class="math inline">\(p_e\)</span> 是 token 对第 e 个专家的
+affinity；<span class="math inline">\(N_E\)</span> 是路由专家个数；j
+是求和用的专家编号（从 0 数起）。</p>
+<p>接着取 p 最大的 k 个专家，记为集合 <span
+class="math inline">\(\mathcal
+I_k\)</span>。本章再把<strong>所选专家</strong>的权重归一化：</p>
 <p><span class="math display">\[
-w_e=\frac{p_e}{\sum_{j\in K}p_j}\quad(e\in K),\qquad
-\operatorname{MoE}(x)=\sum_{e\in K}w_e
-F_e(x)+\sum_{s=1}^{S}F_s^{shared}(x).
+w_e=\frac{p_e}{\sum_{j\in\mathcal I_k}p_j}\quad(e\in\mathcal I_k),\qquad
+\operatorname{MoE}(x)=\sum_{e\in\mathcal I_k}w_e
+F_e(x)+\sum_{e&#39;=1}^{N_S}F^{\mathrm{sh}}_{e&#39;}(x).
 \]</span></p>
 <p>没有被选中的路由专家不计算
 F_e(x)，也不参与这次加权和。共享专家全部执行，输出直接相加，不与路由专家一起归一化，也不除以
-S。</p>
+<span
+class="math inline">\(N_S\)</span>。先在被选中的几位师傅之间重新分配话语权，让它们的权重加起来为
+1；再把每张工单都要做的共享检查原样加上。</p>
+<p>其中：<span class="math inline">\(\mathcal I_k\)</span> 是 affinity
+最大的 k 个路由专家的编号集合；k 是每 token 选几个；<span
+class="math inline">\(w_e\)</span> 是被选专家 e 的组合权重；<span
+class="math inline">\(F_e\)</span> 是第 e 个路由专家（一个 SwiGLU
+FFN）；<span class="math inline">\(N_S\)</span> 是共享专家个数；<span
+class="math inline">\(e&#39;\)</span> 是共享专家编号，<span
+class="math inline">\(F^{\mathrm{sh}}_{e&#39;}\)</span> 是第 <span
+class="math inline">\(e&#39;\)</span> 个共享专家。</p>
 <p>这是本书明确选择的一套教学约定，不是“所有 MoE
 的唯一公式”。尤其要区分原始 Softmax、所选权重归一化、Sigmoid
 affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生不同输出。</p>
@@ -10354,24 +10700,34 @@ affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生
 </table></div>
 <p>A 选择的原始概率和为 0.7，所以不是“0.4 倍下标 0 的专家加 0.3 倍下标 1
 的专家”，而是 4/7 与 3/7。C 的平局不随机打破。</p>
-<p>请求负载是 <code>[2,2,1,1]</code>，总和 6=N×k。它数的是
+<p>请求负载是 <code>[2,2,1,1]</code>，总和 <span
+class="math inline">\(6=BT\cdot k\)</span>（摊平后共 <span
+class="math inline">\(BT=3\)</span> 个 token，k=2）。它数的是
 <strong>token—专家分配次数</strong>，不是不同 token
 的数量，也不包括共享专家。一个 token
-选择两个专家，会计两次；每个共享专家另外处理全部 N=3 个 token。</p>
+选择两个专家，会计两次；每个共享专家另外处理全部 <span
+class="math inline">\(BT=3\)</span> 个 token。</p>
 <h3 id="再把输出算成一个具体数字">再把输出算成一个具体数字</h3>
 <p>为了单独检查组合规则，暂时不用
 SwiGLU，把三个专家换成简单倍率：F0(x)=x，F1(x)=10x，F2(x)=100x。令
 affinity 比例为 1:2:4，top-2 选下标 2 和 1 的专家，归一化权重为 2/3 和
 1/3：</p>
 <p><span class="math display">\[
-y_{routed}=\tfrac23\times100x+\tfrac13\times10x=70x.
+\operatorname{MoE}_{\mathrm{routed}}(x)=\tfrac23\times100x+\tfrac13\times10x=70x.
 \]</span></p>
+<p>其中：<span
+class="math inline">\(\operatorname{MoE}_{\mathrm{routed}}(x)\)</span>
+只是 MoE 输出里路由专家那一部分；2/3、1/3 是 4:2
+归一化后的组合权重；100x、10x 分别是下标 2、1 的专家的输出。</p>
 <p>再加两个共享分支 3x 和 5x，得到 78x，而不是 74x（74x
 是把两个共享分支取平均的错误算法：70+(3+5)/2）。这个倍率实验只用来验算组合，不把线性倍率当成真正的专家能力；正式模块和另一组独立梯度测试都使用
 SwiGLU。</p>
 <h2 id="p18.3-张量账本先摊平最后放回">P18.3
 张量账本：先摊平，最后放回</h2>
-<p>设输入 X 的形状为 [B,T,D]，N=B×T。MoE
+<p>设输入 X 的形状为 [B,T,D]，摊平后共有 <span
+class="math inline">\(BT\)</span> 个 token（附录 A.5：正文不用不带下标的
+<span class="math inline">\(N\)</span>，摊平后的 token 数直接写 <span
+class="math inline">\(BT\)</span>）。MoE
 的路由和专家计算不需要先混合不同 token，因此把前两维暂时摊平即可。</p>
 <div class="table-wrapper"><table>
 <thead>
@@ -10384,42 +10740,43 @@ SwiGLU。</p>
 <tbody>
 <tr>
 <td>flat</td>
-<td>[N,D]</td>
+<td><span class="math inline">\([BT,D]\)</span></td>
 <td>当前调用的全部 token 向量</td>
 </tr>
 <tr>
 <td>router.weight</td>
-<td>[E,D]</td>
+<td><span class="math inline">\([N_E,D]\)</span></td>
 <td>为所有路由专家打分</td>
 </tr>
 <tr>
 <td>logits、probs</td>
-<td>[N,E]</td>
+<td><span class="math inline">\([BT,N_E]\)</span></td>
 <td>每 token 对每个路由专家的分数、affinity</td>
 </tr>
 <tr>
 <td>indices</td>
-<td>[N,k]</td>
+<td><span class="math inline">\([BT,k]\)</span></td>
 <td>被选中的专家编号</td>
 </tr>
 <tr>
 <td>weights</td>
-<td>[N,k]</td>
+<td><span class="math inline">\([BT,k]\)</span></td>
 <td>丢弃前的组合权重</td>
 </tr>
 <tr>
 <td>kept</td>
-<td>[N,k]</td>
+<td><span class="math inline">\([BT,k]\)</span></td>
 <td>容量实验中是否接受该分配</td>
 </tr>
 <tr>
 <td>requested、accepted</td>
-<td>[E]</td>
+<td><span class="math inline">\([N_E]\)</span></td>
 <td>容量处理前后各专家的分配次数</td>
 </tr>
 <tr>
 <td>output</td>
-<td>[N,D] → [B,T,D]</td>
+<td><span class="math inline">\([BT,D]\)</span> → <span
+class="math inline">\([B,T,D]\)</span></td>
 <td>专家结果按原 token 位置合回</td>
 </tr>
 </tbody>
@@ -10443,22 +10800,44 @@ MoE 先摊平再按专家收集，combine 按原位置加权放回
 </div>
 <h2 id="p18.4-专家多了参数和计算怎样算">P18.4
 专家多了，参数和计算怎样算</h2>
-<p>沿用 P13 的无 bias SwiGLU，中间宽度为 d_f
-的一个专家有三张矩阵：gate、up、down。参数量为 3D d_f。路由器有 DE
-个参数。</p>
-<p>设路由专家宽度为 d_r，共享专家宽度为 d_s，则<strong>仅 MoE
-模块</strong>：</p>
+<p>沿用 P13 的无 bias SwiGLU，中间宽度为 <span
+class="math inline">\(d_{\mathrm{ff}}\)</span>
+的一个专家有三张矩阵：gate、up、down。参数量为 <span
+class="math inline">\(3Dd_{\mathrm{ff}}\)</span>。路由器有 <span
+class="math inline">\(DN_E\)</span> 个参数。</p>
+<p>设每个路由专家的中间宽度为 <span
+class="math inline">\(d_{\mathrm{ff}}\)</span>，每个共享专家的为 <span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{sh}}\)</span>，则<strong>仅
+MoE 模块</strong>：</p>
 <p><span class="math display">\[
-P_{total}=E(3Dd_r)+S(3Dd_s)+DE,
+N_{\mathrm{total}}=N_E(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E,
 \]</span></p>
 <p><span class="math display">\[
-P_{active/token}=k(3Dd_r)+S(3Dd_s)+DE.
+N_{\mathrm{active}}=k(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E.
 \]</span></p>
 <p>这里的 active 是不丢弃时，每 token
-参与运算的权重预算。路由器需要给全部 E 个专家打分，所以不能只算 k 个
-router 行；共享专家也不能漏算。两式都不包含 attention、norm、embedding
-和输出 head，更不是整模型内存公式。</p>
-<p>手算 D=4、E=4、k=2、d_r=2、S=1、d_s=2：</p>
+参与运算的权重预算。路由器需要给全部 <span
+class="math inline">\(N_E\)</span> 个专家打分，所以不能只算 k 个 router
+行；共享专家也不能漏算。两式都不包含 attention、norm、embedding 和输出
+head，更不是整模型内存公式。两式只差第一项：店里养着 <span
+class="math inline">\(N_E\)</span> 位路由师傅，每张工单只请 k
+位，而共享师傅和前台每次都在。</p>
+<p>其中：<span class="math inline">\(N_{\mathrm{total}}\)</span> 是 MoE
+模块保存的参数总数；<span
+class="math inline">\(N_{\mathrm{active}}\)</span> 是每 token
+参与运算的参数预算（参数个数各用自己的下标名，<span
+class="math inline">\(N_{\mathrm{param}}\)</span> 只留给 P19
+缩放定律）；3 对应 gate、up、down 三张矩阵；<span
+class="math inline">\(N_E\)</span>、<span
+class="math inline">\(N_S\)</span> 是路由专家与共享专家个数；<span
+class="math inline">\(DN_E\)</span> 是路由矩阵 <span
+class="math inline">\(W_r\)</span> 的元素数。</p>
+<p>手算 <span class="math inline">\(D=4\)</span>、<span
+class="math inline">\(N_E=4\)</span>、<span
+class="math inline">\(k=2\)</span>、<span
+class="math inline">\(d_{\mathrm{ff}}=2\)</span>、<span
+class="math inline">\(N_S=1\)</span>、<span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{sh}}=2\)</span>：</p>
 <ul>
 <li>一个路由专家：3×4×2=24。</li>
 <li>共享专家：24；路由器：4×4=16。</li>
@@ -10484,7 +10863,7 @@ id="细粒度专家把宽专家换成更多窄专家">细粒度专家：把宽�
 <thead>
 <tr>
 <th>方案</th>
-<th>E</th>
+<th><span class="math inline">\(N_E\)</span></th>
 <th>k</th>
 <th>专家宽度</th>
 <th>全部专家参数，不含 router</th>
@@ -10531,21 +10910,46 @@ batch
 id="办法一辅助均衡损失通过梯度影响路由器">办法一：辅助均衡损失，通过梯度影响路由器</h3>
 <p>本章将整个 [B,T] 摊平，定义：</p>
 <p><span class="math display">\[
-f_e=\frac{n_e}{Nk},\qquad
-\bar p_e=\frac1N\sum_{t=1}^{N}p_{t,e},\qquad
-L_{aux}=E\sum_e f_e\bar p_e.
+f_e=\frac{n_e}{BTk},\qquad
+\bar p_e=\frac{1}{BT}\sum_{t=1}^{BT}p_{t,e},\qquad
+\mathcal L_{\mathrm{aux}}=N_E\sum_e f_e\bar p_e.
 \]</span></p>
 <p>n_e 使用丢弃前的 requested 计数；f 的总和为
 1。计数来自离散选择，本实现不对它求梯度，梯度通过平均 affinity 流向
-router。训练时再乘一个小系数 alpha：</p>
+router。训练时再乘一个小系数 α。</p>
+<p><span class="math inline">\(f_e\)</span> 看实际派了几张单，<span
+class="math inline">\(\bar p_e\)</span>
+看平均有多想派；两者一起偏向同一位师傅时和最大，所以压低它就是劝路由器别扎堆。乘
+<span class="math inline">\(N_E\)</span> 是为了让完全均匀时结果正好为
+1。</p>
+<p>其中：<span class="math inline">\(n_e\)</span> 是丢弃前第 e
+个专家收到的分配次数；<span class="math inline">\(BT\)</span> 是摊平后的
+token 数，k 是每 token 选几个，所以 <span
+class="math inline">\(BTk\)</span> 是分配总次数；<span
+class="math inline">\(f_e\)</span> 是专家 e 分到的份额；<span
+class="math inline">\(p_{t,e}\)</span> 是摊平后第 t 个 token（从 1 数到
+<span class="math inline">\(BT\)</span>）对专家 e 的 affinity，<span
+class="math inline">\(\bar p_e\)</span> 是它在 <span
+class="math inline">\(BT\)</span> 个 token 上的平均；<span
+class="math inline">\(\mathcal L_{\mathrm{aux}}\)</span>
+是均衡辅助损失。</p>
 <p><span class="math display">\[
-L=L_{CE}+\alpha\cdot\operatorname{mean}_{layers}(L_{aux}).
+\mathcal L=\mathcal
+L_{\mathrm{CE}}+\alpha\cdot\operatorname{mean}_{\mathrm{layers}}(\mathcal
+L_{\mathrm{aux}}).
 \]</span></p>
-<p>S5 默认 alpha=0.01，且只有提供 targets
+<p>其中：<span class="math inline">\(\mathcal L\)</span>
+是训练时反向传播用的总损失；<span class="math inline">\(\mathcal
+L_{\mathrm{CE}}\)</span> 是下一 token 交叉熵；α
+是辅助项系数（本章局部字母）；<span
+class="math inline">\(\operatorname{mean}_{\mathrm{layers}}\)</span>
+对所有 MoE 层的辅助项取平均。</p>
+<p>S5 默认 α=0.01，且只有提供 targets
 才返回训练损失。均衡辅助项不是标签预测的交叉熵；对验证损失或困惑度做比较时，应单独计算
 CE，不把 CE+辅助项直接拿去算 perplexity。</p>
 <p>在 A、B、C 的例子里，f=[1/3,1/3,1/6,1/6]，平均
-p=[0.3,0.3,0.2,0.2]，所以未乘系数的 L_aux=16/15≈1.066667。</p>
+p=[0.3,0.3,0.2,0.2]，所以未乘系数的 <span class="math inline">\(\mathcal
+L_{\mathrm{aux}}=16/15\approx1.066667\)</span>。</p>
 <p>不要把“辅助损失等于 1”读成“硬路由已均衡”。例如四个专家的 p 都等于
 1/4，在我们的固定平局规则下，所有 token 都选下标 0、1
 的专家，计数仍失衡，但上述辅助项恰好也是
@@ -10636,27 +11040,27 @@ alt="主损失分叉到被选专家与组合权重，辅助损失才打到全部
 <p>关键实现没有写成一个与主线无关的玩具。<code>MoEGPT</code> 继承
 <code>GroupedGPT</code>，保留 attention、norm、残差、embedding 和
 head，只替换每个 Block 的 mlp。</p>
-<div class="sourceCode" id="cb119"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb119-1"><a href="#cb119-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
-<span id="cb119-2"><a href="#cb119-2" aria-hidden="true" tabindex="-1"></a>    block.mlp <span class="op">=</span> TeachingMoE(</span>
-<span id="cb119-3"><a href="#cb119-3" aria-hidden="true" tabindex="-1"></a>        config.d_model, config.num_experts, config.top_k,</span>
-<span id="cb119-4"><a href="#cb119-4" aria-hidden="true" tabindex="-1"></a>        config.expert_width, config.shared_experts,</span>
-<span id="cb119-5"><a href="#cb119-5" aria-hidden="true" tabindex="-1"></a>        config.shared_width, config.balance_mode)</span></code></pre></div>
+<div class="sourceCode" id="cb118"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb118-1"><a href="#cb118-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> block <span class="kw">in</span> <span class="va">self</span>.blocks:</span>
+<span id="cb118-2"><a href="#cb118-2" aria-hidden="true" tabindex="-1"></a>    block.mlp <span class="op">=</span> TeachingMoE(</span>
+<span id="cb118-3"><a href="#cb118-3" aria-hidden="true" tabindex="-1"></a>        config.d_model, config.num_experts, config.top_k,</span>
+<span id="cb118-4"><a href="#cb118-4" aria-hidden="true" tabindex="-1"></a>        config.expert_width, config.shared_experts,</span>
+<span id="cb118-5"><a href="#cb118-5" aria-hidden="true" tabindex="-1"></a>        config.shared_width, config.balance_mode)</span></code></pre></div>
 <p>专家调用处可以按六步读：</p>
-<div class="sourceCode" id="cb120"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb120-1"><a href="#cb120-1" aria-hidden="true" tabindex="-1"></a>flat <span class="op">=</span> x.reshape(<span class="op">-</span><span class="dv">1</span>, <span class="va">self</span>.d_model)</span>
-<span id="cb120-2"><a href="#cb120-2" aria-hidden="true" tabindex="-1"></a>info <span class="op">=</span> route(<span class="va">self</span>.router(flat), <span class="va">self</span>.top_k, bias, <span class="va">self</span>.capacity)</span>
-<span id="cb120-3"><a href="#cb120-3" aria-hidden="true" tabindex="-1"></a>output <span class="op">=</span> flat <span class="op">*</span> <span class="dv">0</span></span>
-<span id="cb120-4"><a href="#cb120-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> expert_id, expert <span class="kw">in</span> <span class="bu">enumerate</span>(<span class="va">self</span>.experts):</span>
-<span id="cb120-5"><a href="#cb120-5" aria-hidden="true" tabindex="-1"></a>    token_ids, slots <span class="op">=</span> ((info.indices <span class="op">==</span> expert_id) <span class="op">&amp;</span> info.kept).nonzero(as_tuple<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb120-6"><a href="#cb120-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> token_ids.numel() <span class="op">==</span> <span class="dv">0</span>:</span>
-<span id="cb120-7"><a href="#cb120-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">continue</span></span>
-<span id="cb120-8"><a href="#cb120-8" aria-hidden="true" tabindex="-1"></a>    values <span class="op">=</span> expert(flat.index_select(<span class="dv">0</span>, token_ids))</span>
-<span id="cb120-9"><a href="#cb120-9" aria-hidden="true" tabindex="-1"></a>    values <span class="op">=</span> values <span class="op">*</span> info.weights[token_ids, slots, <span class="va">None</span>].to(values.dtype)</span>
-<span id="cb120-10"><a href="#cb120-10" aria-hidden="true" tabindex="-1"></a>    output <span class="op">=</span> output.index_add(<span class="dv">0</span>, token_ids, values)</span>
-<span id="cb120-11"><a href="#cb120-11" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> expert <span class="kw">in</span> <span class="va">self</span>.shared:</span>
-<span id="cb120-12"><a href="#cb120-12" aria-hidden="true" tabindex="-1"></a>    output <span class="op">=</span> output <span class="op">+</span> expert(flat)</span>
-<span id="cb120-13"><a href="#cb120-13" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> output.reshape_as(x)</span></code></pre></div>
+<div class="sourceCode" id="cb119"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb119-1"><a href="#cb119-1" aria-hidden="true" tabindex="-1"></a>flat <span class="op">=</span> x.reshape(<span class="op">-</span><span class="dv">1</span>, <span class="va">self</span>.d_model)</span>
+<span id="cb119-2"><a href="#cb119-2" aria-hidden="true" tabindex="-1"></a>info <span class="op">=</span> route(<span class="va">self</span>.router(flat), <span class="va">self</span>.top_k, bias, <span class="va">self</span>.capacity)</span>
+<span id="cb119-3"><a href="#cb119-3" aria-hidden="true" tabindex="-1"></a>output <span class="op">=</span> flat <span class="op">*</span> <span class="dv">0</span></span>
+<span id="cb119-4"><a href="#cb119-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> expert_id, expert <span class="kw">in</span> <span class="bu">enumerate</span>(<span class="va">self</span>.experts):</span>
+<span id="cb119-5"><a href="#cb119-5" aria-hidden="true" tabindex="-1"></a>    token_ids, slots <span class="op">=</span> ((info.indices <span class="op">==</span> expert_id) <span class="op">&amp;</span> info.kept).nonzero(as_tuple<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb119-6"><a href="#cb119-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> token_ids.numel() <span class="op">==</span> <span class="dv">0</span>:</span>
+<span id="cb119-7"><a href="#cb119-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">continue</span></span>
+<span id="cb119-8"><a href="#cb119-8" aria-hidden="true" tabindex="-1"></a>    values <span class="op">=</span> expert(flat.index_select(<span class="dv">0</span>, token_ids))</span>
+<span id="cb119-9"><a href="#cb119-9" aria-hidden="true" tabindex="-1"></a>    values <span class="op">=</span> values <span class="op">*</span> info.weights[token_ids, slots, <span class="va">None</span>].to(values.dtype)</span>
+<span id="cb119-10"><a href="#cb119-10" aria-hidden="true" tabindex="-1"></a>    output <span class="op">=</span> output.index_add(<span class="dv">0</span>, token_ids, values)</span>
+<span id="cb119-11"><a href="#cb119-11" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> expert <span class="kw">in</span> <span class="va">self</span>.shared:</span>
+<span id="cb119-12"><a href="#cb119-12" aria-hidden="true" tabindex="-1"></a>    output <span class="op">=</span> output <span class="op">+</span> expert(flat)</span>
+<span id="cb119-13"><a href="#cb119-13" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> output.reshape_as(x)</span></code></pre></div>
 <ol type="1">
 <li>摊平 token，但保留 D。</li>
 <li>计算 router，再得到选择、权重和容量 mask。这里 bias
@@ -10677,9 +11081,9 @@ Softmax：代数上等于先取原始 p 再归一化，但若 bias
 循环、有限性检查、逐专家收集都不是生产 fused
 kernel。不要拿它的运行时间推断大型 MoE 的性能。</p>
 <h3 id="缓存也必须认识路由配置">缓存也必须认识路由配置</h3>
-<p>S5 继续调用 S4 的 compact GQA cache，形状仍为
-[B,Hkv,T,d]。但高层的历史 K/V 依赖低层 MoE
-的输出，所以改变低层路由也会让缓存失效。</p>
+<p>S5 继续调用 S4 的 compact GQA cache，形状仍为 <span
+class="math inline">\([B,H_{kv},T,d_h]\)</span>。但高层的历史 K/V
+依赖低层 MoE 的输出，所以改变低层路由也会让缓存失效。</p>
 <p>已有签名追踪权重、位置参数、norm epsilon 等；S5 另外追踪实际模块上的
 top_k、capacity、balance_mode，以及 balancing bias 等 buffer
 的身份、原地修改版本、dtype 和 device。bias 虽然不是
@@ -10694,10 +11098,10 @@ token。不要把它当成整段请求直方图。</p>
 <h2 id="p18.9-在-cpu-上跑通并知道测试证明了什么">P18.9 在 CPU
 上跑通，并知道测试证明了什么</h2>
 <p>使用仓库固定依赖，在仓库根目录运行：</p>
-<div class="sourceCode" id="cb121"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb121-1"><a href="#cb121-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
-<span id="cb121-2"><a href="#cb121-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/19_moe.py</span>
-<span id="cb121-3"><a href="#cb121-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_moe.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb120"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb120-1"><a href="#cb120-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements.txt</span>
+<span id="cb120-2"><a href="#cb120-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/19_moe.py</span>
+<span id="cb120-3"><a href="#cb120-3" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_moe.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>附录 H 所列环境下（CPU、seed=180）的实际输出包括：</p>
 <pre class="text"><code>capacity=None; selected=[[0, 1], [3, 2], [0, 1]]
 requested=[2, 2, 1, 1]; accepted=[2, 2, 1, 1]; aux=1.066667
@@ -10713,8 +11117,11 @@ compact KV payload bytes: 1536; no GPU timing measured</code></pre>
 24。不能把随机初始化下的分工当成学到的专家能力。脚本用合成 token
 做一次梯度
 smoke，循环左移标签也只是用于验证反向，并非本书推荐的语料构造或验证集评估方法。</p>
-<p>KV 的 1536 字节可以独立复算：2（K/V）×2 层×2 batch×6 token×2 KV 头×4
-头宽×4 字节。MoE 没有把 Hkv 改成 E；专家参数内存与 KV payload
+<p>KV 的 1536 字节可以独立复算：按 <span
+class="math inline">\(2LBH_{kv}Td_hb_{\mathrm{elem}}\)</span>，即
+2（K/V）×2 层×批大小 2×2 KV 头×6 token×4 头宽×4 字节。MoE 没有把 <span
+class="math inline">\(H_{kv}\)</span> 改成 <span
+class="math inline">\(N_E\)</span>；专家参数内存与 KV payload
 是两本不同的账。</p>
 <p>运行本章测试文件，末尾应显示
 <code>OK</code>；测试分类、计数与错误版本清单见
@@ -10727,9 +11134,12 @@ PyTorch 时，CLI 给出安装提示并退出码 2。</p>
 <p>当专家分布在不同设备上，dispatch 不再只是本机索引：需要把 token
 向量送到相应专家所在的设备，算完后把输出送回。常见 expert parallel
 会用到 all-to-all 一类通信，但具体分组、复制和合并方案各不相同。</p>
-<p>一个粗略账本是：N 个 token，每个发往 k 个远端专家，每份 D 维、每元素
-q 字节，那么一次向外发送的向量 payload 约为
-NkDq；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。</p>
+<p>一个粗略账本是：<span class="math inline">\(BT\)</span> 个
+token，每个发往 k 个远端专家，每份 D 维、每元素 <span
+class="math inline">\(b_{\mathrm{elem}}\)</span>
+字节，那么一次向外发送的向量 payload 约为 <span
+class="math inline">\(BT\cdot
+kDb_{\mathrm{elem}}\)</span>；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。</p>
 <p>因此，决定时延的至少包括：</p>
 <ul>
 <li>每个专家的实际 token 数，最忙的设备是否成为瓶颈。</li>
@@ -10777,15 +11187,20 @@ kernel、训练数据或官方权重。引用生产系统的设计动机，不�
 <ol type="1">
 <li>A 的 p=[0.4,0.3,0.2,0.1]、k=2，输出权重是 0.4、0.3 吗？三行 A、B、C
 一共发生多少次路由分配？</li>
-<li>D=4、E=4、k=2、路由和共享宽度都为 2、一个共享专家时，MoE 总参数与每
-token 激活预算各多少？是整模型参数吗？</li>
-<li>把 E=2、k=1、宽度 8 换成 E=4、k=2、宽度
+<li><span class="math inline">\(D=4\)</span>、<span
+class="math inline">\(N_E=4\)</span>、<span
+class="math inline">\(k=2\)</span>、路由和共享宽度都为
+2、一个共享专家时，MoE 总参数与每 token
+激活预算各多少？是整模型参数吗？</li>
+<li>把 <span class="math inline">\(N_E=2\)</span>、k=1、宽度 8 换成
+<span class="math inline">\(N_E=4\)</span>、k=2、宽度
 4，专家参数预算保持什么？包含 router 后还严格相等吗？</li>
 <li>A、B、C 的请求计数为何是 [2,2,1,1]？capacity=1 后计数和 C
 的路由贡献怎样变？</li>
 <li>部分丢弃例子第二行只保留下标 1 的专家，权重应为 1 还是
 3/7？共享分支受不受影响？</li>
-<li>所有 token 的四个 affinity 都是 1/4，top-2 的硬负载会均匀吗？L_aux=1
+<li>所有 token 的四个 affinity 都是 1/4，top-2 的硬负载会均匀吗？<span
+class="math inline">\(\mathcal L_{\mathrm{aux}}=1\)</span>
 能证明均衡吗？</li>
 <li>top-1 且所选权重归一化时，单靠任务损失能在本实现中更新 router
 吗？辅助项呢？</li>
@@ -10813,8 +11228,9 @@ capacity=0。</li>
 梯度为零；辅助项在测试的集中路由案例中提供非零梯度。见本章测试。</li>
 <li>[-0.1,+0.1,0,0]；更新 buffer 后必须重置缓存。见本章测试。</li>
 <li>不能。见本章测试。</li>
-<li>2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV
-头与长度，而不是专家矩阵。见本章测试。</li>
+<li>2×2×2×2×6×4×4=1536（<span
+class="math inline">\(2LBH_{kv}Td_hb_{\mathrm{elem}}\)</span>）；这是当前请求的
+K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见本章测试。</li>
 </ol>
 <p>到这里，S0→S5 已经把“多保存一些参数”和“每 token
 真正调用哪些参数”分开。接下来进入训练流水线：即使路由与缓存都正确，数据边界、去重、切分和预算没有处理好，也训练不出可靠的模型。</p>
@@ -10919,10 +11335,10 @@ NFC（只统一等价字符的编码写法，不删空白），再删除所有�
 <p>这里的“全局”，只指<strong>这一份尚未划分的封闭生成语料</strong>。去重函数在划分之前运行，使同一个规范化文档不能因为换了
 ID，就同时出现在练习册和考试卷。随机划分重叠窗口则做不到这一点：窗口不同，来源可能仍是同一篇。</p>
 <p>代码顺序很短：</p>
-<div class="sourceCode" id="cb123"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb123-1"><a href="#cb123-1" aria-hidden="true" tabindex="-1"></a>kept, report <span class="op">=</span> clean_deduplicate(raw_documents)</span>
-<span id="cb123-2"><a href="#cb123-2" aria-hidden="true" tabindex="-1"></a>splits <span class="op">=</span> split_documents(kept, seed<span class="op">=</span><span class="dv">19</span>)</span>
-<span id="cb123-3"><a href="#cb123-3" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> {name: pack_documents(docs) <span class="cf">for</span> name, docs <span class="kw">in</span> splits.items()}</span></code></pre></div>
+<div class="sourceCode" id="cb122"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb122-1"><a href="#cb122-1" aria-hidden="true" tabindex="-1"></a>kept, report <span class="op">=</span> clean_deduplicate(raw_documents)</span>
+<span id="cb122-2"><a href="#cb122-2" aria-hidden="true" tabindex="-1"></a>splits <span class="op">=</span> split_documents(kept, seed<span class="op">=</span><span class="dv">19</span>)</span>
+<span id="cb122-3"><a href="#cb122-3" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> {name: pack_documents(docs) <span class="cf">for</span> name, docs <span class="kw">in</span> splits.items()}</span></code></pre></div>
 <p>为什么还要保存 <code>report</code>？否则我们看到“10
 条”时，不知道是删掉了两条垃圾、丢了一个文件，还是悄悄改变了清洗规则。<code>data_version</code>
 则对流水线版本、固定词表、特殊 ID、原始记录及来源、划分结果和 packing
@@ -11248,13 +11664,13 @@ class="math inline">\(\lvert\mathcal V\rvert=18\)</span> 减 1。</p>
 <p>简单平均两份均值会得到约
 <strong>1.328532096</strong>，给短文档额外权重。评估多个长度不同的 batch
 时也是一样：累计 loss 总和与有效 token 总数，最后只除一次。</p>
-<div class="sourceCode" id="cb127"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb127-1"><a href="#cb127-1" aria-hidden="true" tabindex="-1"></a>total_loss, total_targets <span class="op">=</span> <span class="fl">0.0</span>, <span class="dv">0</span></span>
-<span id="cb127-2"><a href="#cb127-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> batch <span class="kw">in</span> validation_batches:</span>
-<span id="cb127-3"><a href="#cb127-3" aria-hidden="true" tabindex="-1"></a>    loss_sum, count <span class="op">=</span> tensor_loss(logits, labels)</span>
-<span id="cb127-4"><a href="#cb127-4" aria-hidden="true" tabindex="-1"></a>    total_loss <span class="op">+=</span> <span class="bu">float</span>(loss_sum)</span>
-<span id="cb127-5"><a href="#cb127-5" aria-hidden="true" tabindex="-1"></a>    total_targets <span class="op">+=</span> count</span>
-<span id="cb127-6"><a href="#cb127-6" aria-hidden="true" tabindex="-1"></a>mean_loss <span class="op">=</span> total_loss <span class="op">/</span> total_targets <span class="cf">if</span> total_targets <span class="cf">else</span> <span class="va">None</span></span></code></pre></div>
+<div class="sourceCode" id="cb126"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb126-1"><a href="#cb126-1" aria-hidden="true" tabindex="-1"></a>total_loss, total_targets <span class="op">=</span> <span class="fl">0.0</span>, <span class="dv">0</span></span>
+<span id="cb126-2"><a href="#cb126-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> batch <span class="kw">in</span> validation_batches:</span>
+<span id="cb126-3"><a href="#cb126-3" aria-hidden="true" tabindex="-1"></a>    loss_sum, count <span class="op">=</span> tensor_loss(logits, labels)</span>
+<span id="cb126-4"><a href="#cb126-4" aria-hidden="true" tabindex="-1"></a>    total_loss <span class="op">+=</span> <span class="bu">float</span>(loss_sum)</span>
+<span id="cb126-5"><a href="#cb126-5" aria-hidden="true" tabindex="-1"></a>    total_targets <span class="op">+=</span> count</span>
+<span id="cb126-6"><a href="#cb126-6" aria-hidden="true" tabindex="-1"></a>mean_loss <span class="op">=</span> total_loss <span class="op">/</span> total_targets <span class="cf">if</span> total_targets <span class="cf">else</span> <span class="va">None</span></span></code></pre></div>
 <p>这是说明聚合方式的片段，完整 <code>evaluate()</code>
 会在循环中做前向，使用 <code>eval()</code> 与
 <code>no_grad()</code>，最后恢复原训练模式。</p>
@@ -11424,17 +11840,17 @@ href="https://docs.pytorch.org/docs/2.14/notes/randomness.html">PyTorch
 上跑出证据，而不是只看一条下降曲线</h2>
 <p>在仓库根目录运行；有 PyTorch 的命令使用按 README 安装依赖的 Python
 环境：</p>
-<div class="sourceCode" id="cb128"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb128-1"><a href="#cb128-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 只看清洗、划分、packing、手算表，无需 torch</span></span>
-<span id="cb128-2"><a href="#cb128-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/20_pretraining_pipeline.py <span class="at">--data-only</span></span>
-<span id="cb128-3"><a href="#cb128-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb128-4"><a href="#cb128-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 12 步连续运行，对照在第 3 步后写盘再恢复</span></span>
-<span id="cb128-5"><a href="#cb128-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/20_pretraining_pipeline.py <span class="at">--steps</span> 12 <span class="at">--interrupt</span> 3</span>
-<span id="cb128-6"><a href="#cb128-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb128-7"><a href="#cb128-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 第 5 步已经经历一次重新洗牌，而且位于 epoch 中间</span></span>
-<span id="cb128-8"><a href="#cb128-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/20_pretraining_pipeline.py <span class="at">--steps</span> 12 <span class="at">--interrupt</span> 5</span>
-<span id="cb128-9"><a href="#cb128-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb128-10"><a href="#cb128-10" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_pretraining_pipeline.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb127"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb127-1"><a href="#cb127-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 只看清洗、划分、packing、手算表，无需 torch</span></span>
+<span id="cb127-2"><a href="#cb127-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/20_pretraining_pipeline.py <span class="at">--data-only</span></span>
+<span id="cb127-3"><a href="#cb127-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb127-4"><a href="#cb127-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 12 步连续运行，对照在第 3 步后写盘再恢复</span></span>
+<span id="cb127-5"><a href="#cb127-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/20_pretraining_pipeline.py <span class="at">--steps</span> 12 <span class="at">--interrupt</span> 3</span>
+<span id="cb127-6"><a href="#cb127-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb127-7"><a href="#cb127-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 第 5 步已经经历一次重新洗牌，而且位于 epoch 中间</span></span>
+<span id="cb127-8"><a href="#cb127-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/20_pretraining_pipeline.py <span class="at">--steps</span> 12 <span class="at">--interrupt</span> 5</span>
+<span id="cb127-9"><a href="#cb127-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb127-10"><a href="#cb127-10" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_pretraining_pipeline.py <span class="at">-v</span></span></code></pre></div>
 <p>没有 torch 或不是本仓库支持的稳定 2.14.x 时，标准库部分仍可运行；训练
 CLI 返回清晰提示和退出码 2。</p>
 <p>在附录 H
@@ -11741,15 +12157,15 @@ config、model、tokenizer：三样东西不能混成一样</h2>
 <h3 id="config-是结构说明不是模型的记忆">config
 是结构说明，不是模型的记忆</h3>
 <p>本章的关键配置很小：</p>
-<div class="sourceCode" id="cb129"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb129-1"><a href="#cb129-1" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> GPT2Config(</span>
-<span id="cb129-2"><a href="#cb129-2" aria-hidden="true" tabindex="-1"></a>    vocab_size<span class="op">=</span><span class="dv">12</span>, n_positions<span class="op">=</span><span class="dv">16</span>, n_ctx<span class="op">=</span><span class="dv">16</span>,</span>
-<span id="cb129-3"><a href="#cb129-3" aria-hidden="true" tabindex="-1"></a>    n_embd<span class="op">=</span><span class="dv">16</span>, n_layer<span class="op">=</span><span class="dv">1</span>, n_head<span class="op">=</span><span class="dv">2</span>, n_inner<span class="op">=</span><span class="dv">32</span>,</span>
-<span id="cb129-4"><a href="#cb129-4" aria-hidden="true" tabindex="-1"></a>    resid_pdrop<span class="op">=</span><span class="fl">0.0</span>, embd_pdrop<span class="op">=</span><span class="fl">0.0</span>, attn_pdrop<span class="op">=</span><span class="fl">0.0</span>,</span>
-<span id="cb129-5"><a href="#cb129-5" aria-hidden="true" tabindex="-1"></a>    bos_token_id<span class="op">=</span><span class="dv">2</span>, eos_token_id<span class="op">=</span><span class="dv">3</span>, pad_token_id<span class="op">=</span><span class="dv">0</span>,</span>
-<span id="cb129-6"><a href="#cb129-6" aria-hidden="true" tabindex="-1"></a>    use_cache<span class="op">=</span><span class="va">False</span>, attn_implementation<span class="op">=</span><span class="st">&quot;eager&quot;</span>,</span>
-<span id="cb129-7"><a href="#cb129-7" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb129-8"><a href="#cb129-8" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> GPT2LMHeadModel(config)</span></code></pre></div>
+<div class="sourceCode" id="cb128"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb128-1"><a href="#cb128-1" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> GPT2Config(</span>
+<span id="cb128-2"><a href="#cb128-2" aria-hidden="true" tabindex="-1"></a>    vocab_size<span class="op">=</span><span class="dv">12</span>, n_positions<span class="op">=</span><span class="dv">16</span>, n_ctx<span class="op">=</span><span class="dv">16</span>,</span>
+<span id="cb128-3"><a href="#cb128-3" aria-hidden="true" tabindex="-1"></a>    n_embd<span class="op">=</span><span class="dv">16</span>, n_layer<span class="op">=</span><span class="dv">1</span>, n_head<span class="op">=</span><span class="dv">2</span>, n_inner<span class="op">=</span><span class="dv">32</span>,</span>
+<span id="cb128-4"><a href="#cb128-4" aria-hidden="true" tabindex="-1"></a>    resid_pdrop<span class="op">=</span><span class="fl">0.0</span>, embd_pdrop<span class="op">=</span><span class="fl">0.0</span>, attn_pdrop<span class="op">=</span><span class="fl">0.0</span>,</span>
+<span id="cb128-5"><a href="#cb128-5" aria-hidden="true" tabindex="-1"></a>    bos_token_id<span class="op">=</span><span class="dv">2</span>, eos_token_id<span class="op">=</span><span class="dv">3</span>, pad_token_id<span class="op">=</span><span class="dv">0</span>,</span>
+<span id="cb128-6"><a href="#cb128-6" aria-hidden="true" tabindex="-1"></a>    use_cache<span class="op">=</span><span class="va">False</span>, attn_implementation<span class="op">=</span><span class="st">&quot;eager&quot;</span>,</span>
+<span id="cb128-7"><a href="#cb128-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb128-8"><a href="#cb128-8" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> GPT2LMHeadModel(config)</span></code></pre></div>
 <p>vocab_size 是输出分类的类别数；n_embd 是每个 token
 的表示宽度；n_layer 是 Transformer block 数；n_head 是注意力头数。16
 维分成 2 个头，每头 8 维。n_inner=32 是 FFN 的中间宽度。位置表容纳 16
@@ -11937,9 +12353,9 @@ samples_per_second，它们受进程启动、机器负载等影响，本章不�
 benchmark。两句话被重复训练后 loss 下降，也不证明模型具备中文能力。</p>
 <h3 id="如何运行">如何运行</h3>
 <p>只运行标准库账本，不需要安装 PyTorch：</p>
-<div class="sourceCode" id="cb133"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb133-1"><a href="#cb133-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/21_training_frameworks.py</span>
-<span id="cb133-2"><a href="#cb133-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_training_frameworks.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb132"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb132-1"><a href="#cb132-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/21_training_frameworks.py</span>
+<span id="cb132-2"><a href="#cb132-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_training_frameworks.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>第二条会执行标准库测试。脚本默认也明确打印 HF smoke: NOT RUN，必须加
 –hf 才会真正训练。</p>
 <p>运行本章测试文件，末尾应显示
@@ -11947,14 +12363,14 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb133-1"><a href
 <code>docs/testing.md</code>。</p>
 <p>需要框架实验时，另建环境，避免为了本章升级全书原有依赖。例如在支持该
 CPU wheel 的 Linux / Python 3.12 环境中：</p>
-<div class="sourceCode" id="cb134"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb134-1"><a href="#cb134-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3.12</span> <span class="at">-m</span> venv /tmp/zero2llm-frameworks</span>
-<span id="cb134-2"><a href="#cb134-2" aria-hidden="true" tabindex="-1"></a><span class="ex">/tmp/zero2llm-frameworks/bin/python</span> <span class="at">-m</span> pip install <span class="dt">\</span></span>
-<span id="cb134-3"><a href="#cb134-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--index-url</span> https://download.pytorch.org/whl/cpu torch==2.14.1</span>
-<span id="cb134-4"><a href="#cb134-4" aria-hidden="true" tabindex="-1"></a><span class="ex">/tmp/zero2llm-frameworks/bin/python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements-frameworks.txt</span>
-<span id="cb134-5"><a href="#cb134-5" aria-hidden="true" tabindex="-1"></a><span class="ex">/tmp/zero2llm-frameworks/bin/python</span> code/21_training_frameworks.py <span class="at">--hf</span></span>
-<span id="cb134-6"><a href="#cb134-6" aria-hidden="true" tabindex="-1"></a><span class="ex">/tmp/zero2llm-frameworks/bin/python</span> <span class="at">-m</span> unittest discover <span class="dt">\</span></span>
-<span id="cb134-7"><a href="#cb134-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_training_frameworks.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb133"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb133-1"><a href="#cb133-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3.12</span> <span class="at">-m</span> venv /tmp/zero2llm-frameworks</span>
+<span id="cb133-2"><a href="#cb133-2" aria-hidden="true" tabindex="-1"></a><span class="ex">/tmp/zero2llm-frameworks/bin/python</span> <span class="at">-m</span> pip install <span class="dt">\</span></span>
+<span id="cb133-3"><a href="#cb133-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--index-url</span> https://download.pytorch.org/whl/cpu torch==2.14.1</span>
+<span id="cb133-4"><a href="#cb133-4" aria-hidden="true" tabindex="-1"></a><span class="ex">/tmp/zero2llm-frameworks/bin/python</span> <span class="at">-m</span> pip install <span class="at">-r</span> requirements-frameworks.txt</span>
+<span id="cb133-5"><a href="#cb133-5" aria-hidden="true" tabindex="-1"></a><span class="ex">/tmp/zero2llm-frameworks/bin/python</span> code/21_training_frameworks.py <span class="at">--hf</span></span>
+<span id="cb133-6"><a href="#cb133-6" aria-hidden="true" tabindex="-1"></a><span class="ex">/tmp/zero2llm-frameworks/bin/python</span> <span class="at">-m</span> unittest discover <span class="dt">\</span></span>
+<span id="cb133-7"><a href="#cb133-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_training_frameworks.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>官方 CPU wheel 的平台列表见 <a
 href="https://download.pytorch.org/whl/cpu/torch/">PyTorch
 官方索引</a>。若平台没有匹配
@@ -12320,8 +12736,8 @@ resume_tested=false。真正验证恢复，应该比较“连续训练 K+M 步�
 步、保存、重启、再训练 M
 步”的最终状态，并检查数据采样位置、随机数、优化器、scheduler、梯度累积边界等。只有模型权重相同还不够。</p>
 <p>若想保留本章输出，给一个新的或空目录：</p>
-<div class="sourceCode" id="cb135"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb135-1"><a href="#cb135-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/21_training_frameworks.py <span class="at">--hf</span> <span class="at">--output-dir</span> /tmp/p20-checkpoint-demo</span></code></pre></div>
+<div class="sourceCode" id="cb134"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb134-1"><a href="#cb134-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/21_training_frameworks.py <span class="at">--hf</span> <span class="at">--output-dir</span> /tmp/p20-checkpoint-demo</span></code></pre></div>
 <p>目录非空时脚本拒绝覆盖；默认不传目录则使用临时目录并清理。只加载本次自己产生的训练状态文件，不要随意反序列化来源不明的
 optimizer 或 Python 对象。safetensors
 也不能替代对模型来源、配置和代码的审核。</p>
@@ -12473,11 +12889,11 @@ P20–P22 为何引用不同 TRL 版本，见附录 H。</p>
 <h2 id="p21.2-对话模板角色不是另一个输入通道">P21.2
 对话模板：角色不是另一个输入通道</h2>
 <p>输入常以消息列表保存：</p>
-<div class="sourceCode" id="cb136"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb136-1"><a href="#cb136-1" aria-hidden="true" tabindex="-1"></a>messages <span class="op">=</span> [</span>
-<span id="cb136-2"><a href="#cb136-2" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;user&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;问红&quot;</span>},</span>
-<span id="cb136-3"><a href="#cb136-3" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;assistant&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;红&quot;</span>},</span>
-<span id="cb136-4"><a href="#cb136-4" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
+<div class="sourceCode" id="cb135"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb135-1"><a href="#cb135-1" aria-hidden="true" tabindex="-1"></a>messages <span class="op">=</span> [</span>
+<span id="cb135-2"><a href="#cb135-2" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;user&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;问红&quot;</span>},</span>
+<span id="cb135-3"><a href="#cb135-3" aria-hidden="true" tabindex="-1"></a>    {<span class="st">&quot;role&quot;</span>: <span class="st">&quot;assistant&quot;</span>, <span class="st">&quot;content&quot;</span>: <span class="st">&quot;红&quot;</span>},</span>
+<span id="cb135-4"><a href="#cb135-4" aria-hidden="true" tabindex="-1"></a>]</span></code></pre></div>
 <p>但本章的 decoder-only 模型最终收到的仍是一串 token
 ID，而不是一个会自动理解 role
 字段的聊天对象。模板决定怎样把消息列表变成序列。</p>
@@ -12615,9 +13031,9 @@ href="https://huggingface.co/docs/transformers/v4.51.3/en/chat_templating">Trans
 <p><strong>labels 与 input_ids 保持同样的位置。不要在构造 labels
 时提前移动答案。</strong> 移动发生在计算 loss
 的函数里，并且只发生一次：</p>
-<div class="sourceCode" id="cb139"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb139-1"><a href="#cb139-1" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> labels[:, <span class="dv">1</span>:]</span>
-<span id="cb139-2"><a href="#cb139-2" aria-hidden="true" tabindex="-1"></a>predictions <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>]</span></code></pre></div>
+<div class="sourceCode" id="cb138"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb138-1"><a href="#cb138-1" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> labels[:, <span class="dv">1</span>:]</span>
+<span id="cb138-2"><a href="#cb138-2" aria-hidden="true" tabindex="-1"></a>predictions <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>]</span></code></pre></div>
 <p>所以位置 5 的 logits 预测位置 6 的“红”，位置 6 的 logits 预测位置 7
 的 EOS。我们<strong>不是</strong>用“红”位置的 logits
 预测同一个“红”；那样会让模型看到答案再复述答案。最后一个输入位置的
@@ -12955,16 +13371,16 @@ Transformer：字符 embedding + 可学习绝对位置、LayerNorm、q/k/v/o
 dropout，不共享输入/输出权重，一共 3,760 参数。它不是在 S5
 主线上偷偷替换组件，也不读取之前章节的 checkpoint。</p>
 <p>训练过程分两阶段：</p>
-<div class="sourceCode" id="cb141"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb141-1"><a href="#cb141-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 第一阶段：整个随机小模型学习这四条合成示范。</span></span>
-<span id="cb141-2"><a href="#cb141-2" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.15</span>)</span>
-<span id="cb141-3"><a href="#cb141-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb141-4"><a href="#cb141-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 第二阶段：冻结刚得到的基础模型，给 q/v 加普通 LoRA。</span></span>
-<span id="cb141-5"><a href="#cb141-5" aria-hidden="true" tabindex="-1"></a>model.zero_grad(set_to_none<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb141-6"><a href="#cb141-6" aria-hidden="true" tabindex="-1"></a>model.requires_grad_(<span class="va">False</span>)</span>
-<span id="cb141-7"><a href="#cb141-7" aria-hidden="true" tabindex="-1"></a>model.q_proj <span class="op">=</span> LoRALinear(model.q_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb141-8"><a href="#cb141-8" aria-hidden="true" tabindex="-1"></a>model.v_proj <span class="op">=</span> LoRALinear(model.v_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
-<span id="cb141-9"><a href="#cb141-9" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb140"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb140-1"><a href="#cb140-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 第一阶段：整个随机小模型学习这四条合成示范。</span></span>
+<span id="cb140-2"><a href="#cb140-2" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.15</span>)</span>
+<span id="cb140-3"><a href="#cb140-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb140-4"><a href="#cb140-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 第二阶段：冻结刚得到的基础模型，给 q/v 加普通 LoRA。</span></span>
+<span id="cb140-5"><a href="#cb140-5" aria-hidden="true" tabindex="-1"></a>model.zero_grad(set_to_none<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb140-6"><a href="#cb140-6" aria-hidden="true" tabindex="-1"></a>model.requires_grad_(<span class="va">False</span>)</span>
+<span id="cb140-7"><a href="#cb140-7" aria-hidden="true" tabindex="-1"></a>model.q_proj <span class="op">=</span> LoRALinear(model.q_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb140-8"><a href="#cb140-8" aria-hidden="true" tabindex="-1"></a>model.v_proj <span class="op">=</span> LoRALinear(model.v_proj, rank<span class="op">=</span><span class="dv">2</span>, alpha<span class="op">=</span><span class="dv">4</span>)</span>
+<span id="cb140-9"><a href="#cb140-9" aria-hidden="true" tabindex="-1"></a>_updates(model, batch, steps<span class="op">=</span><span class="dv">24</span>, lr<span class="op">=</span><span class="fl">0.5</span>)</span></code></pre></div>
 <p><code>_updates</code> 只把 <code>requires_grad=True</code> 的参数交给
 SGD，并按“清梯度 → 前向 → assistant-only loss → backward →
 step”的顺序更新。固定 seed=21，CPU float32，单线程；无 momentum、weight
@@ -13036,15 +13452,15 @@ benchmark；其他平台可能有末位浮点差异。</p>
 <code>hf_peft_qlora_run=false</code>，避免把未测项目混进“通过”的结果。</p>
 <h3 id="运行方式">运行方式</h3>
 <p>只查看模板、标签和手算，不需要 PyTorch：</p>
-<div class="sourceCode" id="cb142"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb142-1"><a href="#cb142-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/22_sft_lora.py</span>
-<span id="cb142-2"><a href="#cb142-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb141"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb141-1"><a href="#cb141-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/22_sft_lora.py</span>
+<span id="cb141-2"><a href="#cb141-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>默认脚本打印 <code>training: NOT RUN</code>；它不会因为输出了 loss
 手算数字，就假装跑过训练。</p>
 <p>已经安装全书基础依赖后，执行真实 CPU 更新：</p>
-<div class="sourceCode" id="cb143"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb143-1"><a href="#cb143-1" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> code/22_sft_lora.py <span class="at">--train</span></span>
-<span id="cb143-2"><a href="#cb143-2" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb142"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb142-1"><a href="#cb142-1" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> code/22_sft_lora.py <span class="at">--train</span></span>
+<span id="cb142-2"><a href="#cb142-2" aria-hidden="true" tabindex="-1"></a><span class="ex">.venv/bin/python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_sft_lora.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>本章不新增 requirements，也不需要安装 transformers、trl、peft 或
 bitsandbytes。若没有 PyTorch 却指定
 <code>--train</code>，标准库演示仍可输出，但训练明确提示 SKIP 并以退出码
@@ -13556,11 +13972,11 @@ rejected，但相对参考已经改善，所以 z
 仍为正。如果当前策略和参考完全相同，每对 loss 都是 ln
 2≈0.693147，而不是零。</p>
 <p>对应的核心代码只有几行：</p>
-<div class="sourceCode" id="cb144"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb144-1"><a href="#cb144-1" aria-hidden="true" tabindex="-1"></a>margin <span class="op">=</span> (chosen <span class="op">-</span> rejected) <span class="op">-</span> (</span>
-<span id="cb144-2"><a href="#cb144-2" aria-hidden="true" tabindex="-1"></a>    ref_chosen.detach() <span class="op">-</span> ref_rejected.detach()</span>
-<span id="cb144-3"><a href="#cb144-3" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb144-4"><a href="#cb144-4" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.nn.functional.softplus(<span class="op">-</span>beta <span class="op">*</span> margin).mean()</span></code></pre></div>
+<div class="sourceCode" id="cb143"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb143-1"><a href="#cb143-1" aria-hidden="true" tabindex="-1"></a>margin <span class="op">=</span> (chosen <span class="op">-</span> rejected) <span class="op">-</span> (</span>
+<span id="cb143-2"><a href="#cb143-2" aria-hidden="true" tabindex="-1"></a>    ref_chosen.detach() <span class="op">-</span> ref_rejected.detach()</span>
+<span id="cb143-3"><a href="#cb143-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb143-4"><a href="#cb143-4" aria-hidden="true" tabindex="-1"></a>loss <span class="op">=</span> torch.nn.functional.softplus(<span class="op">-</span>beta <span class="op">*</span> margin).mean()</span></code></pre></div>
 <p>四个输入都是 [B] 的<strong>答案 log probability</strong>，不是 token
 ID，也不是 reward。detach 切断参考分支的梯度；参考参数本身也不应交给
 optimizer。softplus 的稳定实现避免先算巨大的 exp 再溢出。</p>
@@ -13586,15 +14002,15 @@ class="math inline">\(B\)</span> 是批大小，<span
 class="math inline">\(T\)</span> 是序列长度，<span
 class="math inline">\(\lvert\mathcal V\rvert\)</span>
 是词表大小）。本章的 <code>completion_log_probs</code> 做三步：</p>
-<div class="sourceCode" id="cb145"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb145-1"><a href="#cb145-1" aria-hidden="true" tabindex="-1"></a>next_logps <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>].log_softmax(dim<span class="op">=-</span><span class="dv">1</span>)</span>
-<span id="cb145-2"><a href="#cb145-2" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> input_ids[:, <span class="dv">1</span>:]</span>
-<span id="cb145-3"><a href="#cb145-3" aria-hidden="true" tabindex="-1"></a>selected <span class="op">=</span> next_logps.gather(<span class="op">-</span><span class="dv">1</span>, targets.unsqueeze(<span class="op">-</span><span class="dv">1</span>)).squeeze(<span class="op">-</span><span class="dv">1</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb144"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb144-1"><a href="#cb144-1" aria-hidden="true" tabindex="-1"></a>next_logps <span class="op">=</span> logits[:, :<span class="op">-</span><span class="dv">1</span>].log_softmax(dim<span class="op">=-</span><span class="dv">1</span>)</span>
+<span id="cb144-2"><a href="#cb144-2" aria-hidden="true" tabindex="-1"></a>targets <span class="op">=</span> input_ids[:, <span class="dv">1</span>:]</span>
+<span id="cb144-3"><a href="#cb144-3" aria-hidden="true" tabindex="-1"></a>selected <span class="op">=</span> next_logps.gather(<span class="op">-</span><span class="dv">1</span>, targets.unsqueeze(<span class="op">-</span><span class="dv">1</span>)).squeeze(<span class="op">-</span><span class="dv">1</span>)</span></code></pre></div>
 <p>这就是一次 causal shift：输入位置 t 预测 token
 t+1。然后根据每行实际的 prompt 长度和 padding mask，只保留答案目标：</p>
-<div class="sourceCode" id="cb146"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb146-1"><a href="#cb146-1" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> attention_mask[:, <span class="dv">1</span>:].<span class="bu">bool</span>() <span class="op">&amp;</span> (positions <span class="op">&gt;=</span> starts)</span>
-<span id="cb146-2"><a href="#cb146-2" aria-hidden="true" tabindex="-1"></a>sequence_logps <span class="op">=</span> (selected <span class="op">*</span> mask).<span class="bu">sum</span>(dim<span class="op">=-</span><span class="dv">1</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb145"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb145-1"><a href="#cb145-1" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> attention_mask[:, <span class="dv">1</span>:].<span class="bu">bool</span>() <span class="op">&amp;</span> (positions <span class="op">&gt;=</span> starts)</span>
+<span id="cb145-2"><a href="#cb145-2" aria-hidden="true" tabindex="-1"></a>sequence_logps <span class="op">=</span> (selected <span class="op">*</span> mask).<span class="bu">sum</span>(dim<span class="op">=-</span><span class="dv">1</span>)</span></code></pre></div>
 <p>positions 是原序列中目标的位置 1…T−1，starts
 是该行答案开始的位置。<strong>最后一个 prompt token 的 logits
 要参与预测第一个答案 token</strong>，不能把“输入来自 prompt”误解成“这行
@@ -13784,15 +14200,15 @@ loss，但不是同一个目标。</p>
 <h2 id="p22.7-真正跑一次参数概率和-kl-都由更新得到">P22.7
 真正跑一次：参数、概率和 KL 都由更新得到</h2>
 <p>从仓库根目录运行：</p>
-<div class="sourceCode" id="cb149"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb149-1"><a href="#cb149-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库手算，不导入 torch</span></span>
-<span id="cb149-2"><a href="#cb149-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py</span>
-<span id="cb149-3"><a href="#cb149-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb149-4"><a href="#cb149-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 安装仓库基线依赖后，实际 CPU 更新</span></span>
-<span id="cb149-5"><a href="#cb149-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py <span class="at">--torch</span></span>
-<span id="cb149-6"><a href="#cb149-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb149-7"><a href="#cb149-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 独立数值与梯度测试</span></span>
-<span id="cb149-8"><a href="#cb149-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_preference_optimization.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb148"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb148-1"><a href="#cb148-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库手算，不导入 torch</span></span>
+<span id="cb148-2"><a href="#cb148-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py</span>
+<span id="cb148-3"><a href="#cb148-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb148-4"><a href="#cb148-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 安装仓库基线依赖后，实际 CPU 更新</span></span>
+<span id="cb148-5"><a href="#cb148-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/23_preference_optimization.py <span class="at">--torch</span></span>
+<span id="cb148-6"><a href="#cb148-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb148-7"><a href="#cb148-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 独立数值与梯度测试</span></span>
+<span id="cb148-8"><a href="#cb148-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_preference_optimization.py <span class="at">-v</span></span></code></pre></div>
 <p>缺少 PyTorch 时默认手算正常退出；显式请求 <code>--torch</code> 会打印
 <code>SKIP</code> 并以状态码 2 退出，不能把“没有运行”当成训练成功。可用
 <code>python -S</code> 模拟不加载第三方包。</p>
@@ -13878,36 +14294,36 @@ href="https://github.com/huggingface/trl/blob/v0.16.1/trl/trainer/grpo_config.py
 版本，见附录 H。</p>
 <p>下面只是一份<strong>未执行的配置示意</strong>，不包含模型下载、Trainer
 构造或 train 调用：</p>
-<div class="sourceCode" id="cb150"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb150-1"><a href="#cb150-1" aria-hidden="true" tabindex="-1"></a><span class="co"># NOT RUN：仅供阅读，需在单独环境核对完整依赖。</span></span>
-<span id="cb150-2"><a href="#cb150-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> GPT2Config</span>
-<span id="cb150-3"><a href="#cb150-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> trl <span class="im">import</span> DPOConfig, GRPOConfig</span>
-<span id="cb150-4"><a href="#cb150-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb150-5"><a href="#cb150-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 若开展框架实验，可从这个结构创建随机本地模型；不是预训练权重。</span></span>
-<span id="cb150-6"><a href="#cb150-6" aria-hidden="true" tabindex="-1"></a>tiny_architecture <span class="op">=</span> GPT2Config(</span>
-<span id="cb150-7"><a href="#cb150-7" aria-hidden="true" tabindex="-1"></a>    vocab_size<span class="op">=</span><span class="dv">12</span>, n_positions<span class="op">=</span><span class="dv">32</span>, n_ctx<span class="op">=</span><span class="dv">32</span>,</span>
-<span id="cb150-8"><a href="#cb150-8" aria-hidden="true" tabindex="-1"></a>    n_embd<span class="op">=</span><span class="dv">16</span>, n_layer<span class="op">=</span><span class="dv">1</span>, n_head<span class="op">=</span><span class="dv">2</span>, n_inner<span class="op">=</span><span class="dv">32</span>,</span>
-<span id="cb150-9"><a href="#cb150-9" aria-hidden="true" tabindex="-1"></a>    resid_pdrop<span class="op">=</span><span class="fl">0.0</span>, embd_pdrop<span class="op">=</span><span class="fl">0.0</span>, attn_pdrop<span class="op">=</span><span class="fl">0.0</span>,</span>
-<span id="cb150-10"><a href="#cb150-10" aria-hidden="true" tabindex="-1"></a>    bos_token_id<span class="op">=</span><span class="dv">2</span>, eos_token_id<span class="op">=</span><span class="dv">3</span>, pad_token_id<span class="op">=</span><span class="dv">0</span>,</span>
-<span id="cb150-11"><a href="#cb150-11" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb150-12"><a href="#cb150-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb150-13"><a href="#cb150-13" aria-hidden="true" tabindex="-1"></a>dpo_config <span class="op">=</span> DPOConfig(</span>
-<span id="cb150-14"><a href="#cb150-14" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-dpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb150-15"><a href="#cb150-15" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">2</span>, max_steps<span class="op">=</span><span class="dv">2</span>,</span>
-<span id="cb150-16"><a href="#cb150-16" aria-hidden="true" tabindex="-1"></a>    max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>, max_length<span class="op">=</span><span class="dv">16</span>,</span>
-<span id="cb150-17"><a href="#cb150-17" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.1</span>, loss_type<span class="op">=</span><span class="st">&quot;sigmoid&quot;</span>,</span>
-<span id="cb150-18"><a href="#cb150-18" aria-hidden="true" tabindex="-1"></a>    fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>, gradient_checkpointing<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb150-19"><a href="#cb150-19" aria-hidden="true" tabindex="-1"></a>    report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
-<span id="cb150-20"><a href="#cb150-20" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb150-21"><a href="#cb150-21" aria-hidden="true" tabindex="-1"></a>grpo_config <span class="op">=</span> GRPOConfig(</span>
-<span id="cb150-22"><a href="#cb150-22" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-grpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
-<span id="cb150-23"><a href="#cb150-23" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">4</span>, num_generations<span class="op">=</span><span class="dv">4</span>,</span>
-<span id="cb150-24"><a href="#cb150-24" aria-hidden="true" tabindex="-1"></a>    max_steps<span class="op">=</span><span class="dv">2</span>, max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>,</span>
-<span id="cb150-25"><a href="#cb150-25" aria-hidden="true" tabindex="-1"></a>    temperature<span class="op">=</span><span class="fl">1.0</span>, top_p<span class="op">=</span><span class="fl">1.0</span>, top_k<span class="op">=</span><span class="va">None</span>,</span>
-<span id="cb150-26"><a href="#cb150-26" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.04</span>, epsilon<span class="op">=</span><span class="fl">0.2</span>, num_iterations<span class="op">=</span><span class="dv">2</span>,</span>
-<span id="cb150-27"><a href="#cb150-27" aria-hidden="true" tabindex="-1"></a>    use_vllm<span class="op">=</span><span class="va">False</span>, fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>,</span>
-<span id="cb150-28"><a href="#cb150-28" aria-hidden="true" tabindex="-1"></a>    gradient_checkpointing<span class="op">=</span><span class="va">False</span>, report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
-<span id="cb150-29"><a href="#cb150-29" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb149"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb149-1"><a href="#cb149-1" aria-hidden="true" tabindex="-1"></a><span class="co"># NOT RUN：仅供阅读，需在单独环境核对完整依赖。</span></span>
+<span id="cb149-2"><a href="#cb149-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> GPT2Config</span>
+<span id="cb149-3"><a href="#cb149-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> trl <span class="im">import</span> DPOConfig, GRPOConfig</span>
+<span id="cb149-4"><a href="#cb149-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb149-5"><a href="#cb149-5" aria-hidden="true" tabindex="-1"></a><span class="co"># 若开展框架实验，可从这个结构创建随机本地模型；不是预训练权重。</span></span>
+<span id="cb149-6"><a href="#cb149-6" aria-hidden="true" tabindex="-1"></a>tiny_architecture <span class="op">=</span> GPT2Config(</span>
+<span id="cb149-7"><a href="#cb149-7" aria-hidden="true" tabindex="-1"></a>    vocab_size<span class="op">=</span><span class="dv">12</span>, n_positions<span class="op">=</span><span class="dv">32</span>, n_ctx<span class="op">=</span><span class="dv">32</span>,</span>
+<span id="cb149-8"><a href="#cb149-8" aria-hidden="true" tabindex="-1"></a>    n_embd<span class="op">=</span><span class="dv">16</span>, n_layer<span class="op">=</span><span class="dv">1</span>, n_head<span class="op">=</span><span class="dv">2</span>, n_inner<span class="op">=</span><span class="dv">32</span>,</span>
+<span id="cb149-9"><a href="#cb149-9" aria-hidden="true" tabindex="-1"></a>    resid_pdrop<span class="op">=</span><span class="fl">0.0</span>, embd_pdrop<span class="op">=</span><span class="fl">0.0</span>, attn_pdrop<span class="op">=</span><span class="fl">0.0</span>,</span>
+<span id="cb149-10"><a href="#cb149-10" aria-hidden="true" tabindex="-1"></a>    bos_token_id<span class="op">=</span><span class="dv">2</span>, eos_token_id<span class="op">=</span><span class="dv">3</span>, pad_token_id<span class="op">=</span><span class="dv">0</span>,</span>
+<span id="cb149-11"><a href="#cb149-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb149-12"><a href="#cb149-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb149-13"><a href="#cb149-13" aria-hidden="true" tabindex="-1"></a>dpo_config <span class="op">=</span> DPOConfig(</span>
+<span id="cb149-14"><a href="#cb149-14" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-dpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb149-15"><a href="#cb149-15" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">2</span>, max_steps<span class="op">=</span><span class="dv">2</span>,</span>
+<span id="cb149-16"><a href="#cb149-16" aria-hidden="true" tabindex="-1"></a>    max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>, max_length<span class="op">=</span><span class="dv">16</span>,</span>
+<span id="cb149-17"><a href="#cb149-17" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.1</span>, loss_type<span class="op">=</span><span class="st">&quot;sigmoid&quot;</span>,</span>
+<span id="cb149-18"><a href="#cb149-18" aria-hidden="true" tabindex="-1"></a>    fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>, gradient_checkpointing<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb149-19"><a href="#cb149-19" aria-hidden="true" tabindex="-1"></a>    report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
+<span id="cb149-20"><a href="#cb149-20" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb149-21"><a href="#cb149-21" aria-hidden="true" tabindex="-1"></a>grpo_config <span class="op">=</span> GRPOConfig(</span>
+<span id="cb149-22"><a href="#cb149-22" aria-hidden="true" tabindex="-1"></a>    output_dir<span class="op">=</span><span class="st">&quot;p22-grpo-local&quot;</span>, use_cpu<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb149-23"><a href="#cb149-23" aria-hidden="true" tabindex="-1"></a>    per_device_train_batch_size<span class="op">=</span><span class="dv">4</span>, num_generations<span class="op">=</span><span class="dv">4</span>,</span>
+<span id="cb149-24"><a href="#cb149-24" aria-hidden="true" tabindex="-1"></a>    max_steps<span class="op">=</span><span class="dv">2</span>, max_prompt_length<span class="op">=</span><span class="dv">8</span>, max_completion_length<span class="op">=</span><span class="dv">8</span>,</span>
+<span id="cb149-25"><a href="#cb149-25" aria-hidden="true" tabindex="-1"></a>    temperature<span class="op">=</span><span class="fl">1.0</span>, top_p<span class="op">=</span><span class="fl">1.0</span>, top_k<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb149-26"><a href="#cb149-26" aria-hidden="true" tabindex="-1"></a>    beta<span class="op">=</span><span class="fl">0.04</span>, epsilon<span class="op">=</span><span class="fl">0.2</span>, num_iterations<span class="op">=</span><span class="dv">2</span>,</span>
+<span id="cb149-27"><a href="#cb149-27" aria-hidden="true" tabindex="-1"></a>    use_vllm<span class="op">=</span><span class="va">False</span>, fp16<span class="op">=</span><span class="va">False</span>, bf16<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb149-28"><a href="#cb149-28" aria-hidden="true" tabindex="-1"></a>    gradient_checkpointing<span class="op">=</span><span class="va">False</span>, report_to<span class="op">=</span>[], save_strategy<span class="op">=</span><span class="st">&quot;no&quot;</span>,</span>
+<span id="cb149-29"><a href="#cb149-29" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div>
 <p>先读懂这些设置，再谈运行：</p>
 <ul>
 <li>12 项词表、16 维、1 层、2 个头把模型结构限制在小规模；tokenizer 的
@@ -14563,9 +14979,9 @@ generator，也没有概率校正实现。不要删除这条边界，再把“�
 <h2 id="p23.10-运行结果少几次-target-调用不等于真的快了">P23.10
 运行结果：少几次 target 调用，不等于真的快了</h2>
 <p>在仓库根目录运行：</p>
-<div class="sourceCode" id="cb151"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb151-1"><a href="#cb151-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/24_reasoning_mtp.py</span>
-<span id="cb151-2"><a href="#cb151-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_reasoning_mtp.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb150"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb150-1"><a href="#cb150-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/24_reasoning_mtp.py</span>
+<span id="cb150-2"><a href="#cb150-2" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_reasoning_mtp.py <span class="at">-v</span></span></code></pre></div>
 <p>已验证环境为 CPU、附录 H 所列 PyTorch、单线程、种子
 230。脚本不下载数据／权重。缺少 PyTorch 时，CLI 给出安装
 <code>requirements.txt</code> 的提示并以状态 2 退出。</p>
@@ -14874,11 +15290,11 @@ scale 约定，必须看相应格式与内核。</p>
 s/2；被截断的 40
 可不受这个保证。实际浮点计算还会有自身的舍入误差，不能要求所有端点逐位完全相等。</p>
 <p>代码的核心对应三步：</p>
-<div class="sourceCode" id="cb153"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb153-1"><a href="#cb153-1" aria-hidden="true" tabindex="-1"></a>scaled <span class="op">=</span> x <span class="op">/</span> params.scale</span>
-<span id="cb153-2"><a href="#cb153-2" aria-hidden="true" tabindex="-1"></a>bounded <span class="op">=</span> <span class="bu">min</span>(params.qmax <span class="op">-</span> params.zero_point,</span>
-<span id="cb153-3"><a href="#cb153-3" aria-hidden="true" tabindex="-1"></a>              <span class="bu">max</span>(params.qmin <span class="op">-</span> params.zero_point, scaled))</span>
-<span id="cb153-4"><a href="#cb153-4" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> <span class="bu">round</span>(bounded) <span class="op">+</span> params.zero_point</span></code></pre></div>
+<div class="sourceCode" id="cb152"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb152-1"><a href="#cb152-1" aria-hidden="true" tabindex="-1"></a>scaled <span class="op">=</span> x <span class="op">/</span> params.scale</span>
+<span id="cb152-2"><a href="#cb152-2" aria-hidden="true" tabindex="-1"></a>bounded <span class="op">=</span> <span class="bu">min</span>(params.qmax <span class="op">-</span> params.zero_point,</span>
+<span id="cb152-3"><a href="#cb152-3" aria-hidden="true" tabindex="-1"></a>              <span class="bu">max</span>(params.qmin <span class="op">-</span> params.zero_point, scaled))</span>
+<span id="cb152-4"><a href="#cb152-4" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> <span class="bu">round</span>(bounded) <span class="op">+</span> params.zero_point</span></code></pre></div>
 <p>为什么先截断再转整数？如果 calibration 的 scale 极小，一个有限的大 x
 除以 s 仍可能溢出为无穷。先按整数阈值饱和，就不需要执行
 <code>round(inf)</code>。阈值本身是整数，因此这与“先舍入、后截断”的数学规则一致。不要先强转
@@ -15298,32 +15714,32 @@ href="https://github.com/ggml-org/llama.cpp/releases/tag/b5046">b5046
 <pre class="text"><code>10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e</code></pre>
 <p>这是 Linux x86_64 路线。可在新的临时目录复现下载与校验，不改已有
 Python 环境：</p>
-<div class="sourceCode" id="cb156"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb156-1"><a href="#cb156-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/p24-engine</span>
-<span id="cb156-2"><a href="#cb156-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fL</span> <span class="at">--max-time</span> 120 <span class="dt">\</span></span>
-<span id="cb156-3"><a href="#cb156-3" aria-hidden="true" tabindex="-1"></a>  https://github.com/ggml-org/llama.cpp/releases/download/b5046/llama-b5046-bin-ubuntu-x64.zip <span class="dt">\</span></span>
-<span id="cb156-4"><a href="#cb156-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-o</span> /tmp/p24-engine/llama-b5046.zip</span>
-<span id="cb156-5"><a href="#cb156-5" aria-hidden="true" tabindex="-1"></a><span class="bu">printf</span> <span class="st">&#39;%s  %s\n&#39;</span> <span class="dt">\</span></span>
-<span id="cb156-6"><a href="#cb156-6" aria-hidden="true" tabindex="-1"></a>  10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e <span class="dt">\</span></span>
-<span id="cb156-7"><a href="#cb156-7" aria-hidden="true" tabindex="-1"></a>  /tmp/p24-engine/llama-b5046.zip <span class="kw">|</span> <span class="fu">sha256sum</span> <span class="at">-c</span> <span class="at">-</span></span>
-<span id="cb156-8"><a href="#cb156-8" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span> /tmp/p24-engine/llama-b5046.zip <span class="at">-d</span> /tmp/p24-engine</span></code></pre></div>
+<div class="sourceCode" id="cb155"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb155-1"><a href="#cb155-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> /tmp/p24-engine</span>
+<span id="cb155-2"><a href="#cb155-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-fL</span> <span class="at">--max-time</span> 120 <span class="dt">\</span></span>
+<span id="cb155-3"><a href="#cb155-3" aria-hidden="true" tabindex="-1"></a>  https://github.com/ggml-org/llama.cpp/releases/download/b5046/llama-b5046-bin-ubuntu-x64.zip <span class="dt">\</span></span>
+<span id="cb155-4"><a href="#cb155-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-o</span> /tmp/p24-engine/llama-b5046.zip</span>
+<span id="cb155-5"><a href="#cb155-5" aria-hidden="true" tabindex="-1"></a><span class="bu">printf</span> <span class="st">&#39;%s  %s\n&#39;</span> <span class="dt">\</span></span>
+<span id="cb155-6"><a href="#cb155-6" aria-hidden="true" tabindex="-1"></a>  10195e6ccc8ef5908e6d5842f9ca34389a22338b0d6ab618cfa0f909b461a28e <span class="dt">\</span></span>
+<span id="cb155-7"><a href="#cb155-7" aria-hidden="true" tabindex="-1"></a>  /tmp/p24-engine/llama-b5046.zip <span class="kw">|</span> <span class="fu">sha256sum</span> <span class="at">-c</span> <span class="at">-</span></span>
+<span id="cb155-8"><a href="#cb155-8" aria-hidden="true" tabindex="-1"></a><span class="fu">unzip</span> /tmp/p24-engine/llama-b5046.zip <span class="at">-d</span> /tmp/p24-engine</span></code></pre></div>
 <p>下载和解压须成功、校验须匹配才继续。可执行文件位于解压后的
 <code>build/bin</code>。官方二进制如果不适合你的系统，不要忽略 loader
 错误，更不要绕过系统安全提示；改用适合系统的官方构建方案，并重新记录版本与结果。macOS、Windows
 或自行编译的同版本，本章未实测。</p>
 <p>从仓库根目录运行：</p>
-<div class="sourceCode" id="cb157"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb157-1"><a href="#cb157-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/25_quantized_serving.py <span class="dt">\</span></span>
-<span id="cb157-2"><a href="#cb157-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--llama-bin</span> /tmp/p24-engine/build/bin <span class="dt">\</span></span>
-<span id="cb157-3"><a href="#cb157-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--work-dir</span> /tmp/p24-smoke</span></code></pre></div>
+<div class="sourceCode" id="cb156"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb156-1"><a href="#cb156-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/25_quantized_serving.py <span class="dt">\</span></span>
+<span id="cb156-2"><a href="#cb156-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--llama-bin</span> /tmp/p24-engine/build/bin <span class="dt">\</span></span>
+<span id="cb156-3"><a href="#cb156-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--work-dir</span> /tmp/p24-smoke</span></code></pre></div>
 <p>这个 opt-in 命令<strong>不帮你下载或安装任何软件</strong>。它检查
 <code>llama-cli --version</code>，创建微型 GGUF，并依次执行：</p>
-<div class="sourceCode" id="cb158"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb158-1"><a href="#cb158-1" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-quantize</span> tiny-f32.gguf tiny-q8_0.gguf Q8_0</span>
-<span id="cb158-2"><a href="#cb158-2" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-cli</span> <span class="at">-m</span> tiny-q8_0.gguf <span class="at">-p</span> Hi <span class="at">-n</span> 4 <span class="at">-c</span> 128 <span class="at">-t</span> 1 <span class="dt">\</span></span>
-<span id="cb158-3"><a href="#cb158-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-ngl</span> 0 <span class="at">--seed</span> 24 <span class="at">--temp</span> 0 <span class="at">--no-display-prompt</span></span>
-<span id="cb158-4"><a href="#cb158-4" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-server</span> <span class="at">-m</span> tiny-q8_0.gguf <span class="at">-c</span> 128 <span class="at">-t</span> 1 <span class="at">-ngl</span> 0 <span class="dt">\</span></span>
-<span id="cb158-5"><a href="#cb158-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--host</span> 127.0.0.1 <span class="at">--port</span> <span class="op">&lt;</span>临时空闲端口<span class="op">&gt;</span> --alias p24-tiny</span></code></pre></div>
+<div class="sourceCode" id="cb157"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb157-1"><a href="#cb157-1" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-quantize</span> tiny-f32.gguf tiny-q8_0.gguf Q8_0</span>
+<span id="cb157-2"><a href="#cb157-2" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-cli</span> <span class="at">-m</span> tiny-q8_0.gguf <span class="at">-p</span> Hi <span class="at">-n</span> 4 <span class="at">-c</span> 128 <span class="at">-t</span> 1 <span class="dt">\</span></span>
+<span id="cb157-3"><a href="#cb157-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-ngl</span> 0 <span class="at">--seed</span> 24 <span class="at">--temp</span> 0 <span class="at">--no-display-prompt</span></span>
+<span id="cb157-4"><a href="#cb157-4" aria-hidden="true" tabindex="-1"></a><span class="ex">llama-server</span> <span class="at">-m</span> tiny-q8_0.gguf <span class="at">-c</span> 128 <span class="at">-t</span> 1 <span class="at">-ngl</span> 0 <span class="dt">\</span></span>
+<span id="cb157-5"><a href="#cb157-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">--host</span> 127.0.0.1 <span class="at">--port</span> <span class="op">&lt;</span>临时空闲端口<span class="op">&gt;</span> --alias p24-tiny</span></code></pre></div>
 <p>上面的文件名与端口是阅读用简写；脚本保存的
 <code>smoke-report.json</code>
 记录实际绝对路径和端口。<code>-ngl 0</code> 不把模型层卸载到
@@ -15392,15 +15808,15 @@ href="code/fixtures/p24_llama_completion.sse">真实 SSE 捕获</a>
 <p>引擎在本机运行时，客户端仍要遵守请求协议。这里选择
 <code>/v1/completions</code>，使用纯文本 prompt，不用 chat
 template，因为微型模型没有受训对话模板。</p>
-<div class="sourceCode" id="cb159"><pre
-class="sourceCode json"><code class="sourceCode json"><span id="cb159-1"><a href="#cb159-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb159-2"><a href="#cb159-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;p24-tiny&quot;</span><span class="fu">,</span></span>
-<span id="cb159-3"><a href="#cb159-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;prompt&quot;</span><span class="fu">:</span> <span class="st">&quot;Hi&quot;</span><span class="fu">,</span></span>
-<span id="cb159-4"><a href="#cb159-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;max_tokens&quot;</span><span class="fu">:</span> <span class="dv">4</span><span class="fu">,</span></span>
-<span id="cb159-5"><a href="#cb159-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;temperature&quot;</span><span class="fu">:</span> <span class="dv">0</span><span class="fu">,</span></span>
-<span id="cb159-6"><a href="#cb159-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;seed&quot;</span><span class="fu">:</span> <span class="dv">24</span><span class="fu">,</span></span>
-<span id="cb159-7"><a href="#cb159-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;stream&quot;</span><span class="fu">:</span> <span class="kw">true</span></span>
-<span id="cb159-8"><a href="#cb159-8" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb158"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb158-1"><a href="#cb158-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb158-2"><a href="#cb158-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;p24-tiny&quot;</span><span class="fu">,</span></span>
+<span id="cb158-3"><a href="#cb158-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;prompt&quot;</span><span class="fu">:</span> <span class="st">&quot;Hi&quot;</span><span class="fu">,</span></span>
+<span id="cb158-4"><a href="#cb158-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;max_tokens&quot;</span><span class="fu">:</span> <span class="dv">4</span><span class="fu">,</span></span>
+<span id="cb158-5"><a href="#cb158-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;temperature&quot;</span><span class="fu">:</span> <span class="dv">0</span><span class="fu">,</span></span>
+<span id="cb158-6"><a href="#cb158-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;seed&quot;</span><span class="fu">:</span> <span class="dv">24</span><span class="fu">,</span></span>
+<span id="cb158-7"><a href="#cb158-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;stream&quot;</span><span class="fu">:</span> <span class="kw">true</span></span>
+<span id="cb158-8"><a href="#cb158-8" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
 <p>路径和字段来自锁定版本的 <a
 href="https://github.com/ggml-org/llama.cpp/blob/74d4f5b041ad837153b0e90fc864b8290e01d8d5/examples/server/README.md">llama.cpp
 server 文档</a>。OpenAI-compatible
@@ -15540,16 +15956,16 @@ BF16，那是在比较两套部署方案，不能把差异全归给调度器。�
 填进“本书复现”一栏。</p>
 <h2 id="p24.12-运行找错与自测">P24.12 运行、找错与自测</h2>
 <p>从仓库根目录：</p>
-<div class="sourceCode" id="cb161"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb161-1"><a href="#cb161-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/25_quantized_serving.py</span>
-<span id="cb161-2"><a href="#cb161-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_quantized_serving.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb160"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb160-1"><a href="#cb160-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/25_quantized_serving.py</span>
+<span id="cb160-2"><a href="#cb160-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_quantized_serving.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>运行本章测试文件，末尾应显示
 <code>OK</code>；测试分类、计数与错误版本清单见
 <code>docs/testing.md</code>。</p>
 <p>提供已准备好的引擎后，可选真实测试：</p>
-<div class="sourceCode" id="cb162"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb162-1"><a href="#cb162-1" aria-hidden="true" tabindex="-1"></a><span class="va">P24_LLAMA_BIN</span><span class="op">=</span>/tmp/p24-engine/build/bin <span class="dt">\</span></span>
-<span id="cb162-2"><a href="#cb162-2" aria-hidden="true" tabindex="-1"></a>  <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_quantized_serving.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb161"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb161-1"><a href="#cb161-1" aria-hidden="true" tabindex="-1"></a><span class="va">P24_LLAMA_BIN</span><span class="op">=</span>/tmp/p24-engine/build/bin <span class="dt">\</span></span>
+<span id="cb161-2"><a href="#cb161-2" aria-hidden="true" tabindex="-1"></a>  <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_quantized_serving.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <h3 id="自测题">自测题</h3>
 <ol type="1">
 <li>s=0.25、z=0 时，0.125、0.375、40
@@ -16108,14 +16524,14 @@ href="https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f
 <h2 id="p25.10-运行不下载权重也能得到有意义的证据">P25.10
 运行：不下载权重，也能得到有意义的证据</h2>
 <p>在仓库根目录运行：</p>
-<div class="sourceCode" id="cb167"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb167-1"><a href="#cb167-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库：校验本地快照、输出每个组件的来源与预算。</span></span>
-<span id="cb167-2"><a href="#cb167-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
-<span id="cb167-3"><a href="#cb167-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb167-4"><a href="#cb167-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 仓库基线 PyTorch/Jinja2：执行随机小模型和模板路径。</span></span>
-<span id="cb167-5"><a href="#cb167-5" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/26_qwen3_case.py <span class="at">--torch</span></span>
-<span id="cb167-6"><a href="#cb167-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb167-7"><a href="#cb167-7" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_qwen3_case.py <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb166"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb166-1"><a href="#cb166-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 标准库：校验本地快照、输出每个组件的来源与预算。</span></span>
+<span id="cb166-2"><a href="#cb166-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
+<span id="cb166-3"><a href="#cb166-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb166-4"><a href="#cb166-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 仓库基线 PyTorch/Jinja2：执行随机小模型和模板路径。</span></span>
+<span id="cb166-5"><a href="#cb166-5" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/26_qwen3_case.py <span class="at">--torch</span></span>
+<span id="cb166-6"><a href="#cb166-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb166-7"><a href="#cb166-7" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> test_qwen3_case.py <span class="at">-v</span></span></code></pre></div>
 <p>默认输出为每项组件附上带完整 revision 的 source
 URL，并打印本章精确参数和缓存数字。程序无网络请求。</p>
 <p><code>--torch</code> 使用 CPU、附录 H 所列 PyTorch、Jinja2
@@ -16811,11 +17227,11 @@ D：九个视觉位置如何变一个</h3>
 <h2 id="p26.9-运行可验证结果和失败边界">P26.9
 运行、可验证结果和失败边界</h2>
 <p>在仓库根目录运行，不需要安装 PyTorch：</p>
-<div class="sourceCode" id="cb170"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb170-1"><a href="#cb170-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py</span>
-<span id="cb170-2"><a href="#cb170-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py <span class="at">--matrix-only</span></span>
-<span id="cb170-3"><a href="#cb170-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py <span class="at">--json</span></span>
-<span id="cb170-4"><a href="#cb170-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_deepseek_case.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb169"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb169-1"><a href="#cb169-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py</span>
+<span id="cb169-2"><a href="#cb169-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py <span class="at">--matrix-only</span></span>
+<span id="cb169-3"><a href="#cb169-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/27_deepseek_case.py <span class="at">--json</span></span>
+<span id="cb169-4"><a href="#cb169-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_deepseek_case.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>默认输出完整证据矩阵和四个实验；<code>--json</code>
 输出可被程序读取的同一份报告，<code>--matrix-only</code>
 只打印矩阵。三个模式互斥；从其他工作目录运行也会按脚本位置找到快照。程序不联网、不下载权重，也不执行配置中的
@@ -17107,9 +17523,9 @@ alt="miniGPT 的 S0–S6 主线经过配置对账、数值不变量和错误反�
 <code>scripts/plot_p27_healthcheck.py</code> 读取仓库内金标报告
 <code>docs/gold/p27_healthcheck_mtp.json</code>（<code>OMP_NUM_THREADS=1 python code/28_minigpt_healthcheck.py --mtp --json</code>
 在 CPU float32、种子 270/271 下写出）生成，不使用手填基准值。复现：</p>
-<div class="sourceCode" id="cb171"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb171-1"><a href="#cb171-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> docs/gold/p27_healthcheck_mtp.json</span>
-<span id="cb171-2"><a href="#cb171-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json <span class="at">--out-dir</span> assets/diagrams/p27</span></code></pre></div>
+<div class="sourceCode" id="cb170"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb170-1"><a href="#cb170-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> docs/gold/p27_healthcheck_mtp.json</span>
+<span id="cb170-2"><a href="#cb170-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/plot_p27_healthcheck.py docs/gold/p27_healthcheck_mtp.json <span class="at">--out-dir</span> assets/diagrams/p27</span></code></pre></div>
 <h2 id="p27.1-先分清三种相同">P27.1 先分清三种“相同”</h2>
 <p>做实验最容易犯的错误，是比较了不该相同的东西。</p>
 <div class="table-wrapper"><table>
@@ -17243,15 +17659,15 @@ head。这样，删掉复制步骤时主干权重确实不同，不会被相同�
 <h3 id="运行入口与失败含义">运行入口与失败含义</h3>
 <p>在仓库根目录、已安装 <code>requirements.txt</code> 的 Python
 环境中运行：</p>
-<div class="sourceCode" id="cb172"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb172-1"><a href="#cb172-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py</span></code></pre></div>
+<div class="sourceCode" id="cb171"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb171-1"><a href="#cb171-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py</span></code></pre></div>
 <p>加上可选 MTP 检查：</p>
-<div class="sourceCode" id="cb173"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb173-1"><a href="#cb173-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span></span></code></pre></div>
+<div class="sourceCode" id="cb172"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb172-1"><a href="#cb172-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span></span></code></pre></div>
 <p>需要保存可比较的机器可读报告时：</p>
-<div class="sourceCode" id="cb174"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb174-1"><a href="#cb174-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> healthcheck.json</span>
-<span id="cb174-2"><a href="#cb174-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_minigpt_healthcheck.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb173"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb173-1"><a href="#cb173-1" aria-hidden="true" tabindex="-1"></a><span class="va">OMP_NUM_THREADS</span><span class="op">=</span>1 <span class="ex">python</span> code/28_minigpt_healthcheck.py <span class="at">--mtp</span> <span class="at">--json</span> <span class="op">&gt;</span> healthcheck.json</span>
+<span id="cb173-2"><a href="#cb173-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_minigpt_healthcheck.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p><code>--json</code> 只改变输出格式，不跳过任何检查；每个缓存阶段的
 <code>chunk_checks</code>
 记录实际运行的四种分块及各自误差、字节数，汇总误差取其中最大值。默认路径不下载模型、不访问外部服务、不使用
@@ -17481,21 +17897,21 @@ href="code/28_minigpt_healthcheck.py"><code>code/28_minigpt_healthcheck.py</code
 行），原样摘录，由 <code>scripts/sync_code_excerpts.py</code>
 从源码生成并由测试锁定：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L120-L133 -->
-<div class="sourceCode" id="cb175"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb175-1"><a href="#cb175-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
-<span id="cb175-2"><a href="#cb175-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cache_equivalence(stage, tokens, sizes<span class="op">=</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">4</span>)):</span>
-<span id="cb175-3"><a href="#cb175-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> stage.cached_forward <span class="kw">is</span> <span class="va">None</span>:</span>
-<span id="cb175-4"><a href="#cb175-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;stage has no cache path&#39;</span>)</span>
-<span id="cb175-5"><a href="#cb175-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(<span class="bu">type</span>(size) <span class="kw">is</span> <span class="kw">not</span> <span class="bu">int</span> <span class="kw">or</span> size <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">for</span> size <span class="kw">in</span> sizes) <span class="kw">or</span> <span class="bu">sum</span>(sizes) <span class="op">!=</span> tokens.shape[<span class="dv">1</span>]:</span>
-<span id="cb175-6"><a href="#cb175-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;positive chunks must cover tokens exactly&#39;</span>)</span>
-<span id="cb175-7"><a href="#cb175-7" aria-hidden="true" tabindex="-1"></a>    expected <span class="op">=</span> stage.model(tokens)[<span class="dv">0</span>]</span>
-<span id="cb175-8"><a href="#cb175-8" aria-hidden="true" tabindex="-1"></a>    cache, pieces, start <span class="op">=</span> <span class="va">None</span>, [], <span class="dv">0</span></span>
-<span id="cb175-9"><a href="#cb175-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> size <span class="kw">in</span> sizes:</span>
-<span id="cb175-10"><a href="#cb175-10" aria-hidden="true" tabindex="-1"></a>        output, cache <span class="op">=</span> stage.cached_forward(stage.model, tokens[:, start:start <span class="op">+</span> size], cache)</span>
-<span id="cb175-11"><a href="#cb175-11" aria-hidden="true" tabindex="-1"></a>        pieces.append(output)</span>
-<span id="cb175-12"><a href="#cb175-12" aria-hidden="true" tabindex="-1"></a>        start <span class="op">+=</span> size</span>
-<span id="cb175-13"><a href="#cb175-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> cache.length <span class="op">!=</span> start:</span>
-<span id="cb175-14"><a href="#cb175-14" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;cache length differs from consumed prefix&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb174"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb174-1"><a href="#cb174-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
+<span id="cb174-2"><a href="#cb174-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cache_equivalence(stage, tokens, sizes<span class="op">=</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">4</span>)):</span>
+<span id="cb174-3"><a href="#cb174-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> stage.cached_forward <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb174-4"><a href="#cb174-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;stage has no cache path&#39;</span>)</span>
+<span id="cb174-5"><a href="#cb174-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(<span class="bu">type</span>(size) <span class="kw">is</span> <span class="kw">not</span> <span class="bu">int</span> <span class="kw">or</span> size <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">for</span> size <span class="kw">in</span> sizes) <span class="kw">or</span> <span class="bu">sum</span>(sizes) <span class="op">!=</span> tokens.shape[<span class="dv">1</span>]:</span>
+<span id="cb174-6"><a href="#cb174-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;positive chunks must cover tokens exactly&#39;</span>)</span>
+<span id="cb174-7"><a href="#cb174-7" aria-hidden="true" tabindex="-1"></a>    expected <span class="op">=</span> stage.model(tokens)[<span class="dv">0</span>]</span>
+<span id="cb174-8"><a href="#cb174-8" aria-hidden="true" tabindex="-1"></a>    cache, pieces, start <span class="op">=</span> <span class="va">None</span>, [], <span class="dv">0</span></span>
+<span id="cb174-9"><a href="#cb174-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> size <span class="kw">in</span> sizes:</span>
+<span id="cb174-10"><a href="#cb174-10" aria-hidden="true" tabindex="-1"></a>        output, cache <span class="op">=</span> stage.cached_forward(stage.model, tokens[:, start:start <span class="op">+</span> size], cache)</span>
+<span id="cb174-11"><a href="#cb174-11" aria-hidden="true" tabindex="-1"></a>        pieces.append(output)</span>
+<span id="cb174-12"><a href="#cb174-12" aria-hidden="true" tabindex="-1"></a>        start <span class="op">+=</span> size</span>
+<span id="cb174-13"><a href="#cb174-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> cache.length <span class="op">!=</span> start:</span>
+<span id="cb174-14"><a href="#cb174-14" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;cache length differs from consumed prefix&#39;</span>)</span></code></pre></div>
 <p>逐行读：</p>
 <ul>
 <li>第 120 行
@@ -17528,15 +17944,15 @@ ID，再比较前三个位置的全部 logits。因果 decoder
 是其中的最大值；不能只抽查切点 3。</p>
 <p>对应源码是 <code>causal_error</code>（第 110–117 行）：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L110-L117 -->
-<div class="sourceCode" id="cb176"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb176-1"><a href="#cb176-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
-<span id="cb176-2"><a href="#cb176-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> causal_error(model, tokens, cut<span class="op">=</span><span class="dv">3</span>):</span>
-<span id="cb176-3"><a href="#cb176-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Intervene only on FUTURE inputs, then inspect all earlier logits.&quot;&quot;&quot;</span></span>
-<span id="cb176-4"><a href="#cb176-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="dv">0</span> <span class="op">&lt;</span> cut <span class="op">&lt;</span> tokens.shape[<span class="dv">1</span>]:</span>
-<span id="cb176-5"><a href="#cb176-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;cut must split prefix and nonempty future&#39;</span>)</span>
-<span id="cb176-6"><a href="#cb176-6" aria-hidden="true" tabindex="-1"></a>    changed <span class="op">=</span> tokens.clone()</span>
-<span id="cb176-7"><a href="#cb176-7" aria-hidden="true" tabindex="-1"></a>    changed[:, cut:] <span class="op">=</span> (changed[:, cut:] <span class="op">+</span> <span class="dv">5</span>) <span class="op">%</span> model.config.vocab_size</span>
-<span id="cb176-8"><a href="#cb176-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> check_close(model(changed)[<span class="dv">0</span>][:, :cut], model(tokens)[<span class="dv">0</span>][:, :cut])</span></code></pre></div>
+<div class="sourceCode" id="cb175"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb175-1"><a href="#cb175-1" aria-hidden="true" tabindex="-1"></a><span class="at">@torch.no_grad</span>()</span>
+<span id="cb175-2"><a href="#cb175-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> causal_error(model, tokens, cut<span class="op">=</span><span class="dv">3</span>):</span>
+<span id="cb175-3"><a href="#cb175-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">&quot;&quot;&quot;Intervene only on FUTURE inputs, then inspect all earlier logits.&quot;&quot;&quot;</span></span>
+<span id="cb175-4"><a href="#cb175-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="dv">0</span> <span class="op">&lt;</span> cut <span class="op">&lt;</span> tokens.shape[<span class="dv">1</span>]:</span>
+<span id="cb175-5"><a href="#cb175-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;cut must split prefix and nonempty future&#39;</span>)</span>
+<span id="cb175-6"><a href="#cb175-6" aria-hidden="true" tabindex="-1"></a>    changed <span class="op">=</span> tokens.clone()</span>
+<span id="cb175-7"><a href="#cb175-7" aria-hidden="true" tabindex="-1"></a>    changed[:, cut:] <span class="op">=</span> (changed[:, cut:] <span class="op">+</span> <span class="dv">5</span>) <span class="op">%</span> model.config.vocab_size</span>
+<span id="cb175-8"><a href="#cb175-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> check_close(model(changed)[<span class="dv">0</span>][:, :cut], model(tokens)[<span class="dv">0</span>][:, :cut])</span></code></pre></div>
 <ul>
 <li>第 113–114
 行：切点必须把序列分成非空的过去与非空的未来，否则这次干预什么也没检验。</li>
@@ -17675,25 +18091,25 @@ monkey-patch 后的任意运行时结构。</p>
 prefill。</p>
 <p>加载顺序的核心是 <code>load_checkpoint</code> 第 182–199 行：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L182-L199 -->
-<div class="sourceCode" id="cb177"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb177-1"><a href="#cb177-1" aria-hidden="true" tabindex="-1"></a>    checkpoint <span class="op">=</span> torch.load(source, map_location<span class="op">=</span><span class="st">&#39;cpu&#39;</span>, weights_only<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb177-2"><a href="#cb177-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(checkpoint, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">set</span>(checkpoint) <span class="op">!=</span> {<span class="st">&#39;metadata&#39;</span>, <span class="st">&#39;state_dict&#39;</span>}:</span>
-<span id="cb177-3"><a href="#cb177-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint envelope mismatch&#39;</span>)</span>
-<span id="cb177-4"><a href="#cb177-4" aria-hidden="true" tabindex="-1"></a>    meta <span class="op">=</span> checkpoint[<span class="st">&#39;metadata&#39;</span>]</span>
-<span id="cb177-5"><a href="#cb177-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(meta, <span class="bu">dict</span>) <span class="kw">or</span> meta.get(<span class="st">&#39;dtype&#39;</span>) <span class="kw">not</span> <span class="kw">in</span> (<span class="st">&#39;torch.float32&#39;</span>, <span class="st">&#39;torch.float64&#39;</span>):</span>
-<span id="cb177-6"><a href="#cb177-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;unsupported checkpoint dtype/metadata&#39;</span>)</span>
-<span id="cb177-7"><a href="#cb177-7" aria-hidden="true" tabindex="-1"></a>    model.to(dtype<span class="op">=</span>{<span class="st">&#39;torch.float32&#39;</span>: torch.float32, <span class="st">&#39;torch.float64&#39;</span>: torch.float64}[meta[<span class="st">&#39;dtype&#39;</span>]])</span>
-<span id="cb177-8"><a href="#cb177-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> meta <span class="op">!=</span> _metadata(stage, model, vocabulary):</span>
-<span id="cb177-9"><a href="#cb177-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint architecture/config/vocabulary/depth mismatch&#39;</span>)</span>
-<span id="cb177-10"><a href="#cb177-10" aria-hidden="true" tabindex="-1"></a>    state <span class="op">=</span> checkpoint[<span class="st">&#39;state_dict&#39;</span>]</span>
-<span id="cb177-11"><a href="#cb177-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(state, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">any</span>(<span class="kw">not</span> <span class="bu">isinstance</span>(t, torch.Tensor) <span class="cf">for</span> t <span class="kw">in</span> state.values()):</span>
-<span id="cb177-12"><a href="#cb177-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint state must contain tensors&#39;</span>)</span>
-<span id="cb177-13"><a href="#cb177-13" aria-hidden="true" tabindex="-1"></a>    expected_state <span class="op">=</span> model.state_dict()</span>
-<span id="cb177-14"><a href="#cb177-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># load_state_dict can silently cast integer/bool/complex tensors. Validate</span></span>
-<span id="cb177-15"><a href="#cb177-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># each named target&#39;s exact dtype, including any non-floating buffers, first.</span></span>
-<span id="cb177-16"><a href="#cb177-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(key <span class="kw">in</span> expected_state <span class="kw">and</span> tensor.dtype <span class="op">!=</span> expected_state[key].dtype</span>
-<span id="cb177-17"><a href="#cb177-17" aria-hidden="true" tabindex="-1"></a>           <span class="cf">for</span> key, tensor <span class="kw">in</span> state.items()):</span>
-<span id="cb177-18"><a href="#cb177-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint tensor dtype mismatch&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb176"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb176-1"><a href="#cb176-1" aria-hidden="true" tabindex="-1"></a>    checkpoint <span class="op">=</span> torch.load(source, map_location<span class="op">=</span><span class="st">&#39;cpu&#39;</span>, weights_only<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb176-2"><a href="#cb176-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(checkpoint, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">set</span>(checkpoint) <span class="op">!=</span> {<span class="st">&#39;metadata&#39;</span>, <span class="st">&#39;state_dict&#39;</span>}:</span>
+<span id="cb176-3"><a href="#cb176-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint envelope mismatch&#39;</span>)</span>
+<span id="cb176-4"><a href="#cb176-4" aria-hidden="true" tabindex="-1"></a>    meta <span class="op">=</span> checkpoint[<span class="st">&#39;metadata&#39;</span>]</span>
+<span id="cb176-5"><a href="#cb176-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(meta, <span class="bu">dict</span>) <span class="kw">or</span> meta.get(<span class="st">&#39;dtype&#39;</span>) <span class="kw">not</span> <span class="kw">in</span> (<span class="st">&#39;torch.float32&#39;</span>, <span class="st">&#39;torch.float64&#39;</span>):</span>
+<span id="cb176-6"><a href="#cb176-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;unsupported checkpoint dtype/metadata&#39;</span>)</span>
+<span id="cb176-7"><a href="#cb176-7" aria-hidden="true" tabindex="-1"></a>    model.to(dtype<span class="op">=</span>{<span class="st">&#39;torch.float32&#39;</span>: torch.float32, <span class="st">&#39;torch.float64&#39;</span>: torch.float64}[meta[<span class="st">&#39;dtype&#39;</span>]])</span>
+<span id="cb176-8"><a href="#cb176-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> meta <span class="op">!=</span> _metadata(stage, model, vocabulary):</span>
+<span id="cb176-9"><a href="#cb176-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint architecture/config/vocabulary/depth mismatch&#39;</span>)</span>
+<span id="cb176-10"><a href="#cb176-10" aria-hidden="true" tabindex="-1"></a>    state <span class="op">=</span> checkpoint[<span class="st">&#39;state_dict&#39;</span>]</span>
+<span id="cb176-11"><a href="#cb176-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="bu">isinstance</span>(state, <span class="bu">dict</span>) <span class="kw">or</span> <span class="bu">any</span>(<span class="kw">not</span> <span class="bu">isinstance</span>(t, torch.Tensor) <span class="cf">for</span> t <span class="kw">in</span> state.values()):</span>
+<span id="cb176-12"><a href="#cb176-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint state must contain tensors&#39;</span>)</span>
+<span id="cb176-13"><a href="#cb176-13" aria-hidden="true" tabindex="-1"></a>    expected_state <span class="op">=</span> model.state_dict()</span>
+<span id="cb176-14"><a href="#cb176-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># load_state_dict can silently cast integer/bool/complex tensors. Validate</span></span>
+<span id="cb176-15"><a href="#cb176-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># each named target&#39;s exact dtype, including any non-floating buffers, first.</span></span>
+<span id="cb176-16"><a href="#cb176-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">any</span>(key <span class="kw">in</span> expected_state <span class="kw">and</span> tensor.dtype <span class="op">!=</span> expected_state[key].dtype</span>
+<span id="cb176-17"><a href="#cb176-17" aria-hidden="true" tabindex="-1"></a>           <span class="cf">for</span> key, tensor <span class="kw">in</span> state.items()):</span>
+<span id="cb176-18"><a href="#cb176-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">&#39;checkpoint tensor dtype mismatch&#39;</span>)</span></code></pre></div>
 <ul>
 <li>第 182 行：<code>map_location='cpu'</code> 加
 <code>weights_only=True</code>，只允许张量与基础容器被反序列化。</li>
@@ -17861,14 +18277,14 @@ mask，不修改磁盘上的旧课例。源码锚点如果找不到或出现多�
 <p>变异器 <code>mutate_function</code> 的函数体只有 7 行（第 308–314
 行）：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L308-L314 -->
-<div class="sourceCode" id="cb178"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb178-1"><a href="#cb178-1" aria-hidden="true" tabindex="-1"></a>    raw <span class="op">=</span> inspect.unwrap(function)</span>
-<span id="cb178-2"><a href="#cb178-2" aria-hidden="true" tabindex="-1"></a>    source <span class="op">=</span> textwrap.dedent(inspect.getsource(raw))</span>
-<span id="cb178-3"><a href="#cb178-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> source.count(old) <span class="op">!=</span> <span class="dv">1</span>:</span>
-<span id="cb178-4"><a href="#cb178-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;mutation anchor must occur exactly once&#39;</span>)</span>
-<span id="cb178-5"><a href="#cb178-5" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="bu">dict</span>(raw.__globals__)</span>
-<span id="cb178-6"><a href="#cb178-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">exec</span>(<span class="bu">compile</span>(source.replace(old, new, <span class="dv">1</span>), <span class="st">&#39;&lt;p27-behavior-mutant&gt;&#39;</span>, <span class="st">&#39;exec&#39;</span>), namespace)</span>
-<span id="cb178-7"><a href="#cb178-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> namespace[raw.<span class="va">__name__</span>]</span></code></pre></div>
+<div class="sourceCode" id="cb177"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb177-1"><a href="#cb177-1" aria-hidden="true" tabindex="-1"></a>    raw <span class="op">=</span> inspect.unwrap(function)</span>
+<span id="cb177-2"><a href="#cb177-2" aria-hidden="true" tabindex="-1"></a>    source <span class="op">=</span> textwrap.dedent(inspect.getsource(raw))</span>
+<span id="cb177-3"><a href="#cb177-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> source.count(old) <span class="op">!=</span> <span class="dv">1</span>:</span>
+<span id="cb177-4"><a href="#cb177-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;mutation anchor must occur exactly once&#39;</span>)</span>
+<span id="cb177-5"><a href="#cb177-5" aria-hidden="true" tabindex="-1"></a>    namespace <span class="op">=</span> <span class="bu">dict</span>(raw.__globals__)</span>
+<span id="cb177-6"><a href="#cb177-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">exec</span>(<span class="bu">compile</span>(source.replace(old, new, <span class="dv">1</span>), <span class="st">&#39;&lt;p27-behavior-mutant&gt;&#39;</span>, <span class="st">&#39;exec&#39;</span>), namespace)</span>
+<span id="cb177-7"><a href="#cb177-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> namespace[raw.<span class="va">__name__</span>]</span></code></pre></div>
 <ul>
 <li>第 308–309 行：取被装饰前的原函数，读出它的真实源码。</li>
 <li>第 310–311
@@ -17903,18 +18319,18 @@ id="负例三后一个请求接上了前一个请求的历史">负例三：后�
 <p>前两个负例的判定循环在 <code>negative_controls</code> 第 332–342
 行：</p>
 <!-- code-excerpt: code/28_minigpt_healthcheck.py L332-L342 -->
-<div class="sourceCode" id="cb179"><pre
-class="sourceCode python"><code class="sourceCode python"><span id="cb179-1"><a href="#cb179-1" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, forward <span class="kw">in</span> variants.items():</span>
-<span id="cb179-2"><a href="#cb179-2" aria-hidden="true" tabindex="-1"></a>        first, cache <span class="op">=</span> forward(base, tokens[:, :<span class="dv">3</span>], <span class="va">None</span>)</span>
-<span id="cb179-3"><a href="#cb179-3" aria-hidden="true" tabindex="-1"></a>        rest, _ <span class="op">=</span> forward(base, tokens[:, <span class="dv">3</span>:], cache)</span>
-<span id="cb179-4"><a href="#cb179-4" aria-hidden="true" tabindex="-1"></a>        actual <span class="op">=</span> torch.cat((first, rest), <span class="dv">1</span>)</span>
-<span id="cb179-5"><a href="#cb179-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> torch.isfinite(actual).<span class="bu">all</span>():</span>
-<span id="cb179-6"><a href="#cb179-6" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;negative must return finite logits, not crash/NaN&#39;</span>)</span>
-<span id="cb179-7"><a href="#cb179-7" aria-hidden="true" tabindex="-1"></a>        delta <span class="op">=</span> <span class="bu">float</span>((actual <span class="op">-</span> expected).<span class="bu">abs</span>().<span class="bu">max</span>())</span>
-<span id="cb179-8"><a href="#cb179-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> torch.allclose(actual, expected, atol<span class="op">=</span>ATOL, rtol<span class="op">=</span>RTOL):</span>
-<span id="cb179-9"><a href="#cb179-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="ss">f&#39;</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss"> survived the equivalence oracle&#39;</span>)</span>
-<span id="cb179-10"><a href="#cb179-10" aria-hidden="true" tabindex="-1"></a>        rows.append({<span class="st">&#39;name&#39;</span>: name, <span class="st">&#39;caught&#39;</span>: <span class="va">True</span>, <span class="st">&#39;max_logit_error&#39;</span>: delta,</span>
-<span id="cb179-11"><a href="#cb179-11" aria-hidden="true" tabindex="-1"></a>                     <span class="st">&#39;before_error&#39;</span>: before_split})</span></code></pre></div>
+<div class="sourceCode" id="cb178"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb178-1"><a href="#cb178-1" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, forward <span class="kw">in</span> variants.items():</span>
+<span id="cb178-2"><a href="#cb178-2" aria-hidden="true" tabindex="-1"></a>        first, cache <span class="op">=</span> forward(base, tokens[:, :<span class="dv">3</span>], <span class="va">None</span>)</span>
+<span id="cb178-3"><a href="#cb178-3" aria-hidden="true" tabindex="-1"></a>        rest, _ <span class="op">=</span> forward(base, tokens[:, <span class="dv">3</span>:], cache)</span>
+<span id="cb178-4"><a href="#cb178-4" aria-hidden="true" tabindex="-1"></a>        actual <span class="op">=</span> torch.cat((first, rest), <span class="dv">1</span>)</span>
+<span id="cb178-5"><a href="#cb178-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> torch.isfinite(actual).<span class="bu">all</span>():</span>
+<span id="cb178-6"><a href="#cb178-6" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="st">&#39;negative must return finite logits, not crash/NaN&#39;</span>)</span>
+<span id="cb178-7"><a href="#cb178-7" aria-hidden="true" tabindex="-1"></a>        delta <span class="op">=</span> <span class="bu">float</span>((actual <span class="op">-</span> expected).<span class="bu">abs</span>().<span class="bu">max</span>())</span>
+<span id="cb178-8"><a href="#cb178-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> torch.allclose(actual, expected, atol<span class="op">=</span>ATOL, rtol<span class="op">=</span>RTOL):</span>
+<span id="cb178-9"><a href="#cb178-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">AssertionError</span>(<span class="ss">f&#39;</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss"> survived the equivalence oracle&#39;</span>)</span>
+<span id="cb178-10"><a href="#cb178-10" aria-hidden="true" tabindex="-1"></a>        rows.append({<span class="st">&#39;name&#39;</span>: name, <span class="st">&#39;caught&#39;</span>: <span class="va">True</span>, <span class="st">&#39;max_logit_error&#39;</span>: delta,</span>
+<span id="cb178-11"><a href="#cb178-11" aria-hidden="true" tabindex="-1"></a>                     <span class="st">&#39;before_error&#39;</span>: before_split})</span></code></pre></div>
 <ul>
 <li>第 333–335 行：变异版本先喂 3 个 token、再带着自己的缓存喂剩下 5
 个，拼成完整 logits。</li>
@@ -19603,9 +20019,9 @@ class="math inline">\(8\times128=1024\)</span>），不能擅自把 Q 投影改�
 1024。新 revision 即使文件长度不变也可能改字段，必须同时检查 hash 和语义
 diff，不能只看文件大小。</p>
 <p><strong>第四步，小实验验证。</strong> 在仓库根目录运行：</p>
-<div class="sourceCode" id="cb180"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb180-1"><a href="#cb180-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
-<span id="cb180-2"><a href="#cb180-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_reference_appendix.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
+<div class="sourceCode" id="cb179"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb179-1"><a href="#cb179-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> code/26_qwen3_case.py</span>
+<span id="cb179-2"><a href="#cb179-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> unittest discover <span class="at">-s</span> tests <span class="at">-p</span> <span class="st">&#39;test_reference_appendix.py&#39;</span> <span class="at">-v</span></span></code></pre></div>
 <p>第一条仅读取固定小文件并打印账本；第二条用标准库重新核对原始字节、上述三个字段、形状/概率/梯度卡和本节自测。若另运行
 P25 <code>--torch</code>
 或官方参考测试，记录它们的独立依赖和实际结果。没有下载真实权重，所以不能把此处称作“复现
