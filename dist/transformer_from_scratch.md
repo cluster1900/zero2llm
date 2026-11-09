@@ -421,6 +421,27 @@ sequences = [merge_pair(ids, pair, new_id) for ids in sequences]
 
 `zip(ids, ids[1:])` 把每个位置和紧跟它的位置配对；`Counter` 累加出现次数；`min` 的排序键先比较负频数，所以频数最高的优先，再用 ID 对解决并列。随后给合并结果分配 ID、拼接其 bytes，并更新每篇文档。完整代码在 `counts` 为空时停止，避免对空集合求最小值。
 
+训练的一轮可以画成下面这张循环图：按文档统计 → 选最高频对 → 分配新 ID → 不重叠替换；统计后若没有相邻对，或合并次数用完，就停止。
+
+```mermaid
+flowchart TD
+    %% id: ch01a-bpe-merge-loop
+    accTitle: 最小字节 BPE：每轮只合并当前最常见的一对
+    accDescr: 各文档分别统计相邻对；没有相邻对则得到 merges 与 vocab。否则取次数最高的一对（并列取较小 ID 对），新 ID 从 256 起并拼接 bytes，从左到右替换命中对并跳两格；合并次数用完也停止。
+    A["各文档分别统计相邻对"] --> Z{"还有相邻对？"}
+    Z -->|没有| F["得到 merges 与 vocab"]
+    Z -->|有| B
+    subgraph S[" "]
+      direction LR
+      B["取最高频对 · 并列取较小 ID"] --> C["新 ID · bytes 拼接"]
+      C --> D["不重叠替换"]
+    end
+    D --> E{"合并次数用完？"}
+    E -->|否| A
+    E -->|是| F
+```
+
+
 `merge_pair` 必须处理重叠。例如把 `aaa` 里的 `aa` 合并，结果应是 `[aa, a]`，不能同时把中间的 `a` 用两次：
 
 ```python
@@ -504,6 +525,22 @@ trainer = trainers.BpeTrainer(
 ## 1A.7 生产环境还多了哪些步骤？
 
 真实流水线常包含归一化、预切分、子词编码、特殊 token 插入、padding / truncation 和解码。逐项检查，比只问“用了 BPE 吗”更有用。
+
+教学里的 BPE 主要覆盖「子词编码」；生产环境通常还要串上下面几步：
+
+```mermaid
+flowchart TD
+    %% id: ch01a-prod-pipeline
+    accTitle: 生产分词流水线比教学 BPE 多出归一化、预切分与填充
+    accDescr: 原文经归一化、预切分、子词编码、特殊 token 或模板、截断或填充（填充另配 attention mask），得到 ID 序列。
+    A["原文"] --> B["归一化（可能不可还原）"]
+    B --> C["预切分"]
+    C --> D["子词编码"]
+    D --> E["特殊 token / 模板"]
+    E --> F["截断或填充<br/>填充另配 attention mask"]
+    F --> G["ID 序列"]
+```
+
 
 - **归一化**可能把大写变小写或统一 Unicode 表示。这有时有帮助，却可能让解码无法恢复原文；本章刻意不做。
 - **特殊 token**可表示序列结束、角色边界或填充。它们是明确约定，不是看到字符串 `<eos>` 就一定自动成为控制符。本章教学实现把这样的字符串当普通文字。
@@ -1019,6 +1056,23 @@ allowed = allowed & torch.ones(T, T, dtype=torch.bool).tril()
 
 `valid` 是 [B,T]，两个切片分别变成 [B,1,T,1] 与 [B,1,1,T]，广播后得到 [B,1,T,T]；中间那根长度为 1 的轴留给第 4 章的多个头共享。若单头分数是 [B,T,T]，使用 `allowed[:, 0]`；不要误把 [B,T] 直接广播成分数矩阵。上面的片段省略了 device；`code/attention_core.py` 中的完整版本创建下三角时指定与输入相同的 device。
 
+形状广播可以画成这样：先扩成查询侧与键侧，再与下三角取与；损失掩码仍要另算。
+
+```mermaid
+flowchart TD
+    %% id: ch03-mask-broadcast
+    accTitle: 因果掩码与补位掩码先广播再取与，得到 [B,1,T,T]
+    accDescr: valid 形状 [B,T]；查询侧扩成 [B,1,T,1]、键侧扩成 [B,1,1,T]，再与下三角 [T,T] 取与，得到 [B,1,T,T]。损失掩码另算，不能用注意力 mask 代替。
+    A["valid [B,T]"] --> Q["查询侧 [B,1,T,1]"]
+    A --> K["键侧 [B,1,1,T]"]
+    Q --> P["补位可见 [B,1,T,T]"]
+    K --> P
+    P --> F["allowed [B,1,T,T]"]
+    T["下三角 [T,T]"] --> F
+    N["旁注：损失掩码另算 ≠ 注意力 mask"]
+```
+
+
 注意不同 API 的约定不同：PyTorch 2.14 的 functional SDPA 布尔 mask 中 True 表示参与，`nn.MultiheadAttention` 的布尔禁止掩码使用相反语义。不要把同一个布尔张量不经核对就换接口。
 
 ## 3.5 全部禁止的一行：明确约定，避免 NaN
@@ -1027,7 +1081,19 @@ allowed = allowed & torch.ones(T, T, dtype=torch.bool).tril()
 
 也不能简单改成 `-1e9`：它不是所有 dtype 都可表示的数，而且一整行同样的有限负数仍会得到均匀权重，反而让禁止项“复活”。
 
-本书选一个明确的教学策略：**全禁用行返回全零权重，其加权输出为零**，不是和为 1 的概率分布。核心步骤如下：
+本书选一个明确的教学策略：**全禁用行返回全零权重，其加权输出为零**，不是和为 1 的概率分布。判断流程如下：
+
+```mermaid
+flowchart TD
+    %% id: ch03-all-masked-row
+    accTitle: 全禁止行直接 Softmax 会出 NaN，本书约定权重与输出全为 0
+    accDescr: 若该行还有可见位置，禁止处填 −∞ 再 Softmax，权重和为 1；若整行都禁止，按约定权重与输出全为 0，不用有限大负数冒充。
+    A{"这一行有可见位置吗？"} -->|有| B["禁止处填 −∞"]
+    B --> C["Softmax，权重和为 1"]
+    A -->|没有| D["按约定：权重与输出全为 0"]
+```
+
+核心步骤如下：
 
 ```python
 any_allowed = allowed.any(dim=-1, keepdim=True)

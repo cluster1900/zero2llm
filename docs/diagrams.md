@@ -29,7 +29,7 @@
 
 如果所有图都没变，构建根本不需要 Node.js 和 `npm ci`。
 
-备份只在构建成功后删除。渲染中途失败时，`build.py` 先把备份复制到 `dist/assets/rendered.restore-tmp/`，再用改名换回 `dist/assets/rendered/`，换好之后才删备份。就算恢复时崩溃，备份也还在：下次 `build.py` 发现 `dist/assets/rendered/manifest.json` 不在、`.render-backup/` 还在，就自动拿备份当复用缓存。要强制全部重渲（例如改了 `render_diagrams.mjs` 的主题或字体），运行 `ZERO2LLM_RERENDER=1 python3 build.py`；这会让 40 多张图全部出现字节差异，请单独开一个 PR。
+构建**成功**后才删除备份。渲染中途失败时，`build.py` 先把备份复制到 `dist/assets/rendered.restore-tmp/`，再用改名换回 `dist/assets/rendered/`，**换好之后**才删备份——所以失败路径上备份会多留一会儿，并不是“一开始就删”。就算恢复时崩溃，备份也还在：下次 `build.py` 发现 `dist/assets/rendered/manifest.json` 不在、`.render-backup/` 还在，就自动拿备份当复用缓存。要强制全部重渲（例如改了 `render_diagrams.mjs` 的主题或字体），运行 `ZERO2LLM_RERENDER=1 python3 build.py`；这会让 40 多张图全部出现字节差异，请单独开一个 PR。
 
 `scripts/check_book.py`（CI 会跑）会核对以下几点：
 - dist md 里每个 Mermaid 块都有同 id、同 sha256 的渲染，否则报「没有渲染」或「渲染已过期（源码改了但没重新构建）」；
@@ -46,7 +46,7 @@
 
 `flowchart` `flowchart-elk` `graph` `sequenceDiagram` `classDiagram` `classDiagram-v2` `stateDiagram` `stateDiagram-v2` `erDiagram` `journey` `gantt` `pie` `quadrantChart` `requirement` `requirementDiagram` `gitGraph` `C4Context` `C4Container` `C4Component` `C4Dynamic` `C4Deployment` `mindmap` `timeline` `zenuml` `sankey` `sankey-beta` `xychart` `xychart-beta` `block` `block-beta` `packet` `packet-beta` `kanban` `architecture` `architecture-beta` `radar-beta` `treemap` `treemap-beta` `treeView-beta` `swimlane-beta` `eventmodeling` `venn-beta` `cynefin-beta` `info`，以及不区分大小写的 `ishikawa` `ishikawa-beta` `wardley-beta` `railroad-beta` `railroad-ebnf-beta` `railroad-abnf-beta` `railroad-peg-beta`。
 
-其中很多关键字也是普通单词（`graph`、`pie`、`info`、`block`），所以只有满足下面三条才算图：关键字独占第一行，或后面跟的是参数（如 `graph LR`、`pie title …`、`gitGraph LR:`），而不是 `=`、`(`、`.`、`:` 这类代码符号；并且后面还有正文行。`tests/test_diagram_ids.py` 逐个测试这些关键字。装了 node_modules 时，它还会把这个列表和 `node_modules/mermaid` 实际注册的 detector 对一遍。升级 mermaid 时，同步更新 `scripts/check_book.py` 的 `MERMAID_KEYWORDS`、这份列表和测试。
+其中很多关键字也是普通单词（`graph`、`pie`、`info`、`block`、`timeline`、`journey`）。判定时关键字后面要满足 mermaid 常见的边界 `(?:[\s:]|$)`（所以 `cynefin-beta:` 算图头，`graphs` / `flowchart-v3` 不算）；整行要么只有关键字（可带结尾 `:`），要么后面跟参数。对容易误伤的 `graph` / `journey` / `pie` / `info` / `timeline`，参数只放行方向词（`LR`/`TD`/…）和 `title` / `showData` / `showInfo`，避免 `graph of the function` 这类普通句子被当成图；其他关键字仍拒绝以 `=`、`(`、`.`、`,`、`[`、`{` 开头的代码尾巴。正则里的换行只结束图头这一行，**不要求**后面再跟正文行（`info\n` 单独一行就算）。`tests/test_diagram_ids.py` 逐个测试这些关键字。装了 node_modules 时，它还会把这个列表和 `node_modules/mermaid` 实际注册的 detector 对一遍（同时解析 `return /…/` 与 `if (/…/)` 两种写法）。升级 mermaid 时，同步更新 `scripts/check_book.py` 的 `MERMAID_KEYWORDS`、这份列表和测试。
 
 ## 3. 渲染工具链（实际版本）
 
