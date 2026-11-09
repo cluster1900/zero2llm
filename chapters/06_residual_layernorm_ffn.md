@@ -487,4 +487,4 @@ Pre-LN zero-sublayer identity max error=0.000000
 
 ## 6.9 延伸阅读：AttnRes {#p07-attnres}
 
-6.1 的残差把每个子层的增量 $F_l$ 都以权重 1 相加。**其中：** $F_l$ 是第 $l$ 个子层（注意力或 FFN）算出的增量，$l$ 只是子层编号；**白话：** 每一层的“批注”都原样记到同一条主干上，谁也不比谁分量重。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把它换成沿深度方向的注意力：每层用一个可学习的 pseudo-query，对 embedding 和此前各层的输出做加权平均；[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)采用了这个做法。
+6.1 的残差把每个子层的增量 $F(x)$ 都以权重 1 相加。**其中：** $F$ 就是 6.1 的残差分支，注意力和 FFN 这两个子层各自算出自己的 $F(x)$；**白话：** 每个子层的“批注”都原样记到同一条主干上，谁也不比谁分量重。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把它换成沿深度方向的注意力：每层用一个可学习的 pseudo-query，对 embedding 和此前各层的输出做加权平均；[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)采用了这个做法。

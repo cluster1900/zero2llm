@@ -4633,12 +4633,12 @@ href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.MultiheadAttention.h
 mask 语义和参数接口。</li>
 </ul>
 <h2 id="p07-attnres">6.9 延伸阅读：AttnRes</h2>
-<p>6.1 的残差把每个子层的增量 <span class="math inline">\(F_l\)</span>
+<p>6.1 的残差把每个子层的增量 <span class="math inline">\(F(x)\)</span>
 都以权重 1 相加。<strong>其中：</strong> <span
-class="math inline">\(F_l\)</span> 是第 <span
-class="math inline">\(l\)</span> 个子层（注意力或 FFN）算出的增量，<span
-class="math inline">\(l\)</span> 只是子层编号；<strong>白话：</strong>
-每一层的“批注”都原样记到同一条主干上，谁也不比谁分量重。<a
+class="math inline">\(F\)</span> 就是 6.1 的残差分支，注意力和 FFN
+这两个子层各自算出自己的 <span
+class="math inline">\(F(x)\)</span>；<strong>白话：</strong>
+每个子层的“批注”都原样记到同一条主干上，谁也不比谁分量重。<a
 href="https://arxiv.org/abs/2603.15031">Attention
 Residuals，arXiv:2603.15031</a>
 把它换成沿深度方向的注意力：每层用一个可学习的 pseudo-query，对
@@ -4752,8 +4752,8 @@ alt="因果掩码矩阵原理" /></a>
 <h3 id="表-7-24-词序列的掩码矩阵数值演变推导表">表 7-2：4
 词序列的掩码矩阵数值演变推导表</h3>
 <p>假设输入序列为四个字：“我”、“爱”、“学”、“习”。</p>
-<h4 id="原始点积分数矩阵-q-kᵀ-d_k">1. 原始点积分数矩阵 (Q · Kᵀ /
-√d_k)：</h4>
+<h4 id="原始点积分数矩阵-qktopsqrtd_k">1. 原始点积分数矩阵 (<span
+class="math inline">\(QK^\top/\sqrt{d_k}\)</span>)：</h4>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 16%" />
