@@ -116,11 +116,36 @@
       "sha256": "a3f07f2a8050fb5bf4eaef161f28930cbcdc59cae13cf580216287faa32235a9",
       "renderer": "legacy: committed before D0 (bot-hub#126)"
     },
+    "flow-p08-generate-stop": {
+      "kind": "mermaid",
+      "sha256": "7dfcc24494665639d41df1fb5d106a7e8850128770094ff8e4d07c948b305676",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p11-prefill-decode": {
+      "kind": "mermaid",
+      "sha256": "0e8f620137e0ceaae8f2b289b0f24ccb5d9619f276b889e2cd7f6fe6b6f05481",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p11-shapes-offset": {
+      "kind": "mermaid",
+      "sha256": "b65a7f33f3006b3f52ad54ec05899b17365ccd085f31ebdf62b24ed5244bb448",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p11-length-bounds": {
+      "kind": "mermaid",
+      "sha256": "0697ced054f9d41f62181e5e5a8d2f181a4b31ac0dbe695badaecd3b156351f4",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "p12-rope": {
       "kind": "static",
       "sha256": "f157a0b208054c284fce426a3c13f2948968c5b362bb7a270475d4e9cfe1a3bc",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p12-rope.svg"
+    },
+    "flow-p12-yarn-bands": {
+      "kind": "mermaid",
+      "sha256": "d9fd51438de4d6cb9fadce871f102db110fb2a091bdd3fe545f360b79713a422",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p13-modern-block": {
       "kind": "static",
@@ -133,6 +158,11 @@
       "sha256": "52e8e17253dcf5531320474d8d48a912adfcc2f6b26ad81cd14c7400dc443073",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/grouped_kv_mla.svg"
+    },
+    "flow-p14-mla-absorb": {
+      "kind": "mermaid",
+      "sha256": "0dc34ee49b4c8d2f1cae4ca6757083598fed8199e0533ab4f43a62c09c5bed03",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p15-attention-systems": {
       "kind": "static",

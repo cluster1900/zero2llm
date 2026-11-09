@@ -83,9 +83,29 @@
     "width": 473.62890625,
     "height": 279
   },
+  "flow-p08-generate-stop": {
+    "width": 533.7591552734375,
+    "height": 265.79998779296875
+  },
+  "flow-p11-prefill-decode": {
+    "width": 705,
+    "height": 913
+  },
+  "flow-p11-shapes-offset": {
+    "width": 583.73828125,
+    "height": 597
+  },
+  "flow-p11-length-bounds": {
+    "width": 583.211669921875,
+    "height": 408.6000061035156
+  },
   "p12-rope": {
     "width": 960.0,
     "height": 340.0
+  },
+  "flow-p12-yarn-bands": {
+    "width": 617.8125,
+    "height": 591.671875
   },
   "p13-modern-block": {
     "width": 800.0,
@@ -94,6 +114,10 @@
   "grouped_kv_mla": {
     "width": 920.0,
     "height": 430.0
+  },
+  "flow-p14-mla-absorb": {
+    "width": 505.359375,
+    "height": 519
   },
   "p15-attention-systems": {
     "width": 920.0,
