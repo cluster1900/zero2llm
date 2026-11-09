@@ -2436,6 +2436,17 @@ class="math inline">\(d_v\)</span></td>
 <p>本章约定：</p>
 <p><span class="math display">\[D = H d_h, \qquad d_h = D /
 H\]</span></p>
+<p>白话说，总宽度 <span class="math inline">\(D\)</span>
+像一块大小固定的蛋糕，切成 <span class="math inline">\(H\)</span>
+份，每份宽 <span
+class="math inline">\(d_h\)</span>：头越多，每个头分到的越窄，蛋糕总量不变。</p>
+<p>其中：<span class="math inline">\(D\)</span>、<span
+class="math inline">\(H\)</span>、<span
+class="math inline">\(d_h\)</span> 见上表，依次是模型宽度（代码里的
+<code>d_model</code>）、头数、每个头的宽度。这条等式是<strong>本章的约定</strong>：只有各头等宽、且所有头拼起来的总宽恰好等于
+<span class="math inline">\(D\)</span> 时才成立；有些模型的 <span
+class="math inline">\(Hd_h\)</span> 并不等于 <span
+class="math inline">\(D\)</span>（见附录 A.5）。</p>
 <p>因此 <span class="math inline">\(D\)</span> 必须能被 <span
 class="math inline">\(H\)</span>
 整除，而且二者都应是正整数。<code>D=8, H=2</code>
@@ -2451,17 +2462,41 @@ class="math inline">\(T\)</span> 数的是 <strong>token
 个头分别写出：</p>
 <p><span class="math display">\[Q_h = XW_h^Q, \qquad K_h = XW_h^K,
 \qquad V_h = XW_h^V\]</span></p>
-<p>其中每个 <span class="math inline">\(W_h^Q, W_h^K, W_h^V\)</span>
-的形状都是 <span class="math inline">\([D,
+<p>白话说，每个头都戴着自己的一副“眼镜”看同一份完整输入：眼镜（投影矩阵）不同，照出来的查询、键和值就可能不同，后面算出的权重表也就各不相同。</p>
+<p>其中：<span class="math inline">\(h\)</span> 是头的编号，从 1 数到
+<span class="math inline">\(H\)</span>，只作下标；<span
+class="math inline">\(X\)</span> 是一条序列的完整输入，形状 <span
+class="math inline">\([T,D]\)</span>（带 batch
+时每条序列各算一次）；<span class="math inline">\(Q_h\)</span>、<span
+class="math inline">\(K_h\)</span>、<span
+class="math inline">\(V_h\)</span> 是第 <span
+class="math inline">\(h\)</span> 个头的查询、键、值，形状都是 <span
+class="math inline">\([T,d_h]\)</span>；每个 <span
+class="math inline">\(W_h^Q, W_h^K, W_h^V\)</span> 的形状都是 <span
+class="math inline">\([D,
 d_h]\)</span>。注意左边乘的是<strong>完整的输入 <span
 class="math inline">\(X\)</span></strong>，所以每个头的投影都能利用输入的全部
 <span class="math inline">\(D\)</span>
 个特征，而不是只看原始输入中的某一小段。</p>
 <p>实现时，把各头投影沿输出特征方向并排拼成一个 <span
-class="math inline">\([D,D]\)</span> 矩阵，就不必写 <span
+class="math inline">\([D,Hd_h]\)</span> 矩阵（本章 <span
+class="math inline">\(Hd_h=D\)</span>，所以是 <span
+class="math inline">\([D,D]\)</span>），就不必写 <span
 class="math inline">\(H\)</span> 个 Python 循环：</p>
 <p><span class="math display">\[W_Q = [W_1^Q\; W_2^Q\; \cdots\;
 W_H^Q]\]</span></p>
+<p>白话说，把 <span class="math inline">\(H\)</span>
+张窄矩阵左右并排粘成一张宽矩阵：乘一次宽矩阵，就等于分别乘了 <span
+class="math inline">\(H\)</span>
+次窄矩阵，只是各头的结果首尾相接排在一行里。</p>
+<p>其中：<span class="math inline">\(W_Q\)</span> 是整张查询投影，形状
+<span class="math inline">\([D,Hd_h]\)</span>，在本章等宽且总宽为 <span
+class="math inline">\(D\)</span> 的约定下就是 <span
+class="math inline">\([D,D]\)</span>；<span
+class="math inline">\(W_h^Q\)</span> 是它从左数第 <span
+class="math inline">\(h\)</span> 段、宽 <span
+class="math inline">\(d_h\)</span>
+的列块；方括号里并排书写表示按列拼接。</p>
 <p>一次 <code>W_q(x)</code> 得到 <code>[B,T,D]</code>
 的全部查询，再把最后的 <span class="math inline">\(D\)</span>
 个特征整理为 <code>[H,d_h]</code>。K/V
@@ -2733,8 +2768,25 @@ class="math inline">\(4D^2\)</span></h3>
 <p>Q、K、V 各有一个 <span class="math inline">\(D\times D\)</span>
 投影，最后再加一个 <span class="math inline">\(D\times D\)</span>
 的输出投影：</p>
-<p><span class="math display">\[N_{\mathrm{params}} = D^2+D^2+D^2+D^2 =
+<p><span class="math display">\[N_{\mathrm{param}} = D^2+D^2+D^2+D^2 =
 4D^2\]</span></p>
+<p>参数只看矩阵有多大，不看矩阵内部怎样分头：同一张 <span
+class="math inline">\(D\times D\)</span> 的表，切成几块都还是 <span
+class="math inline">\(D^2\)</span> 个数。</p>
+<p>其中：<span class="math inline">\(N_{\mathrm{param}}\)</span>
+是参数个数，这里借用附录 A.5
+的参数量记号，但只数注意力模块的四个投影，不是缩放定律里整个模型的参数量；四个
+<span class="math inline">\(D^2\)</span> 依次来自 <span
+class="math inline">\(W_Q\)</span>、<span
+class="math inline">\(W_K\)</span>、<span
+class="math inline">\(W_V\)</span>、<span
+class="math inline">\(W_O\)</span>；<span
+class="math inline">\(D\)</span> 是模型宽度。每张都是 <span
+class="math inline">\(D\times
+D\)</span>，靠的是本节开头的条件（各头等宽、Q/K/V 与输出都投影到 <span
+class="math inline">\(D\)</span>）；一般情况下输出投影 <span
+class="math inline">\(W_O\)</span> 的形状是 <span
+class="math inline">\([Hd_v,D]\)</span>，不一定是方阵。</p>
 <p>按头拆开数也一样：Q 投影共有 <span class="math inline">\(H\cdot
 Dd_h=D^2\)</span> 个参数。<span class="math inline">\(D=8\)</span>
 时，四个矩阵共 256 个参数；改成 1、2、4 或 8
@@ -2760,6 +2812,18 @@ class="math inline">\(O(BHT^2d_h)=O(BT^2D)\)</span>。</li>
 </ul>
 <p>所以在上述条件下，主要计算量为：</p>
 <p><span class="math display">\[O(BTD^2 + BT^2D)\]</span></p>
+<p>两项各有来头：第一项是每个位置各自做投影，跟位置数 <span
+class="math inline">\(BT\)</span>
+成正比；第二项是每对位置互相打分、再加权汇总，跟 <span
+class="math inline">\(T^2\)</span> 成正比。所以序列比模型宽度短（<span
+class="math inline">\(T&lt;D\)</span>）时第一项更大，序列更长时第二项会反超。</p>
+<p>其中：<span class="math inline">\(O(\cdot)\)</span> 是大 O
+记号，只保留随尺寸增长的主项、忽略常数；<span
+class="math inline">\(B\)</span> 是批大小，<span
+class="math inline">\(T\)</span> 是序列长度，<span
+class="math inline">\(D\)</span> 是模型宽度；第二项由 <span
+class="math inline">\(BHT^2d_h=BT^2D\)</span> 得到，用到了 <span
+class="math inline">\(Hd_h=D\)</span>。</p>
 <p>掩码和 Softmax 还要处理 <span class="math inline">\(BHT^2\)</span>
 个元素。在本章 <span class="math inline">\(1\leq H\leq D\)</span>
 的等宽设置下，这不改变上述总体大 O 阶数，但会影响实际成本。大 O
@@ -2779,6 +2843,14 @@ class="math inline">\(BHT^2\)</span> 个元素。</p>
 float32 分数张量就占：</p>
 <p><span class="math display">\[1\times8\times1024^2\times4\
 \text{bytes}=32\ \text{MiB}\]</span></p>
+<p>其中：1 是 <span class="math inline">\(B\)</span>，8 是 <span
+class="math inline">\(H\)</span>，<span
+class="math inline">\(1024^2\)</span> 是 <span
+class="math inline">\(T^2\)</span>（每个头一张 <span
+class="math inline">\(T\times T\)</span> 的表），最后的 4 是 float32
+每个元素占的字节数 <span
+class="math inline">\(b_{\mathrm{elem}}\)</span>。一般地，这张分数表占
+<span class="math inline">\(BHT^2b_{\mathrm{elem}}\)</span> 字节。</p>
 <p>这里 <span class="math inline">\(1\ \text{MiB}=2^{20}\)</span>
 字节。这还不含权重张量、Q/K/V、输出以及训练时保存的中间量。固定 <span
 class="math inline">\(B,T,D\)</span>
@@ -2896,7 +2968,7 @@ class="math inline">\(2BT^2\)</span> 增至 <span
 class="math inline">\(4BT^2\)</span> 个元素。</li>
 <li>不能。不同数字没有证明语义分工，更没有证明对模型决策的因果解释。</li>
 <li>不一定。其他头仍可能产生非零特征，随后被 <span
-class="math inline">\(W_o\)</span> 混合。</li>
+class="math inline">\(W_O\)</span> 混合。</li>
 </ol>
 <hr />
 <h2 id="本章小结与下一步-1">4.8 本章小结与下一步</h2>
