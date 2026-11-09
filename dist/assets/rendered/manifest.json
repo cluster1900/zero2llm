@@ -68,6 +68,16 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/positional_encoding_waves.svg"
     },
+    "flow-ch06-residual-shortcut": {
+      "kind": "mermaid",
+      "sha256": "acf1f5cb48f30c0ecf65846d5af87b16b592a148040b615902bdbdc082f71af1",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-ch06-pre-post-ln": {
+      "kind": "mermaid",
+      "sha256": "072cdb290eb787ca71e9e4974aa72580e858234afdf96dd5db8b069d9f10add6",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "transformer_block": {
       "kind": "static",
       "sha256": "5b92fe37c642a2f6bf84fd4d3a8b9b6267e32bb0bbc6e2ce644bc3b29ae73a60",
@@ -96,10 +106,30 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/causal_mask.svg"
     },
+    "flow-ch07-cross-attn-shapes": {
+      "kind": "mermaid",
+      "sha256": "8ce1e4399cb7158cc4fd8ab7112cafdbe7b4f3da37f2abbfe0fa5dd3a271fe02",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "flow-ed42531e828f": {
       "kind": "mermaid",
       "sha256": "ed42531e828f7da960520c4dbaa13f84dd5bc794196f80764a696620214bd38a",
       "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "flow-ch07-generation-stop": {
+      "kind": "mermaid",
+      "sha256": "d192a22428cc4c13beacd345e941e679d6c5ecdbd5fa089fe6bc6390a0afd83a",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-ch07a-train-eval-loop": {
+      "kind": "mermaid",
+      "sha256": "1dddd9e450f0318469233eb4f9d48236c71fafd7442e4c57a7e510279f7dff95",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-ch07a-zero-grad-step": {
+      "kind": "mermaid",
+      "sha256": "c1e564f6379d3d15997c6c858d0eaf96c70cf3323e990f27ffc7bf056f39c57f",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-9b62f68b43a9": {
       "kind": "mermaid",

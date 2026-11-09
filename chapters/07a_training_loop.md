@@ -8,18 +8,23 @@
 
 训练像练习默写：模型交一份答题纸，损失函数评分，梯度告诉我们怎样微调，优化器实施调整。类比的边界是：模型没有老师式理解；一次更新是数值计算，不保证每道题都改对，也不保证下一次总分必然更好。
 
-```text
-原文 -> 按文档分组 -> 训练文档 -> 抽一个 batch
-                         |           |
-                         |       前向得到 logits
-                         |           |
-                         |       对齐答案算 loss
-                         |           |
-                         |       backward 算梯度
-                         |           |
-                         +------ step 改参数
+练习册走更新环，考试卷只评分；一张图把两边分清楚，就不用在箭头字符里对行了。
 
-独立保留文档 -----------------> 只评分，不更新
+```mermaid
+flowchart TD
+    %% id: ch07a-train-eval-loop
+    accTitle: 训练环更新参数，保留文档只评分不更新
+    accDescr: 原文按文档分组后，训练文档抽 batch、前向得 logits、对齐答案算 loss、backward、step 改参数再回到抽 batch；独立保留文档只评分，不更新。
+    A["原文"] --> B["按文档分组"]
+    B --> C["训练文档"]
+    B --> H["独立保留文档"]
+    C --> D["抽一个 batch"]
+    D --> E["前向得到 logits"]
+    E --> F["对齐答案算 loss"]
+    F --> G["backward 算梯度"]
+    G --> I["step 改参数"]
+    I --> D
+    H --> J["只评分，不更新"]
 ```
 
 先分文档，再抽窗口。把同一首诗的许多重叠窗口随机分成“训练/验证”，相当于考试卷藏着练习册里几乎相同的题。窗口不相同，也不代表来源独立。
@@ -114,6 +119,24 @@ optimizer.step()
 3. 前向调用模型，得到分数和当前损失；autograd 记录需要求导的运算。
 4. `backward()` 按链式法则算梯度并写入参数的 `.grad`，还没有修改权重。
 5. `step()` 根据梯度更新权重。脚本使用 AdamW，下面的手算则用 SGD；不要把 SGD 的一步公式当成 AdamW 的精确公式。
+
+清梯度、写 `.grad`、改权重是三步；漏了 `zero_grad`，下一轮梯度会叠在旧账上。
+
+```mermaid
+sequenceDiagram
+    %% id: ch07a-zero-grad-step
+    accTitle: zero_grad 清空、backward 只写梯度、step 才改参数
+    accDescr: 训练循环先对参数调用 zero_grad 清空 .grad，再前向得 loss，backward 只写入 .grad，最后 step 读取 .grad 更新参数。
+    participant L as 训练循环
+    participant P as 参数
+    participant G as ".grad"
+    participant O as AdamW
+    L->>G: zero_grad 清空
+    L->>P: 前向得 loss
+    L->>G: backward 只写 .grad
+    O->>G: step 读取 .grad
+    O->>P: 更新参数
+```
 
 为什么每轮清零？PyTorch 默认把新梯度加到旧梯度上。对同一个参数、不更新参数地反传同一道题两次，`[-0.25,0.25]` 会变成 `[-0.5,0.5]`。有意积累多个 micro-batch 可以节省显存，但需要设计缩放和更新时机；本实验每 batch 更新一次，不需要跨 batch 积累。
 
