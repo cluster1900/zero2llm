@@ -4070,8 +4070,8 @@ You Need，§3.3</a></p>
 <h3
 id="两层仿射变换中间必须有非线性">两层仿射变换，中间必须有非线性</h3>
 <p>采用行向量记法：</p>
-<p><span class="math display">\[u=xW_1+b_1,\qquad
-a=\operatorname{ReLU}(u),\qquad
+<p><span class="math display">\[h=xW_1+b_1,\qquad
+a=\operatorname{ReLU}(h),\qquad
 \operatorname{FFN}(x)=aW_2+b_2\]</span></p>
 <p><strong>其中：</strong> <span class="math inline">\(x\)</span>
 是一个位置的输入行向量，宽度 <span
@@ -4080,7 +4080,9 @@ class="math inline">\(W_1\)</span> 的数学形状是 <span
 class="math inline">\([D,d_{\mathrm{ff}}]\)</span>，<span
 class="math inline">\(b_1\)</span> 长 <span
 class="math inline">\(d_{\mathrm{ff}}\)</span>；<span
-class="math inline">\(u\)</span> 是第一层的中间结果，<span
+class="math inline">\(h\)</span> 是第一层的中间结果（激活之前；<span
+class="math inline">\(h\)</span>
+只是本节的局部字母，不是头的下标），<span
 class="math inline">\(a\)</span> 是激活后的结果，宽度都是 <span
 class="math inline">\(d_{\mathrm{ff}}\)</span>（FFN 中间层宽度，代码里的
 <code>d_ff</code>）；<span class="math inline">\(W_2\)</span> 是 <span
@@ -4240,7 +4242,7 @@ class="math inline">\(8D^2\)</span>，不能把它说成包含偏置的精确总
 <p>序列从 5 个 token 变成 50 个 token，FFN
 <strong>参数数目不变</strong>，因为各位置共用权重，但运算次数和中间激活会增加。矩阵乘法的主要乘加次数约为
 <span class="math inline">\(2BTD\,d_{\mathrm{ff}}\)</span>（<span
-class="math inline">\(B\)</span> 是 batch 大小，<span
+class="math inline">\(B\)</span> 是批大小，<span
 class="math inline">\(T\)</span> 是序列长度；两层各约 <span
 class="math inline">\(BTD\,d_{\mathrm{ff}}\)</span>
 次乘加），这是运算量，不是实际耗时；硬件、精度与实现都会影响速度。</p>
@@ -4250,23 +4252,22 @@ Block：对齐张量，也对齐顺序</h2>
 <p>默认的 Pre-LN Block 含两条支路。用 <span
 class="math inline">\(A\)</span> 表示自注意力，用 <span
 class="math inline">\(F\)</span> 表示 FFN：</p>
-<p><span class="math display">\[\tilde
-x=x+A(\operatorname{LN}_1(x)),\qquad
-y=\tilde x+F(\operatorname{LN}_2(\tilde x))\]</span></p>
+<p><span class="math display">\[u=x+A(\operatorname{LN}_1(x)),\qquad
+y=u+F(\operatorname{LN}_2(u))\]</span></p>
 <p><strong>其中：</strong> <span class="math inline">\(x\)</span> 是
 Block 的输入，形状 <span class="math inline">\([B,T,D]\)</span>；<span
 class="math inline">\(A\)</span> 是多头自注意力子层，<span
 class="math inline">\(F\)</span> 是 FFN；<span
 class="math inline">\(\operatorname{LN}_1\)</span>、<span
 class="math inline">\(\operatorname{LN}_2\)</span> 是两个
-LayerNorm；<span class="math inline">\(\tilde x\)</span>
+LayerNorm；<span class="math inline">\(u\)</span>
 是做完第一次残差后的中间表示，<span class="math inline">\(y\)</span> 是
 Block 的输出，形状都仍是 <span
 class="math inline">\([B,T,D]\)</span>。</p>
 <p><strong>白话：</strong> 一个 Block 就是两轮“整理 → 加工 →
 加回”：第一轮让各个 token 互相交流，第二轮各自消化。</p>
 <p>注意第二次残差加回的是<strong>注意力之后的 <span
-class="math inline">\(\tilde x\)</span></strong>，不是最初的 <span
+class="math inline">\(u\)</span></strong>，不是最初的 <span
 class="math inline">\(x\)</span>。两个 LayerNorm 也有各自的
 gamma/beta，不共享参数。</p>
 <pre><code>                    输入特征 x
@@ -4314,7 +4315,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb49-1"><a h
 <span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>._attention(<span class="va">self</span>.ln1(x), mask)</span>
 <span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> x <span class="op">+</span> <span class="va">self</span>.ffn(<span class="va">self</span>.ln2(x))</span></code></pre></div>
 <p>第一行右边先求值，再把新的结果赋给 <code>x</code>；第二行拿到的已经是
-<span class="math inline">\(\tilde x\)</span>。<code>_attention</code>
+<span class="math inline">\(u\)</span>。<code>_attention</code>
 将同一个归一化后的向量作为 Q/K/V 的来源，它内部仍会做可学习投影。FFN
 则只沿最后的特征维加工。</p>
 <p>切换 <code>norm_first=False</code> 后，代码改为：</p>
@@ -5301,8 +5302,8 @@ V\rvert]\)</span></td>
 </tr>
 </tbody>
 </table></div>
-<p><strong>其中：</strong> <span class="math inline">\(B\)</span> 是
-batch 大小（行数），<span class="math inline">\(T\)</span>
+<p><strong>其中：</strong> <span class="math inline">\(B\)</span>
+是批大小（行数），<span class="math inline">\(T\)</span>
 是每行的格数（序列长度），<span class="math inline">\(\lvert\mathcal
 V\rvert\)</span> 是词表大小（本章是 57）；<span
 class="math inline">\(B\cdot T\)</span>

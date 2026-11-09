@@ -81,7 +81,7 @@ Python 切片是 `x = ids[start:start+T]`，`y = ids[start+1:start+T+1]`。右�
 | 用于 CE 的 y | $[B\cdot T]$ | 每题一个类别编号 |
 | mean loss | 标量 | 本 batch 所有格子的平均损失 |
 
-**其中：** $B$ 是 batch 大小（行数），$T$ 是每行的格数（序列长度），$\lvert\mathcal V\rvert$ 是词表大小（本章是 57）；$B\cdot T$ 是把所有格子排成一列后的题目数。
+**其中：** $B$ 是批大小（行数），$T$ 是每行的格数（序列长度），$\lvert\mathcal V\rvert$ 是词表大小（本章是 57）；$B\cdot T$ 是把所有格子排成一列后的题目数。
 
 这里没有 padding、类别权重或忽略标签，每格权重相同。以后有 padding 时，分母应是有效标签数，不能把 padding 算进去。评估多份长度不同的文档时，也要按预测 token 数加权，不是把每份文档的平均 loss 再简单平均。
 

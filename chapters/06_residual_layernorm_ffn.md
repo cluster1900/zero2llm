@@ -241,10 +241,10 @@ Post-LN 最后一行四位小数恰好与 $\operatorname{LN}(x)$ 一样，但加
 
 采用行向量记法：
 
-$$u=xW_1+b_1,\qquad a=\operatorname{ReLU}(u),\qquad
+$$h=xW_1+b_1,\qquad a=\operatorname{ReLU}(h),\qquad
 \operatorname{FFN}(x)=aW_2+b_2$$
 
-**其中：** $x$ 是一个位置的输入行向量，宽度 $D$；$W_1$ 的数学形状是 $[D,d_{\mathrm{ff}}]$，$b_1$ 长 $d_{\mathrm{ff}}$；$u$ 是第一层的中间结果，$a$ 是激活后的结果，宽度都是 $d_{\mathrm{ff}}$（FFN 中间层宽度，代码里的 `d_ff`）；$W_2$ 是 $[d_{\mathrm{ff}},D]$，$b_2$ 长 $D$。
+**其中：** $x$ 是一个位置的输入行向量，宽度 $D$；$W_1$ 的数学形状是 $[D,d_{\mathrm{ff}}]$，$b_1$ 长 $d_{\mathrm{ff}}$；$h$ 是第一层的中间结果（激活之前；$h$ 只是本节的局部字母，不是头的下标），$a$ 是激活后的结果，宽度都是 $d_{\mathrm{ff}}$（FFN 中间层宽度，代码里的 `d_ff`）；$W_2$ 是 $[d_{\mathrm{ff}},D]$，$b_2$ 长 $D$。
 
 **白话：** 先把每个位置的特征“摊开”到更宽的工作台上，ReLU 关掉一部分通道，再“收拢”回原来的宽度。所有位置用的都是同一套 $W_1,W_2$。
 
@@ -323,7 +323,7 @@ $$N_{\mathrm{FFN}}=D\,d_{\mathrm{ff}}+d_{\mathrm{ff}}+d_{\mathrm{ff}}D+D
 
 如果使用 `d_ff=4D`，代入得 $2D\cdot4D+4D+D=8D^2+5D$。参数主要按宽度的平方增长；只有两个权重矩阵的近似数才是 $8D^2$，不能把它说成包含偏置的精确总数。
 
-序列从 5 个 token 变成 50 个 token，FFN **参数数目不变**，因为各位置共用权重，但运算次数和中间激活会增加。矩阵乘法的主要乘加次数约为 $2BTD\,d_{\mathrm{ff}}$（$B$ 是 batch 大小，$T$ 是序列长度；两层各约 $BTD\,d_{\mathrm{ff}}$ 次乘加），这是运算量，不是实际耗时；硬件、精度与实现都会影响速度。
+序列从 5 个 token 变成 50 个 token，FFN **参数数目不变**，因为各位置共用权重，但运算次数和中间激活会增加。矩阵乘法的主要乘加次数约为 $2BTD\,d_{\mathrm{ff}}$（$B$ 是批大小，$T$ 是序列长度；两层各约 $BTD\,d_{\mathrm{ff}}$ 次乘加），这是运算量，不是实际耗时；硬件、精度与实现都会影响速度。
 
 ---
 
@@ -331,14 +331,14 @@ $$N_{\mathrm{FFN}}=D\,d_{\mathrm{ff}}+d_{\mathrm{ff}}+d_{\mathrm{ff}}D+D
 
 默认的 Pre-LN Block 含两条支路。用 $A$ 表示自注意力，用 $F$ 表示 FFN：
 
-$$\tilde x=x+A(\operatorname{LN}_1(x)),\qquad
-y=\tilde x+F(\operatorname{LN}_2(\tilde x))$$
+$$u=x+A(\operatorname{LN}_1(x)),\qquad
+y=u+F(\operatorname{LN}_2(u))$$
 
-**其中：** $x$ 是 Block 的输入，形状 $[B,T,D]$；$A$ 是多头自注意力子层，$F$ 是 FFN；$\operatorname{LN}_1$、$\operatorname{LN}_2$ 是两个 LayerNorm；$\tilde x$ 是做完第一次残差后的中间表示，$y$ 是 Block 的输出，形状都仍是 $[B,T,D]$。
+**其中：** $x$ 是 Block 的输入，形状 $[B,T,D]$；$A$ 是多头自注意力子层，$F$ 是 FFN；$\operatorname{LN}_1$、$\operatorname{LN}_2$ 是两个 LayerNorm；$u$ 是做完第一次残差后的中间表示，$y$ 是 Block 的输出，形状都仍是 $[B,T,D]$。
 
 **白话：** 一个 Block 就是两轮“整理 → 加工 → 加回”：第一轮让各个 token 互相交流，第二轮各自消化。
 
-注意第二次残差加回的是**注意力之后的 $\tilde x$**，不是最初的 $x$。两个 LayerNorm 也有各自的 gamma/beta，不共享参数。
+注意第二次残差加回的是**注意力之后的 $u$**，不是最初的 $x$。两个 LayerNorm 也有各自的 gamma/beta，不共享参数。
 
 ```
                     输入特征 x
@@ -380,7 +380,7 @@ x = x + self._attention(self.ln1(x), mask)
 x = x + self.ffn(self.ln2(x))
 ```
 
-第一行右边先求值，再把新的结果赋给 `x`；第二行拿到的已经是 $\tilde x$。`_attention` 将同一个归一化后的向量作为 Q/K/V 的来源，它内部仍会做可学习投影。FFN 则只沿最后的特征维加工。
+第一行右边先求值，再把新的结果赋给 `x`；第二行拿到的已经是 $u$。`_attention` 将同一个归一化后的向量作为 Q/K/V 的来源，它内部仍会做可学习投影。FFN 则只沿最后的特征维加工。
 
 切换 `norm_first=False` 后，代码改为：
 
