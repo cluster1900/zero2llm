@@ -2771,6 +2771,17 @@ class="math inline">\(H\)</span> 个头等宽，<span
 class="math inline">\(d_h=D/H\)</span>，Q/K/V 与输出都投影到 <span
 class="math inline">\(D\)</span>，四个线性层都不带
 bias。</strong>单头对照也保留同样的四个投影。</p>
+<p>三本账可以对照这张图看：起点相同，结论却不是同一句「变 H 倍」。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-ch04-three-ledgers.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ch04-three-ledgers.svg" class="book-diagram"
+width="340"
+alt="固定 D 改 H 时，参数、运算与显式分数表三本账结论不同。起点是 D 固定、d_h=D/H、四个投影无偏置。参数 4D² 与 H 无关；运算量级不随 H 变；显式分数表 B·H·T² 随 H 线性增长。" /></a>
+<div class="diagram-caption">
+固定 D 改 H 时，参数、运算与显式分数表三本账结论不同
+</div>
+</div>
 <h3 id="参数账标准无偏置-mha-是-4d2">参数账：标准无偏置 MHA 是 <span
 class="math inline">\(4D^2\)</span></h3>
 <p>Q、K、V 各有一个 <span class="math inline">\(D\times D\)</span>
@@ -8512,6 +8523,16 @@ Softmax 后的输出直接相加，都不对。</p>
 <p>初始状态设
 <code>m=-∞, ell=0, acc=0</code>。第一次读到合法分数时，代码直接令
 alpha=0，不去做不必要的无穷运算。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-online-softmax.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-online-softmax.svg" class="book-diagram"
+width="341"
+alt="在线 Softmax 每读一块都把旧账换到新尺度。初始 s_max=−∞、ell=0、acc=0；读一块后取 next_s_max，用 α=exp(s_max−next_s_max) 先缩放旧 ell 与 acc，再累加新块；还有块就继续，读完输出 acc/ell。" /></a>
+<div class="diagram-caption">
+在线 Softmax 每读一块都把旧账换到新尺度
+</div>
+</div>
 <h2 id="p15.5-手算分成两块仍然得到-6">P15.5 手算：分成两块，仍然得到
 6</h2>
 <p>设
@@ -8665,6 +8686,16 @@ v1，§4.4</a></p>
 <p>若尾块的引用计数已经是
 1，也能直接写入，不必复制。请求释放时只减少它所引用块的计数；降到 0
 的物理块才回到空闲池。脚本的空闲块可以再次分配，但旧数据必须清掉。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-cow-write.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-cow-write.svg" class="book-diagram"
+width="490"
+alt="写入前先看尾块满不满、引用是否大于 1。尾块已满就新分配下一块且不复制；未满且引用大于 1 就复制尾块再写；引用等于 1 则直接写；释放后引用降到 0 的块回空闲池。" /></a>
+<div class="diagram-caption">
+写入前先看尾块满不满、引用是否大于 1
+</div>
+</div>
 <h2 id="p15.10-用槽位记账不伪造显存数字">P15.10
 用槽位记账，不伪造显存数字</h2>
 <p>上面的分叉实例可以独立数出来：</p>
@@ -8746,6 +8777,16 @@ b=2，来源长度 5，可以共享前 4 个 token；要求共享前 3 个会报
 还需要前缀标识、查找、失效规则、淘汰策略以及正确的请求隔离；固定版本
 vLLM 文档说明了块级缓存查找的设计（版本见本章末资料）。</p>
 <p>脚本没有实现这些查找和安全机制，也不会检查两个文本是否相同。它还没有“请求结束后仍保留的前缀缓存”引用：所有活跃请求释放后，物理块就释放了。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-prefix-cache.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-prefix-cache.svg" class="book-diagram"
+width="661"
+alt="前缀缓存只复用兼容计算下的同一段历史，语义相似不算。先问权重与位置是否兼容：整段相同可用 fork 并共享未满尾块；share_prefix 只共享完整块；语义相似或已释放的块都不能复用。" /></a>
+<div class="diagram-caption">
+前缀缓存只复用兼容计算下的同一段历史，语义相似不算
+</div>
+</div>
 <h2 id="p15.12-continuous-batching不要让空位等整桌结束">P15.12
 Continuous batching：不要让空位等整桌结束</h2>
 <p>普通静态 batch 可能要等同一批里最长的请求完成，才接下一批。Continuous
@@ -8812,6 +8853,16 @@ ms 窗口。</p>
 <p>真实 batch 大小会影响轮时，KV
 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token
 间隔可能变长。必须把每轮执行时间和排队一起看。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-continuous-batch.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-continuous-batch.svg" class="book-diagram"
+width="530"
+alt="连续 batch 在空位出现时立刻补位，静态 batch 要等整桌结束。调度器与两个槽位每 10 ms 一轮。静态 batch 里 A 结束后空位干等，C 到 40 ms 才进入；连续 batch 里 C 在 20 ms 补进空位。" /></a>
+<div class="diagram-caption">
+连续 batch 在空位出现时立刻补位，静态 batch 要等整桌结束
+</div>
+</div>
 <h2 id="p15.13-prefilldecode-与排队会互相影响">P15.13 Prefill、decode
 与排队会互相影响</h2>
 <p>Prefill 一次处理已知 prompt 的很多位置，decode
@@ -8883,6 +8934,16 @@ TPOT=0。</p>
 <li>把所有后续 token 间隔放一起平均：<code>(90+60)/3=50 ms</code>。</li>
 </ul>
 <p>两者都可有定义，但不能用同一个标签不加说明。真实服务还应报告分位数、并发、错误率和输出长度；两条请求不足以说明线上长尾表现。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p15-ttft-tpot.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p15-ttft-tpot.svg" class="book-diagram"
+width="385"
+alt="TTFT 量到首字，TPOT 平摊首字之后的间隔，E2E 量整单。客户端请求在时刻 a 到达；服务端排队加 prefill 后在 t1 发出首 token，TTFT=t1−a；随后 t2…t_Tout，TPOT=(t_Tout−t1)/(T_out−1)；E2E=t_Tout−a。" /></a>
+<div class="diagram-caption">
+TTFT 量到首字，TPOT 平摊首字之后的间隔，E2E 量整单
+</div>
+</div>
 <h2 id="p15.15-运行与输出哪些确实测过">P15.15
 运行与输出：哪些确实测过</h2>
 <p>在仓库根目录直接运行：</p>
@@ -9209,6 +9270,16 @@ Longformer 的独立全局投影或完整模型。</p>
 后接一层全量注意力，或者让线性层与普通注意力层按比例混合。它不同于在同一层给窗口加几列全局
 key。若某些层仍读取全量历史，这些层的 KV 缓存仍会随 T
 增长，不能把整个模型都按窗口大小计费。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p16-sparse-mixed.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p16-sparse-mixed.svg" class="book-diagram"
+width="316"
+alt="同层加全局边，和换掉部分层的注意力，是两种结构。同一层里 T_win=3 的窗口边再加全局位置 G={0}，位置 5 可见 0、3、4、5；混合层则是滑窗层与全量层交替堆叠，全量层的 KV 仍随 T 增长。两种结构并列，互不蕴含先后。" /></a>
+<div class="diagram-caption">
+同层加全局边，和换掉部分层的注意力，是两种结构
+</div>
+</div>
 <h2 id="p16.5-稀疏选择不等于-mla-压缩">P16.5 稀疏选择不等于 MLA
 压缩</h2>
 <p><a href="#p14-grouped-kv">P14</a> 的 MLA
@@ -9655,6 +9726,16 @@ replay 为什么有误差，并检查缓存位置有没有接错。</p>
 中，生成一个新 token 的表示，仍然要经过 causal encoder 和
 decoder。反过来，prefill 也不是绝对不运行
 decoder，稍后会看到需要处理一段后缀。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p17-codec-names.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p17-codec-names.svg" class="book-diagram"
+width="720"
+alt="四种“编码—解码”同名不同义，先分开再说 CED。中心是编码—解码，分出经典 seq2seq、CED 同序列两条 KV 路径、推理的 prefill 与 decode、以及 tokenizer 的文本与 ID 转换。" /></a>
+<div class="diagram-caption">
+四种“编码—解码”同名不同义，先分开再说 CED
+</div>
+</div>
 <h2 id="p17.2-哪些是已经核验的官方事实">P17.2
 哪些是已经核验的官方事实</h2>
 <p>本节只谈
@@ -9743,6 +9824,7 @@ alt="教学 CED 数据流：encoder 最终输出投影为 decoder global KV；de
 KV；decoder 本层输入产生 local KV；有界 replay
 只处理后缀且为近似</figcaption>
 </figure>
+<p>图中 X_enc、x、T、T_win 分别对应正文的 E、H^(l)、N、W。</p>
 <h3 id="因果-encoder-为什么不会偷看未来">因果 encoder
 为什么不会偷看未来</h3>
 <p>“encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的
@@ -9850,6 +9932,16 @@ KV，重新选择索引。</li>
 CED。相关头数 / latent 概念见 <a
 href="#p14-grouped-kv">P14</a>，局部与稀疏路径见 <a
 href="#p16-sparse-linear">P16</a>。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p17-csa2-modes.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p17-csa2-modes.svg" class="book-diagram"
+width="343"
+alt="CSA2 三种模式差在谁写 global KV、谁重选索引。Full 写 global KV 并选索引；Reindex 复用 KV 但重选索引；Reuse 两者都复用。三种模式都保留本层 Q 与 SWA；量化只管存储精度，不替代这些模式。" /></a>
+<div class="diagram-caption">
+CSA2 三种模式差在谁写 global KV、谁重选索引
+</div>
+</div>
 <h2 id="p17.7-先把教学模型的边界写在前面">P17.7
 先把教学模型的边界写在前面</h2>
 <p>ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两层
@@ -10187,15 +10279,16 @@ alt="S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k
 <figcaption>S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k
 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃</figcaption>
 </figure>
-<p>图中的 E 是可选的路由专家数量，k 是每 token 选择的数量，S
-是始终参与的共享专家数量。<strong>E 和 k 不能混写。</strong> k=2、E=4
-时，模型保存四个路由专家，单个 token 只调用其中两个。</p>
+<p>图中标了 N_E=4、k=2；N_E 是可选的路由专家数量，k 是每 token
+选择的数量。共享专家始终参与，数量记
+N_S（图中共享专家框未标具体数）。<strong>N_E 和 k 不能混写。</strong>
+k=2、N_E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。</p>
 <h2 id="p18.2-路由器先打分再选择再加权">P18.2
 路由器先打分，再选择，再加权</h2>
 <p>设一个 token 的输入是行向量 x，宽度为 D。教学路由器是一层不带 bias 的
 Linear：</p>
 <p><span class="math display">\[
-z=xW_r^T,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
+z=xW_r^\top,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
 p_e=\frac{\exp(z_e)}{\sum_j\exp(z_j)}.
 \]</span></p>
 <p>z 是分数，p 是本章选用的 Softmax affinity，意思是 token
@@ -10338,6 +10431,16 @@ token；<strong>combine</strong> 是把结果送回 token
 <p>例如上面的 A、B、C：下标 0 的专家收 A、C；下标 1 的专家收 A、C；下标
 2 的专家收 B；下标 3 的专家收 B。下标 0 的专家的两个输出再分别回到 A、C
 的位置。并没有把 A 的结果交给 C。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p18-dispatch-combine.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p18-dispatch-combine.svg" class="book-diagram"
+width="295"
+alt="MoE 先摊平再按专家收集，combine 按原位置加权放回。X 形状 [B,T,D] 摊平为 [B·T,D]；路由得到 top-k 下标与权重后，dispatch 按专家收集 token，各专家算 F_e，combine 回到原位置加权求和，再还原 [B,T,D]。同一 token 可能去多个专家。" /></a>
+<div class="diagram-caption">
+MoE 先摊平再按专家收集，combine 按原位置加权放回
+</div>
+</div>
 <h2 id="p18.4-专家多了参数和计算怎样算">P18.4
 专家多了，参数和计算怎样算</h2>
 <p>沿用 P13 的无 bias SwiGLU，中间宽度为 d_f
@@ -10519,6 +10622,16 @@ router，不能把“空专家没有直接任务梯度”误说成“对应 rout
 间重新分配。输入第一维梯度为 78+20 ln 2，第二维为 78。</p>
 <p>“今天没收到梯度”不等于“永远不会变化”：其他 batch
 可能路由到它，优化器的历史动量、权重衰减和梯度清理方式也会影响实际更新。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p18-grad-paths.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p18-grad-paths.svg" class="book-diagram"
+width="532"
+alt="主损失分叉到被选专家与组合权重，辅助损失才打到全部 affinity。三条路径分叉：主损失更新被选专家参数（未选 grad 可为 None）；主损失经组合权重 w 回路由器，top-1 时 w≡1 使该任务梯度为 0；辅助损失经全部 affinity p 更新路由器。" /></a>
+<div class="diagram-caption">
+主损失分叉到被选专家与组合权重，辅助损失才打到全部 affinity
+</div>
+</div>
 <h2 id="p18.8-顺着代码走一次">P18.8 顺着代码走一次</h2>
 <p>关键实现没有写成一个与主线无关的玩具。<code>MoEGPT</code> 继承
 <code>GroupedGPT</code>，保留 attention、norm、残差、embedding 和
@@ -10629,6 +10742,16 @@ NkDq；返回还要再算一趟。它不是网络实测：同节点合并、专�
 下，大量小矩阵乘法和调度可能更慢。性能要回到 P15
 的相同请求长度、并发、硬件与 TTFT/TPOT 等指标上测；本章没有 GPU
 或多卡实验。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p18-expert-parallel.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p18-expert-parallel.svg" class="book-diagram"
+width="440"
+alt="多设备 MoE 要付 all-to-all 往返，整步速度被最忙的设备拖住。本机先路由，再 all-to-all 把 token 送到专家所在设备，远端算 F_e 后 all-to-all 送回，本机加权相加并加上共享专家；最忙的设备决定整步的等待时间。" /></a>
+<div class="diagram-caption">
+多设备 MoE 要付 all-to-all 往返，整步速度被最忙的设备拖住
+</div>
+</div>
 <h2 id="p18.11-和官方资料对照学机制不冒充复现">P18.11
 和官方资料对照：学机制，不冒充复现</h2>
 <p>本章核验以下固定论文版本（核验日期见附录 H）：</p>
@@ -13903,17 +14026,6 @@ draft/verify。<strong>随机投机采样没有实现，不声称其分布保持
 </tr>
 </tbody>
 </table></div>
-<p>四个问题挤在一个名词里最容易混；下面脑图拆开常被混称的几件事，不必与上表逐行一一对应：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-four-names.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-four-names.svg" class="book-diagram"
-width="720"
-alt="四个问题，别挤进同一个名词。中心是四件事：推理模型的训练路线与计算预算、MTP 训练时多预测未来位置、投机解码先草稿后验证、蒸馏从老师到学生。" /></a>
-<div class="diagram-caption">
-四个问题，别挤进同一个名词
-</div>
-</div>
 <p>MTP 是 <strong>Multi-Token Prediction，多 token
 预测</strong>；speculative decoding
 是<strong>投机解码</strong>。前者可以为后者提供草稿，但不是同义词。没有
@@ -13945,17 +14057,6 @@ SFT，不应写成“小模型完整重跑了教师的 RL 流程”。<a
 href="https://arxiv.org/html/2501.12948v1">DeepSeek-R1
 v1，§2.2–2.4</a></li>
 </ul>
-<p>三条路线分叉画清楚，数据筛选和草稿拒绝就不再挤在一处：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-r1-routes.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-r1-routes.svg" class="book-diagram"
-width="481"
-alt="R1 式三条路线：直接 RL、多阶段、蒸馏学生。基座分三路——R1-Zero 直接 RL，R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL，蒸馏学生只做 SFT——且数据筛选与草稿拒绝不是一回事。" /></a>
-<div class="diagram-caption">
-R1 式三条路线：直接 RL、多阶段、蒸馏学生
-</div>
-</div>
 <p>这里的 <strong>cold start（冷启动）</strong> 是给后续 RL
 提供一个起点；<strong>rejection sampling（拒绝采样筛选）</strong>
 在该训练阶段用于保留合格的数据样本。它不是下文为了保持目标生成规则而进行的“草稿接受／拒绝”，两者的目的、输出和正确性要求不同。</p>
@@ -14289,17 +14390,6 @@ correction／bonus 额外调用一次目标模型，本实现维护如下不变�
 <code>tokens[:, :-1]</code>，即还没包含最后一个已生成 token。</li>
 <li><code>pending</code>：<code>tokens[:, -1:]</code>，下轮才喂入目标模型。</li>
 </ul>
-<p>tokens、cache、pending 三者相差一位，用时序图对齐：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-pending-cache.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-pending-cache.svg" class="book-diagram"
-width="357"
-alt="pending 还没喂进 cache：三者相差一位。草稿模型提出草稿；目标模型 prefill 得到首 token 作 pending；每轮把 pending 加草稿一起喂给目标；接受前缀后修正或 bonus 成为新 pending；拒绝后 cache 截回已接受长度。" /></a>
-<div class="diagram-caption">
-pending 还没喂进 cache：三者相差一位
-</div>
-</div>
 <p>先对完整 prompt 做一次 prefill，取末行 logits 的 argmax，输出第一个
 token。此时 cache 恰好装着 prompt，第一个新 token 成为 pending。</p>
 <h3 id="带具体位置的拒绝例子">带具体位置的拒绝例子</h3>
@@ -14362,17 +14452,6 @@ cache。</li>
 token，预留一个 correction／bonus
 位置。只剩一个输出名额时，不征求草稿，普通前向一步。</li>
 </ul>
-<p>停机条件互相嵌套，状态图比文字清单更清楚：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-eos-budget.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-eos-budget.svg" class="book-diagram"
-width="720"
-alt="EOS 与预算必须一起守住。名额为 0 或 prompt 末尾已是 EOS 则直接返回；prefill 或生成后名额用尽则 Done；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。" /></a>
-<div class="diagram-caption">
-EOS 与预算必须一起守住
-</div>
-</div>
 <p>因此最后一轮不会越过 <code>max_new_tokens</code>。本例保守要求
 <code>prompt 长度 + 生成预算 &lt;= max_seq_len</code>，不实现滑动截断；若模型权重或影响缓存的设置改变，必须重新开始请求。</p>
 <p>每轮验证还必须至少提交一个 token。若拒绝分支因程序错误忘了提交
@@ -14399,17 +14478,6 @@ q(x)=0，正常从 q 采样不会得到该 x；p=q
 时拒绝概率为零，不应去归一化一个全零残差。涉及 temperature
 或截断采样时，要使用相应处理后的分布，不能混用原始 logits
 和修改后的概率。</p>
-<p>拒绝之后必须从残差分布重抽，流程如下：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-spec-sample.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-spec-sample.svg" class="book-diagram"
-width="606"
-alt="拒绝之后要从残差分布重抽，不能改用 argmax。从 q 抽 x，以 min(1, p(x)/q(x)) 接受；接受则输出 x；拒绝则从 max(0, p−q) 归一化后重抽，不是 argmax。" /></a>
-<div class="diagram-caption">
-拒绝之后要从残差分布重抽，不能改用 argmax
-</div>
-</div>
 <p>手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B
 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4
 的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到
@@ -15269,17 +15337,6 @@ href="https://docs.vllm.ai/en/v0.8.4/serving/openai_compatible_server.html">vLLM
 字段里常放
 JSON。一次网络读取可能只有半个中文字符，也可能包含三个事件；一个 content
 delta 可能包含多个 token，也可能为空。</p>
-<p>网络块、SSE 事件和 token 三种边界互不对齐：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p24-sse-stream.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p24-sse-stream.svg" class="book-diagram"
-width="282"
-alt="网络块、SSE 事件和 token 三种边界互不对齐。客户端 POST 流式 completions；服务端逐 token 生成并以空行分隔 SSE 事件；一次网络读取可能只有半个字符；客户端缓冲到完整事件再解析，直到 data:[DONE]。" /></a>
-<div class="diagram-caption">
-网络块、SSE 事件和 token 三种边界互不对齐
-</div>
-</div>
 <pre class="text"><code>data: {&quot;choices&quot;:[{&quot;text&quot;:&quot;春&quot;,&quot;finish_reason&quot;:null}]}
 
 data: {&quot;choices&quot;:[{&quot;text&quot;:&quot;风&quot;,&quot;finish_reason&quot;:&quot;length&quot;}]}
@@ -15701,17 +15758,6 @@ block：QK-norm 不是又一个 LayerNorm</h2>
   → RMSNorm → dense SwiGLU 或稀疏 MoE → 加回上一步结果</code></pre>
 <p>注意力内部还有一层细节：Q、K 在投影并按头切开后，分别做
 <strong>QK-norm</strong>，随后才应用 RoPE；V 不做这两项变换。</p>
-<p>整条 block 的先后顺序决定权重和缓存能否对上：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p25-block-order.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p25-block-order.svg" class="book-diagram"
-width="615"
-alt="QK-norm、RoPE 与缓存的先后顺序决定权重能否对上。x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 做 QK-norm 再 RoPE；V 投影后直通，在「缓存旋转后 K / 原始 V」与旋转后 K 会合；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。" /></a>
-<div class="diagram-caption">
-QK-norm、RoPE 与缓存的先后顺序决定权重能否对上
-</div>
-</div>
 <p>RMSNorm 对最后一维计算：</p>
 <p><span class="math display">\[
 \operatorname{RMSNorm}(z)_j
@@ -15946,17 +15992,6 @@ href="https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485
 token”，也不会自动给答案另留一份额度。<code>completion_budget</code>
 只是对已经得到的 ID
 记账，不会迫使模型结束思考，更不是推理预算控制器。</p>
-<p>模板开关、软提示、生成额度和配置长度上限是四层，互不改写：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p25-thinking-budget.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p25-thinking-budget.svg" class="book-diagram"
-width="479"
-alt="Thinking 开关、软提示、生成额度与长度上限是四层。① 模板布尔开关改 prompt 文本；② 软提示由模型自行遵循；③ 总生成额度在运行时截断；④ 配置里的位置与长度上限另算；四者互不改写。" /></a>
-<div class="diagram-caption">
-Thinking 开关、软提示、生成额度与长度上限是四层
-</div>
-</div>
 <p>手算一个假想输出，不把它当作真实模型生成：</p>
 <pre class="text"><code>生成 ID：[151667, 7, 8, 151668, 9]
 总额度：6
@@ -16267,17 +16302,6 @@ token，部署时却不能偷看尚未生成的答案。若用作草稿，仍要
 训练、多 token 草稿、最终接受几个 token，是三个不同问题。</strong> <a
 href="#p23-mtp">P23</a> 的独立线性未来头用于学习标签对齐，不冒充 V3
 的顺序 MTP。</p>
-<p>顺序 MTP 每一深度都要接上上一深度的表示和对应 token 向量：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p26-mtp-depth.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p26-mtp-depth.svg" class="book-diagram"
-width="624"
-alt="顺序 MTP：每一深度接上上一表示和对应 token 向量。主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，其输出再经共享输出头读出 t+2；深度 2 接该块输出与 emb(t+2) 再进下一块；训练用真 token，部署不能偷看。" /></a>
-<div class="diagram-caption">
-顺序 MTP：每一深度接上上一表示和对应 token 向量
-</div>
-</div>
 <h2 id="p26.3-r1改变训练路线不等于发明另一种-attention">P26.3
 R1：改变训练路线，不等于发明另一种 Attention</h2>
 <p><a
@@ -16516,17 +16540,6 @@ href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb
 → 邻域行 → 邻域列”，不是“邻域位置 → 通道”。最后才经过两层 MLP（中间
 GELU）。本章只复现前面的坐标重排，不运行
 ViT、projector、视觉位置编码或图像理解。</p>
-<p>补零方式和展开顺序都会改变拼出来的向量：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p26-vision-pack.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p26-vision-pack.svg" class="book-diagram"
-width="631"
-alt="视觉特征补零并 3×3 展开后，再投到文本宽度 D。ViT 特征网格高×宽×C 先转成通道在前，右侧与下方补零到 3 的倍数，再 3×3 不重叠展开（块内顺序：通道、行、列）得到 9C 维，经 MLP 投到 D 后接入文本 token 序列。" /></a>
-<div class="diagram-caption">
-视觉特征补零并 3×3 展开后，再投到文本宽度 D
-</div>
-</div>
 <h3 id="mhcengramdspark">mHC、Engram、DSpark</h3>
 <p>DeepSeek-V4.1-Flash <a
 href="https://arxiv.org/html/2609.19969v1">报告的 §2.4.1–2.4.3</a>
@@ -17229,17 +17242,6 @@ logits。</li>
 <li>用同一个 S0 权重和固定 token 重放，记录普通／缓存 CPU
 前向的计时分布。</li>
 </ol>
-<p>八步有依赖，顺序不能打乱：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p27-health-steps.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p27-health-steps.svg" class="book-diagram"
-width="670"
-alt="健康检查八步有依赖，不能打乱顺序瞎跳。make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、对照消融与负例控制（含选修 MTP）、CPU 计时，最后出报告。" /></a>
-<div class="diagram-caption">
-健康检查八步有依赖，不能打乱顺序瞎跳
-</div>
-</div>
 <p>这里的 backward 是<strong>梯度
 smoke</strong>，不是训练完成。参数没有更新，checkpoint 也不包含
 optimizer 或 RNG
@@ -17535,17 +17537,6 @@ dtype，最后严格加载张量。仅检查浮点张量不够：整数、布尔
 buffer 都必须匹配对应目标张量的 dtype。文件不能任意指定一个 Python
 模块让加载器导入。该格式只服务本书工厂建立的教学模型，不支持给模块随手
 monkey-patch 后的任意运行时结构。</p>
-<p>形状相同时词表或 RoPE 仍可能不一致，检查顺序决定先报哪个错：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p27-ckpt-gate.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p27-ckpt-gate.svg" class="book-diagram"
-width="335"
-alt="形状相同也可能词表或 RoPE 不一致，先核元数据再 strict 加载。读 metadata 依次核阶段、配置、词表、深度、dtype，任一项不符就报错；全部通过再 strict 加载张量；缓存不在文件里，加载后重新 prefill。" /></a>
-<div class="diagram-caption">
-形状相同也可能词表或 RoPE 不一致，先核元数据再 strict 加载
-</div>
-</div>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />

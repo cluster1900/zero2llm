@@ -62,6 +62,11 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/multi_head_attention.svg"
     },
+    "flow-ch04-three-ledgers": {
+      "kind": "mermaid",
+      "sha256": "70e376df8c2ecda6329a2a7c97a93b891a228f861e347e13e931f84b7d307b04",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "flow-ch05-permutation-equivariance": {
       "kind": "mermaid",
       "sha256": "8891b08bb6f695ae0da5937141ad94d9b215a896350c4925f4fcc847cb58abb6",
@@ -210,23 +215,78 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p15-attention-systems.svg"
     },
+    "flow-p15-online-softmax": {
+      "kind": "mermaid",
+      "sha256": "8e0650bf7ff3fb15d1228b758c505eeffe0c5294675bc84394504fd0eb881627",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p15-cow-write": {
+      "kind": "mermaid",
+      "sha256": "215ebbd4516b00b1ee15cd115b00cba3650540907146e7f226401604930b32b1",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p15-prefix-cache": {
+      "kind": "mermaid",
+      "sha256": "99630d5492e2f924f4851c19bc4cc77c7ee2cb5ced9a7d8670c2be9146d2d47d",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p15-continuous-batch": {
+      "kind": "mermaid",
+      "sha256": "1c1911d17994425ba43734b341bd2227d789befce62a95bf3b5f9c3d34b00cb0",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p15-ttft-tpot": {
+      "kind": "mermaid",
+      "sha256": "8d6a4e4df21a8b95e446fc203d193afc830ebb04f78a6284144a56bf5f6cd98f",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "p16-sparse-linear": {
       "kind": "static",
-      "sha256": "5275378af07a4b52214799420c426964b31b20d342b4628798a95a7992dbbc4f",
-      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "sha256": "f3914f86d8be86f73ead987ff30b52f04b744f092bb2a738c203eed4c1dda1b8",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1",
       "source": "assets/diagrams/p16-sparse-linear.svg"
+    },
+    "flow-p16-sparse-mixed": {
+      "kind": "mermaid",
+      "sha256": "aec648041d865ea034ca3601b4f16d497e9831006ab1cffced71aa0c8f10df57",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p17-codec-names": {
+      "kind": "mermaid",
+      "sha256": "01c92e65af7eaed3999fa81e7db5dcd7d357bb16713be7bf01e35ea0db4b289b",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p17-ced": {
       "kind": "static",
-      "sha256": "f930d60c426ab0e4189539b05fd9a2c96ae91e9c798f6fb10951b3b36509ed4d",
-      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "sha256": "7fd42d5727f7990602c9b27a2958e55c326a311da6bd960dc90e9f8f24cc8c0b",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1",
       "source": "assets/diagrams/p17-ced.svg"
+    },
+    "flow-p17-csa2-modes": {
+      "kind": "mermaid",
+      "sha256": "b6a04a8ae0b2d39f3976357869b93784a6f129716b419d2d8af1aff1c9c60c61",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p18-moe": {
       "kind": "static",
-      "sha256": "dc2eb6c6a086820ced8920e66a0800c2fd26ca1016d889d36dffff309871f19a",
-      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "sha256": "115d71c7787a7ab727da25b4c6acae5dfd6a3b0b247fe651990201160218b4c8",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1",
       "source": "assets/diagrams/p18-moe.svg"
+    },
+    "flow-p18-dispatch-combine": {
+      "kind": "mermaid",
+      "sha256": "4173620ba27ce4e3021f2ed4f55488f4ec7cf8e5a7e86cb4baf5a24ff3cdc7e8",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p18-grad-paths": {
+      "kind": "mermaid",
+      "sha256": "8e032fbb83fefaada84cb35ff13430d42abafd590f5cc2478ceaf3f5f8ade2ce",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p18-expert-parallel": {
+      "kind": "mermaid",
+      "sha256": "052174680b9d82b9e77598ed7f90e170e74723f4badaaacf91649a1299eb70a4",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p19-pretraining": {
       "kind": "static",
@@ -252,36 +312,11 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p22-preference.svg"
     },
-    "flow-p23-four-names": {
-      "kind": "mermaid",
-      "sha256": "ad53e2837ef7047a9a97ef7b0017baebd026f5b580f1a202d30a8522a1b5c568",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
     "p23-mtp": {
       "kind": "static",
       "sha256": "5d796065b74c90d493466c1d341ee44c102a76eb93faa609376af03b6bd99474",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p23-mtp.svg"
-    },
-    "flow-p23-r1-routes": {
-      "kind": "mermaid",
-      "sha256": "ea7ab72656a4cbe6ce491f30a0c3709a056dbbe246a7be6f38becbfdd558cd86",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
-    "flow-p23-pending-cache": {
-      "kind": "mermaid",
-      "sha256": "5d4bcd634a2e6b24f1df70f7c332dcb41714bc17c4046c21de0e4bd6fd3beef1",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
-    "flow-p23-eos-budget": {
-      "kind": "mermaid",
-      "sha256": "d8686d495d381f527d0861339d044a66cddeb65c3b690f1e027d0c12d044c993",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
-    "flow-p23-spec-sample": {
-      "kind": "mermaid",
-      "sha256": "46169f1132d56f2a66662f9a121eea32083ab0e2d83933d1cbd87091d1f29867",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p24-quantization": {
       "kind": "static",
@@ -289,26 +324,11 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p24-quantization.svg"
     },
-    "flow-p24-sse-stream": {
-      "kind": "mermaid",
-      "sha256": "0f7198d44af1a240cbe16439f2a63f37841cef9fbe1697e0870a8df3b8d8b8bf",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
     "p25-qwen3": {
       "kind": "static",
       "sha256": "2041f88373988d94e319fa7dd6c519b485b5e52e87d58ad619ff0a99b1a31280",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p25-qwen3.svg"
-    },
-    "flow-p25-block-order": {
-      "kind": "mermaid",
-      "sha256": "97cde23550945c9f4d8dc815b2d6cb6ef46eade4d391a3049c8635098065a44f",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
-    "flow-p25-thinking-budget": {
-      "kind": "mermaid",
-      "sha256": "a516187eae51c30d8250d2db34d58810a946fb45a1b3b19bb3bddfaf5d9e6bf0",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p26-deepseek": {
       "kind": "static",
@@ -316,37 +336,17 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p26-deepseek.svg"
     },
-    "flow-p26-mtp-depth": {
-      "kind": "mermaid",
-      "sha256": "cebfb78a8780e72c8faf25bfd6d37247f225becc86376a3e8cd0cc4fd2f06d2a",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
-    "flow-p26-vision-pack": {
-      "kind": "mermaid",
-      "sha256": "7119803d87b8772e23eca953540cd58e54dd03ca430c181c11001e626073d96f",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
     "p27-healthcheck": {
       "kind": "static",
       "sha256": "b47128703b91a6486dd146ce65f27a9c974e2d0a66507cbb39423b88b024e0a7",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p27-healthcheck.svg"
     },
-    "flow-p27-health-steps": {
-      "kind": "mermaid",
-      "sha256": "5acff838dadd50ae883fcc45fcc18c628c37ea5a94f9672e7025c3601f998f97",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
-    },
     "cache_causal": {
       "kind": "static",
       "sha256": "1ad1f0598fe2405278377ed7f7facc36b61e9b4546ad0d7c806d21d696b185af",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p27/cache_causal.svg"
-    },
-    "flow-p27-ckpt-gate": {
-      "kind": "mermaid",
-      "sha256": "e3331da3fd4e9bb03fd9f08b8e41ceb55dd7cf754c4401a43930f0f30262dcb3",
-      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "negative_controls": {
       "kind": "static",
