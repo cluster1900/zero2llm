@@ -1605,9 +1605,11 @@ class="math inline">\(h_t\)</span>，它的基本关系是：</p>
 class="math inline">\(h_t\)</span> 是读完第 <span
 class="math inline">\(t\)</span> 步后的隐藏状态（“记忆箱”），<span
 class="math inline">\(h_{t-1}\)</span> 是上一步的；<span
-class="math inline">\(f\)</span> 是每一步共用的更新函数。全书只有这里把
-<span class="math inline">\(h\)</span> 当作一个量，其他章节的 <span
-class="math inline">\(h\)</span> 只表示“第几个头”。</p>
+class="math inline">\(f\)</span> 是每一步共用的更新函数。这里的 <span
+class="math inline">\(h_t\)</span>
+是本章的局部字母；到了多头注意力，<span class="math inline">\(h\)</span>
+改作“第几个头”的编号，逐层的隐藏状态则统一写成 <span
+class="math inline">\(X^{(l)}\)</span>。</p>
 <pre><code>   小明          在          草地上        ……          它
     ↓            ↓             ↓                       ↓
   记忆箱1 ──→ 记忆箱2 ──→ 记忆箱3 ──→ …… ──→ 后面的记忆箱</code></pre>
