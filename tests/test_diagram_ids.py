@@ -231,7 +231,24 @@ class ReferencedImagesTests(unittest.TestCase):
         html = (DIST / 'index.html').read_text()
         refs = set(re.findall(r'(?:src|href)="(assets/rendered/[^"#?]+)"', html))
         manifest = json.loads((DIST / 'assets/rendered/manifest.json').read_text())['diagrams']
-        self.assertEqual(refs, {f'assets/rendered/{i}.svg' for i in manifest})
+        # Mermaid figures whose source contains U+1D4B1 use PNG on the website;
+        # everything else stays on SVG (see book_diagrams.diagram_asset_ext).
+        from book_diagrams import SCRIPT_V, diagram_asset_ext
+        script_v_ids = set()
+        for path in sorted((ROOT / 'chapters').glob('*.md')):
+            text = path.read_text(encoding='utf-8')
+            for block in re.findall(r'```mermaid\n(.*?)```', text, re.S):
+                if SCRIPT_V in block:
+                    mid = re.search(r'%% id:\s*(\S+)', block)
+                    self.assertIsNotNone(mid, f'missing %% id in {path}')
+                    script_v_ids.add(f'flow-{mid.group(1)}')
+        expected = set()
+        for diagram_id in manifest:
+            ext = 'png' if diagram_id in script_v_ids else 'svg'
+            self.assertEqual(ext, diagram_asset_ext(
+                SCRIPT_V if diagram_id in script_v_ids else 'no-script-v', False))
+            expected.add(f'assets/rendered/{diagram_id}.{ext}')
+        self.assertEqual(refs, expected)
         for ref in sorted(refs):
             with self.subTest(ref=ref):
                 self.assertTrue((DIST / ref).is_file())
@@ -473,6 +490,73 @@ class D0FollowUpMutationTests(unittest.TestCase):
         self.assertIn('def test_missing_repo_svg_source_fails(self):', source)
         self.assertNotIn('def test_edited_dist_svg_copy_or_' + 'missing_source_fails(self):', source)
 
+
+class ScriptVWebAssetTests(unittest.TestCase):
+    """HTML must use PNG for any Mermaid figure whose source contains U+1D4B1."""
+
+    def test_diagram_asset_ext_png_when_script_v_or_epub(self):
+        from book_diagrams import SCRIPT_V, diagram_asset_ext
+        self.assertEqual(diagram_asset_ext('logits [B,T,|%s|]' % SCRIPT_V, False), 'png')
+        self.assertEqual(diagram_asset_ext('no special glyph', False), 'svg')
+        self.assertEqual(diagram_asset_ext('no special glyph', True), 'png')
+        self.assertEqual(diagram_asset_ext('', False), 'svg')
+
+    def test_site_uses_png_for_script_v_diagrams(self):
+        from book_diagrams import SCRIPT_V
+        html = (DIST / 'index.html').read_text(encoding='utf-8')
+        self.assertIn(SCRIPT_V, (ROOT / 'chapters' / '08l_preference_optimization.md').read_text(encoding='utf-8'))
+        # Both img src and 原尺寸 href for the logp-pair figure must be PNG.
+        self.assertIn('assets/rendered/flow-p22-logp-pair.png', html)
+        self.assertNotIn('href="assets/rendered/flow-p22-logp-pair.svg"', html)
+        self.assertNotIn('src="assets/rendered/flow-p22-logp-pair.svg"', html)
+
+
+class ScriptVFontTests(unittest.TestCase):
+    """D7 (bot-hub#126): |𝒱| must not render as tofu; CI checks config + SVG."""
+
+    SCRIPT_V = '\U0001D4B1'
+    RENDERER = ROOT / 'scripts' / 'render_diagrams.mjs'
+    FONT_CANDIDATES = (
+        Path('/workspace/tools/fonts/NotoSansMath-Regular.ttf'),
+        Path.home() / '.local/share/fonts/NotoSansMath-Regular.ttf',
+    )
+
+    def test_renderer_font_family_includes_noto_sans_math(self):
+        src = self.RENDERER.read_text(encoding='utf-8')
+        self.assertIn('Noto Sans Math', src)
+        # Keep CJK ahead so Chinese stays on CJK; Math is the fallback for U+1D4B1.
+        cjk = src.find('Noto Sans CJK SC')
+        math = src.find('Noto Sans Math')
+        self.assertGreater(cjk, 0)
+        self.assertGreater(math, cjk)
+
+    def test_committed_svgs_keep_script_v_when_source_uses_it(self):
+        """If a Mermaid block contains 𝒱, its committed SVG must too (not U+FFFD)."""
+        md = (DIST / 'transformer_from_scratch.md').read_text(encoding='utf-8')
+        checked = 0
+        for definition in mermaid_blocks(md):
+            if self.SCRIPT_V not in definition:
+                continue
+            diagram_id = mermaid_id(definition)
+            svg_path = DIST / 'assets' / 'rendered' / f'{diagram_id}.svg'
+            self.assertTrue(svg_path.is_file(), f'missing {svg_path}')
+            svg = svg_path.read_text(encoding='utf-8')
+            self.assertIn(self.SCRIPT_V, svg, f'{diagram_id}.svg lost 𝒱')
+            self.assertNotIn('\uFFFD', svg)
+            checked += 1
+        self.assertGreaterEqual(checked, 1, 'expected at least one diagram using 𝒱')
+
+    def test_installed_noto_sans_math_covers_script_v(self):
+        font_path = next((p for p in self.FONT_CANDIDATES if p.is_file()), None)
+        if font_path is None:
+            self.skipTest('Noto Sans Math not installed on this machine (OK for CI)')
+        try:
+            from fontTools.ttLib import TTFont
+        except ImportError:
+            self.skipTest('fontTools not installed')
+        font = TTFont(str(font_path))
+        has = any(0x1D4B1 in table.cmap for table in font['cmap'].tables)
+        self.assertTrue(has, f'{font_path} cmap missing U+1D4B1')
 
 if __name__ == '__main__':
     unittest.main()
