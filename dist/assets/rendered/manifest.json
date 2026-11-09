@@ -32,7 +32,7 @@
     },
     "flow-ch01a-bpe-merge-loop": {
       "kind": "mermaid",
-      "sha256": "d230530daa1f2828a9038688ec2295a6e0c7cf9c2d255fd3f30b29bc70e67ad9",
+      "sha256": "a2f41bfb98abd89a3796ef142ad4ecf757260775daa88970d2bda81124468fc0",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-ch01a-prod-pipeline": {

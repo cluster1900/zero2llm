@@ -417,7 +417,7 @@ flowchart TD
     A["各文档分别统计相邻对"] --> Z{"还有相邻对？"}
     Z -->|没有| F["得到 merges 与 vocab"]
     Z -->|有| B
-    subgraph S["合并一步"]
+    subgraph S[" "]
       direction LR
       B["取最高频对 · 并列取较小 ID"] --> C["新 ID · bytes 拼接"]
       C --> D["不重叠替换"]
