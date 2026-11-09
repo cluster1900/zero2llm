@@ -11803,6 +11803,17 @@ loss；不能因为它“特殊”就一并忽略。</li>
 <li>attention_mask 控制注意力可见性；labels=-100
 控制监督位置。二者职责不同，一个不能代替另一个。</li>
 </ul>
+<p>一张图把内部 shift、忽略位和外面再 shift 的后果放在一起：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p20-double-shift.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p20-double-shift.svg" class="book-diagram"
+width="332"
+alt="框架已经 shift 过，外面再 shift 一次就会错位。labels 与 input_ids 同形 [2,6]；模型内部用 logits[:, :-1] 对 labels[:, 1:]；BOS/PAD 记为 -100，有效目标 N_valid=9；外面再 shift 就错一格。" /></a>
+<div class="diagram-caption">
+框架已经 shift 过，外面再 shift 一次就会错位
+</div>
+</div>
 <p>独立参考计算不调用模型返回的
 loss，也不调用框架的交叉熵函数，而是自己写：</p>
 <p><span class="math display">\[
@@ -11966,7 +11977,17 @@ rank 对应一张 GPU，但这不是这些词的定义。</p>
 也不会替你切分输入数据，数据采样器必须配合。相关职责见 <a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.parallel.DistributedDataParallel.html">PyTorch
 2.14 固定版 DDP API</a>；这里引用其机制说明，不声称本次运行了 PyTorch
-2.14 的多卡测试。</p>
+2.14 的多卡测试。 把各 rank 的前向、反传和梯度同步画在时间轴上：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p20-ddp-steps.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p20-ddp-steps.svg" class="book-diagram"
+width="388"
+alt="DDP：各 rank 先各算一份，再 AllReduce 平均梯度。rank0 与 rank1 读不同数据，各自前向与反传；AllReduce 平均梯度后各自按同一规则 step，参数仍一致。" /></a>
+<div class="diagram-caption">
+DDP：各 rank 先各算一份，再 AllReduce 平均梯度
+</div>
+</div>
 <p>假设每个 rank 一次处理 <span class="math inline">\(B\)</span>
 条，累积 <span class="math inline">\(n_{\mathrm{acc}}\)</span>
 次后更新，数据并行组有 <span
@@ -12222,7 +12243,18 @@ href="https://arxiv.org/abs/2104.04473">Megatron
 描述专家放在哪。路由不均衡会让某些设备忙、某些设备闲；跨设备 token
 交换也有成本。<a
 href="https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0">Megatron-Core
-core_v0.12.0 的 MoE 与并行说明</a></p>
+core_v0.12.0 的 MoE 与并行说明</a>
+三种并行切的轴不同，通信落点也不一样：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p20-tp-pp-ep.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p20-tp-pp-ep.svg" class="book-diagram"
+width="574"
+alt="TP、PP、EP 切的不是同一条轴。TP 在层内拆权重：按列拆后拼接，按行拆后求和；PP 按层分设备，激活向前、梯度向后；EP 按专家分设备，token 送去再送回。" /></a>
+<div class="diagram-caption">
+TP、PP、EP 切的不是同一条轴
+</div>
+</div>
 <p>这些策略可以组合，但<strong>不能把所有并行度数字无脑相乘</strong>。简单的纯
 dense DP×TP×PP 布局常可按独立进程组规划；加入 EP、context parallel
 或不同专家组后，要按框架实际 rank
@@ -12256,7 +12288,18 @@ SFTTrainer 的名字等同于“自动正确的对话微调”。assistant-only
 P21、P22，那里会单独锁版本和检查目标。</p>
 <p>一个实用顺序是：先用单进程证明数据、loss
 和保存加载正确；确实需要更多吞吐再试数据并行；确认状态占用是瓶颈再考虑分片；当单层或网络规模、通信条件要求进一步切分时，再研究
-TP / PP / EP。这个顺序不是性能定律，而是降低排错变量的工程方法。</p>
+TP / PP / EP。这个顺序不是性能定律，而是降低排错变量的工程方法。
+把这个先后顺序收成一张决策图：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p20-framework-choice.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p20-framework-choice.svg" class="book-diagram"
+width="324"
+alt="先单进程证明正确，再按瓶颈选框架。单进程验证数据、loss 与保存；常用结构与 Trainer 用 Transformers；后训练用 TRL；内存或吞吐瓶颈用 DeepSpeed ZeRO；超大模型需要 TP/PP/EP 时用 Megatron。" /></a>
+<div class="diagram-caption">
+先单进程证明正确，再按瓶颈选框架
+</div>
+</div>
 <h2 id="p20.9-保存模型不一定等于能继续训练">P20.9
 保存模型，不一定等于能继续训练</h2>
 <p>本章产生两类本地输出，概念上不能混用。</p>
@@ -12675,7 +12718,17 @@ EOS：原本应继续的回答被错误教成“到这里结束”。</p>
 <p>本章采用保守、可测试的策略：保留 BOS、可选
 system，以及从开头开始能装下的<strong>完整 user/assistant
 对</strong>，只在轮与轮之间截断。第一轮都放不下就明确报错，不返回一个零目标样本，不跳过长轮后拼上后面的轮，也不创造
-EOS。</p>
+EOS。 截断规则可以画成一张判断图：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p21-drop-turns.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p21-drop-turns.svg" class="book-diagram"
+width="272"
+alt="宁可丢掉装不下的完整轮，也不造半个答案。从前往后逐轮放入：整轮装得下就保留；装不下就丢弃这一轮及之后；一轮都装不下就拒绝样本；不补 EOS，空回答也监督 EOS。" /></a>
+<div class="diagram-caption">
+宁可丢掉装不下的完整轮，也不造半个答案
+</div>
+</div>
 <p>去掉 system 的两轮例子长度为 15；第一轮长度为 8：</p>
 <ul>
 <li>max_length=15：两轮都保留，4 个目标。</li>
@@ -13556,7 +13609,18 @@ padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 
 拼接边界，调用方还要保证 chosen / rejected 共用同一 prompt
 和一致的结束规则。</p>
 <p>修改被排除位置的
-logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。</p>
+logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。 把从
+logits 到一对答案 log p 的形状账本画出来：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p22-logp-pair.png"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p22-logp-pair.png" class="book-diagram"
+width="317"
+alt="从变长 token 筛出一对答案 log p。logits 形状 [B,T,|𝒱|]；logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。" /></a>
+<div class="diagram-caption">
+从变长 token 筛出一对答案 log p
+</div>
+</div>
 <h2 id="p22.6-grpo同一道题先比较一组答案">P22.6
 GRPO：同一道题，先比较一组答案</h2>
 <p><a href="https://arxiv.org/html/2402.03300v3#S4.SS1">DeepSeekMath
@@ -13653,6 +13717,17 @@ class="math inline">\(\beta\)</span> 是 KL 惩罚系数（局部符号，本章
 min(1.4,1.2)=1.2，不再鼓励这项收益无限上涨。</li>
 <li>A=−1、ρ=0.6：收益取 min(−0.6,−0.8)=−0.8，不能错误地取 max。</li>
 </ul>
+<p>clip 之后取 min 还是看起来像 max，全看优势的正负：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p22-clip-sign.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p22-clip-sign.svg" class="book-diagram"
+width="452"
+alt="clip 之后取 min，上涨与下跌都靠优势符号管住。ρ=exp(log π_θ − log π_old)；A&gt;0 时 min(ρA, clip(ρ)A) 限制上涨；A&lt;0 时同一式子限制下跌；先在答案内平均再对答案平均，取负号得要最小化的损失。" /></a>
+<div class="diagram-caption">
+clip 之后取 min，上涨与下跌都靠优势符号管住
+</div>
+</div>
 <p>clip
 的作用依赖优势符号和更新方向，并不是所有范围外的概率比都“没有梯度”；它也不保证实际
 KL 永远小于一个固定值。更新后的概率仍需检查。</p>
@@ -14026,17 +14101,6 @@ draft/verify。<strong>随机投机采样没有实现，不声称其分布保持
 </tr>
 </tbody>
 </table></div>
-<p>四个问题挤在一个名词里最容易混；下面脑图拆开常被混称的几件事，不必与上表逐行一一对应：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-four-names.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-four-names.svg" class="book-diagram"
-width="720"
-alt="四个问题，别挤进同一个名词。中心是四件事：推理模型的训练路线与计算预算、MTP 训练时多预测未来位置、投机解码先草稿后验证、蒸馏从老师到学生。" /></a>
-<div class="diagram-caption">
-四个问题，别挤进同一个名词
-</div>
-</div>
 <p>MTP 是 <strong>Multi-Token Prediction，多 token
 预测</strong>；speculative decoding
 是<strong>投机解码</strong>。前者可以为后者提供草稿，但不是同义词。没有
@@ -14068,17 +14132,6 @@ SFT，不应写成“小模型完整重跑了教师的 RL 流程”。<a
 href="https://arxiv.org/html/2501.12948v1">DeepSeek-R1
 v1，§2.2–2.4</a></li>
 </ul>
-<p>三条路线分叉画清楚，数据筛选和草稿拒绝就不再挤在一处：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-r1-routes.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-r1-routes.svg" class="book-diagram"
-width="481"
-alt="R1 式三条路线：直接 RL、多阶段、蒸馏学生。基座分三路——R1-Zero 直接 RL，R1 冷启动 SFT → 推理 RL → 筛选数据再 SFT → 综合 RL，蒸馏学生只做 SFT——且数据筛选与草稿拒绝不是一回事。" /></a>
-<div class="diagram-caption">
-R1 式三条路线：直接 RL、多阶段、蒸馏学生
-</div>
-</div>
 <p>这里的 <strong>cold start（冷启动）</strong> 是给后续 RL
 提供一个起点；<strong>rejection sampling（拒绝采样筛选）</strong>
 在该训练阶段用于保留合格的数据样本。它不是下文为了保持目标生成规则而进行的“草稿接受／拒绝”，两者的目的、输出和正确性要求不同。</p>
@@ -14412,17 +14465,6 @@ correction／bonus 额外调用一次目标模型，本实现维护如下不变�
 <code>tokens[:, :-1]</code>，即还没包含最后一个已生成 token。</li>
 <li><code>pending</code>：<code>tokens[:, -1:]</code>，下轮才喂入目标模型。</li>
 </ul>
-<p>tokens、cache、pending 三者相差一位，用时序图对齐：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-pending-cache.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-pending-cache.svg" class="book-diagram"
-width="357"
-alt="pending 还没喂进 cache：三者相差一位。草稿模型提出草稿；目标模型 prefill 得到首 token 作 pending；每轮把 pending 加草稿一起喂给目标；接受前缀后修正或 bonus 成为新 pending；拒绝后 cache 截回已接受长度。" /></a>
-<div class="diagram-caption">
-pending 还没喂进 cache：三者相差一位
-</div>
-</div>
 <p>先对完整 prompt 做一次 prefill，取末行 logits 的 argmax，输出第一个
 token。此时 cache 恰好装着 prompt，第一个新 token 成为 pending。</p>
 <h3 id="带具体位置的拒绝例子">带具体位置的拒绝例子</h3>
@@ -14485,17 +14527,6 @@ cache。</li>
 token，预留一个 correction／bonus
 位置。只剩一个输出名额时，不征求草稿，普通前向一步。</li>
 </ul>
-<p>停机条件互相嵌套，状态图比文字清单更清楚：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-eos-budget.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-eos-budget.svg" class="book-diagram"
-width="720"
-alt="EOS 与预算必须一起守住。名额为 0 或 prompt 末尾已是 EOS 则直接返回；prefill 或生成后名额用尽则 Done；接受非 EOS 后名额用尽也 Done（while 结束）；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。" /></a>
-<div class="diagram-caption">
-EOS 与预算必须一起守住
-</div>
-</div>
 <p>因此最后一轮不会越过 <code>max_new_tokens</code>。本例保守要求
 <code>prompt 长度 + 生成预算 &lt;= max_seq_len</code>，不实现滑动截断；若模型权重或影响缓存的设置改变，必须重新开始请求。</p>
 <p>每轮验证还必须至少提交一个 token。若拒绝分支因程序错误忘了提交
@@ -14522,17 +14553,6 @@ q(x)=0，正常从 q 采样不会得到该 x；p=q
 时拒绝概率为零，不应去归一化一个全零残差。涉及 temperature
 或截断采样时，要使用相应处理后的分布，不能混用原始 logits
 和修改后的概率。</p>
-<p>拒绝之后必须从残差分布重抽，流程如下：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p23-spec-sample.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p23-spec-sample.svg" class="book-diagram"
-width="606"
-alt="拒绝之后要从残差分布重抽，不能改用 argmax。从 q 抽 x，以 min(1, p(x)/q(x)) 接受；接受则输出 x；拒绝则从 max(0, p−q) 归一化后重抽，不是 argmax。" /></a>
-<div class="diagram-caption">
-拒绝之后要从残差分布重抽，不能改用 argmax
-</div>
-</div>
 <p>手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B
 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4
 的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到
@@ -15392,17 +15412,6 @@ href="https://docs.vllm.ai/en/v0.8.4/serving/openai_compatible_server.html">vLLM
 字段里常放
 JSON。一次网络读取可能只有半个中文字符，也可能包含三个事件；一个 content
 delta 可能包含多个 token，也可能为空。</p>
-<p>网络块、SSE 事件和 token 三种边界互不对齐：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p24-sse-stream.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p24-sse-stream.svg" class="book-diagram"
-width="282"
-alt="网络块、SSE 事件和 token 三种边界互不对齐。客户端 POST 流式 completions；服务端逐 token 生成并以空行分隔 SSE 事件；一次网络读取可能只有半个字符；客户端缓冲到完整事件再解析，直到 data:[DONE]。" /></a>
-<div class="diagram-caption">
-网络块、SSE 事件和 token 三种边界互不对齐
-</div>
-</div>
 <pre class="text"><code>data: {&quot;choices&quot;:[{&quot;text&quot;:&quot;春&quot;,&quot;finish_reason&quot;:null}]}
 
 data: {&quot;choices&quot;:[{&quot;text&quot;:&quot;风&quot;,&quot;finish_reason&quot;:&quot;length&quot;}]}
@@ -15824,17 +15833,6 @@ block：QK-norm 不是又一个 LayerNorm</h2>
   → RMSNorm → dense SwiGLU 或稀疏 MoE → 加回上一步结果</code></pre>
 <p>注意力内部还有一层细节：Q、K 在投影并按头切开后，分别做
 <strong>QK-norm</strong>，随后才应用 RoPE；V 不做这两项变换。</p>
-<p>整条 block 的先后顺序决定权重和缓存能否对上：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p25-block-order.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p25-block-order.svg" class="book-diagram"
-width="615"
-alt="QK-norm、RoPE 与缓存的先后顺序决定权重能否对上。x 经 RMSNorm 后做 Q/K/V 投影并分头；Q、K 做 QK-norm 再 RoPE；V 投影后直通，在「缓存旋转后 K / 原始 V」与旋转后 K 会合；注意力加回 x，再 RMSNorm 与 SwiGLU 或 MoE 后加回。" /></a>
-<div class="diagram-caption">
-QK-norm、RoPE 与缓存的先后顺序决定权重能否对上
-</div>
-</div>
 <p>RMSNorm 对最后一维计算：</p>
 <p><span class="math display">\[
 \operatorname{RMSNorm}(z)_j
@@ -16069,17 +16067,6 @@ href="https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485
 token”，也不会自动给答案另留一份额度。<code>completion_budget</code>
 只是对已经得到的 ID
 记账，不会迫使模型结束思考，更不是推理预算控制器。</p>
-<p>模板开关、软提示、生成额度和配置长度上限是四层，互不改写：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p25-thinking-budget.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p25-thinking-budget.svg" class="book-diagram"
-width="479"
-alt="Thinking 开关、软提示、生成额度与长度上限是四层。① 模板布尔开关改 prompt 文本；② 软提示由模型自行遵循；③ 总生成额度在运行时截断；④ 配置里的位置与长度上限另算；四者互不改写。" /></a>
-<div class="diagram-caption">
-Thinking 开关、软提示、生成额度与长度上限是四层
-</div>
-</div>
 <p>手算一个假想输出，不把它当作真实模型生成：</p>
 <pre class="text"><code>生成 ID：[151667, 7, 8, 151668, 9]
 总额度：6
@@ -16390,17 +16377,6 @@ token，部署时却不能偷看尚未生成的答案。若用作草稿，仍要
 训练、多 token 草稿、最终接受几个 token，是三个不同问题。</strong> <a
 href="#p23-mtp">P23</a> 的独立线性未来头用于学习标签对齐，不冒充 V3
 的顺序 MTP。</p>
-<p>顺序 MTP 每一深度都要接上上一深度的表示和对应 token 向量：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p26-mtp-depth.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p26-mtp-depth.svg" class="book-diagram"
-width="624"
-alt="顺序 MTP：每一深度接上上一表示和对应 token 向量。主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，其输出再经共享输出头读出 t+2；深度 2 接该块输出与 emb(t+2) 再进下一块；训练用真 token，部署不能偷看。" /></a>
-<div class="diagram-caption">
-顺序 MTP：每一深度接上上一表示和对应 token 向量
-</div>
-</div>
 <h2 id="p26.3-r1改变训练路线不等于发明另一种-attention">P26.3
 R1：改变训练路线，不等于发明另一种 Attention</h2>
 <p><a
@@ -16633,23 +16609,12 @@ projector
 对齐到语言宽度。重排减少位置数，但在投影前并没有丢掉原有九块的通道数。</p>
 <p>尤其要看<a
 href="https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/314113f8a7dadb388215396ba5fbee2c610a04d6/inference/vision.py">参考
-<code>Aligner.forward</code></a>：先把 高×宽×C
+<code>Aligner.forward</code></a>：先把 H×W×C
 改成通道在前，向<strong>右侧和底部补零</strong>使边长能被 3
 整除，再执行不重叠的 <code>unfold</code>。一个新 token 内部的顺序是“通道
 → 邻域行 → 邻域列”，不是“邻域位置 → 通道”。最后才经过两层 MLP（中间
 GELU）。本章只复现前面的坐标重排，不运行
 ViT、projector、视觉位置编码或图像理解。</p>
-<p>补零方式和展开顺序都会改变拼出来的向量：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p26-vision-pack.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p26-vision-pack.svg" class="book-diagram"
-width="631"
-alt="视觉特征补零并 3×3 展开后，再投到文本宽度 D。ViT 特征网格高×宽×C 先转成通道在前，右侧与下方补零到 3 的倍数，再 3×3 不重叠展开（块内顺序：通道、行、列）得到 9C 维，经 MLP 投到 D 后接入文本 token 序列。" /></a>
-<div class="diagram-caption">
-视觉特征补零并 3×3 展开后，再投到文本宽度 D
-</div>
-</div>
 <h3 id="mhcengramdspark">mHC、Engram、DSpark</h3>
 <p>DeepSeek-V4.1-Flash <a
 href="https://arxiv.org/html/2609.19969v1">报告的 §2.4.1–2.4.3</a>
@@ -17352,17 +17317,6 @@ logits。</li>
 <li>用同一个 S0 权重和固定 token 重放，记录普通／缓存 CPU
 前向的计时分布。</li>
 </ol>
-<p>八步有依赖，顺序不能打乱：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p27-health-steps.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p27-health-steps.svg" class="book-diagram"
-width="670"
-alt="健康检查八步有依赖，不能打乱顺序瞎跳。make_stages 后做 fixture 与梯度 smoke、未来扰动、checkpoint 读回、多种分块缓存、组件 oracle 与兼容检查、对照消融与负例控制（含选修 MTP）、CPU 计时，最后出报告。" /></a>
-<div class="diagram-caption">
-健康检查八步有依赖，不能打乱顺序瞎跳
-</div>
-</div>
 <p>这里的 backward 是<strong>梯度
 smoke</strong>，不是训练完成。参数没有更新，checkpoint 也不包含
 optimizer 或 RNG
@@ -17658,17 +17612,6 @@ dtype，最后严格加载张量。仅检查浮点张量不够：整数、布尔
 buffer 都必须匹配对应目标张量的 dtype。文件不能任意指定一个 Python
 模块让加载器导入。该格式只服务本书工厂建立的教学模型，不支持给模块随手
 monkey-patch 后的任意运行时结构。</p>
-<p>形状相同时词表或 RoPE 仍可能不一致，检查顺序决定先报哪个错：</p>
-<div class="diagram-figure">
-<a href="assets/rendered/flow-p27-ckpt-gate.svg"
-title="点击查看原尺寸图"><img
-src="assets/rendered/flow-p27-ckpt-gate.svg" class="book-diagram"
-width="335"
-alt="形状相同也可能词表或 RoPE 不一致，先核元数据再 strict 加载。读 metadata 依次核阶段、配置、词表、深度、dtype，任一项不符就报错；全部通过再 strict 加载张量；缓存不在文件里，加载后重新 prefill。" /></a>
-<div class="diagram-caption">
-形状相同也可能词表或 RoPE 不一致，先核元数据再 strict 加载
-</div>
-</div>
 <div class="table-wrapper"><table>
 <colgroup>
 <col style="width: 33%" />
