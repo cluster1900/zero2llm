@@ -80,14 +80,14 @@ $$
 参考策略 π_ref 像一张固定的起点照片。我们希望提高奖励，又不无节制地偏离它。一种约束量是：
 
 $$
-D_{\mathrm{KL}}(\pi_\theta\Vert\pi_{\mathrm{ref}})
+\operatorname{KL}(\pi_\theta\Vert\pi_{\mathrm{ref}})
 =\sum_y\pi_\theta(y)
 \left[\log\pi_\theta(y)-\log\pi_{\mathrm{ref}}(y)\right].
 $$
 
 **大白话：**按当前策略自己的概率加权，平均地看“我给每个答案的对数概率比参考策略多出多少”；两份分布一模一样时结果为 0，差得越多越大。
 
-其中：$\pi_\theta$ 是正在训练的策略（参数为 $\theta$），$\pi_{\mathrm{ref}}$ 是固定的参考策略；求和遍历所有可能的答案 $y$；用自然对数时单位是 nats。
+其中：$\pi_\theta$ 是正在训练的策略（参数为 $\theta$），$\pi_{\mathrm{ref}}$ 是固定的参考策略；求和遍历所有可能的答案 $y$；用自然对数时单位是 nats；$\operatorname{KL}(\cdot\Vert\cdot)$ 是 KL 散度（附录 A.5 不写 $D_{\mathrm{KL}}$，因为 $D$ 只指模型宽度）。
 
 两份分布相同时 KL=0；一般不对称，不能调换左右。代码在有限 logits 上用 log-softmax，枚举所有动作计算。手算 p=[0.6,0.3,0.1]、q=[0.2,0.5,0.3]（p 作 $\pi_\theta$，q 作 $\pi_{\mathrm{ref}}$），得到约 0.396058 nats。它不是“只看 chosen 的概率变化”，也不是两个 logits 的欧氏距离。
 
@@ -262,16 +262,16 @@ $$
 
 $$
 \mathcal L=
-\frac1N\sum_{i=1}^{N}\frac1{T_i}
+\frac1{N_{\mathrm{resp}}}\sum_{i=1}^{N_{\mathrm{resp}}}\frac1{T_i}
 \sum_{t=1}^{T_i}
 \left[-\min\left(\rho_{i,t}A_i,
 \operatorname{clip}(\rho_{i,t},0.8,1.2)A_i\right)
-+\beta K_{i,t}\right].
++\beta\,\operatorname{KL}_{i,t}\right].
 $$
 
 **大白话：**优势为正就鼓励这个 token，为负就压低它；但概率比一旦跑出 $[0.8,1.2]$，就不再为同方向的变化加奖，外加一小笔“别离参考策略太远”的 KL 罚款。每份答案先在自己的 token 上取平均，再在答案之间平均。
 
-其中：$N$ 是这批答案总数，$T_i$ 是第 $i$ 份答案的有效长度（token 数），$K_{i,t}$ 是该前缀的 KL 项；$\rho_{i,t}$、$A_i$ 同上；$\operatorname{clip}(\rho,0.8,1.2)$ 把 $\rho$ 截到 $[0.8,1.2]$ 之内；$\beta$ 是 KL 惩罚系数（局部符号，本章 GRPO 取 0.04）。本章各题采样数相同，因此对答案均权也使题目均权。不同组大小时还需明确是否要对题目再次加权。
+其中：$N_{\mathrm{resp}}$ 是这批答案（回复）总数，$T_i$ 是第 $i$ 份答案的有效长度（token 数）；$\operatorname{KL}_{i,t}$ 是第 $i$ 份答案在第 $t$ 个前缀上、当前策略对参考策略的**精确**条件 KL（本章枚举整个词表算出，不是估计，所以不加帽子）；$\rho_{i,t}$、$A_i$ 同上；$\operatorname{clip}(\rho,0.8,1.2)$ 把 $\rho$ 截到 $[0.8,1.2]$ 之内；$\beta$ 是 KL 惩罚系数（局部符号，本章 GRPO 取 0.04）。本章各题采样数相同，因此对答案均权也使题目均权。不同组大小时还需明确是否要对题目再次加权。
 
 两个检查符号的例子：
 
@@ -282,20 +282,20 @@ clip 的作用依赖优势符号和更新方向，并不是所有范围外的概
 
 ### 本章的 KL 和长度归约，刻意写清楚
 
-`grpo_loss` 输入 logits/reference=$[N,T,\lvert\mathcal V\rvert]$，targets/old_logps/mask=$[N,T]$，advantages=$[N]$（$T$ 是补齐后的答案长度）。old、reference、advantages 都停止梯度；当前 logits 保留梯度。mask 中每行至少一个 True。有限的 log probability 不保证 exp 后仍然有限；如果概率比、逐 token loss 或归约超出 dtype 的有限范围，代码明确报错，不用 clip 掩盖溢出，也不让 0×∞ 静默变成 NaN。
+`grpo_loss` 输入 logits/reference=$[N_{\mathrm{resp}},T,\lvert\mathcal V\rvert]$，targets/old_logps/mask=$[N_{\mathrm{resp}},T]$，advantages=$[N_{\mathrm{resp}}]$（$T$ 是补齐后的答案长度，每份答案的有效长度 $T_i\le T$，多出的位置由 mask 排除）。old、reference、advantages 都停止梯度；当前 logits 保留梯度。mask 中每行至少一个 True。有限的 log probability 不保证 exp 后仍然有限；如果概率比、逐 token loss 或归约超出 dtype 的有限范围，代码明确报错，不用 clip 掩盖溢出，也不让 0×∞ 静默变成 NaN。
 
-本章词表很小，K 使用枚举整个词表的精确条件 KL，而不是采样估计。原论文使用的一个逐 token KL 估计写成：
+本章词表很小，$\operatorname{KL}_{i,t}$ 使用枚举整个词表的精确条件 KL，而不是采样估计。原论文使用的一个逐 token KL **估计量**写成（只有估计量加帽子）：
 
 $$
-k=\frac{\pi_{\mathrm{ref}}(a\mid c)}{\pi_\theta(a\mid c)}
--\log\frac{\pi_{\mathrm{ref}}(a\mid c)}{\pi_\theta(a\mid c)}-1.
+\widehat{\operatorname{KL}}_{i,t}=\frac{\pi_{\mathrm{ref}}(y_{i,t}\mid x,y_{i,<t})}{\pi_\theta(y_{i,t}\mid x,y_{i,<t})}
+-\log\frac{\pi_{\mathrm{ref}}(y_{i,t}\mid x,y_{i,<t})}{\pi_\theta(y_{i,t}\mid x,y_{i,<t})}-1.
 $$
 
-**大白话：**只看抽中的那一个 token：记 $u$ 为“参考概率 / 当前概率”，算 $u-\log u-1$。这个数永远不小于 0，两边相同时恰好为 0；按当前策略抽很多次取平均，就逼近 KL。
+**大白话：**只看抽中的那一个 token：记 $u$ 为“参考概率 / 当前概率”，算 $u-\log u-1$。这个数永远不小于 0，两边相同时恰好为 0；按当前策略抽很多次取平均，就逼近精确的 $\operatorname{KL}_{i,t}$。
 
-其中：$a$ 是抽到的动作（token），$c$ 是它前面的上下文（题目加已生成部分；原论文记作 $s$，本书把 $s$ 留给注意力分数）；$k$ 是单个样本上的 KL 估计值。
+其中：$y_{i,t}$ 是抽到的 token（强化学习里叫“动作”），$(x,y_{i,<t})$ 是它前面的上下文，即题目加已生成部分（强化学习里叫“状态”，常写作 $s$；本书把 $s$ 留给注意力分数）；$\widehat{\operatorname{KL}}_{i,t}$ 是单个样本上的 KL 估计值，帽子表示“估计量”，用来和上面损失里的精确项 $\operatorname{KL}_{i,t}$ 区分。
 
-若动作 a 真按当前 π_θ 抽样，且支持集条件满足，它的期望等于相应 KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与 old 不同，也不能不加说明地把旧样本均值称为精确 KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 K 的教学目标说成原论文代码逐行复现。
+若 $y_{i,t}$ 真按当前 $\pi_\theta$ 抽样，且支持集条件满足，它的期望等于相应 KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与 old 不同，也不能不加说明地把旧样本均值称为精确 KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 $\operatorname{KL}_{i,t}$ 的教学目标说成原论文代码逐行复现。
 
 长度归约先做“每个答案内 token 平均”，再对答案平均。若答案长度分别为 2 和 4，每份答案总权重都是 1/2；若改成六个 token 统一平均，两份答案的总权重则为 1/3 和 2/3。两者都能写成 loss，但不是同一个目标。
 

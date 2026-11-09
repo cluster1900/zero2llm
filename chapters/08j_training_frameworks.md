@@ -216,7 +216,7 @@ $$
 
 本例共 16 bytes/参数元素。**这不是所有 Adam、BF16 或 PyTorch 训练的固定规律。** 有的路径保留 FP32 梯度，有的没有单独 master copy；本章真实 CPU smoke 用的是 float32 + SGD，也不能套用这份 Adam 账本。
 
-设参数元素数为 $P$，参数 / 梯度 / 优化器侧每元素字节分别为 $b_p$、$b_g$、$b_o$（它们都是附录 A.5 里 $b_{\mathrm{elem}}$ 这类“每元素字节数”，只是按用途分开记）。这里 $b_o$ = 2×moment_bytes+master_bytes，默认 2×4+4=12。经典 ZeRO 的分级思路是：Stage 1 切优化器状态，Stage 2 再切梯度，Stage 3 再切参数。出处是 [ZeRO 原始论文 v3](https://arxiv.org/abs/1910.02054v3) 以及 [DeepSpeed v0.16.5 的 ZeRO 官方说明源码](https://github.com/deepspeedai/DeepSpeed/blob/v0.16.5/docs/code-docs/source/zero3.rst)。
+设参数元素数为 $N_{\mathrm{param}}$，参数 / 梯度 / 优化器侧每元素字节分别为 $b_p$、$b_g$、$b_o$（它们都是附录 A.5 里 $b_{\mathrm{elem}}$ 这类“每元素字节数”，只是按用途分开记）。这里 $b_o$ = 2×moment_bytes+master_bytes，默认 2×4+4=12。经典 ZeRO 的分级思路是：Stage 1 切优化器状态，Stage 2 再切梯度，Stage 3 再切参数。出处是 [ZeRO 原始论文 v3](https://arxiv.org/abs/1910.02054v3) 以及 [DeepSpeed v0.16.5 的 ZeRO 官方说明源码](https://github.com/deepspeedai/DeepSpeed/blob/v0.16.5/docs/code-docs/source/zero3.rst)。
 
 | 方式 | 参数 | 梯度 | 优化器侧状态 |
 | --- | --- | --- | --- |
@@ -229,22 +229,22 @@ $$
 
 $$
 \begin{aligned}
-M_0 &= P(b_p+b_g+b_o),\\
-M_1 &= P(b_p+b_g)+\frac{P}{N_{\mathrm{dp}}}b_o,\\
-M_2 &= Pb_p+\frac{P}{N_{\mathrm{dp}}}(b_g+b_o),\\
-M_3 &= \frac{P}{N_{\mathrm{dp}}}(b_p+b_g+b_o).
+\mathrm{Mem}_0 &= N_{\mathrm{param}}(b_p+b_g+b_o),\\
+\mathrm{Mem}_1 &= N_{\mathrm{param}}(b_p+b_g)+\frac{N_{\mathrm{param}}}{N_{\mathrm{dp}}}b_o,\\
+\mathrm{Mem}_2 &= N_{\mathrm{param}}b_p+\frac{N_{\mathrm{param}}}{N_{\mathrm{dp}}}(b_g+b_o),\\
+\mathrm{Mem}_3 &= \frac{N_{\mathrm{param}}}{N_{\mathrm{dp}}}(b_p+b_g+b_o).
 \end{aligned}
 $$
 
 **大白话：**Stage 0 每张卡把参数、梯度、优化器状态三样全背着；每升一级，就多一样东西被 $N_{\mathrm{dp}}$ 张卡平分，每张卡只背自己那 $1/N_{\mathrm{dp}}$。
 
-其中：$M_k$ 是 ZeRO Stage $k$ 下每个 rank 的持久状态字节数；$P$ 是参数元素个数；$b_p$、$b_g$、$b_o$ 是参数、梯度、优化器侧的每元素字节数；$N_{\mathrm{dp}}$ 是数据并行组的 rank 数。式子假设 $P$ 能被 $N_{\mathrm{dp}}$ 整除。
+其中：$\mathrm{Mem}_k$ 是 ZeRO Stage $k$ 下每个 rank 的持久状态字节数；$N_{\mathrm{param}}$ 是参数元素个数；$b_p$、$b_g$、$b_o$ 是参数、梯度、优化器侧的每元素字节数；$N_{\mathrm{dp}}$ 是数据并行组的 rank 数。式子假设 $N_{\mathrm{param}}$ 能被 $N_{\mathrm{dp}}$ 整除。
 
 Stage 3 并不是每个 rank 永远只看自己的一小片参数。执行某层计算时仍需按实现聚合所需权重，并在合适时机释放或重新切分。节省常驻冗余往往要付出通信、调度和临时空间成本。CPU/NVMe offload 又是把状态放到别的位置，不是与 Stage 1/2/3 同义的第四个数字。
 
 ### 十个参数，四个 rank，亲手算一遍
 
-$P=10$、$N_{\mathrm{dp}}=4$ 不能整除。我们的教学分配不加 padding，前两个 rank 各负责 3 个元素，后两个各负责 2 个，记作 [3,3,2,2]。这只是平衡所有权模型，不模拟 DeepSpeed 内部的 bucket / 对齐布局。
+$N_{\mathrm{param}}=10$、$N_{\mathrm{dp}}=4$ 不能整除。我们的教学分配不加 padding，前两个 rank 各负责 3 个元素，后两个各负责 2 个，记作 [3,3,2,2]。这只是平衡所有权模型，不模拟 DeepSpeed 内部的 bucket / 对齐布局。
 
 以 rank 0 为例：
 
@@ -253,7 +253,7 @@ $P=10$、$N_{\mathrm{dp}}=4$ 不能整除。我们的教学分配不加 padding�
 - Stage 2：10×2 + 3×2 + 3×12 = 62 bytes。
 - Stage 3：3×2 + 3×2 + 3×12 = 48 bytes。
 
-每一行都是把上面的 $M_k$ 代入 $P=10$、$b_p=b_g=2$、$b_o=12$，并把 $P/N_{\mathrm{dp}}$ 换成 rank 0 实际分到的 3 个元素。
+每一行都是把上面的 $\mathrm{Mem}_k$ 代入 $N_{\mathrm{param}}=10$、$b_p=b_g=2$、$b_o=12$，并把 $N_{\mathrm{param}}/N_{\mathrm{dp}}$ 换成 rank 0 实际分到的 3 个元素。
 
 全部 rank 的结果是：
 
@@ -264,9 +264,9 @@ $P=10$、$N_{\mathrm{dp}}=4$ 不能整除。我们的教学分配不加 padding�
 | Stage 2 | 62 | 62 | 48 | 48 | 220 |
 | Stage 3 | 48 | 48 | 32 | 32 | 160 |
 
-单位全部是 bytes。最大的 rank 分片应使用 $\lceil P/N_{\mathrm{dp}}\rceil=3$，而不是 $\lfloor P/N_{\mathrm{dp}}\rfloor=2$（$\lceil\cdot\rceil$ 向上取整，$\lfloor\cdot\rfloor$ 向下取整）。若用浮点 2.5 个参数来估算最满的 rank，会低估；若每个 rank 都实际分配 3 个槽位，则又是含 padding 的另一种账本，集群合计不能仍写 10 个槽位。
+单位全部是 bytes。最大的 rank 分片应使用 $\lceil N_{\mathrm{param}}/N_{\mathrm{dp}}\rceil=3$，而不是 $\lfloor N_{\mathrm{param}}/N_{\mathrm{dp}}\rfloor=2$（$\lceil\cdot\rceil$ 向上取整，$\lfloor\cdot\rfloor$ 向下取整）。若用浮点 2.5 个参数来估算最满的 rank，会低估；若每个 rank 都实际分配 3 个槽位，则又是含 padding 的另一种账本，集群合计不能仍写 10 个槽位。
 
-脚本用 divmod 得到商和余数，逐 rank 返回真实元素数，保证总和严格等于 $P$；$N_{\mathrm{dp}}>P$ 时允许部分 rank 拥有 0 个分片元素，不能凭空多出参数。
+脚本用 divmod 得到商和余数，逐 rank 返回真实元素数，保证总和严格等于 $N_{\mathrm{param}}$；$N_{\mathrm{dp}}>N_{\mathrm{param}}$ 时允许部分 rank 拥有 0 个分片元素，不能凭空多出参数。
 
 ### 账本不是显存峰值
 
@@ -274,7 +274,7 @@ $P=10$、$N_{\mathrm{dp}}=4$ 不能整除。我们的教学分配不加 padding�
 
 bytes、GB 和 GiB 也要区分：1 GB=10^9 bytes，1 GiB=2^30 bytes。10^9 bytes 大约是 0.9313 GiB，而不是 1 GiB。本章 byte_units 同时返回两种单位；不要把 GPU 标称容量与程序输出混用后得出“刚好能放下”的结论。
 
-现在做一个修改练习：把 gradient_bytes 从 2 改成 4，同时把 master_bytes 改成 0。$P=10$、$N_{\mathrm{dp}}=4$ 时，Stage 2 的每 rank 结果应为 [56,56,44,44] bytes。这个练习强迫我们把“梯度什么 dtype”和“优化器状态什么 dtype”分开，而不是机械背诵“每参数 16 字节”。
+现在做一个修改练习：把 gradient_bytes 从 2 改成 4，同时把 master_bytes 改成 0。$N_{\mathrm{param}}=10$、$N_{\mathrm{dp}}=4$ 时，Stage 2 的每 rank 结果应为 [56,56,44,44] bytes。这个练习强迫我们把“梯度什么 dtype”和“优化器状态什么 dtype”分开，而不是机械背诵“每参数 16 字节”。
 
 ## P20.7 TP、PP、EP：切的不是同一条轴
 
@@ -333,7 +333,7 @@ python code/21_training_frameworks.py --hf --output-dir /tmp/p20-checkpoint-demo
 
 1. “我把 config.json 改成两倍 hidden size，原权重就变强了。”这句话有什么问题？
 2. 两条长度分别为 6、5 的含 BOS/EOS 序列，右侧补齐到 6。首列与 PAD 忽略时，监督位置数是多少？若恢复首列 BOS，本例版本的 Trainer 计数和实际 next-token 目标数有什么不同？
-3. $P=7$、$N_{\mathrm{dp}}=3$，默认每元素 2+2+12 bytes。Stage 3 每个 rank 的所有权、状态字节和合计是多少？
+3. $N_{\mathrm{param}}=7$、$N_{\mathrm{dp}}=3$，默认每元素 2+2+12 bytes。Stage 3 每个 rank 的所有权、状态字节和合计是多少？
 4. 为本章代码故意制造一个错误，说明哪条测试应该发现它。只让 loss 下降，能否作为验收？
 
 ### 参考答案

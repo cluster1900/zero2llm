@@ -293,11 +293,11 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 一种常见的理解方式是把训练结束时的预测 loss 拟合成：
 
-$$\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}}) \approx c_0 + \frac{c_{\mathrm{param}}}{N_{\mathrm{param}}^{\alpha}} + \frac{c_{\mathrm{tok}}}{N_{\mathrm{tok}}^{\beta}}.$$
+$$\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}}) \approx c_{\mathrm{irred}} + \frac{c_{\mathrm{param}}}{N_{\mathrm{param}}^{\alpha}} + \frac{c_{\mathrm{tok}}}{N_{\mathrm{tok}}^{\beta}}.$$
 
 **大白话：**最终 loss 分三块：再大的模型、再多的数据也去不掉的底线，加上“模型不够大”和“数据不够多”各自欠下的一笔账。两笔账都随规模按幂次慢慢还，所以同一预算下要在两者之间分配。
 
-其中：$\mathcal L$ 是训练结束时的预测 loss；$N_{\mathrm{param}}$ 是参数量，$N_{\mathrm{tok}}$ 是训练 token 数；$c_0$ 是不可约的 loss 底线；$c_{\mathrm{param}}$、$c_{\mathrm{tok}}$ 是两笔账的系数，$\alpha$、$\beta$ 是两笔账的下降指数（局部符号，只在本式有效）。后五个都是在具体实验设置下估计的量。原论文把它们写作 $E$、$A$、$B$、$\alpha$、$\beta$；本书改写是为了不和 embedding 表 $E$、批大小 $B$ 撞名。
+其中：$\mathcal L$ 是训练结束时的预测 loss；$N_{\mathrm{param}}$ 是参数量，$N_{\mathrm{tok}}$ 是训练 token 数；$c_{\mathrm{irred}}$ 是不可约的 loss 底线（irreducible）；$c_{\mathrm{param}}$、$c_{\mathrm{tok}}$ 是两笔账的系数，$\alpha$、$\beta$ 是两笔账的下降指数（局部符号，只在本式有效）。后五个都是在具体实验设置下估计的量。原论文把它们写作 $E$、$A$、$B$、$\alpha$、$\beta$；本书改写是为了不和 embedding 表 $E$、批大小 $B$ 撞名。
 
 该论文在所讨论的数据充足设置中使用平滑训练 loss 作为测试 loss 的估计；本章反复使用同一小语料，不满足这个前提，不能拿训练 loss 充当独立验证 loss。增加 $N_{\mathrm{param}}$ 或 $N_{\mathrm{tok}}$ 时，可下降的部分逐渐变小，所以同一预算下需要分配。对某些稠密模型训练的粗略计算账本，还会使用 $C\approx 6N_{\mathrm{param}}N_{\mathrm{tok}}$（常简称 6ND）；它忽略或近似了若干开销，不是任意结构、序列长度或硬件下的精确 FLOPs。
 
