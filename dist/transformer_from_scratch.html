@@ -937,13 +937,24 @@ one-hot
 <h2 id="embedding把编号换成一行数字">1.2
 Embedding：把编号换成一行数字</h2>
 <p>准备一张表 <span class="math inline">\(E\)</span>，有 <span
-class="math inline">\(V\)</span> 行、<span
+class="math inline">\(\lvert\mathcal V\rvert\)</span> 行、<span
 class="math inline">\(D\)</span> 列。<span
-class="math inline">\(V\)</span> 是词表大小，<span
+class="math inline">\(\lvert\mathcal V\rvert\)</span> 是词表大小（<span
+class="math inline">\(\mathcal V\)</span> 是全部 token
+组成的词表，竖线表示“数一数有几个”），<span
 class="math inline">\(D\)</span> 是向量宽度。下标 <span
 class="math inline">\(i\)</span> 的 token 的向量就是下标 <span
 class="math inline">\(i\)</span> 的行：</p>
 <p><span class="math display">\[\mathrm{embedding}(i)=E_i\]</span></p>
+<p>说白了，embedding
+就是“按编号翻到那一行，把整行抄出来”：没有乘法，也没有比较。之所以要专门准备这样一张表，是因为表里的数可以在训练中慢慢调到有用的位置，而编号本身永远只是编号。</p>
+<p>其中：<span class="math inline">\(i\)</span> 是 token 的 ID（从 0
+开始的整数）；<span class="math inline">\(E\in\mathbb R^{\lvert\mathcal
+V\rvert\times D}\)</span> 是 embedding 表；<span
+class="math inline">\(E_i\)</span> 是 <span
+class="math inline">\(E\)</span> 下标 <span
+class="math inline">\(i\)</span> 的那一行，是一个长度为 <span
+class="math inline">\(D\)</span> 的向量。</p>
 <p>一个教学例子：</p>
 <div class="sourceCode" id="cb3"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>embedding_table <span class="op">=</span> [[<span class="fl">0.2</span>, <span class="op">-</span><span class="fl">0.1</span>], [<span class="fl">0.3</span>, <span class="fl">0.4</span>], [<span class="op">-</span><span class="fl">0.5</span>, <span class="fl">0.8</span>]]</span>
@@ -962,8 +973,10 @@ class="book-diagram" width="520" alt="从 token ID 查到 embedding" /></a>
 <p>用 one-hot 行向量乘 <span
 class="math inline">\(E\)</span>，也会选中同一行。实际程序通常直接按 ID
 查表，避免创建一个很长、几乎全为 0 的数组。稠密 embedding
-的存储也不是“免费”的：整张表依然有 <span class="math inline">\(V\times
-D\)</span> 个数。</p>
+的存储也不是“免费”的：整张表依然有 <span
+class="math inline">\(\lvert\mathcal V\rvert\times D\)</span>
+个数：词表每多一个 token，就要多存、多训练一整行 <span
+class="math inline">\(D\)</span> 个数。</p>
 <p><strong>这张表是谁写的？</strong>
 在神经网络里，它通常和其他权重一样初始化，然后通过训练损失的梯度更新。只要模型给正确答案的概率还没到
 1，损失就有非零梯度，训练过程据此调整相关参数；反复见到数据后，向量可能编码有用的语言规律。维度并不天然叫“甜度”“性别”或“情绪”，也不能保证某一维单独对应一个人类概念。</p>
@@ -1061,14 +1074,35 @@ class="math inline">\(\|a-b\|=\sqrt{(-3)^2+(-4)^2}=5\)</span>。</li>
 <li>余弦相似度：<span class="math inline">\(\cos\theta=(a\cdot
 b)/(\|a\|\|b\|)=50/(5\times10)=1\)</span>。</li>
 </ul>
+<p>其中：<span class="math inline">\(a,b\)</span>
+是两个宽度相同的向量；<span class="math inline">\(a\cdot b\)</span>
+是点积；<span class="math inline">\(\|a\|\)</span> 是 <span
+class="math inline">\(a\)</span> 的长度（也叫模长）；<span
+class="math inline">\(\|a-b\|\)</span> 是两个端点之间的直线距离；<span
+class="math inline">\(\theta\)</span> 是 <span
+class="math inline">\(a\)</span> 与 <span
+class="math inline">\(b\)</span> 的夹角（局部符号，只在本节使用）。</p>
 <p>它们方向完全相同，但长度不同，所以距离不是 0。点积是
 50，也没有被限制在 -1 到 1
 之间。<strong>把两个向量都归一化成单位长度后，点积就等于余弦相似度</strong>（严格说，只要两个长度的乘积为
 1 即可）。</p>
 <p>一般地：</p>
-<p><span class="math display">\[a\cdot b=\sum_{j=1}^{D}a_j b_j,\qquad
-\|a\|=\sqrt{\sum_{j=1}^{D}a_j^2},\qquad
+<p><span class="math display">\[a\cdot b=\sum_{k=1}^{D}a_k b_k,\qquad
+\|a\|=\sqrt{\sum_{k=1}^{D}a_k^2},\qquad
 \cos\theta=\frac{a\cdot b}{\|a\|\|b\|}\]</span></p>
+<p>三个式子各管一件事：点积把对应分量相乘再加起来，两根箭头越同向、越长，它就越大；长度是“自己和自己点积再开方”，像拿尺子量箭头；余弦再把点积除以两根箭头的长度，把长短的影响除掉，只剩“方向像不像”。</p>
+<p>其中：<span class="math inline">\(D\)</span>
+是向量宽度，也就是分量个数；<span
+class="math inline">\(a_k\)</span>、<span
+class="math inline">\(b_k\)</span> 是 <span
+class="math inline">\(a\)</span>、<span class="math inline">\(b\)</span>
+的第 <span class="math inline">\(k\)</span> 个分量，<span
+class="math inline">\(k\)</span> 是分量（特征）编号，从 1 数到 <span
+class="math inline">\(D\)</span>；<span
+class="math inline">\(\sum_{k=1}^{D}\)</span> 表示把 <span
+class="math inline">\(k=1\)</span> 到 <span
+class="math inline">\(D\)</span> 的各项加起来；<span
+class="math inline">\(\theta\)</span> 同上，是两向量的夹角。</p>
 <p>余弦为
 1、0、-1，分别对应同向、正交、反向。这是几何事实，不是“同义词、无关词、反义词”的万能判定规则。反义词可能出现在相似上下文里，因此也可能具有较高的相似度。</p>
 <p>零向量没有方向，分母也为
@@ -1114,6 +1148,13 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="
 女王”是经常用来解释词向量的例子。为了手算，我们可以专门配一组数：</p>
 <p><span
 class="math display">\[[9,8,7]-[1,8,5]+[1,-8,5]=[9,-8,7]\]</span></p>
+<p>向量加减就是逐个分量各算各的：第一维 <span
+class="math inline">\(9-1+1=9\)</span>，第二维 <span
+class="math inline">\(8-8+(-8)=-8\)</span>，第三维 <span
+class="math inline">\(7-5+5=7\)</span>。它演示的是“把男人到女人的那段差，搬到国王身上”，这些数是为了凑整专门配的。</p>
+<p>其中：左边三个方括号依次是人工配好的“国王”“男人”“女人”向量，宽度
+<span
+class="math inline">\(D=3\)</span>；右边是算出来的结果，也就是随后被定义成“女王”的向量。</p>
 <p>再把右侧定义成“女王”的向量，当然会精确相等。脚本保留这个演示，并明确说明数值是人工构造的。真实训练所得的向量有时会出现近似的关系方向，但效果依赖数据、模型和评估方法，不保证任何类比都成立。这里人为设置的“性别轴”也不是对人或社会属性的客观量化。</p>
 <p>向量相加减是确定的数学运算，却不因此变成通用逻辑推理器。不要由一个漂亮的平行四边形跳到“语言的一切推理都能靠加减实现”。</p>
 <h2 id="自测把三个层次分清楚">1.7 自测：把三个层次分清楚</h2>
@@ -1557,6 +1598,18 @@ class="math inline">\(h_t\)</span>，它的基本关系是：</p>
 <p><span class="math display">\[h_t=f(h_{t-1},x_t)\]</span></p>
 <p>不用先弄懂函数 <span class="math inline">\(f\)</span>
 的内部。只要注意：<strong>新记忆依赖旧记忆和当前输入</strong>。</p>
+<p>白话说，每读进一个新词，就把“旧笔记”和“新内容”揉成一份新笔记；每一步用的都是同一套揉法，所以多长的句子都能一步步读下去。</p>
+<p>其中：<span class="math inline">\(t\)</span>
+是时间步，表示读到第几个输入；<span class="math inline">\(x_t\)</span>
+是第 <span class="math inline">\(t\)</span> 步的输入向量；<span
+class="math inline">\(h_t\)</span> 是读完第 <span
+class="math inline">\(t\)</span> 步后的隐藏状态（“记忆箱”），<span
+class="math inline">\(h_{t-1}\)</span> 是上一步的；<span
+class="math inline">\(f\)</span> 是每一步共用的更新函数。这里的 <span
+class="math inline">\(h_t\)</span>
+是本章的局部字母；到了多头注意力，<span class="math inline">\(h\)</span>
+改作“第几个头”的编号，逐层的隐藏状态则统一写成 <span
+class="math inline">\(X^{(l)}\)</span>。</p>
 <pre><code>   小明          在          草地上        ……          它
     ↓            ↓             ↓                       ↓
   记忆箱1 ──→ 记忆箱2 ──→ 记忆箱3 ──→ …… ──→ 后面的记忆箱</code></pre>
@@ -1779,6 +1832,15 @@ class="math inline">\(v_{\text{马路}}=(0,1)\)</span>，其余五张暂时都�
 class="math display">\[c_A=0.60(1,0)+0.10(0,1)=(0.60,0.10)\]</span></p>
 <p><span
 class="math display">\[c_B=0.10(1,0)+0.60(0,1)=(0.10,0.60)\]</span></p>
+<p>其中：<span class="math inline">\(c_A\)</span>、<span
+class="math inline">\(c_B\)</span> 是“它”在 A、B
+两句里读到的上下文结果（<span class="math inline">\(c\)</span> 取
+context 的首字母，局部符号）；<span
+class="math inline">\((1,0)\)</span>、<span
+class="math inline">\((0,1)\)</span> 分别是 <span
+class="math inline">\(v_{\text{动物}}\)</span>、<span
+class="math inline">\(v_{\text{马路}}\)</span>；系数 0.60、0.10 是表 2-2
+中的百分数换成小数。</p>
 <p>其余权重仍在，只是乘以零向量后没有贡献。于是，相同的内容卡片经过不同权重的混合，得到不同的结果；<span
 class="math inline">\(c_A\)</span> 与 <span
 class="math inline">\(c_B\)</span> 的差别完全来自表 2-2
@@ -1813,6 +1875,15 @@ class="math inline">\(v_3=2\)</span>，两组权重都非负且总和为 1：</p
 class="math display">\[0.2\times0+0.6\times1+0.2\times2=1\]</span></p>
 <p><span
 class="math display">\[0.4\times0+0.2\times1+0.4\times2=1\]</span></p>
+<p>第二组把中间的权重分给了两头：左边的 0 往下拉、右边的 2
+往上拉，两股力量正好抵消，平均值还停在 1。</p>
+<p>其中：每一项都是“权重 × 内容”；<span
+class="math inline">\(v_1=0\)</span>、<span
+class="math inline">\(v_2=1\)</span>、<span
+class="math inline">\(v_3=2\)</span>
+是三个位置的内容（这里简化成标量）；两行的权重分别是 <span
+class="math inline">\((0.2,0.6,0.2)\)</span> 和 <span
+class="math inline">\((0.4,0.2,0.4)\)</span>，都非负且和为 1。</p>
 <p>第二个位置的权重从 0.6 降到了
 0.2，加权结果却完全一样。这个手算反例只说明：<strong>注意力分布和聚合结果不一定一一对应。</strong>
 它没有声称任意真实模型都能随便改权重，更没有声称注意力毫无作用。</p>
@@ -1920,6 +1991,20 @@ Value。标签负责匹配，内容负责被带走：它们承担不同工作，
 <p>在模型里，每个位置的向量都会通过三组可训练线性变换。用行向量约定：</p>
 <p><span class="math display">\[Q=XW_Q,\qquad K=XW_K,\qquad
 V=XW_V.\]</span></p>
+<p>白话说，同一份输入分别透过三片不同的“镜片”：一片照出“我要找什么”（Q），一片照出“别人凭什么找到我”（K），一片照出“被找到后交出什么”（V）。用三张矩阵而不是一张，是因为匹配和交付内容本来就是两件不同的工作。</p>
+<p>其中：<span class="math inline">\(X\)</span>
+是输入表示，一行一个位置；<span
+class="math inline">\(W_Q\)</span>、<span
+class="math inline">\(W_K\)</span>、<span
+class="math inline">\(W_V\)</span> 是三张可训练的投影矩阵；<span
+class="math inline">\(Q\)</span>、<span
+class="math inline">\(K\)</span>、<span class="math inline">\(V\)</span>
+分别是查询、键、值矩阵，同样一行一个位置；<span
+class="math inline">\(T\)</span> 是序列长度，<span
+class="math inline">\(D\)</span> 是模型宽度，<span
+class="math inline">\(d_k\)</span> 是 Q、K 的宽度，<span
+class="math inline">\(d_v\)</span> 是 V
+的宽度（下一句给出各自的形状）。</p>
 <p>本章暂取 <span class="math inline">\(X\in\mathbb{R}^{T\times
 D}\)</span>，<span class="math inline">\(W_Q,W_K\in\mathbb{R}^{D\times
 d_k}\)</span>，<span class="math inline">\(W_V\in\mathbb{R}^{D\times
@@ -1964,12 +2049,38 @@ alt="注意力下半程：按比例收集信息。分数除以根号 2，每行�
 <span class="math inline">\(j\)</span> 计算：</p>
 <p><span class="math display">\[s_{ij}=\frac{q_i\cdot
 k_j}{\sqrt{d_k}},\qquad
-a_{ij}=\frac{\exp(s_{ij})}{\sum_{r=1}^{T}\exp(s_{ir})},\qquad
+a_{ij}=\frac{\exp(s_{ij})}{\sum_{j&#39;=1}^{T}\exp(s_{ij&#39;})},\qquad
 o_i=\sum_{j=1}^{T}a_{ij}v_j.\]</span></p>
 <p>整批写成 <span
 class="math inline">\(O=\operatorname{softmax}(QK^\top/\sqrt{d_k})V\)</span>。Softmax
 沿<strong>键所在的最后一维</strong>做，而不是把整张表变成一组概率。输出有
-T 行、每行 <span class="math inline">\(d_v\)</span> 个数。</p>
+<span class="math inline">\(T\)</span> 行、每行 <span
+class="math inline">\(d_v\)</span> 个数。</p>
+<p>三步连起来就是：先给每把键打分，再把一行分数换成和为 1
+的权重，最后按权重把各位置的内容调成一杯“混合饮料”。Softmax
+先取指数，是为了让任何分数（包括负分）都变成正数，并让分高的拿得更多。</p>
+<p>其中：<span class="math inline">\(i\)</span> 是 query 的位置，<span
+class="math inline">\(j\)</span> 是 key 的位置，<span
+class="math inline">\(j&#39;\)</span> 是分母里把同一行所有 key
+都走一遍的求和编号；<span class="math inline">\(q_i\)</span>、<span
+class="math inline">\(k_j\)</span>、<span
+class="math inline">\(v_j\)</span> 分别是 <span
+class="math inline">\(Q\)</span> 下标 <span
+class="math inline">\(i\)</span> 的行、<span
+class="math inline">\(K\)</span> 和 <span
+class="math inline">\(V\)</span> 下标 <span
+class="math inline">\(j\)</span> 的行；<span
+class="math inline">\(s_{ij}\)</span> 是缩放后的分数；<span
+class="math inline">\(a_{ij}\)</span> 是第 <span
+class="math inline">\(i\)</span> 行分给位置 <span
+class="math inline">\(j\)</span> 的权重；<span
+class="math inline">\(o_i\)</span> 是位置 <span
+class="math inline">\(i\)</span> 的输出，也就是输出矩阵 <span
+class="math inline">\(O\)</span> 下标 <span
+class="math inline">\(i\)</span> 的行；<span
+class="math inline">\(T\)</span> 是序列长度（本章 query 与 key
+等长）；<span class="math inline">\(\operatorname{softmax}\)</span>
+沿最后一维逐行归一化。</p>
 <p>手算一行：设 <span
 class="math inline">\(q=[1,0]\)</span>，两把键分别为 <span
 class="math inline">\([1,0]\)</span> 和 <span
@@ -2006,10 +2117,20 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a h
 class="math display">\[Q_{我,0}=0.5\times1.0+0.2\times0.5=0.6,\]</span>
 <span
 class="math display">\[Q_{我,1}=0.1\times1.0+0.8\times0.5=0.5.\]</span></p>
+<p>其中：<span class="math inline">\(Q_{我,0}\)</span>、<span
+class="math inline">\(Q_{我,1}\)</span> 是“我”这个位置的 Q 向量下标 0、1
+的分量；每个式子都是 <code>W_Q</code> 的一行与“我”的输入 <span
+class="math inline">\([1.0,0.5]\)</span> 逐项相乘再相加。</p>
 <p>同理算 K、V。列向量代码用 <span class="math inline">\(W
 x\)</span>；若按前文把输入堆成行，必须用<strong>该代码矩阵的转置</strong>写成
 <span
 class="math inline">\(XW^\top\)</span>，才是同一次计算。不要一边换行列约定，一边直接照抄矩阵而不转置。</p>
+<p>其中：<span class="math inline">\(W\)</span> 指代码里的
+<code>W_Q</code>、<code>W_K</code> 或 <code>W_V</code>；<span
+class="math inline">\(x\)</span> 是单个输入，写成列向量；<span
+class="math inline">\(X\)</span> 是把各位置输入按行堆起来的矩阵；<span
+class="math inline">\(W^\top\)</span> 是 <span
+class="math inline">\(W\)</span> 的转置。</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -2045,6 +2166,10 @@ class="math inline">\(\sqrt2\)</span>。例如“我”对“爱”：</p>
 <p><span
 class="math display">\[(0.600\times0.680+0.500\times1.000)/\sqrt2
 =0.908/\sqrt2\approx0.6421.\]</span></p>
+<p>其中：0.600、0.500 是“我”的 Q，0.680、1.000 是“爱”的 K；<span
+class="math inline">\(\sqrt2\)</span> 就是 <span
+class="math inline">\(\sqrt{d_k}\)</span>，本例 <span
+class="math inline">\(d_k=2\)</span>。</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -2115,6 +2240,10 @@ class="math display">\[(0.600\times0.680+0.500\times1.000)/\sqrt2
 <p><span class="math display">\[o_{我}\approx
 0.290776[1.05,0.45]+0.360253[0.92,1.08]+0.348971[0.35,1.35]
 \approx[0.7589,0.9910].\]</span></p>
+<p>白话说，“我”的新表示就是三份内容按上一张表的比例兑出来的：哪一份权重大，结果就更像哪一份。</p>
+<p>其中：<span class="math inline">\(o_{我}\)</span>
+是“我”这个位置的输出；三个系数是“我”一行分给“我、爱、学”的权重（表中百分数的六位小数版）；三个方括号依次是“我、爱、学”的
+V。</p>
 <p>脚本先创建
 <code>new_vec = [0.0] * len(V[0])</code>，再依次执行“将某个 V
 乘权重”和“累加到
@@ -2179,10 +2308,24 @@ Softmax。计算用未舍入值，因此只用表格的两位分数重算时，�
 Softmax：先整体平移，再取指数</h2>
 <p>直接算 <span class="math inline">\(e^{1000}\)</span>
 会超过常见浮点数的范围。对同一行减去最大值 <span
-class="math inline">\(m\)</span> 不改变比例：</p>
-<p><span class="math display">\[\frac{e^{s_j-m}}{\sum_r e^{s_r-m}}
-=\frac{e^{s_j}/e^m}{\sum_r e^{s_r}/e^m}
-=\frac{e^{s_j}}{\sum_r e^{s_r}}.\]</span></p>
+class="math inline">\(s_{\max}\)</span> 不改变比例：</p>
+<p><span class="math display">\[\frac{e^{s_j-s_{\max}}}{\sum_{j&#39;}
+e^{s_{j&#39;}-s_{\max}}}
+=\frac{e^{s_j}/e^{s_{\max}}}{\sum_{j&#39;} e^{s_{j&#39;}}/e^{s_{\max}}}
+=\frac{e^{s_j}}{\sum_{j&#39;} e^{s_{j&#39;}}}.\]</span></p>
+<p>白话说，一行分数一起减去同一个数，相当于分子分母同时除以 <span
+class="math inline">\(e^{s_{\max}}\)</span>，比例自然不变；而减去的恰好是最大值，最大的一项就变成
+<span class="math inline">\(e^0=1\)</span>，其余都不超过
+1，再也不会上溢。</p>
+<p>其中：<span class="math inline">\(s_j\)</span> 是同一行里位置 <span
+class="math inline">\(j\)</span> 的分数（本节只看一行，省去行号 <span
+class="math inline">\(i\)</span>）；<span
+class="math inline">\(j&#39;\)</span>
+是把这一行所有位置走一遍的求和编号；<span
+class="math inline">\(s_{\max}=\max_{j&#39;}s_{j&#39;}\)</span>
+是这一行的最大分数（与附录 A.5 一致；对 logits <span
+class="math inline">\(z\)</span> 做时写 <span
+class="math inline">\(z_{\max}\)</span>）。</p>
 <p>例如 <span class="math inline">\([1000,1001,1002]\)</span> 变成 <span
 class="math inline">\([-2,-1,0]\)</span>，结果约为 <span
 class="math inline">\([0.0900,0.2447,0.6652]\)</span>。最大指数是
@@ -2315,10 +2458,10 @@ GPU、模型权重或网络推理服务。</p>
 <p>自测：</p>
 <ol type="1">
 <li>如果交换 Q 与
-K，是否总能得到相同权重？不能。在本章等长自注意力中，交换后分数由 <span
-class="math inline">\(S\)</span> 变成 <span
-class="math inline">\(S^\top\)</span>，逐行 Softmax 一般得到不同权重；若
-<span class="math inline">\(S\)</span>
+K，是否总能得到相同权重？不能。在本章等长自注意力中，交换后分数矩阵由
+<span class="math inline">\(S=QK^\top\)</span> 变成 <span
+class="math inline">\(KQ^\top=S^\top\)</span>，逐行 Softmax
+一般得到不同权重；若 <span class="math inline">\(S\)</span>
 本身对称，交换前后分数完全相同，权重也相同。但该权重矩阵自身仍未必对称。这是“交换前后相等”和“矩阵关于对角线对称”两个不同问题。</li>
 <li>对一行所有有限分数加
 100，权重应怎样变化？理论不变，实际受有限精度限制。</li>
