@@ -24,13 +24,13 @@
 | 缩放注意力 | $\mathrm{softmax}(QK^\top/\sqrt{d_k}+M)V$ | 行是 query，列是 key；禁看位置的加性 mask 为负无穷 |
 | 周期 | $\sin(\omega t),\quad \lambda=2\pi/\lvert\omega\rvert$ | 正弦位置编码的频率与波长；频率非零才有这个有限周期（这里 $\omega$ 是局部角频率，$\lambda$ 是对应波长，与 A.5 的 $\omega_i,\lambda_i$ 同族） |
 | 和角 | $\cos(a+b)=\cos a\cos b-\sin a\sin b$ | 说明相对位移的三角关系，不自动保证长度外推质量 |
-| 平面旋转 | $R_\theta=\begin{pmatrix}\cos\theta&-\sin\theta\\\sin\theta&\cos\theta\end{pmatrix}$ | RoPE 在成对维度旋转；相邻配对与 split-half 约定不能混用 |
-| 链式法则 | $\partial L/\partial w=(\partial L/\partial z)(\partial z/\partial w)$ | 反向传播沿计算图传递导数 |
-| SGD | $w_{t+1}=w_t-\eta\nabla L(w_t)$ | 参数更新，和梯度清零是不同动作 |
+| 平面旋转 | $R(\theta)=\begin{pmatrix}\cos\theta&-\sin\theta\\\sin\theta&\cos\theta\end{pmatrix}$ | RoPE 在成对维度旋转；相邻配对与 split-half 约定不能混用 |
+| 链式法则 | $\partial\mathcal L/\partial w=(\partial\mathcal L/\partial z)(\partial z/\partial w)$ | 反向传播沿计算图传递导数 |
+| SGD | $w_{t+1}=w_t-\eta\nabla\mathcal L(w_t)$ | 参数更新，和梯度清零是不同动作 |
 
 这些公式在正文中都有推导，旋转约定详见 [P12 RoPE](#p12-rope)，归一化和门控详见 [P13](#p13-modern-block)。注意力原式见 [Vaswani 等 1706.03762v7 §3.2][attention]；本表的简单算术是教学推导，不是某个真实模型的测评。
 
-**其中（表 A-1 记号）：** $\mathcal L$ 是损失；$z_i$ 是第 $i$ 个 logit，$z_{\max}$ 是同一行里最大的 logit（减它只为数值稳定，不改概率）；$\omega$ 是局部角频率，$\lambda=2\pi/\lvert\omega\rvert$ 是对应波长；$QK^\top$ 的转置写 $^	op$；$d_k$ 是单头 Q/K 宽度。**白话：** 这张卡是翻书时的速查，字母已与 A.5 对齐；细节推导仍回各章。
+**其中（表 A-1 记号）：** $\mathcal L$ 是损失；$z_i$ 是第 $i$ 个 logit，$z_{\max}$ 是同一行里最大的 logit（减它只为数值稳定，不改概率）；$\omega$ 是局部角频率，$\lambda=2\pi/\lvert\omega\rvert$ 是对应波长；$Q$、$K$ 是查询、键矩阵，$^\top$ 表示转置；$M$ 是加性 mask；$y$ 是正确目标的编号，$p_y$ 是模型给它的概率；$d_k$ 是单头 Q/K 宽度；$d$ 是向量长度，对 LayerNorm/RMSNorm 即模型宽度 $D$。**白话：** 这张卡是翻书时的速查，字母已与 A.5 对齐；细节推导仍回各章。
 
 ### A.2 一张形状卡：先写轴，再乘矩阵
 
@@ -53,7 +53,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 **概率。** logits 为 $[\log1,\log2,\log3]$，softmax 是 $[1/6,1/3,1/2]$。目标是第三类时，交叉熵 $-\log(1/2)=\log2\approx0.693147$。三个 logits 都加 1000 后结果不变，直接算 $e^{1000}$ 却会溢出。这正是“数学等价”和“浮点算法可靠”要分开检查的地方。
 
-**梯度。** 只有一个权重，$z=wx$、$L=(z-y)^2/2$。取 $w=1,x=2,y=0$，则 $z=2,L=2$，$\partial L/\partial w=(z-y)x=4$。学习率 0.1 的一步 SGD 得到 $w'=0.6$，新损失 0.72。这个例子只说明这一小步下降，不保证任意学习率或非凸网络每步都下降。
+**梯度。** 只有一个权重，$z=wx$、$\mathcal L=(z-y)^2/2$。取 $w=1,x=2,y=0$，则 $z=2,\mathcal L=2$，$\partial\mathcal L/\partial w=(z-y)x=4$。学习率 0.1 的一步 SGD 得到 $w'=0.6$，新损失 $\mathcal L'=0.72$。这个例子只说明这一小步下降，不保证任意学习率或非凸网络每步都下降。
 
 ### A.4 别把三种平均混在一起
 
@@ -174,7 +174,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 有些字母在不同章节各管一摊，硬统一反而难读。它们是**局部符号**：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。
 
-- 希腊字母：$\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率、缩放定律指数等）、$\beta$（LayerNorm 偏移、DPO/KL 系数、缩放定律指数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（夹角；RoPE 的转角写进 $R(m\omega_i)$，不另写裸 $R(\theta)$；或模型参数 $\pi_\theta$、$p_\theta$）、$\pi$（圆周率，或策略 $\pi_\theta$）、$\phi$（旋转角、特征映射，或奖励模型参数）、$\rho$（概率比）、$\delta$、$\Delta$（不带下标的 $\Delta$ 只表示差值，如 P12 的 $\Delta=n-m$、E.0 的 $\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}$；$\Delta W$ 是更新量；P22 DPO 的 $\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两个对数比的差；量化步长只写带下标的 $\Delta_x$、$\Delta_w$）、$\mu$（均值）。
+- 希腊字母：$\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率、缩放定律指数等）、$\beta$（LayerNorm 偏移、DPO/KL 系数、缩放定律指数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（夹角；A.1 与第 9 章通用二维旋转矩阵 $R(\theta)$ 的转角，RoPE 里代入 $\theta=m\omega_i$，P12 直接写 $R(m\omega_i)$；或模型参数 $\pi_\theta$、$p_\theta$）、$\pi$（圆周率，或策略 $\pi_\theta$）、$\phi$（旋转角、特征映射，或奖励模型参数）、$\rho$（概率比）、$\delta$、$\Delta$（不带下标的 $\Delta$ 只表示差值，如 P12 的 $\Delta=n-m$、E.0 的 $\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}$；$\Delta W$ 是更新量；P22 DPO 的 $\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两个对数比的差；量化步长只写带下标的 $\Delta_x$、$\Delta_w$）、$\mu$（均值）。
 - 拉丁字母：$x$（某个式子的输入：一个位置的向量、它的第 $i$ 个分量，或 P21–P23 里的 token 序列）、$y$（输出向量、目标 token，或 P22 里的回复；$y_l$ 是 DPO 的 rejected 答案，下标 $l$ 不是层号）、$h$（第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果、P23 主干最后一层的隐藏向量 $h_t$）、$a$（第 6 章 ReLU 的输出、P12 YaRN 的长度缩放系数、第 1 章的示例向量、第 3 章的注意力权重 $a_{ij}$、P15 的请求到达时刻）、$b$（第 1 章、P12 的示例向量）、$f$（第 2 章 RNN 的更新函数、P18 的分配比例 $f_e$）、$g$（SwiGLU 的门控分支、P20 的梯度）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值、特征宽度、第 3 章的求和下标）、$k$（第 5 章的维度对编号（$\omega_k$，即表中的 $\omega_i$；该章位移改记 $\Delta$）、top-k 的个数、P20 的训练步编号 $\theta_k$）、$q$（P23 的草稿分布 $q(x)$、P24 的量化整数）、$z$（多数时候是 softmax 之前的 logits；也作 SwiGLU 的门控乘积、线性注意力的归一化量、DPO 的间隔、P24 的零点）、$w$（单个权重、路由权重 $w_e$、注意力权重 $w_{tj}$）、$c$（第 2 章的上下文向量、P14 MLA 的压缩向量 $c_t$）、$t_1,t_{\mathrm{start}}$ 等 P15、P24 的计时时刻、$A$（注意力子层函数、GRPO 的优势 $A_i$）、$F$（第 6 章的残差分支 $F(x)$）、$P$（第 5 章的换序操作、P15 的概率矩阵）、$C$、$G$、$R$、$S$、$U$ 等只在一章出现的大写字母。
 - 第 2 章 $h_t$、第 6 章 $h$、P23 $h_t$ 都不是全局的层表示；逐层的隐藏状态统一写 $X^{(l)}$。
 
@@ -312,7 +312,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 5. 一个配置写 head_dim=128，而 hidden_size/heads=64，哪个值应进入这份实现的投影形状？文件等长是否能证明未篡改？
 6. 新闻说“模型快两倍”，你只跑了标准库参数账本。用哪种状态描述这条速度主张？最少还缺什么？
 
-**答案。** 1）1536 字节，只是 payload 翻倍，不能推出速度。2）相同；减最大值后指数安全，直接指数可能溢出。3）3.5 与 3。4）$w'=-3$、$L'=18$，大步长使本例更差。5）该固定实现使用显式 128，需核对代码；等长不等于等字节，仍需 hash。6）对本书而言待核实；若官方论文确有该结果，可另标作者报告，必须给硬件、软件、输入长度/batch、比较基线与计时方法，不能写本书复现。
+**答案。** 1）1536 字节，只是 payload 翻倍，不能推出速度。2）相同；减最大值后指数安全，直接指数可能溢出。3）3.5 与 3。4）$w'=-3$、$\mathcal L'=18$，大步长使本例更差。5）该固定实现使用显式 128，需核对代码；等长不等于等字节，仍需 hash。6）对本书而言待核实；若官方论文确有该结果，可另标作者报告，必须给硬件、软件、输入长度/batch、比较基线与计时方法，不能写本书复现。
 
 ### F.0 平均值与一步更新速查
 

@@ -512,7 +512,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 ## P15.17 自测题与参考答案
 
-1. FlashAttention 为什么不等于把稠密 attention 改成 $O(Td_k)$？与 GQA 分别改了什么？
+1. FlashAttention 为什么不等于把稠密 attention 改成 $O(T(d_k+d_v))$？与 GQA 分别改了什么？
 2. $T$ 从 4096 变为 8192，单头一张 2 字节 score 矩阵从多少 MiB 变成多少？
 3. 手算例子第二块到来时，alpha、ell、acc、最终输出各是多少？若平均两块各自均值，会得到多少？
 4. 第一块全 mask，后块才出现合法 key，该怎样初始化？若整行全 mask，本 API 输出什么？

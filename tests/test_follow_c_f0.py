@@ -49,7 +49,7 @@ class FollowCF0Dedupe(unittest.TestCase):
         self.assertEqual(text.count("### A.4 别把三种平均混在一起"), 1)
         # A.3 gradient card still holds the hand calc; F.0 no longer restates it.
         self.assertEqual(text.count("(z-y)x=4"), 1)
-        self.assertEqual(text.count("$w'=0.6$，新损失 0.72"), 1)
+        self.assertEqual(text.count("$w'=0.6$，新损失 $\\mathcal L'=0.72$"), 1)
         self.assertEqual(text.count("文档等权平均是 $(2+4)/2=3$"), 1)
         self.assertEqual(text.count("token 等权平均是 $(1\\times2+3\\times4)/4=3.5$"), 1)
 
