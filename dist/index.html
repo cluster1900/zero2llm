@@ -6588,17 +6588,17 @@ q、k 当作固定的内容向量；真实 q、k
 由上下文产生，不能据此说整个模型输出只由距离决定。</p>
 <p>这个性质也让“搬动”缓存里的 key 变得便宜：已经转到位置 <span
 class="math inline">\(m\)</span> 的 key，再乘 <span
-class="math inline">\(R(n)R(m)^{-1}\)</span> 就等于直接转到位置 <span
+class="math inline">\(R(n\omega_i)R(m\omega_i)^{-1}\)</span>
+就等于直接转到位置 <span
 class="math inline">\(n\)</span>，不必重算（<span
-class="math inline">\(R(m)^{-1}\)</span> 先把它转回位置 0，<span
-class="math inline">\(R(n)\)</span> 再转到新位置，合起来就是 <span
-class="math inline">\(R(n-m)\)</span>）。其中：<span
+class="math inline">\(R(m\omega_i)^{-1}\)</span> 先把它转回位置 0，<span
+class="math inline">\(R(n\omega_i)\)</span> 再转到新位置，合起来就是
+<span class="math inline">\(R((n-m)\omega_i)\)</span>）。其中：<span
 class="math inline">\(m\)</span> 是 key 原来的位置，<span
 class="math inline">\(n\)</span> 是要挪去的新位置；<span
-class="math inline">\(R(t)\)</span> 表示按位置 <span
-class="math inline">\(t\)</span> 的角度（第 i 个频率对转 <span
-class="math inline">\(t\omega_i\)</span>）旋转；<span
-class="math inline">\(R(m)^{-1}\)</span> 是它的逆，即反向旋转。P11.10 的
+class="math inline">\(\omega_i\)</span> 是第 i 个频率对每前进一个 token
+的转角；<span class="math inline">\(R(m\omega_i)^{-1}\)</span> 是 <span
+class="math inline">\(R(m\omega_i)\)</span> 的逆，即反向旋转。P11.10 的
 <a href="#p11.10-cache-engineering">KV 编辑</a>正是这样用 RoPE
 旋转把保留的 key
 挪到新位置，压紧被删内容留下的空位；但它只改位置，改不掉 K/V
@@ -6740,7 +6740,7 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb80-1"><a h
 <p>第一行生成 r/2 个频率；第二行把 T 个位置与这些频率相乘，得到
 <code>[T,r/2]</code> 角度表。<code>stack</code>
 放回两个坐标，<code>flatten</code> 恢复最后一维。<code>x</code> 可为
-<code>[B,H,T,d]</code>，角度表会广播到 batch
+<code>[B,H,T,d_h]</code>，角度表会广播到 batch
 和头上。完整函数检查维度、偶数、位置长度及设备。</p>
 <p>float64 输入用 float64 计算角度；float16/bfloat16 先转 float32
 计算旋转再转回，避免直接在低精度里算角度。本实现没有声称任意大位置都足够精确，float32
@@ -7546,14 +7546,14 @@ SiLU，第一项会变成正数；如果误把两路相加，也不会得到表�
 为什么不能把两种 FFN 都设置为 4D 宽</h2>
 <p>先全部关闭 bias，GELU FFN 有两个矩阵，参数数是：</p>
 <p><span
-class="math display">\[N_{\text{GELU}}=Dd_{\mathrm{ff}}^{\mathrm{GELU}}+d_{\mathrm{ff}}^{\mathrm{GELU}}D=2Dd_{\mathrm{ff}}^{\mathrm{GELU}}\]</span></p>
+class="math display">\[N_{\mathrm{GELU}}=Dd_{\mathrm{ff}}^{\mathrm{GELU}}+d_{\mathrm{ff}}^{\mathrm{GELU}}D=2Dd_{\mathrm{ff}}^{\mathrm{GELU}}\]</span></p>
 <p>SwiGLU 有三个矩阵，参数数是：</p>
 <p><span
-class="math display">\[N_{\text{SwiGLU}}=Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}D=3Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}\]</span></p>
+class="math display">\[N_{\mathrm{SwiGLU}}=Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}D=3Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}\]</span></p>
 <p>两个式子都是“每张矩阵 = 行数 × 列数”再加起来：GELU 版两张，SwiGLU
 版三张。</p>
-<p>其中：<span class="math inline">\(N_{\text{GELU}}\)</span>、<span
-class="math inline">\(N_{\text{SwiGLU}}\)</span> 是一个 FFN 的无 bias
+<p>其中：<span class="math inline">\(N_{\mathrm{GELU}}\)</span>、<span
+class="math inline">\(N_{\mathrm{SwiGLU}}\)</span> 是一个 FFN 的无 bias
 参数数；<span class="math inline">\(D\)</span> 是模型宽度；<span
 class="math inline">\(d_{\mathrm{ff}}^{\mathrm{GELU}}\)</span> 是 GELU
 FFN 的中间宽度；<span
@@ -8201,14 +8201,16 @@ forward。</p>
 class="math inline">\(T\)</span>、每个数 <span
 class="math inline">\(b_{\mathrm{elem}}\)</span> 字节时：</p>
 <p><span class="math display">\[
-\text{KV 字节数}=2\times L\times B\times H_{kv}\times T\times d_h\times
+\mathrm{Mem}_{KV}=2\times L\times B\times H_{kv}\times T\times d_h\times
 b_{\mathrm{elem}}
 \]</span></p>
 <p>它和 P11.6 的 MHA 账本是同一张表，只是把“每层存几份头”从 <span
 class="math inline">\(H\)</span> 换成真正保存的 <span
 class="math inline">\(H_{kv}\)</span>：query 头再多，只要共用 KV
 头，缓存就按 KV 头数算。</p>
-<p>其中：<span class="math inline">\(L\)</span> 是层数；<span
+<p>其中：<span class="math inline">\(\mathrm{Mem}_{KV}\)</span> 是全部层
+K/V 缓存的逻辑字节数（KV 字节数）；<span
+class="math inline">\(L\)</span> 是层数；<span
 class="math inline">\(B\)</span> 是批大小；<span
 class="math inline">\(T\)</span> 是缓存的 token 数；<span
 class="math inline">\(H_{kv}\)</span> 是 KV 头数；<span

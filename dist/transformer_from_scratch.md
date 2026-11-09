@@ -3255,7 +3255,7 @@ q_rot · k_rot = q · R((n−m)ω_i) k
 
 “两个都转”可改写成“第一个不转，第二个只转相对角度”。这就是点积中的相对位置性质。注意：公式把 q、k 当作固定的内容向量；真实 q、k 由上下文产生，不能据此说整个模型输出只由距离决定。
 
-这个性质也让“搬动”缓存里的 key 变得便宜：已经转到位置 $m$ 的 key，再乘 $R(n)R(m)^{-1}$ 就等于直接转到位置 $n$，不必重算（$R(m)^{-1}$ 先把它转回位置 0，$R(n)$ 再转到新位置，合起来就是 $R(n-m)$）。其中：$m$ 是 key 原来的位置，$n$ 是要挪去的新位置；$R(t)$ 表示按位置 $t$ 的角度（第 i 个频率对转 $t\omega_i$）旋转；$R(m)^{-1}$ 是它的逆，即反向旋转。P11.10 的 [KV 编辑](#p11.10-cache-engineering)正是这样用 RoPE 旋转把保留的 key 挪到新位置，压紧被删内容留下的空位；但它只改位置，改不掉 K/V 内容里已经混入的上下文。
+这个性质也让“搬动”缓存里的 key 变得便宜：已经转到位置 $m$ 的 key，再乘 $R(n\omega_i)R(m\omega_i)^{-1}$ 就等于直接转到位置 $n$，不必重算（$R(m\omega_i)^{-1}$ 先把它转回位置 0，$R(n\omega_i)$ 再转到新位置，合起来就是 $R((n-m)\omega_i)$）。其中：$m$ 是 key 原来的位置，$n$ 是要挪去的新位置；$\omega_i$ 是第 i 个频率对每前进一个 token 的转角；$R(m\omega_i)^{-1}$ 是 $R(m\omega_i)$ 的逆，即反向旋转。P11.10 的 [KV 编辑](#p11.10-cache-engineering)正是这样用 RoPE 旋转把保留的 key 挪到新位置，压紧被删内容留下的空位；但它只改位置，改不掉 K/V 内容里已经混入的上下文。
 
 令 q=[1,2]、k=[3,4]、ω_i=1，设 Δ=n−m。直接代入会得到：
 
@@ -3322,7 +3322,7 @@ rotated = rotated.flatten(-2).to(x.dtype)
 return torch.cat((rotated, x[..., dim:]), dim=-1)
 ```
 
-第一行生成 r/2 个频率；第二行把 T 个位置与这些频率相乘，得到 `[T,r/2]` 角度表。`stack` 放回两个坐标，`flatten` 恢复最后一维。`x` 可为 `[B,H,T,d]`，角度表会广播到 batch 和头上。完整函数检查维度、偶数、位置长度及设备。
+第一行生成 r/2 个频率；第二行把 T 个位置与这些频率相乘，得到 `[T,r/2]` 角度表。`stack` 放回两个坐标，`flatten` 恢复最后一维。`x` 可为 `[B,H,T,d_h]`，角度表会广播到 batch 和头上。完整函数检查维度、偶数、位置长度及设备。
 
 float64 输入用 float64 计算角度；float16/bfloat16 先转 float32 计算旋转再转回，避免直接在低精度里算角度。本实现没有声称任意大位置都足够精确，float32 也有数值范围和分辨率限制。
 
@@ -3670,15 +3670,15 @@ down 是单位矩阵，所以输出恰好是 `[-0.806824,7.046377]`。如果误�
 
 先全部关闭 bias，GELU FFN 有两个矩阵，参数数是：
 
-$$N_{\text{GELU}}=Dd_{\mathrm{ff}}^{\mathrm{GELU}}+d_{\mathrm{ff}}^{\mathrm{GELU}}D=2Dd_{\mathrm{ff}}^{\mathrm{GELU}}$$
+$$N_{\mathrm{GELU}}=Dd_{\mathrm{ff}}^{\mathrm{GELU}}+d_{\mathrm{ff}}^{\mathrm{GELU}}D=2Dd_{\mathrm{ff}}^{\mathrm{GELU}}$$
 
 SwiGLU 有三个矩阵，参数数是：
 
-$$N_{\text{SwiGLU}}=Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}D=3Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}$$
+$$N_{\mathrm{SwiGLU}}=Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}D=3Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}$$
 
 两个式子都是“每张矩阵 = 行数 × 列数”再加起来：GELU 版两张，SwiGLU 版三张。
 
-其中：$N_{\text{GELU}}$、$N_{\text{SwiGLU}}$ 是一个 FFN 的无 bias 参数数；$D$ 是模型宽度；$d_{\mathrm{ff}}^{\mathrm{GELU}}$ 是 GELU FFN 的中间宽度；$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 是 SwiGLU 的中间宽度。
+其中：$N_{\mathrm{GELU}}$、$N_{\mathrm{SwiGLU}}$ 是一个 FFN 的无 bias 参数数；$D$ 是模型宽度；$d_{\mathrm{ff}}^{\mathrm{GELU}}$ 是 GELU FFN 的中间宽度；$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 是 SwiGLU 的中间宽度。
 
 如果 $d_{\mathrm{ff}}^{\mathrm{GELU}}=d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=4D$，后者的矩阵参数多 50%。然后拿训练 loss 比较并宣布“门控优于 GELU”，就把增加参数的影响混进来了。令两者相等，可得 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=2d_{\mathrm{ff}}^{\mathrm{GELU}}/3$；当 $d_{\mathrm{ff}}^{\mathrm{GELU}}=4D$ 时，$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\approx8D/3$。这种收窄门控 FFN 的比较思路也出现在 GLU 变体论文中。[来源 2]
 
@@ -3970,12 +3970,12 @@ layers.append((k, v))
 本章 K、V 每头同宽，且不量化。$L$ 层、batch $B$、长度 $T$、每个数 $b_{\mathrm{elem}}$ 字节时：
 
 $$
-\text{KV 字节数}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}
+\mathrm{Mem}_{KV}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}
 $$
 
 它和 P11.6 的 MHA 账本是同一张表，只是把“每层存几份头”从 $H$ 换成真正保存的 $H_{kv}$：query 头再多，只要共用 KV 头，缓存就按 KV 头数算。
 
-其中：$L$ 是层数；$B$ 是批大小；$T$ 是缓存的 token 数；$H_{kv}$ 是 KV 头数；$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是每个元素的字节数；开头的 2 表示 K、V 两份。
+其中：$\mathrm{Mem}_{KV}$ 是全部层 K/V 缓存的逻辑字节数（KV 字节数）；$L$ 是层数；$B$ 是批大小；$T$ 是缓存的 token 数；$H_{kv}$ 是 KV 头数；$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是每个元素的字节数；开头的 2 表示 K、V 两份。
 
 固定 $H_q$ 和 $d_h$，缓存相对 MHA 的比例是 $H_{kv}/H_q$，不是其平方。query 不在这个缓存里。
 
