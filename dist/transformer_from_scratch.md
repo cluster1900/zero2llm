@@ -7115,7 +7115,7 @@ $$
 
 **大白话：**同一个位置的隐藏状态，同时交给几位“考官”：主 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head 只是换一张输出矩阵，读的是同一份表示。
 
-其中：$h_t$ 是主干最后一层（经过最终 RMSNorm）在位置 $t$ 的隐藏向量，长 $D$ 的行向量（本章局部记号，即全书 $X^{(L)}$ 在位置 $t$ 的那一行；$x_{t+1}$、$x_{t+j}$ 指该位置的真实 token，和 $h_t$ 别混）；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵，和代码里 `nn.Linear` 的权重一样按 $[\lvert\mathcal V\rvert,D]$（输出×输入）存，所以乘的时候写转置 $h_tW_j^\top$；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
+其中：$h_t$ 是主干最后一层、再经最终 $\mathrm{ln\_f}$（RMSNorm）之后、在位置 $t$ 的那一行隐藏向量，长 $D$ 的行向量（本章局部记号；它**不是**附录 A.5 的 $X^{(l)}$——那里 $X^{(l)}$ 是第 $l$ 层的输入；$x_{t+1}$、$x_{t+j}$ 指该位置的真实 token，和 $h_t$ 别混）；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵，和代码里 `nn.Linear` 的权重一样按 $[\lvert\mathcal V\rvert,D]$（输出×输入）存，所以乘的时候写转置 $h_tW_j^\top$；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
 
 主 head 是 S5 原来的 head，不是再复制一个。$h_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $h_t$。
 
@@ -7218,7 +7218,7 @@ $$
 
 所有额外 head 都连接主干，没有 `detach`。因此辅助损失也会训练 embedding 和 Transformer；它不是冻结教师的蒸馏。若想研究“冻结主干”的另一种训练法，必须另开消融，不能只改解释文字。
 
-`depth=0` 不添加参数、不额外消耗随机初始化数；同种子下，S5 与 S6 的 state_dict、参数数量、普通 logits、普通 loss 和缓存数值完全相同。不同模型实例的 cache 仍有不同 owner，不能互换。`depth=2` 时增加的参数正好是 `2 × V × D_model`，不是完整模型参数翻倍。
+`depth=0` 不添加参数、不额外消耗随机初始化数；同种子下，S5 与 S6 的 state_dict、参数数量、普通 logits、普通 loss 和缓存数值完全相同。不同模型实例的 cache 仍有不同 owner，不能互换。`depth=2` 时增加的参数正好是 $2\lvert\mathcal V\rvert D$，不是完整模型参数翻倍。
 
 `weight=0` 只是关闭辅助损失的系数，**不删除已经创建的 head，也不省掉显式 `forward_mtp` 里的 head 计算**。若要结构上关闭旁路，构造 `depth=0`；若只做普通推理，调用普通 forward／cache 路径即可。重新训练后的主干权重变了，不能再要求它与训练前的 S5 输出相同。
 
@@ -7271,7 +7271,9 @@ $$
 
 接受 4，修正为 5 后，tokens 成为 `[1,2,3,4,5]`。cache 应裁成 `[1,2,3,4]`，pending 是 `[5]`。不能留下 9 的 K/V，也不能提前把 5 当作已经存在的 cache 位置。
 
-源码中若旧 cache 长度为 P，本轮一共提交 s 个新 token，则新 cache 长度为 `P+s`。因为本次调用喂入了旧 pending，但留下新 pending 未喂入。`trim_cache` 对每层 K/V 的时间维度取前缀并复制，保留 owner 与权重版本，不修改原 cache。
+源码里旧 cache 长度是 `old_length`，本轮实际写入的新 token 序列是 `emitted`，则裁切后的新 cache 长度为 `old_length + len(emitted)`（也就是 $T_{\mathrm{old}}+T_{\mathrm{emit}}$）。因为本次调用喂入了旧 pending，但留下新 pending 未喂入。`trim_cache` 对每层 K/V 的时间维度取前缀并复制，保留 owner 与权重版本，不修改原 cache。
+
+其中：`old_length` / $T_{\mathrm{old}}$ 是裁切前已缓存的 token 数；`emitted` 是本轮最终提交进 cache 的新 token 列表，$T_{\mathrm{emit}}=\lvert\texttt{emitted}\rvert$；二者之和是下一轮开始时的缓存长度。
 
 ### EOS 与预算必须一起守住
 
@@ -7429,7 +7431,7 @@ INT8 是带符号整数，通常有 -128 到 127 这 256 个码；FP8 是另一�
 权重压小不会自动把 KV 压小。标准 GQA 的缓存主体字节数仍可按 [P14](#p14-grouped-kv) 计算：
 
 $$
-\mathrm{Mem}_{KV}=2L B H_{kv} T d_h\,b_{\mathrm{elem}}.
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}.
 $$
 
 **大白话：**每层、每条序列、每个 KV 头、每个 token 都要存一条长 $d_h$ 的 K 和一条 V；把这些个数乘起来，再乘每个数占几个字节。
@@ -7942,7 +7944,7 @@ FP4 块格式让每一小块元素共享一个 scale，块越小，异常值影�
 
 ![两份固定配置如何映射到注意力、FFN 和输出预算](assets/diagrams/p25-qwen3.svg)
 
-## P25.3 一个最容易算错的维度：D 不一定等于 Hq × d
+## P25.3 一个最容易算错的维度：$D$ 不一定等于 $H_q \times d_h$ {#p25.3}
 
 以前的小型教学模型常把 `head_dim` 写成 `D // Hq`。本章两个 checkpoint **显式指定 $d_h=128$**，所以：
 
@@ -7984,14 +7986,14 @@ RMSNorm 对最后一维计算：
 
 $$
 \operatorname{RMSNorm}(z)_k
-= \gamma_k\frac{z_k}{\sqrt{\frac{1}{n}\sum_{k'=1}^{n}z_{k'}^2+\epsilon}}.
+= \gamma_k\frac{z_k}{\sqrt{\operatorname{mean}(z^2)+\epsilon}}.
 $$
 
 **大白话：**先算这一行数字的“均方根”当作音量，把整行除以它统一音量，再让每一维乘上自己可学的增益。不减均值，所以比 LayerNorm 少一步。
 
-其中：$z$ 是被归一化的那一行向量，$z_k$ 是它的第 $k$ 维，$k'$ 是求和用的维度下标；$n$ 是最后一维的长度；$\gamma_k$ 是第 $k$ 维的可学习 gain（代码里的 `weight`）；$\epsilon$ 是防止除以零的小常数（配置里的 `rms_norm_eps`）。
+其中：$z$ 是被归一化的那一行向量，$z_k$ 是它的第 $k$ 维；$\operatorname{mean}(z^2)$ 是对该行最后一维各分量平方取平均；$\gamma_k$ 是第 $k$ 维的可学习 gain（代码里的 `weight`）；$\epsilon$ 是防止除以零的小常数（配置里的 `rms_norm_eps`）。
 
-对 block 输入，$n=D$；对单个 Q/K 头，$n=d_h$。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 $d_h$ 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 $H_q\times d_h$ 或 $H_{kv}\times d_h$ 的 gain**。这会直接影响参数统计。
+对 block 输入，最后一维长度是 $D$；对单个 Q/K 头，最后一维长度是 $d_h$。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 $d_h$ 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 $H_q\times d_h$ 或 $H_{kv}\times d_h$ 的 gain**。这会直接影响参数统计。
 
 本章探针保留 float64 精度来做标量对照；固定官方实现的 RMSNorm 有转到 float32 求统计量再转回的逻辑。即使数学结构一样，两种数值路径也不能宣称逐位等价，更不代表 BF16 GPU kernel 的误差行为已经复现。
 
@@ -8088,12 +8090,12 @@ $$
 
 为何强调“完整矩阵”？输入 embedding 实际查表只访问选中 token 的行；计算次数、内存读取、算术 FLOPs 不等于这一参数计数。一个 batch 中不同 token 还可能走不同专家，选中专家的并集超过 k。**A3B 不等于只需装下 3B 权重，更不意味着它一定比某个 dense 3B 更快。**
 
-## P25.7 KV cache：这次真的按 Hkv 计算
+## P25.7 KV cache：这次真的按 $H_{kv}$ 计算 {#p25.7}
 
 不量化、各层都保存 K/V 时，逻辑 payload 为：
 
 $$
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}},
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}},
 $$
 
 **大白话：**和 P24 的 KV 账本是同一个乘法：K、V 两份，每层、每条序列、每个 KV 头、每个 token 存一条长 $d_h$ 的向量。
@@ -8580,7 +8582,7 @@ $$
 
 []{#杀手锏-5kv-cache-机制消除重复运算的打字机}
 
-**KV Cache 消除重复计算，不消除历史。** 对固定因果模型和未修改的前缀，旧 K、V 不必每个生成步骤重新计算。朴素逐次重算长度 t 的 dense attention，单步约 t²，累积到 N 约 N³；缓存后每次新 query 对历史约 t，累积约 N²。这里仅计算 attention 位置对，不包含投影、FFN、prefill、batch 或内存带宽。缓存既不把全局注意力变成常数，也不能跨权重修改后继续当成有效状态；具体契约见 P11 与 [P15](#p15-attention-systems)。
+**KV Cache 消除重复计算，不消除历史。** 对固定因果模型和未修改的前缀，旧 K、V 不必每个生成步骤重新计算。朴素逐次重算长度 $t$ 的 dense attention，单步约 $t^2$，累积到长度 $T$ 约 $T^3$；缓存后每次新 query 对历史约 $t$，累积约 $T^2$。这里仅计算 attention 位置对，不包含投影、FFN、prefill、batch 或内存带宽。缓存既不把全局注意力变成常数，也不能跨权重修改后继续当成有效状态；具体契约见 P11 与 [P15](#p15-attention-systems)。
 
 []{#顶级大模型架构进化对照表}
 []{#表-9-2从经典-transformer-到-deepseek-的参数与架构进化演变}
@@ -8785,7 +8787,7 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 缓存公式是：
 
 $$
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}.
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}.
 $$
 
 **大白话：**K、V 两份，每层、每条序列、每个 KV 头、每个 token 都存一条长 $d_h$ 的向量，个数乘起来再乘每个数的字节数。
@@ -8975,7 +8977,7 @@ S3 特殊设置可以在数学上退化成之前的结构，S6 depth=0 也可以
 
 A→B 只换归一化，复制并核对所有非 norm 状态。B→C 只换 FFN 家族与预算匹配宽度，复制并核对所有非 FFN 状态。脚本分别确认 14 个和 15 个不该改变的张量完全相同；输入、标签、dtype、设备和检查路径也相同。
 
-为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 $2Dm$，SwiGLU 三个矩阵的参数为 $3Dn$（$D$ 是模型宽度；$m$、$n$ 分别是 GELU 与 SwiGLU 的 FFN 中间宽度 $d_{\mathrm{ff}}$，用两个字母区分两种结构）。要让参数相等需 $n=2m/3$。$D=16$、$m=64$ 时，理想 n 为 42 又 2/3；宽度必须是整数，选择 43 后为 `3×16×43=2064`，每层多 16 个，两层总共多 32 个。
+为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 $2D d_{\mathrm{ff}}^{\mathrm{GELU}}$，SwiGLU 三个矩阵的参数为 $3D d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$（$D$ 是模型宽度；$d_{\mathrm{ff}}^{\mathrm{GELU}}$、$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 分别是两种 FFN 的中间宽度）。要让参数相等需 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=2d_{\mathrm{ff}}^{\mathrm{GELU}}/3$。$D=16$、$d_{\mathrm{ff}}^{\mathrm{GELU}}=64$ 时，理想 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 为 42 又 2/3；宽度必须是整数，选择 43 后为 `3×16×43=2064`，每层多 16 个，两层总共多 32 个。
 
 所以这个实验应叫**FFN 家族加近似匹配宽度的消融**，不能叫“仅改变激活函数，其他完全不变”。RMSNorm 不做减均值，而 SwiGLU 多了一条门控乘积；它们的原始定义分别见 [RMSNorm v1](https://arxiv.org/abs/1910.07467v1) 与 [GLU Variants v1](https://arxiv.org/abs/2002.05202v1)。
 
@@ -9089,7 +9091,7 @@ S1 负例把 `arange(offset, offset+T)` 改成 `arange(T)`，只破坏绝对位�
 
 ### MoE 的负载账本
 
-两行、每行 8 个 token，共 N=16；每个 token 选择 2 个路由专家，因此每层请求分配数总和必须为 `N×k=32`，不是 16。共享专家总是运行，不记在这 32 次路由分配里。
+两行、每行 8 个 token，共 $BT=16$；每个 token 选择 2 个路由专家，因此每层请求分配数总和必须为 $BT\times k=32$，不是 16。共享专家总是运行，不记在这 32 次路由分配里。
 
 本次 S5 两层的请求负载为 `[7,8,8,9]` 与 `[4,9,9,10]`。每层都加起来为 32，但并不完全均衡。这个数字说明路由确实在工作。[DeepSeekMoE v1](https://arxiv.org/abs/2401.06066v1)
 
@@ -9186,7 +9188,7 @@ S5 比 S4 参数少，是因为这里故意选择了很窄的专家，并非“M
 
 ## P27.13 自测：能解释失败，比记住 PASS 更重要
 
-这里只保留本章新增的综合判断；矩形 mask 的手算见 [P11.4](#p11.4-矩形-mask最容易写错的两行)，MoE 的 N×k 负载记账见 [P18](#p18-moe)，独立手算 oracle 见上文 P27.7。
+这里只保留本章新增的综合判断；矩形 mask 的手算见 [P11.4](#p11.4-矩形-mask最容易写错的两行)，MoE 的 $BT\times k$ 负载记账见 [P18](#p18-moe)，独立手算 oracle 见上文 P27.7。
 
 1. S0 和 S1 为什么必须用同一组权重？固定随机种子是否足够？
 2. GQA 把本次缓存从 4096 字节降到 2048 字节，是否证明进程内存或 GPU 显存下降一半？

@@ -13428,11 +13428,14 @@ z_t^{(j)}=h_tW_j^\top\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head
 只是换一张输出矩阵，读的是同一份表示。</p>
 <p>其中：<span class="math inline">\(h_t\)</span>
-是主干最后一层（经过最终 RMSNorm）在位置 <span
-class="math inline">\(t\)</span> 的隐藏向量，长 <span
-class="math inline">\(D\)</span> 的行向量（本章局部记号，即全书 <span
-class="math inline">\(X^{(L)}\)</span> 在位置 <span
-class="math inline">\(t\)</span> 的那一行；<span
+是主干最后一层、再经最终 <span
+class="math inline">\(\mathrm{ln\_f}\)</span>（RMSNorm）之后、在位置
+<span class="math inline">\(t\)</span> 的那一行隐藏向量，长 <span
+class="math inline">\(D\)</span>
+的行向量（本章局部记号；它<strong>不是</strong>附录 A.5 的 <span
+class="math inline">\(X^{(l)}\)</span>——那里 <span
+class="math inline">\(X^{(l)}\)</span> 是第 <span
+class="math inline">\(l\)</span> 层的输入；<span
 class="math inline">\(x_{t+1}\)</span>、<span
 class="math inline">\(x_{t+j}\)</span> 指该位置的真实 token，和 <span
 class="math inline">\(h_t\)</span> 别混）；<span
@@ -13668,8 +13671,9 @@ Transformer；它不是冻结教师的蒸馏。若想研究“冻结主干”的
 <p><code>depth=0</code> 不添加参数、不额外消耗随机初始化数；同种子下，S5
 与 S6 的 state_dict、参数数量、普通 logits、普通 loss
 和缓存数值完全相同。不同模型实例的 cache 仍有不同
-owner，不能互换。<code>depth=2</code> 时增加的参数正好是
-<code>2 × V × D_model</code>，不是完整模型参数翻倍。</p>
+owner，不能互换。<code>depth=2</code> 时增加的参数正好是 <span
+class="math inline">\(2\lvert\mathcal V\rvert
+D\)</span>，不是完整模型参数翻倍。</p>
 <p><code>weight=0</code>
 只是关闭辅助损失的系数，<strong>不删除已经创建的 head，也不省掉显式
 <code>forward_mtp</code> 里的 head
@@ -13758,10 +13762,16 @@ prompt。以位置编号从 0 开始：</p>
 <p>接受 4，修正为 5 后，tokens 成为 <code>[1,2,3,4,5]</code>。cache
 应裁成 <code>[1,2,3,4]</code>，pending 是 <code>[5]</code>。不能留下 9
 的 K/V，也不能提前把 5 当作已经存在的 cache 位置。</p>
-<p>源码中若旧 cache 长度为 P，本轮一共提交 s 个新 token，则新 cache
-长度为 <code>P+s</code>。因为本次调用喂入了旧 pending，但留下新 pending
-未喂入。<code>trim_cache</code> 对每层 K/V 的时间维度取前缀并复制，保留
-owner 与权重版本，不修改原 cache。</p>
+<p>源码里旧 cache 长度是 <code>old_length</code>，本轮实际写入的新 token
+序列是 <code>emitted</code>，则裁切后的新 cache 长度为
+<code>old_length + len(emitted)</code>（也就是 <span
+class="math inline">\(T_{\mathrm{old}}+T_{\mathrm{emit}}\)</span>）。因为本次调用喂入了旧
+pending，但留下新 pending 未喂入。<code>trim_cache</code> 对每层 K/V
+的时间维度取前缀并复制，保留 owner 与权重版本，不修改原 cache。</p>
+<p>其中：<code>old_length</code> / <span
+class="math inline">\(T_{\mathrm{old}}\)</span> 是裁切前已缓存的 token
+数；<code>emitted</code> 是本轮最终提交进 cache 的新 token 列表，<span
+class="math inline">\(T_{\mathrm{emit}}=\lvert\texttt{emitted}\rvert\)</span>；二者之和是下一轮开始时的缓存长度。</p>
 <h3 id="eos-与预算必须一起守住">EOS 与预算必须一起守住</h3>
 <ul>
 <li>prompt 最后已经是 EOS，或者
@@ -14034,7 +14044,8 @@ v1</a> 是在冻结的量化基座上训练 LoRA 的方法，不是“任何 4
 <p>权重压小不会自动把 KV 压小。标准 GQA 的缓存主体字节数仍可按 <a
 href="#p14-grouped-kv">P14</a> 计算：</p>
 <p><span class="math display">\[
-\mathrm{Mem}_{KV}=2L B H_{kv} T d_h\,b_{\mathrm{elem}}.
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot
+b_{\mathrm{elem}}.
 \]</span></p>
 <p><strong>大白话：</strong>每层、每条序列、每个 KV 头、每个 token
 都要存一条长 <span class="math inline">\(d_h\)</span> 的 K 和一条
@@ -15169,8 +15180,9 @@ src="assets/rendered/p25-qwen3.svg" class="book-diagram" width="634"
 alt="两份固定配置如何映射到注意力、FFN 和输出预算" /></a>
 <figcaption>两份固定配置如何映射到注意力、FFN 和输出预算</figcaption>
 </figure>
-<h2 id="p25.3-一个最容易算错的维度d-不一定等于-hq-d">P25.3
-一个最容易算错的维度：D 不一定等于 Hq × d</h2>
+<h2 id="p25.3">P25.3 一个最容易算错的维度：<span
+class="math inline">\(D\)</span> 不一定等于 <span
+class="math inline">\(H_q \times d_h\)</span></h2>
 <p>以前的小型教学模型常把 <code>head_dim</code> 写成
 <code>D // Hq</code>。本章两个 checkpoint <strong>显式指定 <span
 class="math inline">\(d_h=128\)</span></strong>，所以：</p>
@@ -15213,25 +15225,24 @@ block：QK-norm 不是又一个 LayerNorm</h2>
 <p>RMSNorm 对最后一维计算：</p>
 <p><span class="math display">\[
 \operatorname{RMSNorm}(z)_k
-=
-\gamma_k\frac{z_k}{\sqrt{\frac{1}{n}\sum_{k&#39;=1}^{n}z_{k&#39;}^2+\epsilon}}.
+= \gamma_k\frac{z_k}{\sqrt{\operatorname{mean}(z^2)+\epsilon}}.
 \]</span></p>
 <p><strong>大白话：</strong>先算这一行数字的“均方根”当作音量，把整行除以它统一音量，再让每一维乘上自己可学的增益。不减均值，所以比
 LayerNorm 少一步。</p>
 <p>其中：<span class="math inline">\(z\)</span>
 是被归一化的那一行向量，<span class="math inline">\(z_k\)</span>
-是它的第 <span class="math inline">\(k\)</span> 维，<span
-class="math inline">\(k&#39;\)</span> 是求和用的维度下标；<span
-class="math inline">\(n\)</span> 是最后一维的长度；<span
+是它的第 <span class="math inline">\(k\)</span> 维；<span
+class="math inline">\(\operatorname{mean}(z^2)\)</span>
+是对该行最后一维各分量平方取平均；<span
 class="math inline">\(\gamma_k\)</span> 是第 <span
 class="math inline">\(k\)</span> 维的可学习 gain（代码里的
 <code>weight</code>）；<span class="math inline">\(\epsilon\)</span>
 是防止除以零的小常数（配置里的 <code>rms_norm_eps</code>）。</p>
-<p>对 block 输入，<span class="math inline">\(n=D\)</span>；对单个 Q/K
-头，<span class="math inline">\(n=d_h\)</span>。这里不减均值，也没有
-LayerNorm 的偏置向量。Q 和 K 各有一个长度 <span
-class="math inline">\(d_h\)</span> 的可学习
-gain，它们在同类头之间共享，<strong>不是每个头各拥有一份 <span
+<p>对 block 输入，最后一维长度是 <span
+class="math inline">\(D\)</span>；对单个 Q/K 头，最后一维长度是 <span
+class="math inline">\(d_h\)</span>。这里不减均值，也没有 LayerNorm
+的偏置向量。Q 和 K 各有一个长度 <span class="math inline">\(d_h\)</span>
+的可学习 gain，它们在同类头之间共享，<strong>不是每个头各拥有一份 <span
 class="math inline">\(H_q\times d_h\)</span> 或 <span
 class="math inline">\(H_{kv}\times d_h\)</span> 的
 gain</strong>。这会直接影响参数统计。</p>
@@ -15431,11 +15442,11 @@ href="https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f
 中不同 token 还可能走不同专家，选中专家的并集超过 k。<strong>A3B
 不等于只需装下 3B 权重，更不意味着它一定比某个 dense 3B
 更快。</strong></p>
-<h2 id="p25.7-kv-cache这次真的按-hkv-计算">P25.7 KV cache：这次真的按
-Hkv 计算</h2>
+<h2 id="p25.7">P25.7 KV cache：这次真的按 <span
+class="math inline">\(H_{kv}\)</span> 计算</h2>
 <p>不量化、各层都保存 K/V 时，逻辑 payload 为：</p>
 <p><span class="math display">\[
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot
 b_{\mathrm{elem}},
 \]</span></p>
 <p><strong>大白话：</strong>和 P24 的 KV 账本是同一个乘法：K、V
@@ -16472,9 +16483,14 @@ href="#p13-modern-block">P13</a>。</p>
 <p><span id="杀手锏-5kv-cache-机制消除重复运算的打字机"></span></p>
 <p><strong>KV Cache 消除重复计算，不消除历史。</strong>
 对固定因果模型和未修改的前缀，旧 K、V
-不必每个生成步骤重新计算。朴素逐次重算长度 t 的 dense attention，单步约
-t²，累积到 N 约 N³；缓存后每次新 query 对历史约 t，累积约 N²。这里仅计算
-attention 位置对，不包含投影、FFN、prefill、batch
+不必每个生成步骤重新计算。朴素逐次重算长度 <span
+class="math inline">\(t\)</span> 的 dense attention，单步约 <span
+class="math inline">\(t^2\)</span>，累积到长度 <span
+class="math inline">\(T\)</span> 约 <span
+class="math inline">\(T^3\)</span>；缓存后每次新 query 对历史约 <span
+class="math inline">\(t\)</span>，累积约 <span
+class="math inline">\(T^2\)</span>。这里仅计算 attention
+位置对，不包含投影、FFN、prefill、batch
 或内存带宽。缓存既不把全局注意力变成常数，也不能跨权重修改后继续当成有效状态；具体契约见
 P11 与 <a href="#p15-attention-systems">P15</a>。</p>
 <p><span id="顶级大模型架构进化对照表"></span> <span
@@ -16934,7 +16950,7 @@ optimizer 或 RNG
 </table></div>
 <p>缓存公式是：</p>
 <p><span class="math display">\[
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot
 b_{\mathrm{elem}}.
 \]</span></p>
 <p><strong>大白话：</strong>K、V 两份，每层、每条序列、每个 KV 头、每个
@@ -17318,17 +17334,21 @@ ablation。</p>
 家族与预算匹配宽度，复制并核对所有非 FFN 状态。脚本分别确认 14 个和 15
 个不该改变的张量完全相同；输入、标签、dtype、设备和检查路径也相同。</p>
 <p>为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 <span
-class="math inline">\(2Dm\)</span>，SwiGLU 三个矩阵的参数为 <span
-class="math inline">\(3Dn\)</span>（<span
+class="math inline">\(2D
+d_{\mathrm{ff}}^{\mathrm{GELU}}\)</span>，SwiGLU 三个矩阵的参数为 <span
+class="math inline">\(3D
+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\)</span>（<span
 class="math inline">\(D\)</span> 是模型宽度；<span
-class="math inline">\(m\)</span>、<span class="math inline">\(n\)</span>
-分别是 GELU 与 SwiGLU 的 FFN 中间宽度 <span
-class="math inline">\(d_{\mathrm{ff}}\)</span>，用两个字母区分两种结构）。要让参数相等需
-<span class="math inline">\(n=2m/3\)</span>。<span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{GELU}}\)</span>、<span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\)</span>
+分别是两种 FFN 的中间宽度）。要让参数相等需 <span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=2d_{\mathrm{ff}}^{\mathrm{GELU}}/3\)</span>。<span
 class="math inline">\(D=16\)</span>、<span
-class="math inline">\(m=64\)</span> 时，理想 n 为 42 又
-2/3；宽度必须是整数，选择 43 后为 <code>3×16×43=2064</code>，每层多 16
-个，两层总共多 32 个。</p>
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{GELU}}=64\)</span>
+时，理想 <span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\)</span> 为 42
+又 2/3；宽度必须是整数，选择 43 后为 <code>3×16×43=2064</code>，每层多
+16 个，两层总共多 32 个。</p>
 <p>所以这个实验应叫<strong>FFN
 家族加近似匹配宽度的消融</strong>，不能叫“仅改变激活函数，其他完全不变”。RMSNorm
 不做减均值，而 SwiGLU 多了一条门控乘积；它们的原始定义分别见 <a
@@ -17528,8 +17548,10 @@ width="720" alt="三个负例控制：报警前后最大 logit 误差" /></a>
 <h2 id="p27.9-moe-与选修-mtp不能只看一行-loss">P27.9 MoE 与选修
 MTP：不能只看一行 loss</h2>
 <h3 id="moe-的负载账本">MoE 的负载账本</h3>
-<p>两行、每行 8 个 token，共 N=16；每个 token 选择 2
-个路由专家，因此每层请求分配数总和必须为 <code>N×k=32</code>，不是
+<p>两行、每行 8 个 token，共 <span
+class="math inline">\(BT=16\)</span>；每个 token 选择 2
+个路由专家，因此每层请求分配数总和必须为 <span
+class="math inline">\(BT\times k=32\)</span>，不是
 16。共享专家总是运行，不记在这 32 次路由分配里。</p>
 <p>本次 S5 两层的请求负载为 <code>[7,8,8,9]</code> 与
 <code>[4,9,9,10]</code>。每层都加起来为
@@ -17789,8 +17811,9 @@ dtype。把首个出错位置保存下来，比抄十屏日志更有用。</p>
 <h2 id="p27.13-自测能解释失败比记住-pass-更重要">P27.13
 自测：能解释失败，比记住 PASS 更重要</h2>
 <p>这里只保留本章新增的综合判断；矩形 mask 的手算见 <a
-href="#p11.4-矩形-mask最容易写错的两行">P11.4</a>，MoE 的 N×k 负载记账见
-<a href="#p18-moe">P18</a>，独立手算 oracle 见上文 P27.7。</p>
+href="#p11.4-矩形-mask最容易写错的两行">P11.4</a>，MoE 的 <span
+class="math inline">\(BT\times k\)</span> 负载记账见 <a
+href="#p18-moe">P18</a>，独立手算 oracle 见上文 P27.7。</p>
 <ol type="1">
 <li>S0 和 S1 为什么必须用同一组权重？固定随机种子是否足够？</li>
 <li>GQA 把本次缓存从 4096 字节降到 2048 字节，是否证明进程内存或 GPU
