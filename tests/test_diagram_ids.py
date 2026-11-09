@@ -391,5 +391,53 @@ class RenderBackupTests(unittest.TestCase):
         self.assertIsNone(self.build.backup_render(str(self.rendered), self.backup))
 
 
+
+class ScriptVFontTests(unittest.TestCase):
+    """D7 (bot-hub#126): |𝒱| must not render as tofu; CI checks config + SVG."""
+
+    SCRIPT_V = '\U0001D4B1'
+    RENDERER = ROOT / 'scripts' / 'render_diagrams.mjs'
+    FONT_CANDIDATES = (
+        Path('/workspace/tools/fonts/NotoSansMath-Regular.ttf'),
+        Path.home() / '.local/share/fonts/NotoSansMath-Regular.ttf',
+    )
+
+    def test_renderer_font_family_includes_noto_sans_math(self):
+        src = self.RENDERER.read_text(encoding='utf-8')
+        self.assertIn('Noto Sans Math', src)
+        # Keep CJK ahead so Chinese stays on CJK; Math is the fallback for U+1D4B1.
+        cjk = src.find('Noto Sans CJK SC')
+        math = src.find('Noto Sans Math')
+        self.assertGreater(cjk, 0)
+        self.assertGreater(math, cjk)
+
+    def test_committed_svgs_keep_script_v_when_source_uses_it(self):
+        """If a Mermaid block contains 𝒱, its committed SVG must too (not U+FFFD)."""
+        md = (DIST / 'transformer_from_scratch.md').read_text(encoding='utf-8')
+        checked = 0
+        for definition in mermaid_blocks(md):
+            if self.SCRIPT_V not in definition:
+                continue
+            diagram_id = mermaid_id(definition)
+            svg_path = DIST / 'assets' / 'rendered' / f'{diagram_id}.svg'
+            self.assertTrue(svg_path.is_file(), f'missing {svg_path}')
+            svg = svg_path.read_text(encoding='utf-8')
+            self.assertIn(self.SCRIPT_V, svg, f'{diagram_id}.svg lost 𝒱')
+            self.assertNotIn('\uFFFD', svg)
+            checked += 1
+        self.assertGreaterEqual(checked, 1, 'expected at least one diagram using 𝒱')
+
+    def test_installed_noto_sans_math_covers_script_v(self):
+        font_path = next((p for p in self.FONT_CANDIDATES if p.is_file()), None)
+        if font_path is None:
+            self.skipTest('Noto Sans Math not installed on this machine (OK for CI)')
+        try:
+            from fontTools.ttLib import TTFont
+        except ImportError:
+            self.skipTest('fontTools not installed')
+        font = TTFont(str(font_path))
+        has = any(0x1D4B1 in table.cmap for table in font['cmap'].tables)
+        self.assertTrue(has, f'{font_path} cmap missing U+1D4B1')
+
 if __name__ == '__main__':
     unittest.main()

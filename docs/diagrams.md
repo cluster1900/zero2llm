@@ -62,8 +62,40 @@
 | Pandoc | 3.9 | `pandoc --version` |
 | Python | 3.13.5 | `python3 --version` |
 | 中文字体 | Noto Sans CJK SC（`render_diagrams.mjs` 依次尝试 PingFang SC → Noto Sans CJK SC → Microsoft YaHei） | `fc-match "Noto Sans CJK SC"` |
+| 数学字母字体 | **Noto Sans Math Regular v3.000**（覆盖 U+1D4B1 `𝒱` 等 Mathematical Alphanumeric Symbols；CJK 缺字形时回退到它） | 见下文安装 |
 
 字体或 Chrome 不同，文字宽度会差几个像素。实测重渲 D0 之前的 10 张图，2 张字节相同，其余宽度相差 < 2.5%，内容一致。复用机制保证这种漂移只出现在新增或改动的图上。
+
+### 数学字体：Noto Sans Math（D7，bot-hub#126）
+
+附录 A.5 的词表大小写作 $\lvert\mathcal V\rvert$，图里对应明文 `|𝒱|`（U+1D4B1 MATHEMATICAL SCRIPT CAPITAL V）。Noto Sans CJK SC **没有**这个码位，缺字体时会画成空白方框。因此 `scripts/render_diagrams.mjs` 的 `fontFamily` 在 CJK 之后加入 **Noto Sans Math**：中文仍走 CJK，script V 回退到数学字体。
+
+| 项 | 值 |
+|---|---|
+| 字体名 | Noto Sans Math |
+| 样式 / 版本 | Regular / **3.000**（`fc-query` 的 `fontversion` 为 196608 = 3.0.0） |
+| 发布包 | [NotoSansMath-v3.000.zip](https://github.com/notofonts/math/releases/download/NotoSansMath-v3.000/NotoSansMath-v3.000.zip)（notofonts/math） |
+| 包 sha256 | `ac351837b41f8a897f020b97fb0f075ad574c1e9669fb5839ada1f92fd748356` |
+| 选用文件 | `NotoSansMath/full/ttf/NotoSansMath-Regular.ttf` |
+| 文件 sha256 | `7283c396e9b22699bb542d9631030dc804a7e5b954f193d8f8f5b5f1162fbc61` |
+| 已核验 | `full/ttf` 的 cmap **含 U+1D4B1**（本机用 fontTools 查过） |
+
+安装到本机（构建机 / box；CI 不渲染图，不必装）：
+
+```bash
+curl -fsSL -o /tmp/NotoSansMath-v3.000.zip \
+  https://github.com/notofonts/math/releases/download/NotoSansMath-v3.000/NotoSansMath-v3.000.zip
+echo ac351837b41f8a897f020b97fb0f075ad574c1e9669fb5839ada1f92fd748356  /tmp/NotoSansMath-v3.000.zip | sha256sum -c
+unzip -o /tmp/NotoSansMath-v3.000.zip -d /tmp/noto-math
+mkdir -p /workspace/tools/fonts "$HOME/.local/share/fonts"
+cp /tmp/noto-math/NotoSansMath/full/ttf/NotoSansMath-Regular.ttf /workspace/tools/fonts/
+cp /tmp/noto-math/NotoSansMath/full/ttf/NotoSansMath-Regular.ttf "$HOME/.local/share/fonts/"
+fc-cache -f "$HOME/.local/share/fonts"
+fc-list "Noto Sans Math"
+fc-list :charset=1D4B1 family   # 应列出 Noto Sans Math
+```
+
+`tests/test_diagram_ids.py` 会检查：`render_diagrams.mjs` 的 `fontFamily` 含 `Noto Sans Math`；若某张已提交的 Mermaid SVG 源码含 `𝒱`，则 SVG 正文也必须含 `𝒱`（不是 `` U+FFFD）；本机装了该 ttf 时再断言 cmap 覆盖 U+1D4B1，CI 未装字体则跳过字形检查。
 
 ## 4. 复现命令
 
@@ -122,7 +154,7 @@ node scripts/render_diagrams.mjs /tmp/jobs.json /tmp/preview   # 得到 preview.
        root((编码—解码))
          经典 seq2seq
      ```
-   - 图中符号遵守附录 A.5（F0）：`D`、`H`、`H_kv`、`d_h`、`T`（`T_q`/`T_kv`）、`B`、`|V|`、`N_E`、`τ`、`κ`、`T_win`，形状写 `[B,T,D]`。标签不支持 LaTeX（`htmlLabels:false`），用纯文本或 Unicode 下标。
+   - 图中符号遵守附录 A.5（F0）：`D`、`H`、`H_kv`、`d_h`、`T`（`T_q`/`T_kv`）、`B`、`|𝒱|`（词表大小；需 Noto Sans Math）、`N_E`、`τ`、`κ`、`T_win`，形状写 `[B,T,D]`。标签不支持 LaTeX（`htmlLabels:false`），用纯文本或 Unicode 下标。
    - 图型：流程、形状、判断用 `flowchart`；多角色随时间用 `sequenceDiagram`；生命周期、停止条件用 `stateDiagram-v2`；`mindmap`、`block-beta` 也可以用。**不要用 `gantt`**：默认宽高比约 4.85。
 2. 运行 `python3 build.py`，确认输出里「新渲染」恰好是你加的那几张。
 3. 打开 `dist/assets/rendered/<id>.png` 看一眼。`check_book.py` 要求宽高比在 **0.45–2.4** 之间（例如一行并排三块的 block-beta 是 566×53，会失败，要改成 `columns 1`）。过长的链拆成两张，或改用 `LR`。

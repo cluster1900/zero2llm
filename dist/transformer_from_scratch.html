@@ -12855,7 +12855,7 @@ logits 到一对答案 log p 的形状账本画出来：</p>
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-p22-logp-pair.svg" class="book-diagram"
 width="317"
-alt="从变长 token 筛出一对答案 log p。logits 形状 [B,T,|𝒱|]（图中写作 |V_vocab|，避免与 Value 的 V 混淆）；logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。" /></a>
+alt="从变长 token 筛出一对答案 log p。logits 形状 [B,T,|𝒱|]；logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。" /></a>
 <div class="diagram-caption">
 从变长 token 筛出一对答案 log p
 </div>
