@@ -185,7 +185,7 @@ loss = torch.nn.functional.softplus(-beta * margin).mean()
 
 ## P22.5 从变长 token 到一对概率：形状不能代替对齐
 
-语言模型 logits 为 $[B,T,\lvert\mathcal V\rvert]$，input_ids 和 attention_mask 为 $[B,T]$（$B$ 是 batch 大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。本章的 `completion_log_probs` 做三步：
+语言模型 logits 为 $[B,T,\lvert\mathcal V\rvert]$，input_ids 和 attention_mask 为 $[B,T]$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。本章的 `completion_log_probs` 做三步：
 
 ```python
 next_logps = logits[:, :-1].log_softmax(dim=-1)

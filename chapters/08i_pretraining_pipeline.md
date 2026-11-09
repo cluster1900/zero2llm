@@ -109,7 +109,7 @@ P09 为复用三首诗的字符词表，提前知道了保留诗歌的字符。�
 | 6 | EOS / 2 | 2 | 4、5、6 | -100 | 否 |
 | 7 | PAD / 0 | 占位为 0 | 无 | -100 | 否 |
 
-行长 $T=8$，模型输入是 `[B,T]`，输出 logits 是 $[B,T,\lvert\mathcal V\rvert]$，这里 $B=1$、$\lvert\mathcal V\rvert=18$（$B$ 是 batch 大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。位置 ID 在每篇 BOS 重置为 0；整箱中的“下标 4 的格”不是文档 B 中下标 4 的位置。
+行长 $T=8$，模型输入是 `[B,T]`，输出 logits 是 $[B,T,\lvert\mathcal V\rvert]$，这里 $B=1$、$\lvert\mathcal V\rvert=18$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。位置 ID 在每篇 BOS 重置为 0；整箱中的“下标 4 的格”不是文档 B 中下标 4 的位置。
 
 本章的布尔 attention mask 中，`True` 表示**允许**，不是“挡住”：
 
@@ -293,11 +293,11 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 一种常见的理解方式是把训练结束时的预测 loss 拟合成：
 
-$$\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}}) \approx \mathcal L_{\infty} + \frac{c_1}{N_{\mathrm{param}}^{\alpha}} + \frac{c_2}{N_{\mathrm{tok}}^{\beta}}.$$
+$$\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}}) \approx c_0 + \frac{c_{\mathrm{param}}}{N_{\mathrm{param}}^{\alpha}} + \frac{c_{\mathrm{tok}}}{N_{\mathrm{tok}}^{\beta}}.$$
 
 **大白话：**最终 loss 分三块：再大的模型、再多的数据也去不掉的底线，加上“模型不够大”和“数据不够多”各自欠下的一笔账。两笔账都随规模按幂次慢慢还，所以同一预算下要在两者之间分配。
 
-其中：$\mathcal L$ 是训练结束时的预测 loss；$N_{\mathrm{param}}$ 是参数量，$N_{\mathrm{tok}}$ 是训练 token 数；$\mathcal L_{\infty}$ 是不可约的 loss 底线；$c_1$、$c_2$ 是两笔账的系数，$\alpha$、$\beta$ 是两笔账的下降指数（局部符号，只在本式有效）。后五个都是在具体实验设置下估计的量。原论文把它们写作 $E$、$A$、$B$、$\alpha$、$\beta$；本书改写是为了不和 embedding 表 $E$、batch 大小 $B$ 撞名。
+其中：$\mathcal L$ 是训练结束时的预测 loss；$N_{\mathrm{param}}$ 是参数量，$N_{\mathrm{tok}}$ 是训练 token 数；$c_0$ 是不可约的 loss 底线；$c_{\mathrm{param}}$、$c_{\mathrm{tok}}$ 是两笔账的系数，$\alpha$、$\beta$ 是两笔账的下降指数（局部符号，只在本式有效）。后五个都是在具体实验设置下估计的量。原论文把它们写作 $E$、$A$、$B$、$\alpha$、$\beta$；本书改写是为了不和 embedding 表 $E$、批大小 $B$ 撞名。
 
 该论文在所讨论的数据充足设置中使用平滑训练 loss 作为测试 loss 的估计；本章反复使用同一小语料，不满足这个前提，不能拿训练 loss 充当独立验证 loss。增加 $N_{\mathrm{param}}$ 或 $N_{\mathrm{tok}}$ 时，可下降的部分逐渐变小，所以同一预算下需要分配。对某些稠密模型训练的粗略计算账本，还会使用 $C\approx 6N_{\mathrm{param}}N_{\mathrm{tok}}$（常简称 6ND）；它忽略或近似了若干开销，不是任意结构、序列长度或硬件下的精确 FLOPs。
 

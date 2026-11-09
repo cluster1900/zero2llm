@@ -76,7 +76,7 @@ attention_mask[0] = [1, 1, 1, 1, 1, 1]
 attention_mask[1] = [1, 1, 1, 1, 1, 0]
 ```
 
-因此 input_ids 的形状为 $[B,T]=[2,6]$。模型输出 logits 的形状是 $[B,T,\lvert\mathcal V\rvert]=[2,6,12]$（$B$ 是 batch 大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
+因此 input_ids 的形状为 $[B,T]=[2,6]$。模型输出 logits 的形状是 $[B,T,\lvert\mathcal V\rvert]=[2,6,12]$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
 
 unknown 词会变成 ID 1。
 
@@ -97,13 +97,13 @@ labels[1] = [-100, 7, 8, 10, 3, -100]
 独立参考计算不调用模型返回的 loss，也不调用框架的交叉熵函数，而是自己写：
 
 $$
-\mathcal L=\frac{1}{N}\sum_{(b,t)\in\Omega}
+\mathcal L=\frac{1}{N_{\mathrm{valid}}}\sum_{(b,t)\in\Omega}
 \left[\log\sum_{v\in\mathcal V}\exp(z_{b,t,v})-z_{b,t,y_{b,t+1}}\right],
 $$
 
 **大白话：**对每个要评分的位置，先用 log-sum-exp 量出“所有候选一起的总分”，再减去正确答案的分数，差值正是 $-\log p(\text{正确答案})$；把这些扣分加起来，只除以真正评分的位置数。
 
-其中：有效集合 $\Omega$ 只包含下一位置标签不是 -100 的预测位置，$N$ 是这些位置的数量；$b$ 是第几条样本，$t$ 是输入位置；$z_{b,t,v}$ 是该位置给词表 $\mathcal V$ 中 token $v$ 的 logit；$y_{b,t+1}$ 是下一位置的标签 ID。本例第一行 5 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。
+其中：有效集合 $\Omega$ 只包含下一位置标签不是 -100 的预测位置，$N_{\mathrm{valid}}=|\Omega|$ 是这些位置的数量；$b$ 是第几条样本，$t$ 是输入位置；$z_{b,t,v}$ 是该位置给词表 $\mathcal V$ 中 token $v$ 的 logit；$y_{b,t+1}$ 是下一位置的标签 ID。本例第一行 5 个目标、第二行 4 个目标，所以 $N_{\mathrm{valid}}=9$，不是输入张量的 12 个格子。
 
 代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。
 
@@ -198,7 +198,7 @@ $$
 
 **大白话：**每张卡每次吃 $B$ 条，攒 $n_{\mathrm{acc}}$ 次才更新一次，一共 $N_{\mathrm{dp}}$ 张卡并排吃，三者相乘就是一次更新真正“见过”的样本条数。
 
-其中：$B_{\mathrm{global}}$ 是一次参数更新用到的总样本条数；$B$ 是每个 rank 每次前向的 batch 大小（micro-batch）；$n_{\mathrm{acc}}$ 是梯度累积次数；$N_{\mathrm{dp}}$ 是数据并行组的 rank 数，即代码里的 world size。
+其中：$B_{\mathrm{global}}$ 是一次参数更新用到的总样本条数；$B$ 是每个 rank 每次前向的批大小（micro-batch）；$n_{\mathrm{acc}}$ 是梯度累积次数；$N_{\mathrm{dp}}$ 是数据并行组的 rank 数，即代码里的 world size。
 
 若长度不一，有效监督 token 数不一定按样本数平均；还要检查各 rank 的 loss 归一化与梯度汇总口径。P19 中关于有效 token 和梯度累积的约定，并不会因为加了 DDP 就消失。
 

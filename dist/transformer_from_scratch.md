@@ -5549,7 +5549,7 @@ P09 为复用三首诗的字符词表，提前知道了保留诗歌的字符。�
 | 6 | EOS / 2 | 2 | 4、5、6 | -100 | 否 |
 | 7 | PAD / 0 | 占位为 0 | 无 | -100 | 否 |
 
-行长 $T=8$，模型输入是 `[B,T]`，输出 logits 是 $[B,T,\lvert\mathcal V\rvert]$，这里 $B=1$、$\lvert\mathcal V\rvert=18$（$B$ 是 batch 大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。位置 ID 在每篇 BOS 重置为 0；整箱中的“下标 4 的格”不是文档 B 中下标 4 的位置。
+行长 $T=8$，模型输入是 `[B,T]`，输出 logits 是 $[B,T,\lvert\mathcal V\rvert]$，这里 $B=1$、$\lvert\mathcal V\rvert=18$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。位置 ID 在每篇 BOS 重置为 0；整箱中的“下标 4 的格”不是文档 B 中下标 4 的位置。
 
 本章的布尔 attention mask 中，`True` 表示**允许**，不是“挡住”：
 
@@ -5733,11 +5733,11 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 一种常见的理解方式是把训练结束时的预测 loss 拟合成：
 
-$$\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}}) \approx \mathcal L_{\infty} + \frac{c_1}{N_{\mathrm{param}}^{\alpha}} + \frac{c_2}{N_{\mathrm{tok}}^{\beta}}.$$
+$$\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}}) \approx c_0 + \frac{c_{\mathrm{param}}}{N_{\mathrm{param}}^{\alpha}} + \frac{c_{\mathrm{tok}}}{N_{\mathrm{tok}}^{\beta}}.$$
 
 **大白话：**最终 loss 分三块：再大的模型、再多的数据也去不掉的底线，加上“模型不够大”和“数据不够多”各自欠下的一笔账。两笔账都随规模按幂次慢慢还，所以同一预算下要在两者之间分配。
 
-其中：$\mathcal L$ 是训练结束时的预测 loss；$N_{\mathrm{param}}$ 是参数量，$N_{\mathrm{tok}}$ 是训练 token 数；$\mathcal L_{\infty}$ 是不可约的 loss 底线；$c_1$、$c_2$ 是两笔账的系数，$\alpha$、$\beta$ 是两笔账的下降指数（局部符号，只在本式有效）。后五个都是在具体实验设置下估计的量。原论文把它们写作 $E$、$A$、$B$、$\alpha$、$\beta$；本书改写是为了不和 embedding 表 $E$、batch 大小 $B$ 撞名。
+其中：$\mathcal L$ 是训练结束时的预测 loss；$N_{\mathrm{param}}$ 是参数量，$N_{\mathrm{tok}}$ 是训练 token 数；$c_0$ 是不可约的 loss 底线；$c_{\mathrm{param}}$、$c_{\mathrm{tok}}$ 是两笔账的系数，$\alpha$、$\beta$ 是两笔账的下降指数（局部符号，只在本式有效）。后五个都是在具体实验设置下估计的量。原论文把它们写作 $E$、$A$、$B$、$\alpha$、$\beta$；本书改写是为了不和 embedding 表 $E$、批大小 $B$ 撞名。
 
 该论文在所讨论的数据充足设置中使用平滑训练 loss 作为测试 loss 的估计；本章反复使用同一小语料，不满足这个前提，不能拿训练 loss 充当独立验证 loss。增加 $N_{\mathrm{param}}$ 或 $N_{\mathrm{tok}}$ 时，可下降的部分逐渐变小，所以同一预算下需要分配。对某些稠密模型训练的粗略计算账本，还会使用 $C\approx 6N_{\mathrm{param}}N_{\mathrm{tok}}$（常简称 6ND）；它忽略或近似了若干开销，不是任意结构、序列长度或硬件下的精确 FLOPs。
 
@@ -5862,7 +5862,7 @@ attention_mask[0] = [1, 1, 1, 1, 1, 1]
 attention_mask[1] = [1, 1, 1, 1, 1, 0]
 ```
 
-因此 input_ids 的形状为 $[B,T]=[2,6]$。模型输出 logits 的形状是 $[B,T,\lvert\mathcal V\rvert]=[2,6,12]$（$B$ 是 batch 大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
+因此 input_ids 的形状为 $[B,T]=[2,6]$。模型输出 logits 的形状是 $[B,T,\lvert\mathcal V\rvert]=[2,6,12]$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
 
 unknown 词会变成 ID 1。
 
@@ -5883,13 +5883,13 @@ labels[1] = [-100, 7, 8, 10, 3, -100]
 独立参考计算不调用模型返回的 loss，也不调用框架的交叉熵函数，而是自己写：
 
 $$
-\mathcal L=\frac{1}{N}\sum_{(b,t)\in\Omega}
+\mathcal L=\frac{1}{N_{\mathrm{valid}}}\sum_{(b,t)\in\Omega}
 \left[\log\sum_{v\in\mathcal V}\exp(z_{b,t,v})-z_{b,t,y_{b,t+1}}\right],
 $$
 
 **大白话：**对每个要评分的位置，先用 log-sum-exp 量出“所有候选一起的总分”，再减去正确答案的分数，差值正是 $-\log p(\text{正确答案})$；把这些扣分加起来，只除以真正评分的位置数。
 
-其中：有效集合 $\Omega$ 只包含下一位置标签不是 -100 的预测位置，$N$ 是这些位置的数量；$b$ 是第几条样本，$t$ 是输入位置；$z_{b,t,v}$ 是该位置给词表 $\mathcal V$ 中 token $v$ 的 logit；$y_{b,t+1}$ 是下一位置的标签 ID。本例第一行 5 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。
+其中：有效集合 $\Omega$ 只包含下一位置标签不是 -100 的预测位置，$N_{\mathrm{valid}}=|\Omega|$ 是这些位置的数量；$b$ 是第几条样本，$t$ 是输入位置；$z_{b,t,v}$ 是该位置给词表 $\mathcal V$ 中 token $v$ 的 logit；$y_{b,t+1}$ 是下一位置的标签 ID。本例第一行 5 个目标、第二行 4 个目标，所以 $N_{\mathrm{valid}}=9$，不是输入张量的 12 个格子。
 
 代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。
 
@@ -5984,7 +5984,7 @@ $$
 
 **大白话：**每张卡每次吃 $B$ 条，攒 $n_{\mathrm{acc}}$ 次才更新一次，一共 $N_{\mathrm{dp}}$ 张卡并排吃，三者相乘就是一次更新真正“见过”的样本条数。
 
-其中：$B_{\mathrm{global}}$ 是一次参数更新用到的总样本条数；$B$ 是每个 rank 每次前向的 batch 大小（micro-batch）；$n_{\mathrm{acc}}$ 是梯度累积次数；$N_{\mathrm{dp}}$ 是数据并行组的 rank 数，即代码里的 world size。
+其中：$B_{\mathrm{global}}$ 是一次参数更新用到的总样本条数；$B$ 是每个 rank 每次前向的批大小（micro-batch）；$n_{\mathrm{acc}}$ 是梯度累积次数；$N_{\mathrm{dp}}$ 是数据并行组的 rank 数，即代码里的 world size。
 
 若长度不一，有效监督 token 数不一定按样本数平均；还要检查各 rank 的 loss 归一化与梯度汇总口径。P19 中关于有效 token 和梯度累积的约定，并不会因为加了 DDP 就消失。
 
@@ -6263,9 +6263,9 @@ $$
 
 **大白话：**把每条样本里“该评分”的位置挑出来，看模型给下一个正确 token 多少概率，取负对数当扣分，最后按评分位置的个数求平均；不评分的位置乘上 $m=0$，等于直接划掉。
 
-其中：$b$ 是第几条样本，$B$ 是 batch 大小；$t$ 是输入位置，$T$ 是序列长度；$x_{b,t}$ 是第 $b$ 条样本位置 $t$ 的 token，$x_{b,\le t}$ 是到位置 $t$ 为止的前缀；$m_{b,t+1}\in\{0,1\}$ 标记位置 $t+1$ 的目标是否评分（label 不是 -100 时为 1）；$p_\theta$ 是参数为 $\theta$ 的模型给出的概率；$N$ 是评分位置总数。
+其中：$b$ 是第几条样本，$B$ 是批大小；$t$ 是输入位置，$T$ 是序列长度；$x_{b,t}$ 是第 $b$ 条样本位置 $t$ 的 token，$x_{b,\le t}$ 是到位置 $t$ 为止的前缀；$m_{b,t+1}\in\{0,1\}$ 标记位置 $t+1$ 的目标是否评分（label 不是 -100 时为 1）；$p_\theta$ 是参数为 $\theta$ 的模型给出的概率；$N$ 是评分位置总数。
 
-这个 N 是有效目标数，不是 batch 大小，也不是 `B×T`。本例 N=2。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：
+这个 N 是有效目标数，不是批大小，也不是 `B×T`。本例 N=2。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：
 
 $$
 \mathcal L=-\frac{\ln 0.5+\ln 0.25}{2}
@@ -6353,7 +6353,7 @@ $$
 
 **大白话：**原权重 $W_0$ 冻住不动，旁边并一条“先压窄到 $r$ 维、再放宽回来”的小支路，训练只调这条支路；$\alpha/r$ 像支路的音量旋钮。
 
-其中：$A$ 是把输入压到 $r$ 维的下投影，$B$ 是放回 $d_{\mathrm{out}}$ 维的上投影（$A$、$B$ 是 LoRA 的局部记号，沿用原论文和代码里的 A/B，这里的 $B$ **不是** batch 大小）；$r$ 是秩，即支路宽度；$\alpha$ 是缩放超参数；$\Delta W$ 是这次更新给原权重带来的增量。
+其中：$A$ 是把输入压到 $r$ 维的下投影，$B$ 是放回 $d_{\mathrm{out}}$ 维的上投影（$A$、$B$ 是 LoRA 的局部记号，沿用原论文和代码里的 A/B，这里的 $B$ **不是** 批大小）；$r$ 是秩，即支路宽度；$\alpha$ 是缩放超参数；$\Delta W$ 是这次更新给原权重带来的增量。
 
 可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是**这次更新**：$\operatorname{rank}(BA)\le r$，还可能低于 $r$。
 
@@ -6809,7 +6809,7 @@ loss = torch.nn.functional.softplus(-beta * margin).mean()
 
 ## P22.5 从变长 token 到一对概率：形状不能代替对齐
 
-语言模型 logits 为 $[B,T,\lvert\mathcal V\rvert]$，input_ids 和 attention_mask 为 $[B,T]$（$B$ 是 batch 大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。本章的 `completion_log_probs` 做三步：
+语言模型 logits 为 $[B,T,\lvert\mathcal V\rvert]$，input_ids 和 attention_mask 为 $[B,T]$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。本章的 `completion_log_probs` 做三步：
 
 ```python
 next_logps = logits[:, :-1].log_softmax(dim=-1)
