@@ -82,6 +82,11 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/multi_head_attention.svg"
     },
+    "flow-ch04-three-ledgers": {
+      "kind": "mermaid",
+      "sha256": "70e376df8c2ecda6329a2a7c97a93b891a228f861e347e13e931f84b7d307b04",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "flow-ch05-permutation-equivariance": {
       "kind": "mermaid",
       "sha256": "8891b08bb6f695ae0da5937141ad94d9b215a896350c4925f4fcc847cb58abb6",

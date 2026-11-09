@@ -1340,6 +1340,25 @@ output, weights = mha(x, mask=allowed)
 
 “头数变成 8，开销是否变成 8 倍？”不能只回答“是”或“不是”。先固定比较条件：**总宽度 $D$ 不变，$H$ 个头等宽，$d_h=D/H$，Q/K/V 与输出都投影到 $D$，四个线性层都不带 bias。**单头对照也保留同样的四个投影。
 
+三本账可以对照这张图看：起点相同，结论却不是同一句「变 H 倍」。
+
+```mermaid
+flowchart TD
+    %% id: ch04-three-ledgers
+    accTitle: 固定 D 改 H 时，参数、运算与显式分数表三本账结论不同
+    accDescr: 起点是 D 固定、d_h=D/H、四个投影无偏置。参数 4D² 与 H 无关；运算量级不随 H 变；显式分数表 B·H·T² 随 H 线性增长。
+    S["D 固定 · d_h=D/H ·<br/>四投影无偏置"] --> G
+    subgraph G["三本账结论不同"]
+      direction TB
+      P["① 参数：4D² 与 H 无关"]
+      C["② 运算：<br/>量级不随 H 变"]
+      M["③ 分数表：B·H·T² 随 H 增"]
+      P ~~~ C
+      C ~~~ M
+    end
+```
+
+
 ### 参数账：标准无偏置 MHA 是 $4D^2$
 
 Q、K、V 各有一个 $D\times D$ 投影，最后再加一个 $D\times D$ 的输出投影：
