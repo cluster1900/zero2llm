@@ -274,13 +274,13 @@ flowchart TB
     accDescr: ① 模板布尔开关改 prompt 文本；② 软提示由模型自行遵循；③ 总生成额度在运行时截断；④ 配置里的位置与长度上限另算；四者互不改写。
     subgraph Top[" "]
       direction LR
-      B["① 模板布尔开关<br/>改 prompt 文本"] --> C["② 软提示 /think<br/>模型自行遵循"]
+      B["① 模板布尔开关<br/>改 prompt 文本"] ~~~ C["② 软提示 /think<br/>模型自行遵循"]
     end
     subgraph Bot[" "]
       direction LR
-      D["③ 总生成额度<br/>运行时截断"] --> E["④ 配置长度上限<br/>位置与上下文"]
+      D["③ 总生成额度<br/>运行时截断"] ~~~ E["④ 配置长度上限<br/>位置与上下文"]
     end
-    Top --> Bot
+    Top ~~~ Bot
 ```
 
 

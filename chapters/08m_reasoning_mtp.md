@@ -320,7 +320,7 @@ sequenceDiagram
 stateDiagram-v2
     %% id: p23-eos-budget
     accTitle: EOS 与预算必须一起守住
-    accDescr: 名额为 0 或 prompt 末尾已是 EOS 则直接返回；prefill 或生成后名额用尽则 Done；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。
+    accDescr: 名额为 0 或 prompt 末尾已是 EOS 则直接返回；prefill 或生成后名额用尽则 Done；接受非 EOS 后名额用尽也 Done（while 结束）；接受、修正或 bonus 遇 EOS 则提交并停；被拒草稿里的 EOS 不停；只剩一个名额时草稿长度为 0。
     [*] --> Check: 新请求
     Check --> Done: 名额=0 或 prompt 末已是 EOS
     Check --> Prefill: 还有名额
@@ -330,6 +330,7 @@ stateDiagram-v2
     Gen --> Verify: 征求草稿并验证
     Gen --> Done: 名额用尽
     Verify --> Done: 接受/修正/bonus 遇 EOS
+    Verify --> Done: 提交后名额用尽
     Verify --> Gen: 提交后仍有名额
     Verify --> RejectedEOS: 拒草稿里的 EOS（不停）
     RejectedEOS --> Gen
