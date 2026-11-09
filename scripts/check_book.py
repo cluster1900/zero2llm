@@ -44,13 +44,40 @@ def _alternation(words):
 
 
 # Many keywords are ordinary words too (graph, pie, info, block, timeline...), so the
-# header must be a whole line: the keyword alone, or followed by arguments such as
-# `graph LR`, `pie title X`, `gitGraph LR:`, never by `=`, `(`, `.`, `:` like code is;
-# and the diagram needs a body line after it.
-MERMAID_SOURCE = re.compile(
-    r'^\s*(?:---\n.*?\n---\s*\n\s*)?(?:%%[^\n]*\n\s*)*'
-    r'(?:' + _alternation(MERMAID_KEYWORDS) + r'|(?i:' + _alternation(MERMAID_KEYWORDS_ANY_CASE) + r'))'
-    r'(?![\w-])(?:[ \t]*|[ \t]+[^\s=(.,:\[{][^\n]*)\n', re.S)
+# header must be a whole line. After the keyword, the boundary matches mermaid's
+# common `(?:[\s:]|$)` idea: whitespace, a trailing `:`, or end-of-string — so
+# `cynefin-beta:` counts, while `graphs` / `flowchart-v3` do not.
+# Ambiguous keywords (graph/journey/pie/info/timeline) only accept a short allow-list
+# of arguments (`LR`/`TD`/…, `title`, `showData`, `showInfo`); other keywords still
+# reject code-like starters `= ( . , [ {`. The `\n` only ends the header line — a
+# body line after it is not required (`info\n` alone is enough).
+MERMAID_AMBIGUOUS = ('graph', 'journey', 'pie', 'info', 'timeline')
+
+
+def _mermaid_source_re():
+    ambiguous = set(MERMAID_AMBIGUOUS)
+    other = [word for word in MERMAID_KEYWORDS if word not in ambiguous]
+    prefix = (
+        r'^\s*(?:---\n.*?\n---\s*\n\s*)?(?:%%[^\n]*\n\s*)*'
+    )
+    # Alone / `keyword:` form: optional colon, then only spaces to the newline.
+    alone = r':?[ \t]*\n'
+    amb_args = (
+        r'[ \t]+(?:(?:LR|RL|TD|TB|BT)\b;?[ \t]*|title\b[^\n]*|showData\b[^\n]*|showInfo\b[^\n]*)\n'
+    )
+    other_args = r'[ \t]+[^\s=(.,\[{][^\n]*\n'
+    amb = (
+        r'(?:' + _alternation(MERMAID_AMBIGUOUS) + r')(?![\w-])'
+        r'(?:' + alone + r'|' + amb_args + r')'
+    )
+    rest = (
+        r'(?:' + _alternation(other) + r'|(?i:' + _alternation(MERMAID_KEYWORDS_ANY_CASE) + r'))(?![\w-])'
+        r'(?:' + alone + r'|' + other_args + r')'
+    )
+    return re.compile(prefix + r'(?:' + amb + r'|' + rest + r')', re.S)
+
+
+MERMAID_SOURCE = _mermaid_source_re()
 
 
 class WebDocument(HTMLParser):
@@ -133,8 +160,11 @@ def check_render_manifest(dist, markdown, sizes):
             errors.append(f'渲染清单条目类型未知：{diagram_id}')
     rendered = dist / 'assets/rendered'
     expected = {MANIFEST, DIMENSIONS} | {f'{name}.{ext}' for name in {*manifest, *sizes} for ext in ('svg', 'png')}
-    for orphan in sorted(p.name for p in rendered.iterdir() if p.name not in expected):
-        errors.append(f'渲染目录里有清单之外的孤儿文件：assets/rendered/{orphan}')
+    # Walk nested paths too: report `tmp/x.png`, not just the directory name `tmp`.
+    for path in sorted(p for p in rendered.rglob('*') if p.is_file()):
+        rel = path.relative_to(rendered).as_posix()
+        if rel not in expected:
+            errors.append(f'渲染目录里有清单之外的孤儿文件：assets/rendered/{rel}')
     return errors
 
 
