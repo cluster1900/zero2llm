@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from book_diagrams import collect_jobs, render_all  # noqa: E402
 from check_book import (MERMAID_KEYWORDS, MERMAID_KEYWORDS_ANY_CASE, MERMAID_SOURCE,  # noqa: E402
-                        check_book, check_render_manifest)
+                        check_book, check_render_manifest, scan_mermaid_js_detectors)
 from diagram_ids import (mermaid_blocks, mermaid_id, mermaid_labels,  # noqa: E402
                          sha256_bytes, sha256_text)
 
@@ -185,13 +185,17 @@ class ManifestGateTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, '静态图的渲染已过期.*p12-rope'):
                 check_book(root / 'dist')
 
-    def test_edited_dist_svg_copy_or_missing_source_fails(self):
+    def test_edited_dist_svg_copy_fails(self):
         with TemporaryDirectory() as folder:
             root = self._copy_book(folder)
             copy = root / 'dist/assets/diagrams/p12-rope.svg'
             copy.write_bytes(copy.read_bytes() + b'\n')
             self.assertIn('dist 里的静态图副本和仓库源文件不一致（请重新构建）：p12-rope',
                           check_render_manifest(root / 'dist', self.markdown, self.sizes))
+
+    def test_missing_repo_svg_source_fails(self):
+        with TemporaryDirectory() as folder:
+            root = self._copy_book(folder)
             (root / 'assets/diagrams/p12-rope.svg').unlink()
             self.assertIn('静态图源文件缺失：p12-rope',
                           check_render_manifest(root / 'dist', self.markdown, self.sizes))
@@ -208,6 +212,15 @@ class ManifestGateTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, f'孤儿文件：assets/rendered/{re.escape(orphan)}'):
                         check_book(root / 'dist')
                     path.unlink()
+            nested = root / 'dist/assets/rendered' / 'tmp' / 'nested.png'
+            nested.parent.mkdir()
+            nested.write_text('x')
+            self.assertIn('渲染目录里有清单之外的孤儿文件：assets/rendered/tmp/nested.png',
+                          check_render_manifest(root / 'dist', self.markdown, self.sizes))
+            with self.assertRaisesRegex(ValueError, r'孤儿文件：assets/rendered/tmp/nested\.png'):
+                check_book(root / 'dist')
+            nested.unlink()
+            nested.parent.rmdir()
             check_book(root / 'dist')
 
 
@@ -302,7 +315,9 @@ class LeakCheckTests(unittest.TestCase):
                 self.assertTrue(MERMAID_SOURCE.match(keyword.upper() + '\n  a'))
 
     def test_headers_with_arguments_are_detected(self):
-        for source in [FLOW, 'graph LR\n  A-->B', 'graph TD;\n  A-->B', 'pie title 宠物\n  "猫" : 3',
+        for source in [FLOW, 'graph LR\n  A-->B', 'graph TD;\n  A-->B',
+                       'graph LR; A-->B\n', 'graph TD;A-->B\n',
+                       'pie title 宠物\n  "猫" : 3',
                        'pie showData\n  "a" : 1', 'gitGraph LR:\n  commit', 'xychart-beta horizontal\n  x-axis [a]',
                        'info showInfo\n', 'sequenceDiagram\n  A->>B: x', 'stateDiagram-v2\n  [*] --> A', MINDMAP,
                        '%% id: p16-x\n%% accTitle: a\n%% accDescr: b\nblock-beta\n  a b', 'gantt\n  x :0, 1',
@@ -311,7 +326,8 @@ class LeakCheckTests(unittest.TestCase):
                        'requirementDiagram\n  requirement r {\n  }', 'C4Context\n  title 系统',
                        'zenuml\n  A.method()', 'kanban\n  todo[待办]', 'radar-beta\n  axis a, b',
                        'treemap-beta\n  "a": 1', 'sankey-beta\n  a,b,1', 'quadrantChart\n  x-axis a --> b',
-                       'timeline\n  2017 : Transformer', 'journey\n  title x', 'erDiagram\n  A ||--o{ B : has']:
+                       'timeline\n  2017 : Transformer', 'journey\n  title x', 'erDiagram\n  A ||--o{ B : has',
+                       'cynefin-beta:\n  a', 'cynefin-beta:\n', 'info\n']:
             with self.subTest(source=source[:30]):
                 self.assertTrue(MERMAID_SOURCE.match(source))
 
@@ -320,7 +336,9 @@ class LeakCheckTests(unittest.TestCase):
                      'info = load()\nprint(info)', 'block: int = 4\n', 'packet.send()\n', 'graphs\n  x',
                      'timeline(events)\n', 'pie, cake = 1, 2\n', 'requirements.txt\n', 'kanban_board = []\n',
                      'architecture: str\n', 'blocks = [a, b]\n', 'C4ContextLoader()\n', 'flowchart-v3\n  x',
-                     '[0.1, 0.2]\n', 'python build.py\n']:
+                     '[0.1, 0.2]\n', 'python build.py\n',
+                     'graph of the function\n', 'journey home tomorrow\n', 'pie chart data\n',
+                     'info about config\n', 'timeline of events\n']:
             with self.subTest(text=text):
                 self.assertFalse(MERMAID_SOURCE.match(text))
 
@@ -328,8 +346,12 @@ class LeakCheckTests(unittest.TestCase):
     def test_covers_every_detector_in_installed_mermaid(self):
         version = json.loads((ROOT / 'node_modules/mermaid/package.json').read_text())['version']
         self.assertEqual(version, '11.17.2')
-        detectors = re.findall(r'return /\^\\s\*([^/]+)/i?\.test\(\w+\)', MERMAID_JS.read_text())
+        source = MERMAID_JS.read_text()
+        from_return, from_if = scan_mermaid_js_detectors(source)
+        detectors = from_return + from_if
         self.assertGreaterEqual(len(detectors), 30)
+        self.assertTrue(any('flowchart-elk' in d for d in detectors), 'should see flowchart-elk from if (/…/)')
+        self.assertTrue(any('stateDiagram-v2' in d for d in detectors), 'should see stateDiagram-v2 from if (/…/)')
         for pattern in detectors:
             depth, alternatives = 0, ['']
             for char in pattern:   # split on top-level `|` only (C4Context|C4Container|...)
@@ -407,6 +429,66 @@ class RenderBackupTests(unittest.TestCase):
         shutil.rmtree(self.rendered)
         self.assertIsNone(self.build.backup_render(str(self.rendered), self.backup))
 
+
+
+class D0FollowUpMutationTests(unittest.TestCase):
+    """Each assertion fails if the corresponding D0 follow-up fix is reverted."""
+
+    def test_docs_and_comment_do_not_require_a_body_line(self):
+        docs = (ROOT / 'docs/diagrams.md').read_text()
+        comment = (ROOT / 'scripts/check_book.py').read_text()
+        self.assertNotIn('并且后面还有正文行', docs)
+        self.assertNotIn('needs a body line after it', comment)
+        self.assertIn('不要求', docs)
+        self.assertIn('body line after it is not required', comment)
+
+    def test_ambiguous_keyword_plus_ordinary_word_is_not_a_diagram(self):
+        for text in ('graph of the function\n', 'journey home tomorrow\n', 'pie chart data\n',
+                     'info about config\n', 'timeline of events\n'):
+            with self.subTest(text=text):
+                self.assertFalse(MERMAID_SOURCE.match(text))
+
+    def test_cynefin_beta_colon_header_is_detected(self):
+        self.assertTrue(MERMAID_SOURCE.match('cynefin-beta:\n'))
+        self.assertTrue(MERMAID_SOURCE.match('cynefin-beta:\n  a'))
+
+    def test_installed_mermaid_scan_includes_if_slash_detectors(self):
+        if not MERMAID_JS.is_file():
+            self.skipTest('needs node_modules/mermaid')
+        source = MERMAID_JS.read_text()
+        from_return, from_if = scan_mermaid_js_detectors(source)
+        self.assertTrue(from_if, 'mermaid.js still uses if (/…/) detectors')
+        self.assertFalse(any('flowchart-elk' in d for d in from_return))
+        self.assertTrue(any('flowchart-elk' in d for d in from_if))
+
+    def test_same_line_direction_args_are_detected(self):
+        for source in ('graph LR; A-->B\n', 'graph TD;A-->B\n', 'graph RL;\n', 'graph BT A-->B\n'):
+            with self.subTest(source=source):
+                self.assertTrue(MERMAID_SOURCE.match(source))
+
+    def test_nested_orphan_reports_file_path_not_just_directory(self):
+        with TemporaryDirectory() as folder:
+            root = ManifestGateTests('test_orphan_rendered_file_fails_check_book')._copy_book(folder)
+            nested = root / 'dist/assets/rendered/tmp/nested.png'
+            nested.parent.mkdir()
+            nested.write_text('x')
+            markdown = (root / 'dist/transformer_from_scratch.md').read_text()
+            sizes = json.loads((root / 'dist/assets/rendered/dimensions.json').read_text())
+            errors = check_render_manifest(root / 'dist', markdown, sizes)
+            self.assertTrue(any(e.endswith('assets/rendered/tmp/nested.png') for e in errors), errors)
+            self.assertFalse(any(e.rstrip('/').endswith('assets/rendered/tmp') for e in errors), errors)
+
+    def test_docs_backup_wording_matches_restore_path(self):
+        docs = (ROOT / 'docs/diagrams.md').read_text()
+        self.assertNotIn('备份只在构建成功后删除', docs)
+        self.assertIn('构建**成功**后才删除备份', docs)
+        self.assertIn('换好之后**才删备份', docs)
+
+    def test_dist_copy_and_missing_source_are_separate_tests(self):
+        source = (ROOT / 'tests/test_diagram_ids.py').read_text()
+        self.assertIn('def test_edited_dist_svg_copy_fails(self):', source)
+        self.assertIn('def test_missing_repo_svg_source_fails(self):', source)
+        self.assertNotIn('def test_edited_dist_svg_copy_or_' + 'missing_source_fails(self):', source)
 
 
 class ScriptVWebAssetTests(unittest.TestCase):

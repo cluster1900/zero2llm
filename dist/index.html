@@ -1381,6 +1381,18 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a hr
 对解决并列。随后给合并结果分配 ID、拼接其
 bytes，并更新每篇文档。完整代码在 <code>counts</code>
 为空时停止，避免对空集合求最小值。</p>
+<p>训练的一轮可以画成下面这张循环图：按文档统计 → 选最高频对 → 分配新 ID
+→ 不重叠替换；统计后若没有相邻对，或合并次数用完，就停止。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-ch01a-bpe-merge-loop.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ch01a-bpe-merge-loop.svg" class="book-diagram"
+width="264"
+alt="最小字节 BPE：每轮只合并当前最常见的一对。各文档分别统计相邻对；没有相邻对则得到 merges 与 vocab。否则取次数最高的一对（并列取较小 ID 对），新 ID 从 256 起并拼接 bytes，从左到右替换命中对并跳两格；合并次数用完也停止。" /></a>
+<div class="diagram-caption">
+最小字节 BPE：每轮只合并当前最常见的一对
+</div>
+</div>
 <p><code>merge_pair</code> 必须处理重叠。例如把 <code>aaa</code> 里的
 <code>aa</code> 合并，结果应是 <code>[aa, a]</code>，不能同时把中间的
 <code>a</code> 用两次：</p>
@@ -1507,6 +1519,17 @@ token ID 相同</strong>：真实库对字节的内部表示、初始 ID
 <h2 id="a.7-生产环境还多了哪些步骤">1A.7 生产环境还多了哪些步骤？</h2>
 <p>真实流水线常包含归一化、预切分、子词编码、特殊 token 插入、padding /
 truncation 和解码。逐项检查，比只问“用了 BPE 吗”更有用。</p>
+<p>教学里的 BPE 主要覆盖「子词编码」；生产环境通常还要串上下面几步：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-ch01a-prod-pipeline.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ch01a-prod-pipeline.svg" class="book-diagram"
+width="263"
+alt="生产分词流水线比教学 BPE 多出归一化、预切分与填充。原文经归一化、预切分、子词编码、特殊 token 或模板、截断或填充（填充另配 attention mask），得到 ID 序列。" /></a>
+<div class="diagram-caption">
+生产分词流水线比教学 BPE 多出归一化、预切分与填充
+</div>
+</div>
 <ul>
 <li><strong>归一化</strong>可能把大写变小写或统一 Unicode
 表示。这有时有帮助，却可能让解码无法恢复原文；本章刻意不做。</li>
@@ -2421,6 +2444,17 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a h
 直接广播成分数矩阵。上面的片段省略了
 device；<code>code/attention_core.py</code>
 中的完整版本创建下三角时指定与输入相同的 device。</p>
+<p>形状广播可以画成这样：先扩成查询侧与键侧，再与下三角取与；损失掩码仍要另算。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-ch03-mask-broadcast.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ch03-mask-broadcast.svg" class="book-diagram"
+width="590"
+alt="因果掩码与补位掩码先广播再取与，得到 [B,1,T,T]。valid 形状 [B,T]；查询侧扩成 [B,1,T,1]、键侧扩成 [B,1,1,T]，再与下三角 [T,T] 取与，得到 [B,1,T,T]。损失掩码另算，不能用注意力 mask 代替。" /></a>
+<div class="diagram-caption">
+因果掩码与补位掩码先广播再取与，得到 [B,1,T,T]
+</div>
+</div>
 <p>注意不同 API 的约定不同：PyTorch 2.14 的 functional SDPA 布尔 mask 中
 True 表示参与，<code>nn.MultiheadAttention</code>
 的布尔禁止掩码使用相反语义。不要把同一个布尔张量不经核对就换接口。</p>
@@ -2434,7 +2468,18 @@ class="math inline">\(-\infty-(-\infty)\)</span>，结果不是一个有效概�
 <p>也不能简单改成 <code>-1e9</code>：它不是所有 dtype
 都可表示的数，而且一整行同样的有限负数仍会得到均匀权重，反而让禁止项“复活”。</p>
 <p>本书选一个明确的教学策略：<strong>全禁用行返回全零权重，其加权输出为零</strong>，不是和为
-1 的概率分布。核心步骤如下：</p>
+1 的概率分布。判断流程如下：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-ch03-all-masked-row.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ch03-all-masked-row.svg" class="book-diagram"
+width="485"
+alt="全禁止行直接 Softmax 会出 NaN，本书约定权重与输出全为 0。若该行还有可见位置，禁止处填 −∞ 再 Softmax，权重和为 1；若整行都禁止，按约定权重与输出全为 0，不用有限大负数冒充。" /></a>
+<div class="diagram-caption">
+全禁止行直接 Softmax 会出 NaN，本书约定权重与输出全为 0
+</div>
+</div>
+<p>核心步骤如下：</p>
 <div class="sourceCode" id="cb22"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>any_allowed <span class="op">=</span> allowed.<span class="bu">any</span>(dim<span class="op">=-</span><span class="dv">1</span>, keepdim<span class="op">=</span><span class="va">True</span>)</span>
 <span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>masked <span class="op">=</span> scores.masked_fill(<span class="op">~</span>allowed, <span class="op">-</span>torch.inf)</span>

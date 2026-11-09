@@ -19,6 +19,14 @@
     "width": 520.0,
     "height": 670.0
   },
+  "flow-ch01a-bpe-merge-loop": {
+    "width": 435.765625,
+    "height": 923
+  },
+  "flow-ch01a-prod-pipeline": {
+    "width": 266.578125,
+    "height": 568
+  },
   "flow-84635206051a": {
     "width": 226,
     "height": 383
@@ -38,6 +46,14 @@
   "flow-e59ba8fcee2e": {
     "width": 324,
     "height": 439
+  },
+  "flow-ch03-mask-broadcast": {
+    "width": 589.80859375,
+    "height": 331
+  },
+  "flow-ch03-all-masked-row": {
+    "width": 485.078125,
+    "height": 435
   },
   "multi_head_attention": {
     "width": 850,
