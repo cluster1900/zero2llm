@@ -5145,8 +5145,8 @@ token。若前缀本来已以 EOS 结尾，本教学函数立即按 EOS 停止�
 <a href="assets/rendered/flow-ch07-generation-stop.svg"
 title="点击查看原尺寸图"><img
 src="assets/rendered/flow-ch07-generation-stop.svg" class="book-diagram"
-width="530"
-alt="生成停止：先查前缀 EOS，零预算与新增上限都返回 max_new_tokens。前缀已以 EOS 结尾则按 eos 返回且不调模型；否则预算为 0 按 max_new_tokens 返回且不调模型；生成中每步追加一个 token，先查 EOS，再查是否达新增上限。" /></a>
+width="566"
+alt="生成停止：先查前缀 EOS，零预算与新增上限都返回 max_new_tokens。前缀已以 EOS 结尾则按 eos 返回且不调模型；否则预算为 0 按 max_new_tokens 返回且不调模型；生成中每步追加一个 token 后，先查 EOS，再查是否达新增上限（EOS 优先于上限）。" /></a>
 <div class="diagram-caption">
 生成停止：先查前缀 EOS，零预算与新增上限都返回 max_new_tokens
 </div>

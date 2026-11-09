@@ -118,7 +118,7 @@
     },
     "flow-ch07-generation-stop": {
       "kind": "mermaid",
-      "sha256": "d50710f728b2a0f3dbe416618977b5ec69b21a02257bfcb8549b33638b4e9647",
+      "sha256": "7c1db131884122dc64b476bbc3fc4744982e481ac0bbc24629dbf7978f3d8fb3",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-ch07a-train-eval-loop": {
