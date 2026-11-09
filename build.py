@@ -323,6 +323,45 @@ def build_html(document_path):
     print(f"✓ 同步生成入口: {index_out}")
     return True
 
+# 上次构建的图表渲染备份在 dist/ 之外（仓库根下，已 gitignore），构建成功后才删除。
+# 构建中途崩溃（包括恢复时崩溃）时备份还在；下次构建会自动拿它当复用缓存。
+RENDER_BACKUP = os.path.join(BASE_DIR, ".render-backup")
+
+
+def backup_render(previous_render, backup=RENDER_BACKUP):
+    """Back up the last render outside dist/; return the cache dir to reuse, or None.
+
+    A backup left by a crashed build is kept (it is the last complete render)
+    unless dist/ already holds a complete render (manifest.json written last).
+    """
+    complete = os.path.isfile(os.path.join(previous_render, "manifest.json"))
+    if os.path.isdir(backup) and not complete:
+        print(f"⚠️ 发现上次构建中断留下的渲染备份，用它当复用缓存：{backup}")
+        return backup
+    if not complete:
+        return None
+    partial = backup + ".tmp"
+    shutil.rmtree(partial, ignore_errors=True)
+    shutil.copytree(previous_render, partial)
+    shutil.rmtree(backup, ignore_errors=True)
+    os.rename(partial, backup)  # 复制完整后才改名，半截的备份不会被当成可用的
+    return backup
+
+
+def restore_render(backup, previous_render):
+    """Put the backup back into dist/ via rename; delete the backup only afterwards."""
+    staging = previous_render + ".restore-tmp"
+    broken = previous_render + ".broken"
+    for leftover in (staging, broken):
+        shutil.rmtree(leftover, ignore_errors=True)
+    shutil.copytree(backup, staging)
+    if os.path.exists(previous_render):
+        os.rename(previous_render, broken)
+    os.rename(staging, previous_render)
+    shutil.rmtree(broken, ignore_errors=True)
+    shutil.rmtree(backup)
+
+
 def main(renderer=None, cache_dir=None, renderer_label=None):
     print("=" * 65)
     print("【Transformer 初学者启蒙书：全自动编译交付流水线】")
@@ -337,12 +376,12 @@ def main(renderer=None, cache_dir=None, renderer_label=None):
     
     # 1. 复制资源文件到 dist/ 以便相对路径正常解析
     dist_assets = os.path.join(DIST_DIR, "assets")
-    # 上次构建的图表渲染先挪到临时缓存：源码未变的图直接复用，不重新渲染（docs/diagrams.md）。
-    cache_root = tempfile.TemporaryDirectory(prefix="zero2llm-render-cache-")
     previous_render = os.path.join(dist_assets, "rendered")
-    if cache_dir is None and os.path.isdir(previous_render):
-        cache_dir = os.path.join(cache_root.name, "rendered")
-        shutil.copytree(previous_render, cache_dir)
+    # 上次构建的图表渲染先备份到 dist/ 之外：源码未变的图直接复用，不重新渲染（docs/diagrams.md）。
+    backup = None
+    if cache_dir is None:
+        backup = backup_render(previous_render)
+        cache_dir = backup
     if os.path.exists(dist_assets):
         shutil.rmtree(dist_assets)
     shutil.copytree(ASSETS_DIR, dist_assets)
@@ -372,13 +411,19 @@ def main(renderer=None, cache_dir=None, renderer_label=None):
             check_book(DIST_DIR)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"❌ 构建或产物校验失败：{exc}")
-        # 渲染中途失败时，把上次的渲染放回去，免得丢掉还没提交的新图。
-        if cache_dir and not os.path.isfile(os.path.join(previous_render, "manifest.json")):
-            shutil.rmtree(previous_render, ignore_errors=True)
-            shutil.copytree(cache_dir, previous_render)
+        if backup and os.path.isdir(backup):
+            if os.path.isfile(os.path.join(previous_render, "manifest.json")):
+                # 渲染已完整写进 dist/，备份不再需要。
+                shutil.rmtree(backup)
+            else:
+                # 渲染中途失败：把上次的渲染放回去，免得丢掉还没提交的新图。
+                try:
+                    restore_render(backup, previous_render)
+                except OSError as restore_exc:
+                    print(f"❌ 恢复上次的渲染失败（{restore_exc}）；备份保留在 {backup}，下次构建会自动使用")
         return 1
-    finally:
-        cache_root.cleanup()
+    if backup and os.path.isdir(backup):
+        shutil.rmtree(backup)
 
     print("\n" + "=" * 65)
     if epub_ok and html_ok:
