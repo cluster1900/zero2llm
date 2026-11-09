@@ -126,13 +126,13 @@ float32 的运算顺序可能因为矩阵大小不同而有微小舍入差；测
 
 MHA 有 $L$ 层，batch 为 $B$，缓存 $T$ 个 token，$H$ 个头，每头 $d_h$ 个数，每个元素 $b_{\mathrm{elem}}$ 字节，则：
 
-$$\mathrm{bytes}_{\mathrm{KV}}=2LBH_{kv}Td_hb_{\mathrm{elem}}=2LBTDb_{\mathrm{elem}}\qquad(\text{MHA：}H_{kv}=H,\ Hd_h=D)$$
+$$\mathrm{Mem}_{KV}=2LBH_{kv}Td_hb_{\mathrm{elem}}=2LBTDb_{\mathrm{elem}}\qquad(\text{MHA：}H_{kv}=H\text{；本章各头等宽、总宽为 }D\text{，故 }Hd_h=D)$$
 
 前面的 2 是 K 和 V 两份，不是两个 Block。默认 $L=2$、$B=1$、$H=4$、$d_h=12$、float32 的 $b_{\mathrm{elem}}=4$。
 
 这条式子就是“数格子再乘格子大小”：每层、每条序列、每个缓存位置、每个头都要存一个 $d_h$ 维的 K 和一个 $d_h$ 维的 V，元素个数连乘起来，再乘每个元素占的字节。MHA 里每个 query 头都有自己的 KV 头，$H_{kv}=H$；本章各头等宽、拼起来正好是 $D$，所以 $Hd_h=D$，后半个等号只是把头数和每头宽度合并成主干宽度。
 
-其中：$\mathrm{bytes}_{\mathrm{KV}}$ 是全部层 K/V 缓存的逻辑字节数；$L$ 是层数；$B$ 是批大小；$T$ 是已缓存的 token 数；$H_{kv}$ 是 KV 头数（MHA 里等于 query 头数 $H$）；$d_h$ 是每头宽度；$D=Hd_h$ 是模型宽度；$b_{\mathrm{elem}}$ 是每个元素的字节数（float32 为 4）。
+其中：$\mathrm{Mem}_{KV}$ 是全部层 K/V 缓存的逻辑字节数；$L$ 是层数；$B$ 是批大小；$T$ 是已缓存的 token 数；$H_{kv}$ 是 KV 头数（MHA 里等于 query 头数 $H$）；$d_h$ 是每头宽度；$D$ 是模型宽度（只因本章各头等宽、拼起来正好是 $D$，才有 $D=Hd_h$）；$b_{\mathrm{elem}}$ 是每个元素的字节数（float32 为 4）。
 
 | 缓存长度 T | 计算 | K/V 逻辑字节数 |
 | --- | --- | --- |

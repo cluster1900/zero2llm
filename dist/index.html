@@ -6073,8 +6073,8 @@ class="math inline">\(H\)</span> 个头，每头 <span
 class="math inline">\(d_h\)</span> 个数，每个元素 <span
 class="math inline">\(b_{\mathrm{elem}}\)</span> 字节，则：</p>
 <p><span
-class="math display">\[\mathrm{bytes}_{\mathrm{KV}}=2LBH_{kv}Td_hb_{\mathrm{elem}}=2LBTDb_{\mathrm{elem}}\qquad(\text{MHA：}H_{kv}=H,\
-Hd_h=D)\]</span></p>
+class="math display">\[\mathrm{Mem}_{KV}=2LBH_{kv}Td_hb_{\mathrm{elem}}=2LBTDb_{\mathrm{elem}}\qquad(\text{MHA：}H_{kv}=H\text{；本章各头等宽、总宽为
+}D\text{，故 }Hd_h=D)\]</span></p>
 <p>前面的 2 是 K 和 V 两份，不是两个 Block。默认 <span
 class="math inline">\(L=2\)</span>、<span
 class="math inline">\(B=1\)</span>、<span
@@ -6089,15 +6089,17 @@ KV 头，<span
 class="math inline">\(H_{kv}=H\)</span>；本章各头等宽、拼起来正好是
 <span class="math inline">\(D\)</span>，所以 <span
 class="math inline">\(Hd_h=D\)</span>，后半个等号只是把头数和每头宽度合并成主干宽度。</p>
-<p>其中：<span
-class="math inline">\(\mathrm{bytes}_{\mathrm{KV}}\)</span> 是全部层 K/V
-缓存的逻辑字节数；<span class="math inline">\(L\)</span> 是层数；<span
-class="math inline">\(B\)</span> 是批大小；<span
+<p>其中：<span class="math inline">\(\mathrm{Mem}_{KV}\)</span> 是全部层
+K/V 缓存的逻辑字节数；<span class="math inline">\(L\)</span>
+是层数；<span class="math inline">\(B\)</span> 是批大小；<span
 class="math inline">\(T\)</span> 是已缓存的 token 数；<span
 class="math inline">\(H_{kv}\)</span> 是 KV 头数（MHA 里等于 query 头数
 <span class="math inline">\(H\)</span>）；<span
 class="math inline">\(d_h\)</span> 是每头宽度；<span
-class="math inline">\(D=Hd_h\)</span> 是模型宽度；<span
+class="math inline">\(D\)</span>
+是模型宽度（只因本章各头等宽、拼起来正好是 <span
+class="math inline">\(D\)</span>，才有 <span
+class="math inline">\(D=Hd_h\)</span>）；<span
 class="math inline">\(b_{\mathrm{elem}}\)</span>
 是每个元素的字节数（float32 为 4）。</p>
 <div class="table-wrapper"><table>
