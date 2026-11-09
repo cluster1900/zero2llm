@@ -2768,15 +2768,17 @@ class="math inline">\(4D^2\)</span></h3>
 <p>Q、K、V 各有一个 <span class="math inline">\(D\times D\)</span>
 投影，最后再加一个 <span class="math inline">\(D\times D\)</span>
 的输出投影：</p>
-<p><span class="math display">\[N_{\mathrm{param}} = D^2+D^2+D^2+D^2 =
+<p><span class="math display">\[N_{\mathrm{attn}} = D^2+D^2+D^2+D^2 =
 4D^2\]</span></p>
 <p>参数只看矩阵有多大，不看矩阵内部怎样分头：同一张 <span
 class="math inline">\(D\times D\)</span> 的表，切成几块都还是 <span
 class="math inline">\(D^2\)</span> 个数。</p>
-<p>其中：<span class="math inline">\(N_{\mathrm{param}}\)</span>
-是参数个数，这里借用附录 A.5
-的参数量记号，但只数注意力模块的四个投影，不是缩放定律里整个模型的参数量；四个
-<span class="math inline">\(D^2\)</span> 依次来自 <span
+<p>其中：<span class="math inline">\(N_{\mathrm{attn}}\)</span>
+是注意力模块四个投影矩阵的参数个数（按本节条件：各头等宽、不带
+bias），只数这四张矩阵，不含 embedding、FFN 等；附录 A.5 的 <span
+class="math inline">\(N_{\mathrm{param}}\)</span>
+专指缩放定律里整个模型的参数量，这里不用它；四个 <span
+class="math inline">\(D^2\)</span> 依次来自 <span
 class="math inline">\(W_Q\)</span>、<span
 class="math inline">\(W_K\)</span>、<span
 class="math inline">\(W_V\)</span>、<span
@@ -2816,7 +2818,8 @@ class="math inline">\(O(BHT^2d_h)=O(BT^2D)\)</span>。</li>
 class="math inline">\(BT\)</span>
 成正比；第二项是每对位置互相打分、再加权汇总，跟 <span
 class="math inline">\(T^2\)</span> 成正比。所以序列比模型宽度短（<span
-class="math inline">\(T&lt;D\)</span>）时第一项更大，序列更长时第二项会反超。</p>
+class="math inline">\(T&lt;D\)</span>）时第一项更大，序列更长时第二项会反超；这里只比较写出的两项、忽略了常数因子，所以分界并不严格落在
+<span class="math inline">\(T=D\)</span>。</p>
 <p>其中：<span class="math inline">\(O(\cdot)\)</span> 是大 O
 记号，只保留随尺寸增长的主项、忽略常数；<span
 class="math inline">\(B\)</span> 是批大小，<span
