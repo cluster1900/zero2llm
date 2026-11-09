@@ -4404,9 +4404,9 @@ flowchart TD
     accTitle: 前缀缓存只复用兼容计算下的同一段历史，语义相似不算
     accDescr: 先问权重与位置是否兼容：整段相同可用 fork 并共享未满尾块；share_prefix 只共享完整块；语义相似或已释放的块都不能复用。
     A["要复用已有 KV？"] --> B{"权重与位置兼容，且前缀相同？"}
-    B -->|否| N["不复用：语义相似也无效；已释放的块不能当前缀"]
-    B -->|是：整段历史相同| F["fork：可共享未满尾块，之后写时复制"]
-    B -->|是：只要共同前缀| S["share_prefix：只共享完整块边界"]
+    B -->|否| N["不复用：语义相似也无效<br/>已释放的块不能当前缀"]
+    B -->|是：整段历史相同| F["fork：可共享未满尾块<br/>之后写时复制"]
+    B -->|是：只要共同前缀| S["share_prefix：<br/>只共享完整块边界"]
     N --> R2["重新 prefill"]
 ```
 
@@ -4511,7 +4511,7 @@ sequenceDiagram
     Sv-->>Cl: t1 首 token
     Note over Cl,Sv: TTFT = t1 - a
     Sv-->>Cl: t2 到 t_Tout
-    Note over Cl,Sv: TPOT 用 T_out；E2E = t_Tout - a
+    Note over Cl,Sv: TPOT 用 T_out；<br/>E2E = t_Tout - a
 ```
 
 ## P15.15 运行与输出：哪些确实测过

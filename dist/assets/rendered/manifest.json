@@ -152,7 +152,7 @@
     },
     "flow-p15-prefix-cache": {
       "kind": "mermaid",
-      "sha256": "cfee52c4b440b3a32f702f46cbaabbdc8ed691ae09c556625ff3d35d954c0ce2",
+      "sha256": "99630d5492e2f924f4851c19bc4cc77c7ee2cb5ced9a7d8670c2be9146d2d47d",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p15-continuous-batch": {
@@ -162,7 +162,7 @@
     },
     "flow-p15-ttft-tpot": {
       "kind": "mermaid",
-      "sha256": "8be8f73ac7775fed6c8d69635de18042229273aeabbb3e63aab82ce3a0c33e81",
+      "sha256": "8d6a4e4df21a8b95e446fc203d193afc830ebb04f78a6284144a56bf5f6cd98f",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p16-sparse-linear": {
