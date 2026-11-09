@@ -62,11 +62,21 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/multi_head_attention.svg"
     },
+    "flow-ch05-permutation-equivariance": {
+      "kind": "mermaid",
+      "sha256": "85ebf96b00a34893341140bd3b13d701482cb2b2c99ad7ad4c4dc9216f8e0972",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "positional_encoding_waves": {
       "kind": "static",
       "sha256": "f17447c03489626ef5e27fefadb1b6a76328b8e03fa91a12b174e0803f99c235",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/positional_encoding_waves.svg"
+    },
+    "flow-ch05-length-three-ledgers": {
+      "kind": "mermaid",
+      "sha256": "1aa361843c97b6975dd44ba58a1af577f2b8bfeea043ecc8f4284413aa375894",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "transformer_block": {
       "kind": "static",
