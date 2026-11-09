@@ -119,13 +119,41 @@
     "width": 1000.0,
     "height": 790.0
   },
+  "flow-p20-double-shift": {
+    "width": 383.125,
+    "height": 647
+  },
+  "flow-p20-ddp-steps": {
+    "width": 545,
+    "height": 1033
+  },
+  "flow-p20-tp-pp-ep": {
+    "width": 574.34375,
+    "height": 357
+  },
+  "flow-p20-framework-choice": {
+    "width": 324,
+    "height": 491
+  },
   "p21-sft": {
     "width": 1000.0,
     "height": 910.0
   },
+  "flow-p21-drop-turns": {
+    "width": 448,
+    "height": 891
+  },
   "p22-preference": {
     "width": 1080.0,
     "height": 850.0
+  },
+  "flow-p22-logp-pair": {
+    "width": 317.03125,
+    "height": 437
+  },
+  "flow-p22-clip-sign": {
+    "width": 464.78125,
+    "height": 576.015625
   },
   "p23-mtp": {
     "width": 1120.0,

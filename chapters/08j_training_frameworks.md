@@ -93,6 +93,20 @@ labels[1] = [-100, 7, 8, 10, 3, -100]
 - EOS 是真实的结束目标，仍然进入 loss；不能因为它“特殊”就一并忽略。
 - 第一列没有前一个输入位置来预测它。本例显式将它设为 -100，下面会解释一个与版本有关的原因。
 - attention_mask 控制注意力可见性；labels=-100 控制监督位置。二者职责不同，一个不能代替另一个。
+一张图把内部 shift、忽略位和外面再 shift 的后果放在一起：
+
+```mermaid
+flowchart TD
+    %% id: p20-double-shift
+    accTitle: 框架已经 shift 过，外面再 shift 一次就会错位
+    accDescr: labels 与 input_ids 同形 [2,6]；模型内部用 logits[:, :-1] 对 labels[:, 1:]；BOS/PAD 记为 -100，有效目标 N_valid=9；外面再 shift 就错一格。
+    A["labels 与 input_ids 同形<br/>[B,T]=[2,6]"] --> B["模型内部<br/>logits[:, :-1] 对 labels[:, 1:]"]
+    B --> C["BOS / PAD 记为 -100<br/>有效目标 N_valid = |Ω| = 9"]
+    C --> D{"外面再 shift 一次？"}
+    D -->|不要| E["目标与分母对齐"]
+    D -->|再做一次| F["错一格 / 分母错"]
+```
+
 
 独立参考计算不调用模型返回的 loss，也不调用框架的交叉熵函数，而是自己写：
 
@@ -183,6 +197,30 @@ python3.12 -m venv /tmp/zero2llm-frameworks
 rank 是分布式进程的编号；world size 是进程总数。常见 GPU 训练把一个 rank 对应一张 GPU，但这不是这些词的定义。
 
 最容易理解的数据并行是 DDP：各 rank 持有同一模型副本，读取不同数据，反向传播时同步梯度，再按一致规则更新。它提高了可以共同处理的数据量，**没有自动把模型参数、梯度和普通优化器状态都分成几份**。DDP 也不会替你切分输入数据，数据采样器必须配合。相关职责见 [PyTorch 2.14 固定版 DDP API](https://docs.pytorch.org/docs/2.14/generated/torch.nn.parallel.DistributedDataParallel.html)；这里引用其机制说明，不声称本次运行了 PyTorch 2.14 的多卡测试。
+把各 rank 的前向、反传和梯度同步画在时间轴上：
+
+```mermaid
+sequenceDiagram
+    %% id: p20-ddp-steps
+    accTitle: DDP：各 rank 先各算一份，再 AllReduce 平均梯度
+    accDescr: rank0 与 rank1 读不同数据，各自前向与反传；AllReduce 平均梯度后各自按同一规则 step，参数仍一致。
+    autonumber
+    participant R0 as rank0
+    participant R1 as rank1
+    participant AR as AllReduce
+    R0->>R0: 读自己的 batch
+    R1->>R1: 读另一份 batch
+    R0->>R0: 前向 → 反传（写 .grad）
+    R1->>R1: 前向 → 反传（写 .grad）
+    R0->>AR: 提交梯度
+    R1->>AR: 提交梯度
+    AR-->>R0: 平均后的梯度
+    AR-->>R1: 平均后的梯度
+    R0->>R0: 按同一规则 step
+    R1->>R1: 按同一规则 step
+    Note over R0,R1: 参数仍一致
+```
+
 
 假设每个 rank 一次处理 b 条，累积 A 次后更新，数据并行组有 D 个 rank，理想情况下每次更新包含 b×A×D 条样本。若长度不一，有效监督 token 数不一定按样本数平均；还要检查各 rank 的 loss 归一化与梯度汇总口径。P19 中关于有效 token 和梯度累积的约定，并不会因为加了 DDP 就消失。
 
@@ -263,6 +301,28 @@ ZeRO 主要回答“数据并行组中谁保存哪些训练状态”。其他并
 **Pipeline parallel，流水线并行（PP）：**把不同层放到不同设备。例如 4 层网络，设备 A 负责第 1–2 层，设备 B 负责第 3–4 层。样本的激活先从 A 传给 B，反向梯度再反方向流回。把大 batch 切为 microbatch 可以让不同阶段交错工作，但启动、收尾或阶段不均衡会产生空闲时间，称为 pipeline bubble。不是把层拆开就能永远满载。[Megatron 的大规模训练论文](https://arxiv.org/abs/2104.04473)
 
 **Expert parallel，专家并行（EP）：**把 MoE 专家分散到不同设备，路由后把 token 发给相应专家，再把输出送回。它和 P18 的“一个 token 只激活少数专家”有关，但不是同一概念：稀疏激活描述模型计算，EP 描述专家放在哪。路由不均衡会让某些设备忙、某些设备闲；跨设备 token 交换也有成本。[Megatron-Core core_v0.12.0 的 MoE 与并行说明](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0)
+三种并行切的轴不同，通信落点也不一样：
+
+```mermaid
+flowchart TB
+    %% id: p20-tp-pp-ep
+    accTitle: TP、PP、EP 切的不是同一条轴
+    accDescr: TP 在层内拆权重：按列拆后拼接，按行拆后求和；PP 按层分设备，激活向前、梯度向后；EP 按专家分设备，token 送去再送回。
+    subgraph TP["张量并行 TP：层内拆 W"]
+      direction LR
+      TP1["按列拆 → 拼接输出"] --- TP2["按行拆 → all-reduce 求和"]
+    end
+    subgraph PP["流水线并行 PP：按层分设备"]
+      direction LR
+      PP1["激活向前传"] --- PP2["梯度向后传"]
+    end
+    subgraph EP["专家并行 EP：按专家分设备"]
+      direction LR
+      EP1["token 送到专家设备"] --- EP2["结果送回再加权"]
+    end
+    TP --> PP --> EP
+```
+
 
 这些策略可以组合，但**不能把所有并行度数字无脑相乘**。简单的纯 dense DP×TP×PP 布局常可按独立进程组规划；加入 EP、context parallel 或不同专家组后，要按框架实际 rank 分组规则检查哪些维度独立、哪些共享。不清楚自己的 data-parallel group 大小时，前一节的 D 也就可能填错。
 
@@ -278,6 +338,19 @@ ZeRO 主要回答“数据并行组中谁保存哪些训练状态”。其他并
 [TRL 0.17.0 官方总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 列出 SFT、DPO、GRPO、奖励模型等入口；[同版 SFTTrainer 说明](https://huggingface.co/docs/trl/v0.17.0/en/sft_trainer) 展示它与模型、数据和训练配置的连接。本章只建立定位，不安装 TRL，也不把 SFTTrainer 的名字等同于“自动正确的对话微调”。assistant-only 标签、LoRA、DPO 的偏好对和 GRPO 的奖励分组分别留给 P21、P22，那里会单独锁版本和检查目标。
 
 一个实用顺序是：先用单进程证明数据、loss 和保存加载正确；确实需要更多吞吐再试数据并行；确认状态占用是瓶颈再考虑分片；当单层或网络规模、通信条件要求进一步切分时，再研究 TP / PP / EP。这个顺序不是性能定律，而是降低排错变量的工程方法。
+把这个先后顺序收成一张决策图：
+
+```mermaid
+flowchart TD
+    %% id: p20-framework-choice
+    accTitle: 先单进程证明正确，再按瓶颈选框架
+    accDescr: 单进程验证数据、loss 与保存；常用结构与 Trainer 用 Transformers；后训练用 TRL；内存或吞吐瓶颈用 DeepSpeed ZeRO；超大模型需要 TP/PP/EP 时用 Megatron。
+    A["① 单进程验证：数据 / loss / 保存"] --> B["② 需要结构与 Trainer → Transformers"]
+    B --> C["③ 后训练 SFT/DPO/GRPO → TRL"]
+    C --> D["④ 内存或吞吐瓶颈 → DeepSpeed ZeRO"]
+    D --> E["⑤ 需要 TP/PP/EP → Megatron"]
+```
+
 
 ## P20.9 保存模型，不一定等于能继续训练
 

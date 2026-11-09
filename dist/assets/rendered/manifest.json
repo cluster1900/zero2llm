@@ -170,17 +170,52 @@
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p20-frameworks.svg"
     },
+    "flow-p20-double-shift": {
+      "kind": "mermaid",
+      "sha256": "9222b968e2721d8c75c13fcf820ea8f5a675b244bc7472e795b7865ebe9805e2",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p20-ddp-steps": {
+      "kind": "mermaid",
+      "sha256": "e8e5e82c743f313a4e44e99dcccff1b02af5f92524e4192be5c2ea153397708e",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p20-tp-pp-ep": {
+      "kind": "mermaid",
+      "sha256": "538eadd6554d31ec0e1040124b65c8050f730a16b043044bf006dc99496de998",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p20-framework-choice": {
+      "kind": "mermaid",
+      "sha256": "690bfbac91375d006217fa8e49a80b46c949674c04f28394e45bac9236bae5fe",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "p21-sft": {
       "kind": "static",
       "sha256": "af5aff32ec037862b62b5baeba230edb370718697106e5668dc2ca1714bd9152",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p21-sft.svg"
     },
+    "flow-p21-drop-turns": {
+      "kind": "mermaid",
+      "sha256": "01291c8951be874a3fcf14169a3e7f0ee8b10b1ef48c58504bb5c2793c079c91",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
     "p22-preference": {
       "kind": "static",
       "sha256": "10796e5adee6c1d2ed9a542830b202097d0074c64092b3753db830b584203fa3",
       "renderer": "legacy: committed before D0 (bot-hub#126)",
       "source": "assets/diagrams/p22-preference.svg"
+    },
+    "flow-p22-logp-pair": {
+      "kind": "mermaid",
+      "sha256": "f7eb3875876cf2bb5fc3aaec3717997746512082c864c8a16d2cb7661f9404ca",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
+    },
+    "flow-p22-clip-sign": {
+      "kind": "mermaid",
+      "sha256": "7a00ea74285e65f46a0831e0662d37701db55a6a0a9804d1d0a1294c837a1353",
+      "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "p23-mtp": {
       "kind": "static",
