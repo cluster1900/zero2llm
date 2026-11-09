@@ -231,14 +231,16 @@ npm run check         # 单独检查已有成品
 npm run check:layout  # 检查手机、平板、横屏下的图表尺寸，输出预览截图
 ```
 
-若构建机不能启动 Chromium，可使用受限静态构建路径（需要支持 `alerts` 的 Pandoc；已验证 3.9，及本地完整 Git 历史）：
+图表按稳定 id 和源码哈希复用：源码没变的图直接复用已提交的渲染，只有新增或改动的图才启动 Chromium 渲染。加图的完整步骤、渲染工具链的实际版本和复现命令见 [docs/diagrams.md](docs/diagrams.md)。
+
+若构建机不能启动 Chromium，可使用受限静态构建路径（需要支持 `alerts` 的 Pandoc；已验证 3.9）：
 
 ```bash
 .venv/bin/python -m pip install -r requirements-build-static.txt
-.venv/bin/python scripts/build_without_browser.py --baseline 69e5c87ed4b5762a89127ab395738f688fac6299
+.venv/bin/python scripts/build_without_browser.py
 ```
 
-此路径仅复用与基准原稿**逐字一致**的 Mermaid 预渲染图片，新/修改的静态 SVG 由固定版本 CairoSVG 转 PNG。遇到改动的 Mermaid 会失败，要求回到正常 Chromium 构建，绝不会用旧图冒充新图。它不代替浏览器布局检查；正常构建方式仍是 `python3 build.py`。
+此路径只复用 `dist/assets/rendered/manifest.json` 中 id 与源码 sha256 都一致的已提交渲染，新/修改的静态 SVG 由固定版本 CairoSVG 转 PNG。遇到没有对应渲染的新 Mermaid 图或改动过的 Mermaid 图会失败，要求回到正常 Chromium 构建，绝不会用旧图冒充新图。它不代替浏览器布局检查；正常构建方式仍是 `python3 build.py`。
 
 Linux 构建机需要中文字体（例如 `fonts-noto-cjk`）。已有 Chrome 时，可以设置
 `PUPPETEER_EXECUTABLE_PATH` 指向其可执行文件；安装依赖时可设置 `PUPPETEER_SKIP_DOWNLOAD=true`。
