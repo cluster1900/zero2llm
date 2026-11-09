@@ -303,7 +303,7 @@ $$
 
 其中：$(x,y)$ 是一对通道的两个坐标（这里按几何习惯写成列向量）；$\theta$ 是旋转角（局部符号）；$R(\theta)$ 是旋转矩阵。
 
-位置 $i$ 的 query 旋转 $i\theta$，位置 $j$ 的 key 旋转 $j\theta$；点积可整理成净旋转 $(j-i)\theta$，所以相对位置进入分数。例如 `[1,0]` 旋转 π/2 得到 `[0,1]`，但其长度仍为 1。这个几何关系不自动保证任意长上下文都可靠，完整数值与 YaRN 边界见 [P12](#p12-rope)。
+位置 $m$ 的 query 旋转 $m\omega_i$，位置 $n$ 的 key 旋转 $n\omega_i$；点积可整理成净旋转 $(n-m)\omega_i$，所以相对位置进入分数。其中：$m$、$n$ 是 query、key 的位置（附录 A.5 的“座位 $m$、$n$”）；$\omega_i$ 是第 i 个频率对每前进一个位置转过的角度（角频率），所以 $R(\theta)$ 里的转角在这里取 $\theta=m\omega_i$ 或 $n\omega_i$。例如 `[1,0]` 旋转 π/2 得到 `[0,1]`，但其长度仍为 1。这个几何关系不自动保证任意长上下文都可靠，完整数值与 YaRN 边界见 [P12](#p12-rope)。
 
 []{#杀手锏-2rmsnorm先不管平均数只控制振幅}
 
@@ -323,10 +323,10 @@ $$
 
 $$
 \operatorname{SwiGLU}(x)=
-\bigl(\operatorname{SiLU}(xW_g)\odot xW_u\bigr)W_d.
+\bigl(\operatorname{SiLU}(xW_{\mathrm{gate}})\odot xW_{\mathrm{up}}\bigr)W_{\mathrm{down}}.
 $$
 
-其中：$x$ 是一个位置的行向量；$W_g$、$W_u$ 是门控支路和内容支路的投影（$D\times d_{\mathrm{ff}}$），$W_d$ 是压回 $D$ 维的下投影（$d_{\mathrm{ff}}\times D$）；$\operatorname{SiLU}$ 逐元素计算 $a/(1+e^{-a})$（$a$ 是局部变量）。
+其中：$x$ 是一个位置的行向量；$W_{\mathrm{gate}}$、$W_{\mathrm{up}}$ 是门控支路和内容支路的投影（$D\times d_{\mathrm{ff}}$），$W_{\mathrm{down}}$ 是压回 $D$ 维的下投影（$d_{\mathrm{ff}}\times D$）；记门控支路 $g=xW_{\mathrm{gate}}$，$\operatorname{SiLU}(g)=g\sigma(g)=g/(1+e^{-g})$ 逐元素计算（与 [P13](#p13-modern-block) 相同）。
 
 中间的 ⊙ 是逐元素乘法，不是点积。若某个 gate 输入恰为 0，SiLU(0)=0，该通道的内容支路就被关掉。门控不等于 MoE 路由：前者通常调节 dense 中间通道，后者决定哪些专家支路参与。具体参数量与隐藏宽度要一起算，见 [P13](#p13-modern-block)。
 

@@ -83,20 +83,20 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 
 ## P23.4 MTP：在同一位置多问几个未来问题
 
-普通 next-token prediction 在位置 $t$ 的隐藏状态 $x_t$ 上，预测下一个 token $x_{t+1}$。S6 的教学旁路另外增加独立线性 head，用**同一个 $x_t$** 预测 $x_{t+2}$、$x_{t+3}$……。
+普通 next-token prediction 在位置 $t$ 的隐藏向量 $h_t$ 上，预测下一个 token $x_{t+1}$。S6 的教学旁路另外增加独立线性 head，用**同一个 $h_t$** 预测 $x_{t+2}$、$x_{t+3}$……。
 
 设有 $n_{\mathrm{mtp}}$ 个额外 head，总共 $n_{\mathrm{mtp}}+1$ 个预测距离，记为 horizon $j$：
 
 $$
-z_t^{(1)}=x_tW_1,\qquad
-z_t^{(j)}=x_tW_j\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
+z_t^{(1)}=h_tW_1^\top,\qquad
+z_t^{(j)}=h_tW_j^\top\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
 $$
 
 **大白话：**同一个位置的隐藏状态，同时交给几位“考官”：主 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head 只是换一张输出矩阵，读的是同一份表示。
 
-其中：$x_t$ 是最后一层（经过最终 RMSNorm）的隐藏状态 $X^{(L)}$ 在位置 $t$ 的那一行，长 $D$ 的行向量（小写 $x_t$ 加下标 $t$ 指隐藏向量；$x_{t+1}$、$x_{t+j}$ 这类带“$+j$”的写法指该位置的真实 token，两者别混）；$W_j\in\mathbb R^{D\times\lvert\mathcal V\rvert}$ 是第 $j$ 个 horizon 的输出矩阵（代码里 `nn.Linear` 存成 $[\lvert\mathcal V\rvert,D]$，即 $W_j^\top$）；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
+其中：$h_t$ 是主干最后一层（经过最终 RMSNorm）在位置 $t$ 的隐藏向量，长 $D$ 的行向量（本章局部记号，即全书 $X^{(L)}$ 在位置 $t$ 的那一行；$x_{t+1}$、$x_{t+j}$ 指该位置的真实 token，和 $h_t$ 别混）；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵，和代码里 `nn.Linear` 的权重一样按 $[\lvert\mathcal V\rvert,D]$（输出×输入）存，所以乘的时候写转置 $h_tW_j^\top$；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
 
-主 head 是 S5 原来的 head，不是再复制一个。$x_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $x_t$。
+主 head 是 S5 原来的 head，不是再复制一个。$h_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $h_t$。
 
 ### 五个 token，把标签写出来
 
