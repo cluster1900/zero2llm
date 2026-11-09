@@ -38,11 +38,17 @@ $$
 \pi(y\mid x)=0.5\times0.25=0.125.
 $$
 
+**大白话：**整条答案的概率，等于每一步“接对下一个 token”的条件概率连乘。
+
+其中：$x$ 是问题（含前文），$y$ 是一整条答案；$\pi$ 是策略，也就是语言模型给出的概率分布。
+
 使用自然对数 ln，有：
 
 $$
 \log\pi(y\mid x)=\log0.5+\log0.25\approx-2.07944.
 $$
+
+其中：$\log$ 是自然对数 ln；$x$、$y$、$\pi$ 同上。
 
 这里的第二个概率已经以第一个 token 为条件，**不是假设 token 彼此独立**。对数把很长的概率连乘变成相加，数值上更方便。概率在 0 到 1 之间，对数概率通常为负；从 −3 提高到 −2，是概率增加，不是下降。
 
@@ -63,19 +69,27 @@ $$
 =\sum_y\pi(y)r(y)=0.5.
 $$
 
-符号 y∼π 表示按策略抽样。多抽几次再取奖励均值，可以估计这个期望，但有限样本有波动。贪心只选最大概率答案，不是在进行同一种抽样。本章 `sample_rollouts` 用固定种子的有放回抽样，temperature=1，不做 top-k / top-p 截断。
+**大白话：**每个答案的奖励乘上它被抽中的概率，再加总；相当于抽很多很多次以后奖励的平均。
+
+其中：$r(y)$ 是答案 $y$ 的奖励（局部符号）；$\mathbb E$ 表示期望；求和遍历所有答案。
+
+符号 $y\sim\pi$ 表示按策略 $\pi$ 抽样。多抽几次再取奖励均值，可以估计这个期望，但有限样本有波动。贪心只选最大概率答案，不是在进行同一种抽样。本章 `sample_rollouts` 用固定种子的有放回抽样，temperature=1，不做 top-k / top-p 截断。
 
 ### KL 比较两份完整分布
 
 参考策略 π_ref 像一张固定的起点照片。我们希望提高奖励，又不无节制地偏离它。一种约束量是：
 
 $$
-D_{\mathrm{KL}}(\pi_\theta\Vert\pi_{\mathrm{ref}})
+\operatorname{KL}(\pi_\theta\Vert\pi_{\mathrm{ref}})
 =\sum_y\pi_\theta(y)
 \left[\log\pi_\theta(y)-\log\pi_{\mathrm{ref}}(y)\right].
 $$
 
-两份分布相同时 KL=0；一般不对称，不能调换左右。代码在有限 logits 上用 log-softmax，枚举所有动作计算。手算 p=[0.6,0.3,0.1]、q=[0.2,0.5,0.3]，得到约 0.396058 nats。它不是“只看 chosen 的概率变化”，也不是两个 logits 的欧氏距离。
+**大白话：**按当前策略自己的概率加权，平均地看“我给每个答案的对数概率比参考策略多出多少”；两份分布一模一样时结果为 0，差得越多越大。
+
+其中：$\pi_\theta$ 是正在训练的策略（参数为 $\theta$），$\pi_{\mathrm{ref}}$ 是固定的参考策略；求和遍历所有可能的答案 $y$；用自然对数时单位是 nats；$\operatorname{KL}(\cdot\Vert\cdot)$ 是 KL 散度（附录 A.5 不写 $D_{\mathrm{KL}}$，因为 $D$ 只指模型宽度）。
+
+两份分布相同时 KL=0；一般不对称，不能调换左右。代码在有限 logits 上用 log-softmax，枚举所有动作计算。手算 p=[0.6,0.3,0.1]、q=[0.2,0.5,0.3]（p 作 $\pi_\theta$，q 作 $\pi_{\mathrm{ref}}$），得到约 0.396058 nats。它不是“只看 chosen 的概率变化”，也不是两个 logits 的欧氏距离。
 
 对真正的自回归模型，在一个固定前缀上枚举词表，得到的是**该前缀下的条件下一 token KL**。对旧策略采到的若干前缀取平均，并不自动成为完整答案分布的精确 KL。本章后面打印的“精确答案 KL”之所以成立，是因为玩具策略只有三个完整答案，能够全部枚举。
 
@@ -96,6 +110,10 @@ $$
 =-\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big),
 \qquad \sigma(z)=\frac{1}{1+e^{-z}}.
 $$
+
+**大白话：**奖励模型给好、坏两份答案各打一分；好答案领先越多，sigmoid 越接近 1，loss 越接近 0。它只在乎“好的比坏的高多少”，不在乎分数本身多大。
+
+其中：$r_\phi(x,y)$ 是参数为 $\phi$ 的奖励模型给问题 $x$、答案 $y$ 打的分；$y_w$、$y_l$ 是同一问题下较受偏好和较不受偏好的答案；$\sigma$ 是 sigmoid 函数（局部符号，这里不是标准差），$z$ 是它的输入。
 
 w 表示较受偏好的答案，l 表示较不受偏好的答案。只比较差值，所以对同一问题把两个评分都加 100，并不改变偏好概率。评分没有天然的“满分 100”含义。
 
@@ -124,6 +142,10 @@ z &= \beta(\Delta_\theta-\Delta_{\mathrm{ref}}),\\
 \mathcal L_{\mathrm{DPO}} &= -\log\sigma(z)=\operatorname{softplus}(-z).
 \end{aligned}
 $$
+
+**大白话：**先量“现在的模型比起 rejected 多偏爱 chosen 多少”，再扣掉参考模型原本就有的偏爱，乘上 $\beta$ 送进 $-\log\sigma$：相对起点越偏向 chosen，loss 越小。
+
+其中：$\pi_\theta$、$\pi_{\mathrm{ref}}$ 是当前策略与参考策略；$\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两者对 chosen（$y_w$）与 rejected（$y_l$）的整条答案对数概率之差；$\beta$ 是控制偏离强度的系数（局部符号）；$z$ 是乘过 $\beta$ 的相对 margin；$\sigma$ 是 sigmoid，$\operatorname{softplus}(u)=\log(1+e^{u})$。
 
 来源是 [DPO 论文 v3，式 (7)，2024-07-29](https://arxiv.org/html/2305.18290v3#S4)。直觉是：不只问策略是否喜欢 chosen，而是问它**相对于原来，更偏向 chosen 了吗？** 参考策略可能本来就偏爱某个答案，减掉参考差值可以把这一点纳入目标。
 
@@ -163,7 +185,7 @@ loss = torch.nn.functional.softplus(-beta * margin).mean()
 
 ## P22.5 从变长 token 到一对概率：形状不能代替对齐
 
-语言模型 logits 为 [B,T,V]，input_ids 和 attention_mask 为 [B,T]。本章的 `completion_log_probs` 做三步：
+语言模型 logits 为 $[B,T,\lvert\mathcal V\rvert]$，input_ids 和 attention_mask 为 $[B,T]$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。本章的 `completion_log_probs` 做三步：
 
 ```python
 next_logps = logits[:, :-1].log_softmax(dim=-1)
@@ -211,16 +233,20 @@ flowchart TD
 设一个问题采样 G 份答案，奖励为 r₁…r_G。本章明确选择总体标准差，即分母为 G：
 
 $$
-\bar r=\frac1G\sum_i r_i,\qquad
-s=\sqrt{\frac1G\sum_i(r_i-\bar r)^2},\qquad
-A_i=\frac{r_i-\bar r}{s+\delta},\quad\delta=10^{-8}.
+\bar r=\frac1G\sum_{i=1}^{G} r_i,\qquad
+\sigma_r=\sqrt{\frac1G\sum_{i=1}^{G}(r_i-\bar r)^2},\qquad
+A_i=\frac{r_i-\bar r}{\sigma_r+\epsilon},\quad\epsilon=10^{-8}.
 $$
 
-δ 放在平方根**外面**。这里的选择用于手算和可重复的教学实现，不意味着所有 GRPO 实现都采用同一个标准差、epsilon 或归一化方式。
+**大白话：**同一道题的几份答案互相比：先看比组平均好多少，再除以组内分数的波动幅度，得到每份答案的“相对成绩”。
+
+其中：$G$ 是同一问题采样的答案数，$r_i$ 是第 $i$ 份答案的奖励；$\bar r$ 是组内平均奖励，$\sigma_r$ 是组内总体标准差（分母为 $G$）；$A_i$ 是第 $i$ 份答案的优势值；$\epsilon$ 是防止除以零的小常数，代码里叫 `epsilon`。
+
+$\epsilon$ 放在平方根**外面**。这里的选择用于手算和可重复的教学实现，不意味着所有 GRPO 实现都采用同一个标准差、epsilon 或归一化方式。
 
 ### 手算一组 [0,1,1,2]
 
-平均奖励为 1，方差为 (1+0+0+1)/4=0.5，标准差约 0.707107。忽略很小的 δ 后，优势约为：
+平均奖励为 1，方差为 (1+0+0+1)/4=0.5，标准差约 0.707107。忽略很小的 $\epsilon$ 后，优势约为：
 
 ```text
 奖励：  0          1       1       2
@@ -229,7 +255,7 @@ $$
 
 相对本组平均更好的是最后一份答案；第一份较差。这里没有给另一道更难的题“借用平均值”。代码按 prompt_id 分组，即使样本交错排列也不会混组。每组要求至少两份答案。
 
-如果一组奖励为 [2,2,2,2]，减去平均后全为 0，分母为 δ，优势正好全为 0，不会产生 NaN。它可能表示全部答对、全部答错，或者评分器太粗糙；**仅凭零优势无法知道是哪一种**。这组没有奖励比较带来的策略梯度，但若策略已经偏离 reference，非零 KL 惩罚仍可能产生梯度。
+如果一组奖励为 [2,2,2,2]，减去平均后全为 0，分母为 $\epsilon$，优势正好全为 0，不会产生 NaN。它可能表示全部答对、全部答错，或者评分器太粗糙；**仅凭零优势无法知道是哪一种**。这组没有奖励比较带来的策略梯度，但若策略已经偏离 reference，非零 KL 惩罚仍可能产生梯度。
 
 ### 概率比、clip 和最小化符号
 
@@ -241,18 +267,24 @@ $$
 -\log\pi_{\mathrm{old}}(y_{i,t}\mid x,y_{i,<t})\right).
 $$
 
-本章使用 clip ε=0.2，并把“最大化收益”写成优化器常用的“最小化负收益”：
+**大白话：**同一个 token，现在的策略和当初采样时的旧策略各给多少概率，取二者之比；先把对数相减再取 exp，比直接相除更稳。
+
+其中：$y_{i,t}$ 是第 $i$ 份答案的第 $t$ 个 token，$y_{i,<t}$ 是它之前的部分；$\pi_\theta$ 是当前策略，$\pi_{\mathrm{old}}$ 是采样这批答案时的策略快照；$\rho_{i,t}$ 是概率比。
+
+本章使用 clip 范围 $\epsilon_{\mathrm{clip}}=0.2$（即把概率比夹在 $[0.8,1.2]$ 内），并把“最大化收益”写成优化器常用的“最小化负收益”：
 
 $$
 \mathcal L=
-\frac1N\sum_{i=1}^{N}\frac1{L_i}
-\sum_{t=1}^{L_i}
+\frac1{N_{\mathrm{resp}}}\sum_{i=1}^{N_{\mathrm{resp}}}\frac1{T_i}
+\sum_{t=1}^{T_i}
 \left[-\min\left(\rho_{i,t}A_i,
 \operatorname{clip}(\rho_{i,t},0.8,1.2)A_i\right)
-+\beta K_{i,t}\right].
++\beta\,\operatorname{KL}_{i,t}\right].
 $$
 
-N 是这批答案总数，L_i 是第 i 份答案的有效长度，K 是该前缀的 KL 项。本章各题采样数相同，因此对答案均权也使题目均权。不同组大小时还需明确是否要对题目再次加权。
+**大白话：**优势为正就鼓励这个 token，为负就压低它；但概率比一旦跑出 $[0.8,1.2]$，就不再为同方向的变化加奖，外加一小笔“别离参考策略太远”的 KL 罚款。每份答案先在自己的 token 上取平均，再在答案之间平均。
+
+其中：$N_{\mathrm{resp}}$ 是这批答案（回复）总数，$T_i$ 是第 $i$ 份答案的有效长度（token 数）；$\operatorname{KL}_{i,t}$ 是第 $i$ 份答案在第 $t$ 个前缀上、当前策略对参考策略的**精确**条件 KL（本章枚举整个词表算出，不是估计，所以不加帽子）；$\rho_{i,t}$、$A_i$ 同上；$\operatorname{clip}(\rho,0.8,1.2)$ 把 $\rho$ 截到 $[0.8,1.2]$ 之内；$\beta$ 是 KL 惩罚系数（局部符号，本章 GRPO 取 0.04）。本章各题采样数相同，因此对答案均权也使题目均权。不同组大小时还需明确是否要对题目再次加权。
 
 两个检查符号的例子：
 
@@ -278,16 +310,20 @@ clip 的作用依赖优势符号和更新方向，并不是所有范围外的概
 
 ### 本章的 KL 和长度归约，刻意写清楚
 
-`grpo_loss` 输入 logits/reference=[N,L,V]，targets/old_logps/mask=[N,L]，advantages=[N]。old、reference、advantages 都停止梯度；当前 logits 保留梯度。mask 中每行至少一个 True。有限的 log probability 不保证 exp 后仍然有限；如果概率比、逐 token loss 或归约超出 dtype 的有限范围，代码明确报错，不用 clip 掩盖溢出，也不让 0×∞ 静默变成 NaN。
+`grpo_loss` 输入 logits/reference=$[N_{\mathrm{resp}},T,\lvert\mathcal V\rvert]$，targets/old_logps/mask=$[N_{\mathrm{resp}},T]$，advantages=$[N_{\mathrm{resp}}]$（$T$ 是补齐后的答案长度，每份答案的有效长度 $T_i\le T$，多出的位置由 mask 排除）。old、reference、advantages 都停止梯度；当前 logits 保留梯度。mask 中每行至少一个 True。有限的 log probability 不保证 exp 后仍然有限；如果概率比、逐 token loss 或归约超出 dtype 的有限范围，代码明确报错，不用 clip 掩盖溢出，也不让 0×∞ 静默变成 NaN。
 
-本章词表很小，K 使用枚举整个词表的精确条件 KL，而不是采样估计。原论文使用的一个逐 token KL 估计写成：
+本章词表很小，$\operatorname{KL}_{i,t}$ 使用枚举整个词表的精确条件 KL，而不是采样估计。原论文使用的一个逐 token KL **估计量**写成（只有估计量加帽子）：
 
 $$
-k=\frac{\pi_{\mathrm{ref}}(a\mid s)}{\pi_\theta(a\mid s)}
--\log\frac{\pi_{\mathrm{ref}}(a\mid s)}{\pi_\theta(a\mid s)}-1.
+\widehat{\operatorname{KL}}_{i,t}=\frac{\pi_{\mathrm{ref}}(y_{i,t}\mid x,y_{i,<t})}{\pi_\theta(y_{i,t}\mid x,y_{i,<t})}
+-\log\frac{\pi_{\mathrm{ref}}(y_{i,t}\mid x,y_{i,<t})}{\pi_\theta(y_{i,t}\mid x,y_{i,<t})}-1.
 $$
 
-若动作 a 真按当前 π_θ 抽样，且支持集条件满足，它的期望等于相应 KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与 old 不同，也不能不加说明地把旧样本均值称为精确 KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 K 的教学目标说成原论文代码逐行复现。
+**大白话：**只看抽中的那一个 token：记 $u$ 为“参考概率 / 当前概率”，算 $u-\log u-1$。这个数永远不小于 0，两边相同时恰好为 0；按当前策略抽很多次取平均，就逼近精确的 $\operatorname{KL}_{i,t}$。
+
+其中：$y_{i,t}$ 是抽到的 token（强化学习里叫“动作”），$(x,y_{i,<t})$ 是它前面的上下文，即题目加已生成部分（强化学习里叫“状态”，常写作 $s$；本书把 $s$ 留给注意力分数）；$\widehat{\operatorname{KL}}_{i,t}$ 是单个样本上的 KL 估计值，帽子表示“估计量”，用来和上面损失里的精确项 $\operatorname{KL}_{i,t}$ 区分。
+
+若 $y_{i,t}$ 真按当前 $\pi_\theta$ 抽样，且支持集条件满足，它的期望等于相应 KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与 old 不同，也不能不加说明地把旧样本均值称为精确 KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 $\operatorname{KL}_{i,t}$ 的教学目标说成原论文代码逐行复现。
 
 长度归约先做“每个答案内 token 平均”，再对答案平均。若答案长度分别为 2 和 4，每份答案总权重都是 1/2；若改成六个 token 统一平均，两份答案的总权重则为 1/3 和 2/3。两者都能写成 loss，但不是同一个目标。
 
@@ -315,9 +351,9 @@ python -m unittest discover -s tests -p test_preference_optimization.py -v
 之后复制两份策略：
 
 - DPO：chosen 为各题正确答案，rejected 都是“我猜是 0”，β=0.5，学习率 0.4，更新 6 次。
-- GRPO：每题从 SFT 策略有放回采样 8 个动作，精确匹配正确答案得 1，否则得 0；保存 old 概率，同一批更新 3 次，学习率 0.2，β=0.04，clip ε=0.2。
+- GRPO：每题从 SFT 策略有放回采样 8 个动作，精确匹配正确答案得 1，否则得 0；保存 old 概率，同一批更新 3 次，学习率 0.2，β=0.04，$\epsilon_{\mathrm{clip}}=0.2$。
 
-GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我猜是 0”虽然字符更多，也不是多个策略动作。不要把这两层混写成“已经训练了一个生成式小 LLM”。
+GRPO 的一次动作代表一整份答案，所以优化张量的 $T=1$；“我猜是 0”虽然字符更多，也不是多个策略动作。不要把这两层混写成“已经训练了一个生成式小 LLM”。
 
 在附录 H 所列环境下（CPU、seed=22、单线程）实测：
 
@@ -432,7 +468,7 @@ On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 tok
 
 ## P22.12 延伸阅读：Softmax Cancellation {#p22.12-softmax-cancellation}
 
-这篇论文已在 [P04 3.3a](#p04-softmax-collapse) 介绍；其 §3 讨论软目标交叉熵梯度 $q-p$ 的抵消与修法，本书不展开。
+这篇论文已在 [P04 3.3a](#p04-softmax-collapse) 介绍；其 §3 讨论软目标交叉熵梯度 $q-p$（$q$ 是学生的 softmax 分布，$p$ 是老师给的软目标）的抵消与修法，本书不展开。
 
 ## 本章小结
 

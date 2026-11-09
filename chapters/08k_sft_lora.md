@@ -98,15 +98,19 @@ predictions = logits[:, :-1]
 
 所以位置 5 的 logits 预测位置 6 的“红”，位置 6 的 logits 预测位置 7 的 EOS。我们**不是**用“红”位置的 logits 预测同一个“红”；那样会让模型看到答案再复述答案。最后一个输入位置的 logits 没有下一个真实标签，本例不使用它。
 
-写成数学式，令 m 表示一个目标位置是否应评分：
+写成数学式，把所有应评分的预测位置收进集合 $\Omega$：
 
 $$
-\mathcal L=-\frac{1}{N}\sum_{b=1}^{B}\sum_{t=0}^{T-2}
- m_{b,t+1}\log p_\theta(x_{b,t+1}\mid x_{b,\le t}),
-\qquad N=\sum_{b,t}m_{b,t+1}.
+\mathcal L=-\frac{1}{N_{\mathrm{valid}}}\sum_{(b,t)\in\Omega}
+ \log p_\theta(x_{b,t+1}\mid x_{b,\le t}),
+\qquad N_{\mathrm{valid}}=\lvert\Omega\rvert.
 $$
 
-这个 N 是有效目标数，不是 batch 大小，也不是 `B×T`。本例 N=2。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：
+**大白话：**把每条样本里“该评分”的位置挑出来，看模型给下一个正确 token 多少概率，取负对数当扣分，最后按评分位置的个数求平均；不评分的位置根本不进 $\Omega$，等于直接划掉。
+
+其中：$b$ 是第几条样本，$B$ 是批大小；$t$ 是输入位置，$T$ 是序列长度；$x_{b,t}$ 是第 $b$ 条样本位置 $t$ 的 token，$x_{b,\le t}$ 是到位置 $t$ 为止的前缀；$\Omega$ 是有效集合，只收下一位置 $t+1$ 的 label 不是 -100 的 $(b,t)$，$t$ 从 0 到 $T-2$；$p_\theta$ 是参数为 $\theta$ 的模型给出的概率；$N_{\mathrm{valid}}=\lvert\Omega\rvert$ 是评分位置总数（和 [P20](#p20-frameworks) 的写法一致）。
+
+这个 $N_{\mathrm{valid}}$ 是有效目标数，不是批大小，也不是 `B×T`。本例 $N_{\mathrm{valid}}=2$。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：
 
 $$
 \mathcal L=-\frac{\ln 0.5+\ln 0.25}{2}
@@ -114,6 +118,8 @@ $$
 =\frac{0.69314718+1.38629436}{2}
 \approx1.03972077.
 $$
+
+其中：0.5、0.25 是模型给正确的“红”和 EOS 的概率，分母 2 就是上式的 $N_{\mathrm{valid}}$。
 
 这是自然对数下的平均负对数似然。除以八个输入格子，会错误得到四分之一大小的 loss 与梯度；只要分母错误固定，loss 依然可能下降，因此“曲线看起来正常”不能代替索引检查。
 
@@ -184,66 +190,82 @@ flowchart TD
 
 ### 零个目标不能“平均一下”
 
-如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常。
+如果 shift 之后所有标签都是 -100，$N_{\mathrm{valid}}=0$。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常。
 
 我们的数据函数 `encode_chat` 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
 
 ## P21.5 全量更新与 LoRA：改整张表，还是加一条窄支路
 
-对一个线性层，采用列向量记法：
+对一个线性层，按全书的行向量写法：
 
 $$
-y=W_0x,\qquad W_0\in\mathbb R^{d_{out}\times d_{in}}.
+y=xW_0^\top,\qquad W_0\in\mathbb R^{d_{\mathrm{out}}\times d_{\mathrm{in}}}.
 $$
 
-全量更新允许直接调整 W0 中的全部元素。普通 LoRA 冻结它，增加两个小矩阵：
+其中：$x$ 是长 $d_{\mathrm{in}}$ 的输入行向量，$y$ 是长 $d_{\mathrm{out}}$ 的输出行向量，$W_0$ 是预训练得到的原权重，按 $[d_{\mathrm{out}},d_{\mathrm{in}}]$（输出×输入）存，和 PyTorch `nn.Linear.weight` 一样，所以乘的时候写转置 $^\top$。LoRA 原论文用列向量写成 $y=W_0x$，两种写法互为转置，内容完全一样。
+
+全量更新允许直接调整 $W_0$ 中的全部元素。普通 LoRA 冻结它，增加两个小矩阵：
 
 $$
-A\in\mathbb R^{r\times d_{in}},\quad
-B\in\mathbb R^{d_{out}\times r},\quad
-\Delta W=\frac{\alpha}{r}BA,\quad
-y=W_0x+\frac{\alpha}{r}B(Ax).
+\begin{aligned}
+&W_A\in\mathbb R^{r\times d_{\mathrm{in}}},\quad
+W_B\in\mathbb R^{d_{\mathrm{out}}\times r},\quad
+\Delta W=\frac{\alpha}{r}W_BW_A\in\mathbb R^{d_{\mathrm{out}}\times d_{\mathrm{in}}},\\
+&y=x(W_0+\Delta W)^\top=xW_0^\top+\frac{\alpha}{r}\,(xW_A^\top)\,W_B^\top.
+\end{aligned}
 $$
 
-可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是**这次更新**：`rank(BA)≤r`，还可能低于 r。
+**大白话：**原权重 $W_0$ 冻住不动，旁边并一条“先压窄到 $r$ 维、再放宽回来”的小支路，训练只调这条支路；$\alpha/r$ 像支路的音量旋钮。
 
-这里是 [LoRA 原论文 v2](https://arxiv.org/abs/2106.09685v2) 的普通低秩更新及 alpha/r 缩放形式。PyTorch 的 Linear 接受行式 batch，所以实现写成先 `F.linear(x,A)` 再 `F.linear(...,B)`；不要因为记法切换就把 BA 的乘法顺序颠倒。
+其中：$W_A$ 是把输入压到 $r$ 维的下投影，形状 $[r,d_{\mathrm{in}}]$；$W_B$ 是放回 $d_{\mathrm{out}}$ 维的上投影，形状 $[d_{\mathrm{out}},r]$（原论文和代码把它们叫 A、B；本书写 $W_A$、$W_B$，免得和批大小 $B$ 混淆）；两者都和 $W_0$ 一样按“输出×输入”存，所以行向量前向里每一项都带转置；$r$ 是秩，即支路宽度；$\alpha$ 是缩放超参数；$\Delta W$ 是这次更新给原权重带来的增量，和 $W_0$ 同形，因此可以直接相加。注意第二个等号右边两项**都**要转置：$\Delta W$ 和 $W_0$ 同形（输出×输入），所以它也要先转置，才能被行向量 $x$ 右乘。
+
+可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是**这次更新**：$\operatorname{rank}(W_BW_A)\le r$，还可能低于 $r$。
+
+这里是 [LoRA 原论文 v2](https://arxiv.org/abs/2106.09685v2) 的普通低秩更新及 alpha/r 缩放形式。PyTorch 的 Linear 接受行式 batch，所以实现写成先 `F.linear(x,A)` 再 `F.linear(...,B)`：`F.linear(x,A)` 算的就是 $xW_A^\top$，第二步再右乘 $W_B^\top$，正好是上式的支路项；不要因为记法切换就把 $W_BW_A$ 的乘法顺序颠倒。
 
 ### 先数参数，再谈节省
 
 不计 bias 等额外可训练项时：
 
 $$
-P_{full}=d_{out}d_{in},\qquad P_{LoRA}=r(d_{in}+d_{out}).
+N_{\mathrm{full}}=d_{\mathrm{out}}d_{\mathrm{in}},\qquad N_{\mathrm{LoRA}}=r(d_{\mathrm{in}}+d_{\mathrm{out}}).
 $$
 
-例如 `d_in=d_out=4096，r=8`：原矩阵有 16,777,216 个参数，A/B 合计 65,536 个，是原矩阵的 1/256，约 0.390625%。这只是这一层的**新增可训练参数比例**；冻结的 16,777,216 个原参数仍需保存和参与前向。
+**大白话：**全量更新时原矩阵每一格都是可训练参数；LoRA 只多出两条细长矩阵，一条 $r\times d_{\mathrm{in}}$，一条 $d_{\mathrm{out}}\times r$。
+
+其中：$N_{\mathrm{full}}$ 是全量更新这一层时的可训练参数数；$N_{\mathrm{LoRA}}$ 是 LoRA 新增的可训练参数数（附录 A.5：参数个数一律写带下标的 $N$）；$r$、$d_{\mathrm{in}}$、$d_{\mathrm{out}}$ 同上。
+
+例如 `d_in=d_out=4096，r=8`：原矩阵有 16,777,216 个参数，$W_A$、$W_B$ 合计 65,536 个，是原矩阵的 1/256，约 0.390625%。这只是这一层的**新增可训练参数比例**；冻结的 16,777,216 个原参数仍需保存和参与前向。
 
 当矩阵很小或 r 很大时，LoRA 甚至可能比原矩阵参数更多。例如 2×3 的层，r=2 时有 2×(3+2)=10 个适配参数，超过原来的 6 个。低秩不是免费的效果保证。
 
-本章小模型只给 q_proj 和 v_proj 接上 LoRA。每个原矩阵为 16×16，r=2，A/B 合计 64 个；两个投影合计 **128 个可训练参数**。其余 3,760 个基础参数全部冻结，包括 embedding、位置表、norm、FFN 和输出层。加入 adapter 后模型实际总参数为 3,888，不是变成只有 128 个参数。
+本章小模型只给 q_proj 和 v_proj 接上 LoRA。每个原矩阵为 16×16，r=2，$W_A$、$W_B$ 合计 64 个；两个投影合计 **128 个可训练参数**。其余 3,760 个基础参数全部冻结，包括 embedding、位置表、norm、FFN 和输出层。加入 adapter 后模型实际总参数为 3,888，不是变成只有 128 个参数。
 
 少算基础权重的梯度和优化器状态，通常能降低相应训练状态开销；但基础权重、激活、中间结果及部分反向计算仍存在。可训练参数减少 99%，不能据此声称峰值显存或训练时间也减少 99%。本章不做 GPU 显存和速度测试。
 
 ## P21.6 一个可以手算到底的 LoRA 层
 
-取输入 x、基础矩阵 W0 和适配矩阵如下，r=1、alpha=2，因此缩放系数为 2：
+取输入行向量 $x$、基础矩阵 $W_0$ 和适配矩阵如下，r=1、alpha=2，因此缩放系数为 2：
 
 $$
-x=\begin{bmatrix}2\\-1\\0.5\end{bmatrix},\quad
+x=\begin{bmatrix}2&-1&0.5\end{bmatrix},\quad
 W_0=\begin{bmatrix}1&2&3\\4&5&6\end{bmatrix},\quad
-A=\begin{bmatrix}1&0&2\end{bmatrix},\quad
-B=\begin{bmatrix}3\\-1\end{bmatrix}.
+W_A=\begin{bmatrix}1&0&2\end{bmatrix},\quad
+W_B=\begin{bmatrix}3\\-1\end{bmatrix}.
 $$
+
+其中：这里 $d_{\mathrm{in}}=3$、$d_{\mathrm{out}}=2$、$r=1$、$\alpha=2$，所以缩放系数 $\alpha/r=2$；$W_0$ 是 $[2,3]$，$W_A$ 是 $[1,3]$，$W_B$ 是 $[2,1]$，都按“输出×输入”存。
 
 逐步相乘：
 
 $$
-W_0x=\begin{bmatrix}1.5\\6\end{bmatrix},\quad
-Ax=3,\quad
-2B(Ax)=\begin{bmatrix}18\\-6\end{bmatrix},\quad
-y=\begin{bmatrix}19.5\\0\end{bmatrix}.
+xW_0^\top=\begin{bmatrix}1.5&6\end{bmatrix},\quad
+xW_A^\top=3,\quad
+2\,(xW_A^\top)\,W_B^\top=\begin{bmatrix}18&-6\end{bmatrix},\quad
+y=\begin{bmatrix}19.5&0\end{bmatrix}.
 $$
+
+**大白话：**主路照常算 $xW_0^\top$；支路先把三维输入压成一个数 $xW_A^\top=3$，乘上缩放 2，再由 $W_B^\top$ 放回两维；两路相加就是输出。
 
 只写一句“输出等于基础输出加 adapter 输出”很容易让两个实现一起错。
 
@@ -251,21 +273,25 @@ $$
 
 `requires_grad_(False)` 让基础参数不接收梯度更新；它不等于把经过基础层的全部运算包进 `no_grad()`。有些早先层的 adapter 仍需要通过后面的冻结层回传梯度。把整条主路断开，可能切断正确的学习路径。
 
-令这个手算例子的标量目标为 `L=y₁+y₂`，链式法则给出：
+令这个手算例子的标量目标为 $\mathcal L=y_1+y_2$，链式法则给出：
 
 $$
-\frac{\partial L}{\partial B}=\begin{bmatrix}6\\6\end{bmatrix},\quad
-\frac{\partial L}{\partial A}=\begin{bmatrix}8&-4&2\end{bmatrix},\quad
-\frac{\partial L}{\partial x}=\begin{bmatrix}9\\7\\17\end{bmatrix}.
+\frac{\partial \mathcal L}{\partial W_B}=\begin{bmatrix}6\\6\end{bmatrix},\quad
+\frac{\partial \mathcal L}{\partial W_A}=\begin{bmatrix}8&-4&2\end{bmatrix},\quad
+\frac{\partial \mathcal L}{\partial x}=\begin{bmatrix}9&7&17\end{bmatrix}.
 $$
 
-W0 的梯度为 None，因为它被显式冻结。输入 x 仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。
+**大白话：**把两个输出加起来当“考分”，问每个数字轻轻动一下，考分会跟着变多少。比如 $W_B$ 的每一项都乘着同一个 $\frac{\alpha}{r}(xW_A^\top)=2\times3=6$，所以梯度都是 6。
 
-### 为什么初始 B 为零，不代表学习卡死
+其中：$y_1$、$y_2$ 是输出 $y$ 的两个分量；$\partial\mathcal L/\partial W_B$ 等是 $\mathcal L$ 对该矩阵（或向量）逐元素的偏导，形状与它本身相同。逐项来源（$\mathbf 1=[1,1]$ 是 $\partial\mathcal L/\partial y$，全 1 行向量）：$\partial\mathcal L/\partial W_B=\frac{\alpha}{r}\,\mathbf 1^\top(xW_A^\top)=2\times3\times[1,1]^\top$，$\partial\mathcal L/\partial W_A=\frac{\alpha}{r}(\mathbf 1W_B)^\top x=2\times2\times[2,-1,0.5]$，$\partial\mathcal L/\partial x=\mathbf 1W_0+\frac{\alpha}{r}(\mathbf 1W_B)W_A=[5,7,9]+4\times[1,0,2]$。
 
-代码使用随机初始化 A、零初始化 B，保证刚插入 adapter 时 `BA=0`，不改变原模型预测。具体采用 Kaiming-uniform 初始化 A；它是本实现的选择，不声称逐项复现原论文的高斯初始化。固定版 [PEFT 0.15.0 LoRA 配置说明](https://huggingface.co/docs/peft/v0.15.0/package_reference/lora) 也区分初始化、rank、alpha 与 target modules；本章没有调用 PEFT。
+$W_0$ 的梯度为 None，因为它被显式冻结。输入 x 仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。
 
-在第一步，如果 B=0，则对 A 的梯度为 0，但对 B 的梯度通常不为 0。B 更新之后，下一步 A 也能获得梯度。若 A、B 都初始化为零，两个方向都可能没有初始学习信号；不要因为“初始更新应为零”就把两个矩阵都清零。
+### 为什么初始 $W_B$ 为零，不代表学习卡死
+
+代码使用随机初始化 $W_A$（代码里的 `A`）、零初始化 $W_B$（代码里的 `B`），保证刚插入 adapter 时 $W_BW_A=0$，不改变原模型预测。具体采用 Kaiming-uniform 初始化 $W_A$；它是本实现的选择，不声称逐项复现原论文的高斯初始化。固定版 [PEFT 0.15.0 LoRA 配置说明](https://huggingface.co/docs/peft/v0.15.0/package_reference/lora) 也区分初始化、rank、alpha 与 target modules；本章没有调用 PEFT。
+
+在第一步，如果 $W_B=0$，则对 $W_A$ 的梯度为 0，但对 $W_B$ 的梯度通常不为 0。$W_B$ 更新之后，下一步 $W_A$ 也能获得梯度。若 $W_A$、$W_B$ 都初始化为零，两个方向都可能没有初始学习信号；不要因为“初始更新应为零”就把两个矩阵都清零。
 
 ## P21.7 真正训练一次，明确哪些结果不能比较
 
@@ -312,7 +338,7 @@ _updates(model, batch, steps=24, lr=0.5)
 | 冻结基础参数 / 梯度 | 逐元素未变 / 全部为 None |
 | 合并前后 logits 最大差 | 约 7.15e-7 |
 
-第二阶段只再降约 0.0008：它从第一阶段终点 0.61146003 起步，只训练 q/v 投影上的 128 个 LoRA 参数（B 初始为零），参数最大变化约 0.036，远小于第一阶段的约 0.766；本章没有另做实验区分这几个因素各自的作用。
+第二阶段只再降约 0.0008：它从第一阶段终点 0.61146003 起步，只训练 q/v 投影上的 128 个 LoRA 参数（$W_B$ 初始为零），参数最大变化约 0.036，远小于第一阶段的约 0.766；本章没有另做实验区分这几个因素各自的作用。
 
 训练 loss 的下降证明这个目标在这批数据上被优化，不证明模型会回答新问题。脚本显式输出 `heldout_quality_evaluated=false` 与 `hf_peft_qlora_run=false`，避免把未测项目混进“通过”的结果。
 
@@ -341,24 +367,30 @@ python -m unittest discover -s tests -p 'test_sft_lora.py' -v
 普通、无量化、无 LoRA dropout 的线性层，可以构造：
 
 $$
-W_{merged}=W_0+\frac{\alpha}{r}BA.
+W_{\mathrm{merged}}=W_0+\frac{\alpha}{r}W_BW_A.
 $$
 
-于是 `W_merged x` 与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：
+**大白话：**支路说到底只是给 $W_0$ 加了一个固定增量；训练完把增量直接加回原矩阵，以后只走一条路，算出来一样。
+
+其中：$W_{\mathrm{merged}}$ 是合并后的普通权重，和 $W_0$ 同形，前向写 $y=xW_{\mathrm{merged}}^\top$；$W_0$、$W_B$、$W_A$、$\alpha$、$r$ 同上。
+
+于是 $xW_{\mathrm{merged}}^\top$ 与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：
 
 $$
-W_{merged}=\begin{bmatrix}7&2&15\\2&5&2\end{bmatrix}.
+W_{\mathrm{merged}}=\begin{bmatrix}7&2&15\\2&5&2\end{bmatrix}.
 $$
 
-代码的 `merged()` 返回一个**新的普通 Linear**，保留原来的 bias，不改原 adapter 或基础层。调用两次也各自从同一个原始 W0 出发，不会把 BA 重复加两遍。合并后的模型不再额外执行 adapter 支路；若既改了原权重又保留支路，更新就会被算两次。
+其中：$W_BW_A=\begin{bmatrix}3&0&6\\-1&0&-2\end{bmatrix}$，乘以 $\alpha/r=2$ 后逐元素加到 $W_0$ 上。
+
+代码的 `merged()` 返回一个**新的普通 Linear**，保留原来的 bias，不改原 adapter 或基础层。调用两次也各自从同一个原始 $W_0$ 出发，不会把 $W_BW_A$ 重复加两遍。合并后的模型不再额外执行 adapter 支路；若既改了原权重又保留支路，更新就会被算两次。
 
 float64 小整数例子得到精确对齐；float32 整模因乘法顺序不同，按 `atol=2e-6、rtol=2e-5` 检查。这里验证的是数值等价，不是实测推理加速。
 
-实际保存 adapter 时，还需要记录基础 checkpoint 的精确版本、目标层名、rank/alpha、tokenizer/template、额外训练的 embedding 或其他模块。只有 A/B 文件并不等于一个独立完整模型。**本章没有实现 adapter 保存/重载或跨框架转换**，不声称这条部署链已经通过测试。
+实际保存 adapter 时，还需要记录基础 checkpoint 的精确版本、目标层名、rank/alpha、tokenizer/template、额外训练的 embedding 或其他模块。只有 $W_A$、$W_B$ 文件并不等于一个独立完整模型。**本章没有实现 adapter 保存/重载或跨框架转换**，不声称这条部署链已经通过测试。
 
 ## P21.9 QLoRA：冻结的底座换成低比特存储
 
-QLoRA 的 Q 指 quantization。它不是“把 A/B 变成 4 bit 再训练”，也不是“训练中直接对 4 bit 整数权重做普通梯度下降”。[QLoRA 原论文 v1](https://arxiv.org/abs/2305.14314v1) 的关键思路是冻结量化后的基础模型，通过相应计算路径，把梯度传到可训练的低秩 adapter；论文还讨论 NF4、量化常数的再次量化和 paged optimizers。
+QLoRA 的 Q 指 quantization。它不是“把 $W_A$、$W_B$ 变成 4 bit 再训练”，也不是“训练中直接对 4 bit 整数权重做普通梯度下降”。[QLoRA 原论文 v1](https://arxiv.org/abs/2305.14314v1) 的关键思路是冻结量化后的基础模型，通过相应计算路径，把梯度传到可训练的低秩 adapter；论文还讨论 NF4、量化常数的再次量化和 paged optimizers。
 
 需要区分三件事：基础权重的存储格式、运算时使用的计算精度、adapter / 梯度 / 优化器状态的精度。它们不必相同。基础参数“4 bit”也不表示整个训练进程只占 `参数数×0.5` 字节；量化元数据、激活、临时反量化结果及优化器状态仍要计算。
 
@@ -391,7 +423,7 @@ LoRA 不是数据审校器，也不能保证不遗忘既有能力。SFT 通过�
 
 “问红 → 红”的八个输入位置，哪些 labels 保留？哪些 logits 被评分？若两个正确目标概率分别为 0.5、0.25，平均 loss 是多少？
 
-**参考答案：** labels 仅位置 6=13、7=6，其余为 -100；logits 位置 5、6 被评分；N=2，loss≈1.03972077。不能把 labels 提前左移，也不能除以八。对应 `test_hand_example_literal_ids`、`test_scalar_loss_hand_answer_and_large_offsets` 与独立 log-probability 测试。
+**参考答案：** labels 仅位置 6=13、7=6，其余为 -100；logits 位置 5、6 被评分；$N_{\mathrm{valid}}=2$，loss≈1.03972077。不能把 labels 提前左移，也不能除以八。对应 `test_hand_example_literal_ids`、`test_scalar_loss_hand_answer_and_large_offsets` 与独立 log-probability 测试。
 
 ### 题 2：多轮与 EOS
 
@@ -407,27 +439,27 @@ LoRA 不是数据审校器，也不能保证不遗忘既有能力。SFT 通过�
 
 ### 题 4：LoRA 的参数账
 
-4096×4096 的层用 r=8，A/B 有多少参数？本章两个 16×16 投影用 r=2 又有多少？是否可以说本章模型只剩 128 个参数？
+4096×4096 的层用 r=8，$W_A$、$W_B$ 有多少参数？本章两个 16×16 投影用 r=2 又有多少？是否可以说本章模型只剩 128 个参数？
 
 **参考答案：** 前者 65,536，相对原矩阵 16,777,216 是 1/256；后者每层 64，共 128。不能说模型只有 128 个参数，它还保存 3,760 个被冻结的基础参数，总计 3,888。对应参数算术测试和真实训练报告测试。
 
 ### 题 5：矩阵与合并
 
-使用 P21.6 的 W0、A、B、x，算出输出与合并权重；若忘记 alpha/r，结果还能一样吗？
+使用 P21.6 的 $W_0$、$W_A$、$W_B$、$x$，算出输出与合并权重；若忘记 alpha/r，结果还能一样吗？
 
 **参考答案：** 输出 `[19.5,0]`，合并权重 `[[7,2,15],[2,5,2]]`。忘记系数 2 会得到错误输出 `[10.5,3]`。矩阵 oracle 直接检查手算答案。
 
 ### 题 6：梯度到哪里
 
-仍用该例子，令 L=y₁+y₂，求 A、B、x 的梯度。为什么冻结 W0 后 x 仍可能有梯度？
+仍用该例子，令 $\mathcal L=y_1+y_2$，求 $W_A$、$W_B$、$x$ 的梯度。为什么冻结 $W_0$ 后 $x$ 仍可能有梯度？
 
-**参考答案：** A 梯度 `[8,-4,2]`，B 梯度 `[6,6]`，x 梯度 `[9,7,17]`；固定 W0 不等于切断对输入的导数。`test_lora_gradients_match_manual_chain_rule` 逐项核对。另一个测试验证 user 内容虽然不被当成标签，仍可通过上下文影响 loss。
+**参考答案：** $W_A$ 梯度 `[8,-4,2]`，$W_B$ 梯度 `[6,6]`（形状 [2,1]），$x$ 梯度 `[9,7,17]`；固定 $W_0$ 不等于切断对输入的导数。`test_lora_gradients_match_manual_chain_rule` 逐项核对。另一个测试验证 user 内容虽然不被当成标签，仍可通过上下文影响 loss。
 
 ### 题 7：两个“零”是否一样
 
-B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽略时，loss 返回零再更新是否合适？
+$W_B$ 初始为零时，$W_A$ 第一轮梯度为零，是 bug 吗？所有 labels 都忽略时，loss 返回零再更新是否合适？
 
-**参考答案：** 前者不一定是 bug：B 先获得梯度，更新后 A 也能获得梯度。后者不合适：有效目标数为零，平均 loss 未定义；本代码在更新前报错，并验证参数完全不变。对应两步初始化梯度测试和 all-ignored 测试。
+**参考答案：** 前者不一定是 bug：$W_B$ 先获得梯度，更新后 $W_A$ 也能获得梯度。后者不合适：有效目标数为零，平均 loss 未定义；本代码在更新前报错，并验证参数完全不变。对应两步初始化梯度测试和 all-ignored 测试。
 
 ### 题 8：什么叫“验证过”
 
@@ -439,7 +471,7 @@ B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽
 
 ## 本章小结与来源边界
 
-SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 A/B 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
+SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 $W_A$、$W_B$ 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
 
 来源按附录 H 所列日期核验，固定版本而非追随 latest：
 
