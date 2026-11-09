@@ -13173,40 +13173,46 @@ token 预算单调上升</strong>。</p>
 MTP：在同一位置多问几个未来问题</h2>
 <p>普通 next-token prediction 在位置 <span
 class="math inline">\(t\)</span> 的隐藏状态 <span
-class="math inline">\(X^{(L)}_t\)</span> 上，预测下一个 token <span
+class="math inline">\(x_t\)</span> 上，预测下一个 token <span
 class="math inline">\(x_{t+1}\)</span>。S6 的教学旁路另外增加独立线性
-head，用<strong>同一个 <span
-class="math inline">\(X^{(L)}_t\)</span></strong> 预测 <span
-class="math inline">\(x_{t+2}\)</span>、<span
+head，用<strong>同一个 <span class="math inline">\(x_t\)</span></strong>
+预测 <span class="math inline">\(x_{t+2}\)</span>、<span
 class="math inline">\(x_{t+3}\)</span>……。</p>
 <p>设有 <span class="math inline">\(n_{\mathrm{mtp}}\)</span> 个额外
 head，总共 <span class="math inline">\(n_{\mathrm{mtp}}+1\)</span>
 个预测距离，记为 horizon <span class="math inline">\(j\)</span>：</p>
 <p><span class="math display">\[
-z_t^{(1)}=X^{(L)}_tW_1^\top,\qquad
-z_t^{(j)}=X^{(L)}_tW_j^\top\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
+z_t^{(1)}=x_tW_1,\qquad
+z_t^{(j)}=x_tW_j\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
 \]</span></p>
 <p><strong>大白话：</strong>同一个位置的隐藏状态，同时交给几位“考官”：主
 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head
 只是换一张输出矩阵，读的是同一份表示。</p>
-<p>其中：<span class="math inline">\(X^{(L)}_t\)</span>
-是最后一层（经过最终 RMSNorm）的隐藏状态 <span
-class="math inline">\(X^{(L)}\)</span> 在位置 <span
-class="math inline">\(t\)</span> 的那一行，长 <span
-class="math inline">\(D\)</span>；<span
-class="math inline">\(W_j\in\mathbb R^{\lvert\mathcal V\rvert\times
-D}\)</span> 是第 <span class="math inline">\(j\)</span> 个 horizon
-的输出矩阵（按 PyTorch 的 <code>[输出,输入]</code>
-存放，所以右乘它的转置）；<span class="math inline">\(z_t^{(j)}\)</span>
-是预测位置 <span class="math inline">\(t+j\)</span> 的 logits，长 <span
+<p>其中：<span class="math inline">\(x_t\)</span> 是最后一层（经过最终
+RMSNorm）的隐藏状态 <span class="math inline">\(X^{(L)}\)</span> 在位置
+<span class="math inline">\(t\)</span> 的那一行，长 <span
+class="math inline">\(D\)</span> 的行向量（小写 <span
+class="math inline">\(x_t\)</span> 加下标 <span
+class="math inline">\(t\)</span> 指隐藏向量；<span
+class="math inline">\(x_{t+1}\)</span>、<span
+class="math inline">\(x_{t+j}\)</span> 这类带“<span
+class="math inline">\(+j\)</span>”的写法指该位置的真实
+token，两者别混）；<span class="math inline">\(W_j\in\mathbb
+R^{D\times\lvert\mathcal V\rvert}\)</span> 是第 <span
+class="math inline">\(j\)</span> 个 horizon 的输出矩阵（代码里
+<code>nn.Linear</code> 存成 <span class="math inline">\([\lvert\mathcal
+V\rvert,D]\)</span>，即 <span
+class="math inline">\(W_j^\top\)</span>）；<span
+class="math inline">\(z_t^{(j)}\)</span> 是预测位置 <span
+class="math inline">\(t+j\)</span> 的 logits，长 <span
 class="math inline">\(\lvert\mathcal V\rvert\)</span>；<span
 class="math inline">\(j\)</span> 是预测距离；<span
 class="math inline">\(n_{\mathrm{mtp}}\)</span> 是额外 head 数，代码里叫
 <code>depth</code>。</p>
 <p>主 head 是 S5 原来的 head，不是再复制一个。<span
-class="math inline">\(X^{(L)}_t\)</span> 只能看见当前位置及之前的
+class="math inline">\(x_t\)</span> 只能看见当前位置及之前的
 token；为了预测更远处，我们没有把真实未来 token 偷塞进 <span
-class="math inline">\(X^{(L)}_t\)</span>。</p>
+class="math inline">\(x_t\)</span>。</p>
 <h3 id="五个-token把标签写出来">五个 token，把标签写出来</h3>
 <p>输入为 <code>[1,2,3,4,5]</code>，<span
 class="math inline">\(n_{\mathrm{mtp}}=2\)</span>。这里的整数是 token
@@ -13254,6 +13260,10 @@ ID，不是它们的数值大小。</p>
 后忘记遮住尾部，否则最后一个位置会被要求预测窗口开头，制造不存在的循环文本。</p>
 <p>张量账本如下：</p>
 <div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr>
 <th>项目</th>
@@ -13270,7 +13280,7 @@ ID，不是它们的数值大小。</p>
 <td><span class="math inline">\([B,T,D]\)</span></td>
 </tr>
 <tr>
-<td>每个 head 的权重</td>
+<td>每个 head 的权重（<code>nn.Linear</code> 存储形状）</td>
 <td><span class="math inline">\([\lvert\mathcal V\rvert,D]\)</span></td>
 </tr>
 <tr>
@@ -13334,17 +13344,18 @@ class="math inline">\(n_{\mathrm{mtp}}\)</span> 个额外 head
 的损失取平均：</p>
 <p><span class="math display">\[
 \mathcal L=\mathcal
-L_1+\frac{\lambda}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal
+L_1+\frac{w_{\mathrm{mtp}}}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal
 L_j+\mathcal L_{\mathrm{MoE}}\quad(n_{\mathrm{mtp}}&gt;0).
 \]</span></p>
 <p><strong>大白话：</strong>主任务的分数照记；几位旁路考官的分数先取平均，再乘一个小权重
-<span class="math inline">\(\lambda\)</span> 当“附加题”；MoE
+<span class="math inline">\(w_{\mathrm{mtp}}\)</span> 当“附加题”；MoE
 的负载均衡罚款原样加上。</p>
 <p>其中：<span class="math inline">\(\mathcal L\)</span>
 是总训练损失；<span class="math inline">\(\mathcal L_1\)</span> 是主
 head（下一个 token）的损失，<span class="math inline">\(\mathcal
-L_j\)</span> 见上式；<span class="math inline">\(\lambda\)</span> 是 MTP
-辅助损失的权重（局部符号，代码里的 <code>weight</code>）；<span
+L_j\)</span> 见上式；<span
+class="math inline">\(w_{\mathrm{mtp}}\)</span> 是 MTP
+辅助损失的权重（代码里的 <code>weight</code>）；<span
 class="math inline">\(\mathcal L_{\mathrm{MoE}}\)</span> 是 S5
 已乘过系数的负载辅助项。</p>
 <p><span class="math inline">\(n_{\mathrm{mtp}}=0\)</span>
@@ -13790,7 +13801,7 @@ M_{KV}=2L B H_{kv} T d_h\,b_{\mathrm{elem}}.
 都要存一条长 <span class="math inline">\(d_h\)</span> 的 K 和一条
 V；把这些个数乘起来，再乘每个数占几个字节。</p>
 <p>其中：2 是 K 和 V 两份；<span class="math inline">\(L\)</span>
-是层数，<span class="math inline">\(B\)</span> 是 batch 大小，<span
+是层数，<span class="math inline">\(B\)</span> 是批大小，<span
 class="math inline">\(H_{kv}\)</span> 是 KV 头数，<span
 class="math inline">\(T\)</span> 是已缓存的 token 数，<span
 class="math inline">\(d_h\)</span> 是每头宽度；<span
@@ -15153,7 +15164,7 @@ b_{\mathrm{elem}},
 两份，每层、每条序列、每个 KV 头、每个 token 存一条长 <span
 class="math inline">\(d_h\)</span> 的向量。</p>
 <p>其中：2 对应 K 与 V；<span class="math inline">\(L\)</span>
-是层数，<span class="math inline">\(B\)</span> 是 batch 大小，<span
+是层数，<span class="math inline">\(B\)</span> 是批大小，<span
 class="math inline">\(H_{kv}\)</span> 是 KV 头数，<span
 class="math inline">\(T\)</span> 是缓存的 token 数，<span
 class="math inline">\(d_h\)</span> 是每头宽度，<span
@@ -16158,7 +16169,9 @@ class="math inline">\(D\times d_{\mathrm{ff}}\)</span>），<span
 class="math inline">\(W_d\)</span> 是压回 <span
 class="math inline">\(D\)</span> 维的下投影（<span
 class="math inline">\(d_{\mathrm{ff}}\times D\)</span>）；<span
-class="math inline">\(\operatorname{SiLU}(u)=u/(1+e^{-u})\)</span>。</p>
+class="math inline">\(\operatorname{SiLU}\)</span> 逐元素计算 <span
+class="math inline">\(a/(1+e^{-a})\)</span>（<span
+class="math inline">\(a\)</span> 是局部变量）。</p>
 <p>中间的 ⊙ 是逐元素乘法，不是点积。若某个 gate 输入恰为
 0，SiLU(0)=0，该通道的内容支路就被关掉。门控不等于 MoE
 路由：前者通常调节 dense
@@ -16508,9 +16521,14 @@ padding、跨文档 packing 或聊天模板。</p>
 <code>stream[:, 1:]</code>。最后一个标签来自第九个
 token，<strong>不是把窗口开头卷回来</strong>。这能验证 next-token
 的位置关系。</p>
-<p>统一小配置为 B=2、T=8、D=16、Hq=4、每头 d=4、层数 L=2、上下文上限
-16。GQA 使用 Hkv=2；MoE 每层 4 个路由专家、top-k=2、专家宽度 7，另有 1
-个宽度 5 的共享专家。</p>
+<p>统一小配置为 <span class="math inline">\(B=2\)</span>、<span
+class="math inline">\(T=8\)</span>、<span
+class="math inline">\(D=16\)</span>、<span
+class="math inline">\(H_q=4\)</span>、每头 <span
+class="math inline">\(d_h=4\)</span>、层数 <span
+class="math inline">\(L=2\)</span>、上下文上限 16。GQA 使用 <span
+class="math inline">\(H_{kv}=2\)</span>；MoE 每层 4
+个路由专家、top-k=2、专家宽度 7，另有 1 个宽度 5 的共享专家。</p>
 <h3 id="脚本到底做了什么">脚本到底做了什么</h3>
 <p>顺着 <code>run_healthcheck</code>
 阅读，比一次看完所有模型源代码容易：</p>
@@ -16633,7 +16651,7 @@ b_{\mathrm{elem}}.
 token 都存一条长 <span class="math inline">\(d_h\)</span>
 的向量，个数乘起来再乘每个数的字节数。</p>
 <p>其中：第一个 2 是 K 和 V 两份；<span class="math inline">\(L\)</span>
-是层数，<span class="math inline">\(B\)</span> 是 batch 大小，<span
+是层数，<span class="math inline">\(B\)</span> 是批大小，<span
 class="math inline">\(H_{kv}\)</span> 是 KV 头数，<span
 class="math inline">\(T\)</span> 是缓存的 token 数，<span
 class="math inline">\(d_h\)</span> 是每头宽度，<span
@@ -16646,10 +16664,13 @@ class="math inline">\(H_{kv}\)</span> 改为 2，结果为
 求和后，再与独立整数账本对照的值。</p>
 <p>这里<strong>不是测出来的进程内存，更不是显存峰值</strong>。模型权重、注意力分数、临时复制、Python
 对象、分配器缓存都没计入。S4 计算注意力时还会临时展开共享
-K/V；存储的缓存必须保留 Hkv 头，不能把展开后的 Hq 份偷偷存回去。</p>
-<p>Hq=4、Hkv=2 时，查询头的映射是 <code>[0,0,1,1]</code>。给两个 KV
-头分别填入 <code>[10,11]</code> 和 <code>[20,21]</code>，只放一个可见
-key，四个查询头输出应为：</p>
+K/V；存储的缓存必须保留 <span class="math inline">\(H_{kv}\)</span>
+个头，不能把展开后的 <span class="math inline">\(H_q\)</span>
+份偷偷存回去。</p>
+<p><span class="math inline">\(H_q=4\)</span>、<span
+class="math inline">\(H_{kv}=2\)</span> 时，查询头的映射是
+<code>[0,0,1,1]</code>。给两个 KV 头分别填入 <code>[10,11]</code> 和
+<code>[20,21]</code>，只放一个可见 key，四个查询头输出应为：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -16890,7 +16911,7 @@ monkey-patch 后的任意运行时结构。</p>
 <td>ID 的含义不同</td>
 </tr>
 <tr>
-<td>GQA 的 Hkv 从 2 改为 1</td>
+<td>GQA 的 <span class="math inline">\(H_{kv}\)</span> 从 2 改为 1</td>
 <td>拒绝</td>
 <td>KV 投影与缓存形状改变</td>
 </tr>

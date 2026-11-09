@@ -326,7 +326,7 @@ $$
 \bigl(\operatorname{SiLU}(xW_g)\odot xW_u\bigr)W_d.
 $$
 
-其中：$x$ 是一个位置的行向量；$W_g$、$W_u$ 是门控支路和内容支路的投影（$D\times d_{\mathrm{ff}}$），$W_d$ 是压回 $D$ 维的下投影（$d_{\mathrm{ff}}\times D$）；$\operatorname{SiLU}(u)=u/(1+e^{-u})$。
+其中：$x$ 是一个位置的行向量；$W_g$、$W_u$ 是门控支路和内容支路的投影（$D\times d_{\mathrm{ff}}$），$W_d$ 是压回 $D$ 维的下投影（$d_{\mathrm{ff}}\times D$）；$\operatorname{SiLU}$ 逐元素计算 $a/(1+e^{-a})$（$a$ 是局部变量）。
 
 中间的 ⊙ 是逐元素乘法，不是点积。若某个 gate 输入恰为 0，SiLU(0)=0，该通道的内容支路就被关掉。门控不等于 MoE 路由：前者通常调节 dense 中间通道，后者决定哪些专家支路参与。具体参数量与隐藏宽度要一起算，见 [P13](#p13-modern-block)。
 

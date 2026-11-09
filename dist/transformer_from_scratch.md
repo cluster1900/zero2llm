@@ -7040,20 +7040,20 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 
 ## P23.4 MTP：在同一位置多问几个未来问题
 
-普通 next-token prediction 在位置 $t$ 的隐藏状态 $X^{(L)}_t$ 上，预测下一个 token $x_{t+1}$。S6 的教学旁路另外增加独立线性 head，用**同一个 $X^{(L)}_t$** 预测 $x_{t+2}$、$x_{t+3}$……。
+普通 next-token prediction 在位置 $t$ 的隐藏状态 $x_t$ 上，预测下一个 token $x_{t+1}$。S6 的教学旁路另外增加独立线性 head，用**同一个 $x_t$** 预测 $x_{t+2}$、$x_{t+3}$……。
 
 设有 $n_{\mathrm{mtp}}$ 个额外 head，总共 $n_{\mathrm{mtp}}+1$ 个预测距离，记为 horizon $j$：
 
 $$
-z_t^{(1)}=X^{(L)}_tW_1^\top,\qquad
-z_t^{(j)}=X^{(L)}_tW_j^\top\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
+z_t^{(1)}=x_tW_1,\qquad
+z_t^{(j)}=x_tW_j\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
 $$
 
 **大白话：**同一个位置的隐藏状态，同时交给几位“考官”：主 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head 只是换一张输出矩阵，读的是同一份表示。
 
-其中：$X^{(L)}_t$ 是最后一层（经过最终 RMSNorm）的隐藏状态 $X^{(L)}$ 在位置 $t$ 的那一行，长 $D$；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵（按 PyTorch 的 `[输出,输入]` 存放，所以右乘它的转置）；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
+其中：$x_t$ 是最后一层（经过最终 RMSNorm）的隐藏状态 $X^{(L)}$ 在位置 $t$ 的那一行，长 $D$ 的行向量（小写 $x_t$ 加下标 $t$ 指隐藏向量；$x_{t+1}$、$x_{t+j}$ 这类带“$+j$”的写法指该位置的真实 token，两者别混）；$W_j\in\mathbb R^{D\times\lvert\mathcal V\rvert}$ 是第 $j$ 个 horizon 的输出矩阵（代码里 `nn.Linear` 存成 $[\lvert\mathcal V\rvert,D]$，即 $W_j^\top$）；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
 
-主 head 是 S5 原来的 head，不是再复制一个。$X^{(L)}_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $X^{(L)}_t$。
+主 head 是 S5 原来的 head，不是再复制一个。$x_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $x_t$。
 
 ### 五个 token，把标签写出来
 
@@ -7073,7 +7073,7 @@ $$
 | --- | --- |
 | token ID、每个 horizon 的 labels | [B,T] |
 | 归一化后的隐藏状态 | $[B,T,D]$ |
-| 每个 head 的权重 | $[\lvert\mathcal V\rvert,D]$ |
+| 每个 head 的权重（`nn.Linear` 存储形状） | $[\lvert\mathcal V\rvert,D]$ |
 | 每个 horizon 的 logits | $[B,T,\lvert\mathcal V\rvert]$ |
 | 每个 horizon 的 CE | 标量 |
 
@@ -7103,12 +7103,12 @@ $$
 S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 $n_{\mathrm{mtp}}$ 个额外 head 的损失取平均：
 
 $$
-\mathcal L=\mathcal L_1+\frac{\lambda}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal L_j+\mathcal L_{\mathrm{MoE}}\quad(n_{\mathrm{mtp}}>0).
+\mathcal L=\mathcal L_1+\frac{w_{\mathrm{mtp}}}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal L_j+\mathcal L_{\mathrm{MoE}}\quad(n_{\mathrm{mtp}}>0).
 $$
 
-**大白话：**主任务的分数照记；几位旁路考官的分数先取平均，再乘一个小权重 $\lambda$ 当“附加题”；MoE 的负载均衡罚款原样加上。
+**大白话：**主任务的分数照记；几位旁路考官的分数先取平均，再乘一个小权重 $w_{\mathrm{mtp}}$ 当“附加题”；MoE 的负载均衡罚款原样加上。
 
-其中：$\mathcal L$ 是总训练损失；$\mathcal L_1$ 是主 head（下一个 token）的损失，$\mathcal L_j$ 见上式；$\lambda$ 是 MTP 辅助损失的权重（局部符号，代码里的 `weight`）；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已乘过系数的负载辅助项。
+其中：$\mathcal L$ 是总训练损失；$\mathcal L_1$ 是主 head（下一个 token）的损失，$\mathcal L_j$ 见上式；$w_{\mathrm{mtp}}$ 是 MTP 辅助损失的权重（代码里的 `weight`）；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已乘过系数的负载辅助项。
 
 $n_{\mathrm{mtp}}=0$ 时省略中间项；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon 没有标签时，其 CE 为零，但**整项训练损失未必为零**，因为 MoE 辅助项可能仍存在。把所有 horizon 的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。
 
@@ -7370,7 +7370,7 @@ $$
 
 **大白话：**每层、每条序列、每个 KV 头、每个 token 都要存一条长 $d_h$ 的 K 和一条 V；把这些个数乘起来，再乘每个数占几个字节。
 
-其中：2 是 K 和 V 两份；$L$ 是层数，$B$ 是 batch 大小，$H_{kv}$ 是 KV 头数，$T$ 是已缓存的 token 数，$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是 K/V 张量每元素的字节数；$M_{KV}$ 是缓存主体的总字节数。把 2 字节换成 1 字节，只是**数据主体**约减半；scale、分页、对齐、临时缓冲和其他层仍需要空间。MLA、跨层共享等结构不能直接套同一个账本。
+其中：2 是 K 和 V 两份；$L$ 是层数，$B$ 是批大小，$H_{kv}$ 是 KV 头数，$T$ 是已缓存的 token 数，$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是 K/V 张量每元素的字节数；$M_{KV}$ 是缓存主体的总字节数。把 2 字节换成 1 字节，只是**数据主体**约减半；scale、分页、对齐、临时缓冲和其他层仍需要空间。MLA、跨层共享等结构不能直接套同一个账本。
 
 ## P24.2 一把短尺子：scale 与 zero-point
 
@@ -8034,7 +8034,7 @@ $$
 
 **大白话：**和 P24 的 KV 账本是同一个乘法：K、V 两份，每层、每条序列、每个 KV 头、每个 token 存一条长 $d_h$ 的向量。
 
-其中：2 对应 K 与 V；$L$ 是层数，$B$ 是 batch 大小，$H_{kv}$ 是 KV 头数，$T$ 是缓存的 token 数，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是 K/V 张量每个元素的字节数。假设 $B=1$、$T=4096$、BF16 的 $b_{\mathrm{elem}}=2$：
+其中：2 对应 K 与 V；$L$ 是层数，$B$ 是批大小，$H_{kv}$ 是 KV 头数，$T$ 是缓存的 token 数，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是 K/V 张量每个元素的字节数。假设 $B=1$、$T=4096$、BF16 的 $b_{\mathrm{elem}}=2$：
 
 - 0.6B：469,762,048 字节，即 **448 MiB**；
 - 30B-A3B：402,653,184 字节，即 **384 MiB**。
@@ -8508,7 +8508,7 @@ $$
 \bigl(\operatorname{SiLU}(xW_g)\odot xW_u\bigr)W_d.
 $$
 
-其中：$x$ 是一个位置的行向量；$W_g$、$W_u$ 是门控支路和内容支路的投影（$D\times d_{\mathrm{ff}}$），$W_d$ 是压回 $D$ 维的下投影（$d_{\mathrm{ff}}\times D$）；$\operatorname{SiLU}(u)=u/(1+e^{-u})$。
+其中：$x$ 是一个位置的行向量；$W_g$、$W_u$ 是门控支路和内容支路的投影（$D\times d_{\mathrm{ff}}$），$W_d$ 是压回 $D$ 维的下投影（$d_{\mathrm{ff}}\times D$）；$\operatorname{SiLU}$ 逐元素计算 $a/(1+e^{-a})$（$a$ 是局部变量）。
 
 中间的 ⊙ 是逐元素乘法，不是点积。若某个 gate 输入恰为 0，SiLU(0)=0，该通道的内容支路就被关掉。门控不等于 MoE 路由：前者通常调节 dense 中间通道，后者决定哪些专家支路参与。具体参数量与隐藏宽度要一起算，见 [P13](#p13-modern-block)。
 
@@ -8679,7 +8679,7 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 
 代码先写出 9 个 token 的流，再取 `stream[:, :-1]` 和 `stream[:, 1:]`。最后一个标签来自第九个 token，**不是把窗口开头卷回来**。这能验证 next-token 的位置关系。
 
-统一小配置为 B=2、T=8、D=16、Hq=4、每头 d=4、层数 L=2、上下文上限 16。GQA 使用 Hkv=2；MoE 每层 4 个路由专家、top-k=2、专家宽度 7，另有 1 个宽度 5 的共享专家。
+统一小配置为 $B=2$、$T=8$、$D=16$、$H_q=4$、每头 $d_h=4$、层数 $L=2$、上下文上限 16。GQA 使用 $H_{kv}=2$；MoE 每层 4 个路由专家、top-k=2、专家宽度 7，另有 1 个宽度 5 的共享专家。
 
 ### 脚本到底做了什么
 
@@ -8726,11 +8726,11 @@ $$
 
 **大白话：**K、V 两份，每层、每条序列、每个 KV 头、每个 token 都存一条长 $d_h$ 的向量，个数乘起来再乘每个数的字节数。
 
-其中：第一个 2 是 K 和 V 两份；$L$ 是层数，$B$ 是 batch 大小，$H_{kv}$ 是 KV 头数，$T$ 是缓存的 token 数，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是 K/V 张量每元素字节数（float32 为 4）。MHA 时 $H_{kv}=H_q=4$；因此 `2×2×2×4×8×4×4=4096`。GQA 把 $H_{kv}$ 改为 2，结果为 2048。这是从实际缓存张量 `numel×element_size` 求和后，再与独立整数账本对照的值。
+其中：第一个 2 是 K 和 V 两份；$L$ 是层数，$B$ 是批大小，$H_{kv}$ 是 KV 头数，$T$ 是缓存的 token 数，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是 K/V 张量每元素字节数（float32 为 4）。MHA 时 $H_{kv}=H_q=4$；因此 `2×2×2×4×8×4×4=4096`。GQA 把 $H_{kv}$ 改为 2，结果为 2048。这是从实际缓存张量 `numel×element_size` 求和后，再与独立整数账本对照的值。
 
-这里**不是测出来的进程内存，更不是显存峰值**。模型权重、注意力分数、临时复制、Python 对象、分配器缓存都没计入。S4 计算注意力时还会临时展开共享 K/V；存储的缓存必须保留 Hkv 头，不能把展开后的 Hq 份偷偷存回去。
+这里**不是测出来的进程内存，更不是显存峰值**。模型权重、注意力分数、临时复制、Python 对象、分配器缓存都没计入。S4 计算注意力时还会临时展开共享 K/V；存储的缓存必须保留 $H_{kv}$ 个头，不能把展开后的 $H_q$ 份偷偷存回去。
 
-Hq=4、Hkv=2 时，查询头的映射是 `[0,0,1,1]`。给两个 KV 头分别填入 `[10,11]` 和 `[20,21]`，只放一个可见 key，四个查询头输出应为：
+$H_q=4$、$H_{kv}=2$ 时，查询头的映射是 `[0,0,1,1]`。给两个 KV 头分别填入 `[10,11]` 和 `[20,21]`，只放一个可见 key，四个查询头输出应为：
 
 | 查询头 | 使用的 KV 头 | 结果 |
 | --- | --- | --- |
@@ -8850,7 +8850,7 @@ def causal_error(model, tokens, cut=3):
 | S0 文件当成 S2 | 拒绝 | 绝对位置与 RoPE 不同 |
 | 只改 RoPE base，矩阵形状不变 | 拒绝 | 配置语义不同 |
 | 只把词表顺序倒过来 | 拒绝 | ID 的含义不同 |
-| GQA 的 Hkv 从 2 改为 1 | 拒绝 | KV 投影与缓存形状改变 |
+| GQA 的 $H_{kv}$ 从 2 改为 1 | 拒绝 | KV 投影与缓存形状改变 |
 | S4 文件直接读成 S5 | 拒绝 | 稠密 FFN 与专家结构不同 |
 | S6 depth=2 文件按 depth=0 读取 | 拒绝 | 辅助 head 集合不同 |
 

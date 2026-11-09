@@ -83,20 +83,20 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 
 ## P23.4 MTP：在同一位置多问几个未来问题
 
-普通 next-token prediction 在位置 $t$ 的隐藏状态 $X^{(L)}_t$ 上，预测下一个 token $x_{t+1}$。S6 的教学旁路另外增加独立线性 head，用**同一个 $X^{(L)}_t$** 预测 $x_{t+2}$、$x_{t+3}$……。
+普通 next-token prediction 在位置 $t$ 的隐藏状态 $x_t$ 上，预测下一个 token $x_{t+1}$。S6 的教学旁路另外增加独立线性 head，用**同一个 $x_t$** 预测 $x_{t+2}$、$x_{t+3}$……。
 
 设有 $n_{\mathrm{mtp}}$ 个额外 head，总共 $n_{\mathrm{mtp}}+1$ 个预测距离，记为 horizon $j$：
 
 $$
-z_t^{(1)}=X^{(L)}_tW_1^\top,\qquad
-z_t^{(j)}=X^{(L)}_tW_j^\top\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
+z_t^{(1)}=x_tW_1,\qquad
+z_t^{(j)}=x_tW_j\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
 $$
 
 **大白话：**同一个位置的隐藏状态，同时交给几位“考官”：主 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head 只是换一张输出矩阵，读的是同一份表示。
 
-其中：$X^{(L)}_t$ 是最后一层（经过最终 RMSNorm）的隐藏状态 $X^{(L)}$ 在位置 $t$ 的那一行，长 $D$；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵（按 PyTorch 的 `[输出,输入]` 存放，所以右乘它的转置）；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
+其中：$x_t$ 是最后一层（经过最终 RMSNorm）的隐藏状态 $X^{(L)}$ 在位置 $t$ 的那一行，长 $D$ 的行向量（小写 $x_t$ 加下标 $t$ 指隐藏向量；$x_{t+1}$、$x_{t+j}$ 这类带“$+j$”的写法指该位置的真实 token，两者别混）；$W_j\in\mathbb R^{D\times\lvert\mathcal V\rvert}$ 是第 $j$ 个 horizon 的输出矩阵（代码里 `nn.Linear` 存成 $[\lvert\mathcal V\rvert,D]$，即 $W_j^\top$）；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
 
-主 head 是 S5 原来的 head，不是再复制一个。$X^{(L)}_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $X^{(L)}_t$。
+主 head 是 S5 原来的 head，不是再复制一个。$x_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $x_t$。
 
 ### 五个 token，把标签写出来
 
@@ -116,7 +116,7 @@ $$
 | --- | --- |
 | token ID、每个 horizon 的 labels | [B,T] |
 | 归一化后的隐藏状态 | $[B,T,D]$ |
-| 每个 head 的权重 | $[\lvert\mathcal V\rvert,D]$ |
+| 每个 head 的权重（`nn.Linear` 存储形状） | $[\lvert\mathcal V\rvert,D]$ |
 | 每个 horizon 的 logits | $[B,T,\lvert\mathcal V\rvert]$ |
 | 每个 horizon 的 CE | 标量 |
 
@@ -146,12 +146,12 @@ $$
 S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 $n_{\mathrm{mtp}}$ 个额外 head 的损失取平均：
 
 $$
-\mathcal L=\mathcal L_1+\frac{\lambda}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal L_j+\mathcal L_{\mathrm{MoE}}\quad(n_{\mathrm{mtp}}>0).
+\mathcal L=\mathcal L_1+\frac{w_{\mathrm{mtp}}}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal L_j+\mathcal L_{\mathrm{MoE}}\quad(n_{\mathrm{mtp}}>0).
 $$
 
-**大白话：**主任务的分数照记；几位旁路考官的分数先取平均，再乘一个小权重 $\lambda$ 当“附加题”；MoE 的负载均衡罚款原样加上。
+**大白话：**主任务的分数照记；几位旁路考官的分数先取平均，再乘一个小权重 $w_{\mathrm{mtp}}$ 当“附加题”；MoE 的负载均衡罚款原样加上。
 
-其中：$\mathcal L$ 是总训练损失；$\mathcal L_1$ 是主 head（下一个 token）的损失，$\mathcal L_j$ 见上式；$\lambda$ 是 MTP 辅助损失的权重（局部符号，代码里的 `weight`）；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已乘过系数的负载辅助项。
+其中：$\mathcal L$ 是总训练损失；$\mathcal L_1$ 是主 head（下一个 token）的损失，$\mathcal L_j$ 见上式；$w_{\mathrm{mtp}}$ 是 MTP 辅助损失的权重（代码里的 `weight`）；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已乘过系数的负载辅助项。
 
 $n_{\mathrm{mtp}}=0$ 时省略中间项；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon 没有标签时，其 CE 为零，但**整项训练损失未必为零**，因为 MoE 辅助项可能仍存在。把所有 horizon 的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。
 
