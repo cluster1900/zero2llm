@@ -8,7 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 G4 = [
 ("chapters/08a_kv_cache.md","参数更新后旧缓存无效。实现核对参数对象身份、版本、dtype 与 device，包含 `assign=True` 替换参数的情况；不支持通过 `.data` 等方式故意绕过 PyTorch 版本跟踪。","参数更新或替换后，旧缓存会被拒绝。"),
 ("chapters/08b_rope_yarn.md","源码 `rotation_walkthrough()` 用 float64 生成上表，`test_rotation_matches_independent_float64_matrix_and_preserves_tail` 还用独立的 2×2 矩阵验证实现，","源码 `rotation_walkthrough()` 用 float64 生成上表；本章另用独立的 2×2 矩阵核对实现，"),
-("chapters/08b_rope_yarn.md","点积会乘 **a²**，不是 a。","点积会乘 **a²**，不是 a。s>1 时 a>1，即 t<1，logits 被放大，注意力分布变得更尖。"),
+# bot-hub#126 F5：扩展倍数 s→κ、温度 t→τ（附录 A.5），句意不变。
+("chapters/08b_rope_yarn.md","s>1 时 a>1，即 t<1","点积会乘 **a²**，不是 a。$\\kappa>1$ 时 $a>1$，即 $\\tau<1$，logits 被放大，注意力分布变得更尖。"),
 ]
 
 # G5 机械修正
@@ -33,7 +34,8 @@ G5R = [
 ('chapters/08g_ced_architecture.md','`tensor[:, -0:]` 会意外保留全部历史','缓存是调用者持有的快照，新请求传 None；增量调用不覆盖旧快照，可以从同一个前缀分叉实验；改权重、换配置或换模型后旧缓存会被拒绝。不要编辑缓存张量，也不要用 `.data` 或底层共享存储写入绕过版本跟踪；这里不承诺检测这些破坏。'),
 ('chapters/08g_ced_architecture.md','mHC、Engram','、RMSNorm、FFN、量化、视觉输入、其他生产组件与 GPU kernel。'),
 ('chapters/08g_ced_architecture.md','Full 产生 global KV 并选择索引；','把 CSA2 分成三种模式：\n\n- **Full**：产生 global KV，并选择索引。\n- **Reindex**：复用前面层的 global KV，重新选择索引。\n- **Reuse**：global KV 和选择结果都复用。\n\n三种模式都保留'),
-('chapters/08g_ced_architecture.md','因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。','因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。'),
+# bot-hub#126 F6 (F0 r4 A.5): window length W→T_win (W 只指权重); same sentence, letter only; old W sentence still asserted absent.
+('chapters/08g_ced_architecture.md','因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。','因此“最后 $T_{\\mathrm{win}}$ 行还在”不等于“能从这 $T_{\\mathrm{win}}$ 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。'),
 ('chapters/08h_moe.md','得到 78x，而不是 74x。','得到 78x，而不是 74x（74x 是把两个共享分支取平均的错误算法：70+(3+5)/2）。'),
 ]
 
