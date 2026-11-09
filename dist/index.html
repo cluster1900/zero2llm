@@ -11949,6 +11949,17 @@ loss；不能因为它“特殊”就一并忽略。</li>
 <li>attention_mask 控制注意力可见性；labels=-100
 控制监督位置。二者职责不同，一个不能代替另一个。</li>
 </ul>
+<p>一张图把内部 shift、忽略位和外面再 shift 的后果放在一起：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p20-double-shift.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p20-double-shift.svg" class="book-diagram"
+width="332"
+alt="框架已经 shift 过，外面再 shift 一次就会错位。labels 与 input_ids 同形 [2,6]；模型内部用 logits[:, :-1] 对 labels[:, 1:]；BOS/PAD 记为 -100，有效目标 N_valid=9；外面再 shift 就错一格。" /></a>
+<div class="diagram-caption">
+框架已经 shift 过，外面再 shift 一次就会错位
+</div>
+</div>
 <p>独立参考计算不调用模型返回的
 loss，也不调用框架的交叉熵函数，而是自己写：</p>
 <p><span class="math display">\[
@@ -12112,7 +12123,17 @@ rank 对应一张 GPU，但这不是这些词的定义。</p>
 也不会替你切分输入数据，数据采样器必须配合。相关职责见 <a
 href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.parallel.DistributedDataParallel.html">PyTorch
 2.14 固定版 DDP API</a>；这里引用其机制说明，不声称本次运行了 PyTorch
-2.14 的多卡测试。</p>
+2.14 的多卡测试。 把各 rank 的前向、反传和梯度同步画在时间轴上：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p20-ddp-steps.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p20-ddp-steps.svg" class="book-diagram"
+width="388"
+alt="DDP：各 rank 先各算一份，再 AllReduce 平均梯度。rank0 与 rank1 读不同数据，各自前向与反传；AllReduce 平均梯度后各自按同一规则 step，参数仍一致。" /></a>
+<div class="diagram-caption">
+DDP：各 rank 先各算一份，再 AllReduce 平均梯度
+</div>
+</div>
 <p>假设每个 rank 一次处理 <span class="math inline">\(B\)</span>
 条，累积 <span class="math inline">\(n_{\mathrm{acc}}\)</span>
 次后更新，数据并行组有 <span
@@ -12368,7 +12389,18 @@ href="https://arxiv.org/abs/2104.04473">Megatron
 描述专家放在哪。路由不均衡会让某些设备忙、某些设备闲；跨设备 token
 交换也有成本。<a
 href="https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0">Megatron-Core
-core_v0.12.0 的 MoE 与并行说明</a></p>
+core_v0.12.0 的 MoE 与并行说明</a>
+三种并行切的轴不同，通信落点也不一样：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p20-tp-pp-ep.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p20-tp-pp-ep.svg" class="book-diagram"
+width="574"
+alt="TP、PP、EP 切的不是同一条轴。TP 在层内拆权重：按列拆后拼接，按行拆后求和；PP 按层分设备，激活向前、梯度向后；EP 按专家分设备，token 送去再送回。" /></a>
+<div class="diagram-caption">
+TP、PP、EP 切的不是同一条轴
+</div>
+</div>
 <p>这些策略可以组合，但<strong>不能把所有并行度数字无脑相乘</strong>。简单的纯
 dense DP×TP×PP 布局常可按独立进程组规划；加入 EP、context parallel
 或不同专家组后，要按框架实际 rank
@@ -12402,7 +12434,18 @@ SFTTrainer 的名字等同于“自动正确的对话微调”。assistant-only
 P21、P22，那里会单独锁版本和检查目标。</p>
 <p>一个实用顺序是：先用单进程证明数据、loss
 和保存加载正确；确实需要更多吞吐再试数据并行；确认状态占用是瓶颈再考虑分片；当单层或网络规模、通信条件要求进一步切分时，再研究
-TP / PP / EP。这个顺序不是性能定律，而是降低排错变量的工程方法。</p>
+TP / PP / EP。这个顺序不是性能定律，而是降低排错变量的工程方法。
+把这个先后顺序收成一张决策图：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p20-framework-choice.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p20-framework-choice.svg" class="book-diagram"
+width="324"
+alt="先单进程证明正确，再按瓶颈选框架。单进程验证数据、loss 与保存；常用结构与 Trainer 用 Transformers；后训练用 TRL；内存或吞吐瓶颈用 DeepSpeed ZeRO；超大模型需要 TP/PP/EP 时用 Megatron。" /></a>
+<div class="diagram-caption">
+先单进程证明正确，再按瓶颈选框架
+</div>
+</div>
 <h2 id="p20.9-保存模型不一定等于能继续训练">P20.9
 保存模型，不一定等于能继续训练</h2>
 <p>本章产生两类本地输出，概念上不能混用。</p>
@@ -12821,7 +12864,17 @@ EOS：原本应继续的回答被错误教成“到这里结束”。</p>
 <p>本章采用保守、可测试的策略：保留 BOS、可选
 system，以及从开头开始能装下的<strong>完整 user/assistant
 对</strong>，只在轮与轮之间截断。第一轮都放不下就明确报错，不返回一个零目标样本，不跳过长轮后拼上后面的轮，也不创造
-EOS。</p>
+EOS。 截断规则可以画成一张判断图：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p21-drop-turns.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p21-drop-turns.svg" class="book-diagram"
+width="272"
+alt="宁可丢掉装不下的完整轮，也不造半个答案。从前往后逐轮放入：整轮装得下就保留；装不下就丢弃这一轮及之后；一轮都装不下就拒绝样本；不补 EOS，空回答也监督 EOS。" /></a>
+<div class="diagram-caption">
+宁可丢掉装不下的完整轮，也不造半个答案
+</div>
+</div>
 <p>去掉 system 的两轮例子长度为 15；第一轮长度为 8：</p>
 <ul>
 <li>max_length=15：两轮都保留，4 个目标。</li>
@@ -13702,7 +13755,18 @@ padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 
 拼接边界，调用方还要保证 chosen / rejected 共用同一 prompt
 和一致的结束规则。</p>
 <p>修改被排除位置的
-logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。</p>
+logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。 把从
+logits 到一对答案 log p 的形状账本画出来：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p22-logp-pair.png"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p22-logp-pair.png" class="book-diagram"
+width="317"
+alt="从变长 token 筛出一对答案 log p。logits 形状 [B,T,|𝒱|]；logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。" /></a>
+<div class="diagram-caption">
+从变长 token 筛出一对答案 log p
+</div>
+</div>
 <h2 id="p22.6-grpo同一道题先比较一组答案">P22.6
 GRPO：同一道题，先比较一组答案</h2>
 <p><a href="https://arxiv.org/html/2402.03300v3#S4.SS1">DeepSeekMath
@@ -13799,6 +13863,17 @@ class="math inline">\(\beta\)</span> 是 KL 惩罚系数（局部符号，本章
 min(1.4,1.2)=1.2，不再鼓励这项收益无限上涨。</li>
 <li>A=−1、ρ=0.6：收益取 min(−0.6,−0.8)=−0.8，不能错误地取 max。</li>
 </ul>
+<p>clip 之后取 min 还是看起来像 max，全看优势的正负：</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p22-clip-sign.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p22-clip-sign.svg" class="book-diagram"
+width="452"
+alt="clip 之后取 min，上涨与下跌都靠优势符号管住。ρ=exp(log π_θ − log π_old)；A&gt;0 时 min(ρA, clip(ρ)A) 限制上涨；A&lt;0 时同一式子限制下跌；先在答案内平均再对答案平均，取负号得要最小化的损失。" /></a>
+<div class="diagram-caption">
+clip 之后取 min，上涨与下跌都靠优势符号管住
+</div>
+</div>
 <p>clip
 的作用依赖优势符号和更新方向，并不是所有范围外的概率比都“没有梯度”；它也不保证实际
 KL 永远小于一个固定值。更新后的概率仍需检查。</p>
