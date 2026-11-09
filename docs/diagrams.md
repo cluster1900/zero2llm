@@ -1,6 +1,6 @@
 # 怎样给书加一张图（D0，bot-hub#126）
 
-读者看到的图都是**构建时预渲染**的：网站用 SVG，EPUB 用 PNG，dist md 原样保留 Mermaid 源码。阅读时不需要 JavaScript，也不需要 Mermaid。**CI 不渲染图**：`ci.yml` 和 `pages.yml` 只跑 `scripts/check_book.py`，检查已提交的 `dist/`。因此加图或改图的 PR 必须**在本地渲染**，再把 `dist/` 一起提交。
+读者看到的图都是**构建时预渲染**的：网站用 SVG，EPUB 用 PNG，dist md 原样保留 Mermaid 源码。阅读时不需要 JavaScript，也不需要 Mermaid。**CI 不渲染图**：`ci.yml` 跑 `python -m unittest discover -s tests` 和 `scripts/check_book.py`，`pages.yml` 只跑 `scripts/check_book.py`，然后发布已提交的 `dist/`。两者都不启动浏览器，也不重新生成 `dist/`。因此加图或改图的 PR 必须**在本地渲染**，再把 `dist/` 一起提交。
 
 ## 1. 图的名字：稳定 id，不随位置变
 
@@ -16,24 +16,37 @@
 - **新图请写 `%% id:`**，按「章节编号-内容」命名，如 `p15-online-softmax`、`ch03-mask-broadcast`。这样以后改图时，文件名不变，diff 一眼能看出是哪张图。
 - 在别处插入或删除一张图，其他图的 id 都不变。这一点和 D0 之前不同：以前按出现顺序编号 `flow-01…flow-10`，插一张图就会让后面所有图改名。
 
+- 没有 `%% id:` 时，哈希按源码**原样**计算，不做任何规范化：改一个空格、缩进或换行，id 就会变。想让名字固定，就写 `%% id:`。
+
 `dist/assets/rendered/manifest.json` 记下每张图源码的 sha256 和它是由什么渲染的（`renderer`）。D0 之前提交的 40 张图标为 `legacy: committed before D0 (bot-hub#126)`。
 
 ## 2. 只渲染新增或改动的图
 
-`build.py` 开始时，先把上一次的 `dist/assets/rendered/` 挪到临时缓存，然后按 id 和 sha256 判断：
+`build.py` 开始时，先把上一次的 `dist/assets/rendered/` 备份到 `dist/` 之外的仓库根目录 `.render-backup/`（已 gitignore；先复制到 `.render-backup.tmp/`，复制完整后再改名），然后按 id 和 sha256 判断：
 
 - id 相同、源码 sha256 相同、svg/png 都在：**直接复制旧文件**，字节不变，不启动浏览器；
 - 新图或源码改过的图：交给 `scripts/render_diagrams.mjs`（puppeteer + Chromium）渲染。
 
-如果所有图都没变，构建根本不需要 Node.js 和 `npm ci`。要强制全部重渲（例如改了 `render_diagrams.mjs` 的主题或字体），运行 `ZERO2LLM_RERENDER=1 python3 build.py`；这会让 40 多张图全部出现字节差异，请单独开一个 PR。
+如果所有图都没变，构建根本不需要 Node.js 和 `npm ci`。
+
+备份只在构建成功后删除。渲染中途失败时，`build.py` 先把备份复制到 `dist/assets/rendered.restore-tmp/`，再用改名换回 `dist/assets/rendered/`，换好之后才删备份。就算恢复时崩溃，备份也还在：下次 `build.py` 发现 `dist/assets/rendered/manifest.json` 不在、`.render-backup/` 还在，就自动拿备份当复用缓存。要强制全部重渲（例如改了 `render_diagrams.mjs` 的主题或字体），运行 `ZERO2LLM_RERENDER=1 python3 build.py`；这会让 40 多张图全部出现字节差异，请单独开一个 PR。
 
 `scripts/check_book.py`（CI 会跑）会核对以下几点：
 - dist md 里每个 Mermaid 块都有同 id、同 sha256 的渲染，否则报「没有渲染」或「渲染已过期（源码改了但没重新构建）」；
-- 每张手绘 SVG 的 sha256 都与清单一致；
+- 每张手绘 SVG 的 sha256 都与清单一致。哈希的是**仓库里的源文件** `assets/diagrams/x.svg`（也就是你要改的那个文件，和 `build.py` 一致），不是 `dist/assets/diagrams/` 里的副本；副本和源文件不一致也会报错；
+- `dist/assets/rendered/` 里除了 `manifest.json`、`dimensions.json` 和清单中每个 id 的 `.svg/.png` 之外，没有任何别的文件（孤儿文件，例如旧的 `flow-01.png` 或 `orphan.svg`，会报错）；
 - 清单里没有书稿中已不存在的 Mermaid 图；
 - 清单与 `dimensions.json` 一致。
 
-所以「改了 chapters 却忘了重新构建」会在 CI 里失败。
+所以「改了 chapters 或 assets/diagrams 却忘了重新构建」会在 CI 里失败。
+
+### EPUB 源码泄漏检查覆盖的图型
+
+`check_book.py` 会检查 EPUB 里每个 `<pre>`/`<code>`：去掉开头的 front matter（`---…---`）和 `%%` 注释行以后，如果第一行是 Mermaid 图型关键字，就说明有一张图没被预渲染、源码漏给了读者。关键字列表取自锁定版本 mermaid 11.17.2 的 `dist/mermaid.js` 中注册的全部 detector，再加上外部插件 @mermaid-js/mermaid-zenuml 的 `zenuml`：
+
+`flowchart` `flowchart-elk` `graph` `sequenceDiagram` `classDiagram` `classDiagram-v2` `stateDiagram` `stateDiagram-v2` `erDiagram` `journey` `gantt` `pie` `quadrantChart` `requirement` `requirementDiagram` `gitGraph` `C4Context` `C4Container` `C4Component` `C4Dynamic` `C4Deployment` `mindmap` `timeline` `zenuml` `sankey` `sankey-beta` `xychart` `xychart-beta` `block` `block-beta` `packet` `packet-beta` `kanban` `architecture` `architecture-beta` `radar-beta` `treemap` `treemap-beta` `treeView-beta` `swimlane-beta` `eventmodeling` `venn-beta` `cynefin-beta` `info`，以及不区分大小写的 `ishikawa` `ishikawa-beta` `wardley-beta` `railroad-beta` `railroad-ebnf-beta` `railroad-abnf-beta` `railroad-peg-beta`。
+
+其中很多关键字也是普通单词（`graph`、`pie`、`info`、`block`），所以只有满足下面三条才算图：关键字独占第一行，或后面跟的是参数（如 `graph LR`、`pie title …`、`gitGraph LR:`），而不是 `=`、`(`、`.`、`:` 这类代码符号；并且后面还有正文行。`tests/test_diagram_ids.py` 逐个测试这些关键字。装了 node_modules 时，它还会把这个列表和 `node_modules/mermaid` 实际注册的 detector 对一遍。升级 mermaid 时，同步更新 `scripts/check_book.py` 的 `MERMAID_KEYWORDS`、这份列表和测试。
 
 ## 3. 渲染工具链（实际版本）
 
