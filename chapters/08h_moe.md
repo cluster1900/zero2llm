@@ -14,40 +14,48 @@
 
 $$
 u=x+\operatorname{Attention}(\operatorname{Norm}_1(x)),\qquad
-h=u+\operatorname{FFN}(\operatorname{Norm}_2(u)).
+y=u+\operatorname{FFN}(\operatorname{Norm}_2(u)).
 $$
 
 S5 不改变第一条支路，只把第二式的 FFN 换成 MoE：
 
 $$
-h=u+\operatorname{MoE}(\operatorname{Norm}_2(u)).
+y=u+\operatorname{MoE}(\operatorname{Norm}_2(u)).
 $$
+
+换句话说，只换了第二道工序的师傅班子：工单进出的流程（先归一化、做完再加回残差）原样不动。
+
+其中：x 是进入本 Block 的一个 token 的行向量，宽 $D$；$u$ 是注意力子层加完残差后的结果（全书同义）；$y$ 是本 Block 的输出，也就是下一层的输入；$\operatorname{Norm}_1$、$\operatorname{Norm}_2$ 是两处 RMSNorm；$\operatorname{MoE}(\cdot)$ 是下面要定义的混合专家模块。
 
 因此，MoE 本身不再加一次输入残差。注意力负责读取其他位置，MoE 在本层逐 token 加工已经得到的表示。换 FFN 不意味着换掉因果 mask，也不意味着取消 GQA 的 K/V 缓存。
 
 ![S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃](assets/diagrams/p18-moe.svg)
 
-图中标了 N_E=4、k=2；N_E 是可选的路由专家数量，k 是每 token 选择的数量。共享专家始终参与，数量记 N_S（图中共享专家框未标具体数）。**N_E 和 k 不能混写。** k=2、N_E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。
+图中标了 $N_E=4$、$k=2$；$N_E$ 是可选的路由专家数量，$k$ 是每 token 选择的数量。共享专家始终参与，数量记 $N_S$（图中共享专家框未标具体数；全书 $E$ 专指 embedding 表）。**$N_E$ 和 $k$ 不能混写。** $k=2$、$N_E=4$ 时，模型保存四个路由专家，单个 token 只调用其中两个。
 
 ## P18.2 路由器先打分，再选择，再加权
 
 设一个 token 的输入是行向量 x，宽度为 D。教学路由器是一层不带 bias 的 Linear：
 
 $$
-z=xW_r^\top,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
-p_e=\frac{\exp(z_e)}{\sum_j\exp(z_j)}.
+z=xW_r^\top,\qquad W_r\in\mathbb{R}^{N_E\times D},\qquad
+p_e=\frac{\exp(z_e)}{\sum_{j=0}^{N_E-1}\exp(z_j)}.
 $$
 
-z 是分数，p 是本章选用的 Softmax affinity，意思是 token 对专家的相对偏好。它不是词表上的下一个 token 概率，维度 E 也不是词表大小 V。
+z 是分数，p 是本章选用的 Softmax affinity，意思是 token 对专家的相对偏好。它不是词表上的下一个 token 概率，维度 $N_E$ 也不是词表大小 $\lvert\mathcal V\rvert$。路由器像前台给每位师傅打一个“对口分”，Softmax 再把这些分数换成加起来为 1 的偏好比例。
 
-接着取 p 最大的 k 个专家，记为集合 K。本章再把**所选专家**的权重归一化：
+其中：x 是一个 token 经 $\operatorname{Norm}_2$ 之后的行向量，宽 $D$；$W_r$ 是路由矩阵，按 $[N_E,D]$（输出×输入）存，所以乘的时候写转置；$z$ 有 $N_E$ 个分量，$z_e$ 是第 e 个路由专家的分数；$p_e$ 是 token 对第 e 个专家的 affinity；$N_E$ 是路由专家个数；j 是求和用的专家编号（从 0 数起）。
+
+接着取 p 最大的 k 个专家，记为集合 $\mathcal I_k$。本章再把**所选专家**的权重归一化：
 
 $$
-w_e=\frac{p_e}{\sum_{j\in K}p_j}\quad(e\in K),\qquad
-\operatorname{MoE}(x)=\sum_{e\in K}w_e F_e(x)+\sum_{s=1}^{S}F_s^{shared}(x).
+w_e=\frac{p_e}{\sum_{j\in\mathcal I_k}p_j}\quad(e\in\mathcal I_k),\qquad
+\operatorname{MoE}(x)=\sum_{e\in\mathcal I_k}w_e F_e(x)+\sum_{e'=1}^{N_S}F^{\mathrm{sh}}_{e'}(x).
 $$
 
-没有被选中的路由专家不计算 F_e(x)，也不参与这次加权和。共享专家全部执行，输出直接相加，不与路由专家一起归一化，也不除以 S。
+没有被选中的路由专家不计算 F_e(x)，也不参与这次加权和。共享专家全部执行，输出直接相加，不与路由专家一起归一化，也不除以 $N_S$。先在被选中的几位师傅之间重新分配话语权，让它们的权重加起来为 1；再把每张工单都要做的共享检查原样加上。
+
+其中：$\mathcal I_k$ 是 affinity 最大的 k 个路由专家的编号集合；k 是每 token 选几个；$w_e$ 是被选专家 e 的组合权重；$F_e$ 是第 e 个路由专家（一个 SwiGLU FFN）；$N_S$ 是共享专家个数；$e'$ 是共享专家编号，$F^{\mathrm{sh}}_{e'}$ 是第 $e'$ 个共享专家。
 
 这是本书明确选择的一套教学约定，不是“所有 MoE 的唯一公式”。尤其要区分原始 Softmax、所选权重归一化、Sigmoid affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生不同输出。
 
@@ -63,32 +71,34 @@ $$
 
 A 选择的原始概率和为 0.7，所以不是“0.4 倍下标 0 的专家加 0.3 倍下标 1 的专家”，而是 4/7 与 3/7。C 的平局不随机打破。
 
-请求负载是 `[2,2,1,1]`，总和 6=N×k。它数的是 **token—专家分配次数**，不是不同 token 的数量，也不包括共享专家。一个 token 选择两个专家，会计两次；每个共享专家另外处理全部 N=3 个 token。
+请求负载是 `[2,2,1,1]`，总和 $6=BT\cdot k$（摊平后共 $BT=3$ 个 token，k=2）。它数的是 **token—专家分配次数**，不是不同 token 的数量，也不包括共享专家。一个 token 选择两个专家，会计两次；每个共享专家另外处理全部 $BT=3$ 个 token。
 
 ### 再把输出算成一个具体数字
 
 为了单独检查组合规则，暂时不用 SwiGLU，把三个专家换成简单倍率：F0(x)=x，F1(x)=10x，F2(x)=100x。令 affinity 比例为 1:2:4，top-2 选下标 2 和 1 的专家，归一化权重为 2/3 和 1/3：
 
 $$
-y_{routed}=\tfrac23\times100x+\tfrac13\times10x=70x.
+\operatorname{MoE}_{\mathrm{routed}}(x)=\tfrac23\times100x+\tfrac13\times10x=70x.
 $$
+
+其中：$\operatorname{MoE}_{\mathrm{routed}}(x)$ 只是 MoE 输出里路由专家那一部分；2/3、1/3 是 4:2 归一化后的组合权重；100x、10x 分别是下标 2、1 的专家的输出。
 
 再加两个共享分支 3x 和 5x，得到 78x，而不是 74x（74x 是把两个共享分支取平均的错误算法：70+(3+5)/2）。这个倍率实验只用来验算组合，不把线性倍率当成真正的专家能力；正式模块和另一组独立梯度测试都使用 SwiGLU。
 
 ## P18.3 张量账本：先摊平，最后放回
 
-设输入 X 的形状为 [B,T,D]，N=B×T。MoE 的路由和专家计算不需要先混合不同 token，因此把前两维暂时摊平即可。
+设输入 X 的形状为 [B,T,D]，摊平后共有 $BT$ 个 token（附录 A.5：正文不用不带下标的 $N$，摊平后的 token 数直接写 $BT$）。MoE 的路由和专家计算不需要先混合不同 token，因此把前两维暂时摊平即可。
 
 | 张量 | 形状 | 含义 |
 | --- | --- | --- |
-| flat | [N,D] | 当前调用的全部 token 向量 |
-| router.weight | [E,D] | 为所有路由专家打分 |
-| logits、probs | [N,E] | 每 token 对每个路由专家的分数、affinity |
-| indices | [N,k] | 被选中的专家编号 |
-| weights | [N,k] | 丢弃前的组合权重 |
-| kept | [N,k] | 容量实验中是否接受该分配 |
-| requested、accepted | [E] | 容量处理前后各专家的分配次数 |
-| output | [N,D] → [B,T,D] | 专家结果按原 token 位置合回 |
+| flat | $[BT,D]$ | 当前调用的全部 token 向量 |
+| router.weight | $[N_E,D]$ | 为所有路由专家打分 |
+| logits、probs | $[BT,N_E]$ | 每 token 对每个路由专家的分数、affinity |
+| indices | $[BT,k]$ | 被选中的专家编号 |
+| weights | $[BT,k]$ | 丢弃前的组合权重 |
+| kept | $[BT,k]$ | 容量实验中是否接受该分配 |
+| requested、accepted | $[N_E]$ | 容量处理前后各专家的分配次数 |
+| output | $[BT,D]$ → $[B,T,D]$ | 专家结果按原 token 位置合回 |
 
 **dispatch** 是按专家收集 token；**combine** 是把结果送回 token 原位置并加权。它们不能只做 reshape：同一个 token 可能出现在多个专家的小批次中，结果要相加，而不是覆盖。
 
@@ -110,21 +120,23 @@ flowchart TD
 
 ## P18.4 专家多了，参数和计算怎样算
 
-沿用 P13 的无 bias SwiGLU，中间宽度为 d_f 的一个专家有三张矩阵：gate、up、down。参数量为 3D d_f。路由器有 DE 个参数。
+沿用 P13 的无 bias SwiGLU，中间宽度为 $d_{\mathrm{ff}}$ 的一个专家有三张矩阵：gate、up、down。参数量为 $3Dd_{\mathrm{ff}}$。路由器有 $DN_E$ 个参数。
 
-设路由专家宽度为 d_r，共享专家宽度为 d_s，则**仅 MoE 模块**：
-
-$$
-P_{total}=E(3Dd_r)+S(3Dd_s)+DE,
-$$
+设每个路由专家的中间宽度为 $d_{\mathrm{ff}}$，每个共享专家的为 $d_{\mathrm{ff}}^{\mathrm{sh}}$，则**仅 MoE 模块**：
 
 $$
-P_{active/token}=k(3Dd_r)+S(3Dd_s)+DE.
+N_{\mathrm{total}}=N_E(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E,
 $$
 
-这里的 active 是不丢弃时，每 token 参与运算的权重预算。路由器需要给全部 E 个专家打分，所以不能只算 k 个 router 行；共享专家也不能漏算。两式都不包含 attention、norm、embedding 和输出 head，更不是整模型内存公式。
+$$
+N_{\mathrm{active}}=k(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E.
+$$
 
-手算 D=4、E=4、k=2、d_r=2、S=1、d_s=2：
+这里的 active 是不丢弃时，每 token 参与运算的权重预算。路由器需要给全部 $N_E$ 个专家打分，所以不能只算 k 个 router 行；共享专家也不能漏算。两式都不包含 attention、norm、embedding 和输出 head，更不是整模型内存公式。两式只差第一项：店里养着 $N_E$ 位路由师傅，每张工单只请 k 位，而共享师傅和前台每次都在。
+
+其中：$N_{\mathrm{total}}$ 是 MoE 模块保存的参数总数；$N_{\mathrm{active}}$ 是每 token 参与运算的参数预算（参数个数各用自己的下标名，$N_{\mathrm{param}}$ 只留给 P19 缩放定律）；3 对应 gate、up、down 三张矩阵；$N_E$、$N_S$ 是路由专家与共享专家个数；$DN_E$ 是路由矩阵 $W_r$ 的元素数。
+
+手算 $D=4$、$N_E=4$、$k=2$、$d_{\mathrm{ff}}=2$、$N_S=1$、$d_{\mathrm{ff}}^{\mathrm{sh}}=2$：
 
 - 一个路由专家：3×4×2=24。
 - 共享专家：24；路由器：4×4=16。
@@ -137,7 +149,7 @@ $$
 
 考虑 D=4、没有共享专家的两个方案：
 
-| 方案 | E | k | 专家宽度 | 全部专家参数，不含 router | 每 token 专家参数，不含 router | 含 router 总参数 |
+| 方案 | $N_E$ | k | 专家宽度 | 全部专家参数，不含 router | 每 token 专家参数，不含 router | 含 router 总参数 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 较粗 | 2 | 1 | 8 | 192 | 96 | 200 |
 | 较细 | 4 | 2 | 4 | 192 | 96 | 208 |
@@ -157,20 +169,26 @@ $$
 本章将整个 [B,T] 摊平，定义：
 
 $$
-f_e=\frac{n_e}{Nk},\qquad
-\bar p_e=\frac1N\sum_{t=1}^{N}p_{t,e},\qquad
-L_{aux}=E\sum_e f_e\bar p_e.
+f_e=\frac{n_e}{BTk},\qquad
+\bar p_e=\frac{1}{BT}\sum_{t=1}^{BT}p_{t,e},\qquad
+\mathcal L_{\mathrm{aux}}=N_E\sum_e f_e\bar p_e.
 $$
 
-n_e 使用丢弃前的 requested 计数；f 的总和为 1。计数来自离散选择，本实现不对它求梯度，梯度通过平均 affinity 流向 router。训练时再乘一个小系数 alpha：
+n_e 使用丢弃前的 requested 计数；f 的总和为 1。计数来自离散选择，本实现不对它求梯度，梯度通过平均 affinity 流向 router。训练时再乘一个小系数 α。
+
+$f_e$ 看实际派了几张单，$\bar p_e$ 看平均有多想派；两者一起偏向同一位师傅时和最大，所以压低它就是劝路由器别扎堆。乘 $N_E$ 是为了让完全均匀时结果正好为 1。
+
+其中：$n_e$ 是丢弃前第 e 个专家收到的分配次数；$BT$ 是摊平后的 token 数，k 是每 token 选几个，所以 $BTk$ 是分配总次数；$f_e$ 是专家 e 分到的份额；$p_{t,e}$ 是摊平后第 t 个 token（从 1 数到 $BT$）对专家 e 的 affinity，$\bar p_e$ 是它在 $BT$ 个 token 上的平均；$\mathcal L_{\mathrm{aux}}$ 是均衡辅助损失。
 
 $$
-L=L_{CE}+\alpha\cdot\operatorname{mean}_{layers}(L_{aux}).
+\mathcal L=\mathcal L_{\mathrm{CE}}+\alpha\cdot\operatorname{mean}_{\mathrm{layers}}(\mathcal L_{\mathrm{aux}}).
 $$
 
-S5 默认 alpha=0.01，且只有提供 targets 才返回训练损失。均衡辅助项不是标签预测的交叉熵；对验证损失或困惑度做比较时，应单独计算 CE，不把 CE+辅助项直接拿去算 perplexity。
+其中：$\mathcal L$ 是训练时反向传播用的总损失；$\mathcal L_{\mathrm{CE}}$ 是下一 token 交叉熵；α 是辅助项系数（本章局部字母）；$\operatorname{mean}_{\mathrm{layers}}$ 对所有 MoE 层的辅助项取平均。
 
-在 A、B、C 的例子里，f=[1/3,1/3,1/6,1/6]，平均 p=[0.3,0.3,0.2,0.2]，所以未乘系数的 L_aux=16/15≈1.066667。
+S5 默认 α=0.01，且只有提供 targets 才返回训练损失。均衡辅助项不是标签预测的交叉熵；对验证损失或困惑度做比较时，应单独计算 CE，不把 CE+辅助项直接拿去算 perplexity。
+
+在 A、B、C 的例子里，f=[1/3,1/3,1/6,1/6]，平均 p=[0.3,0.3,0.2,0.2]，所以未乘系数的 $\mathcal L_{\mathrm{aux}}=16/15\approx1.066667$。
 
 不要把“辅助损失等于 1”读成“硬路由已均衡”。例如四个专家的 p 都等于 1/4，在我们的固定平局规则下，所有 token 都选下标 0、1 的专家，计数仍失衡，但上述辅助项恰好也是 1。应同时查看计数、概率和训练效果。
 
@@ -286,7 +304,7 @@ route 里不用默认 topk 的偶然平局顺序，而使用稳定降序排序�
 
 ### 缓存也必须认识路由配置
 
-S5 继续调用 S4 的 compact GQA cache，形状仍为 [B,Hkv,T,d]。但高层的历史 K/V 依赖低层 MoE 的输出，所以改变低层路由也会让缓存失效。
+S5 继续调用 S4 的 compact GQA cache，形状仍为 $[B,H_{kv},T,d_h]$。但高层的历史 K/V 依赖低层 MoE 的输出，所以改变低层路由也会让缓存失效。
 
 已有签名追踪权重、位置参数、norm epsilon 等；S5 另外追踪实际模块上的 top_k、capacity、balance_mode，以及 balancing bias 等 buffer 的身份、原地修改版本、dtype 和 device。bias 虽然不是 Parameter，也必须纳入。
 
@@ -321,7 +339,7 @@ compact KV payload bytes: 1536; no GPU timing measured
 
 后一组直方图来自未训练的两层 S5，B=2、T=6、k=2，所以每层计数和为 24。不能把随机初始化下的分工当成学到的专家能力。脚本用合成 token 做一次梯度 smoke，循环左移标签也只是用于验证反向，并非本书推荐的语料构造或验证集评估方法。
 
-KV 的 1536 字节可以独立复算：2（K/V）×2 层×2 batch×6 token×2 KV 头×4 头宽×4 字节。MoE 没有把 Hkv 改成 E；专家参数内存与 KV payload 是两本不同的账。
+KV 的 1536 字节可以独立复算：按 $2LBH_{kv}Td_hb_{\mathrm{elem}}$，即 2（K/V）×2 层×批大小 2×2 KV 头×6 token×4 头宽×4 字节。MoE 没有把 $H_{kv}$ 改成 $N_E$；专家参数内存与 KV payload 是两本不同的账。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
@@ -331,7 +349,7 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 
 当专家分布在不同设备上，dispatch 不再只是本机索引：需要把 token 向量送到相应专家所在的设备，算完后把输出送回。常见 expert parallel 会用到 all-to-all 一类通信，但具体分组、复制和合并方案各不相同。
 
-一个粗略账本是：N 个 token，每个发往 k 个远端专家，每份 D 维、每元素 q 字节，那么一次向外发送的向量 payload 约为 NkDq；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。
+一个粗略账本是：$BT$ 个 token，每个发往 k 个远端专家，每份 D 维、每元素 $b_{\mathrm{elem}}$ 字节，那么一次向外发送的向量 payload 约为 $BT\cdot kDb_{\mathrm{elem}}$；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。
 
 因此，决定时延的至少包括：
 
@@ -374,11 +392,11 @@ sequenceDiagram
 ## P18.12 自测：先写答案，再运行断言
 
 1. A 的 p=[0.4,0.3,0.2,0.1]、k=2，输出权重是 0.4、0.3 吗？三行 A、B、C 一共发生多少次路由分配？
-2. D=4、E=4、k=2、路由和共享宽度都为 2、一个共享专家时，MoE 总参数与每 token 激活预算各多少？是整模型参数吗？
-3. 把 E=2、k=1、宽度 8 换成 E=4、k=2、宽度 4，专家参数预算保持什么？包含 router 后还严格相等吗？
+2. $D=4$、$N_E=4$、$k=2$、路由和共享宽度都为 2、一个共享专家时，MoE 总参数与每 token 激活预算各多少？是整模型参数吗？
+3. 把 $N_E=2$、k=1、宽度 8 换成 $N_E=4$、k=2、宽度 4，专家参数预算保持什么？包含 router 后还严格相等吗？
 4. A、B、C 的请求计数为何是 [2,2,1,1]？capacity=1 后计数和 C 的路由贡献怎样变？
 5. 部分丢弃例子第二行只保留下标 1 的专家，权重应为 1 还是 3/7？共享分支受不受影响？
-6. 所有 token 的四个 affinity 都是 1/4，top-2 的硬负载会均匀吗？L_aux=1 能证明均衡吗？
+6. 所有 token 的四个 affinity 都是 1/4，top-2 的硬负载会均匀吗？$\mathcal L_{\mathrm{aux}}=1$ 能证明均衡吗？
 7. top-1 且所选权重归一化时，单靠任务损失能在本实现中更新 router 吗？辅助项呢？
 8. bias 更新采用负载 [4,0,2,2]、步长 0.1 时，增量是多少？已建的 KV cache 能否继续用？
 9. 缓存和完整前向都用同一个错误的“所有专家平均”函数，二者一致能证明 MoE 正确吗？
@@ -395,7 +413,7 @@ sequenceDiagram
 7. 不能通过这条任务路径，唯一组合权重恒为 1，router 梯度为零；辅助项在测试的集中路由案例中提供非零梯度。见本章测试。
 8. [-0.1,+0.1,0,0]；更新 buffer 后必须重置缓存。见本章测试。
 9. 不能。见本章测试。
-10. 2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见本章测试。
+10. 2×2×2×2×6×4×4=1536（$2LBH_{kv}Td_hb_{\mathrm{elem}}$）；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见本章测试。
 
 到这里，S0→S5 已经把“多保存一些参数”和“每 token 真正调用哪些参数”分开。接下来进入训练流水线：即使路由与缓存都正确，数据边界、去重、切分和预算没有处理好，也训练不出可靠的模型。
 

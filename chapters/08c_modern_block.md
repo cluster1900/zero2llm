@@ -11,6 +11,10 @@
 $$u=x+\operatorname{Attention}(\operatorname{Norm}_1(x))$$
 $$y=u+\operatorname{FFN}(\operatorname{Norm}_2(u))$$
 
+两行是同一个套路：先把输入“理一理”（Norm），交给子层算出一份修改意见，再把意见加回原来的主干。主干本身一直原样往下传，子层只负责“补一笔”。
+
+其中：$x$ 是本 Block 的输入，一行一个位置；$u$ 是做完注意力、加回主干后的中间结果（全书用 $u$ 记这个注意力后的残差）；$y$ 是本 Block 的输出；$\operatorname{Norm}_1$、$\operatorname{Norm}_2$ 是两处独立的归一化层（各有自己的参数）；$\operatorname{Attention}$ 是因果多头注意力；$\operatorname{FFN}$ 是逐位置前馈网络。
+
 Norm 和 FFN 都分别作用于每个 token 的最后一维。它们本身不把不同位置混起来；跨位置读信息的是 Attention。输入和输出都是 `[B,T,D]`，所以残差相加仍然合法。这里 B 是 batch，T 是序列长度，D 是主干宽度。
 
 ![S3 主干与 SwiGLU 两路门控：注意力不改，FFN 内部宽度可以改](assets/diagrams/p13-modern-block.svg)
@@ -23,19 +27,27 @@ Norm 和 FFN 都分别作用于每个 token 的最后一维。它们本身不把
 
 LayerNorm 先减均值，再除以标准差：
 
-$$\mu=\frac{1}{D}\sum_i x_i,\qquad v=\frac{1}{D}\sum_i(x_i-\mu)^2$$
-$$\operatorname{LN}(x)_i=\frac{x_i-\mu}{\sqrt{v+\epsilon}}\gamma_i+\beta_i$$
+$$\mu=\frac{1}{D}\sum_k x_k,\qquad v=\frac{1}{D}\sum_k(x_k-\mu)^2$$
+$$\operatorname{LN}(x)_k=\frac{x_k-\mu}{\sqrt{v+\epsilon}}\gamma_k+\beta_k$$
+
+第一行算出这一个 token 的“平均水平” μ 和“起伏大小” v；第二行先减掉平均、再除以起伏，把向量搬到“均值 0、方差约为 1”的标准位置，最后用 γ、β 让模型自己决定要放大多少、平移多少。
+
+其中：$D$ 是模型宽度；$x_k$ 是向量 $x$ 的第 $k$ 个坐标，$\sum_k$ 对 $k=1,\ldots,D$ 求和；$\mu$ 是均值；v 是方差（本节局部记号）；$\epsilon$ 是防止除以零的小常数；$\gamma_k$、$\beta_k$ 是第 $k$ 个坐标可学习的缩放与偏移（局部符号，本节指 LayerNorm 参数）。
 
 这里方差除以 D，不是统计学无偏估计的 D−1。PyTorch LayerNorm 对应 `correction=0`。它在训练和推理时都使用当前输入的统计量，没有 BatchNorm 那种运行均值表。[来源 3]
 
 RMS 是 root mean square，中文是“均方根”：先平方、求平均，再开平方。RMSNorm **不减均值**：
 
-$$r^2=\frac{1}{D}\sum_i x_i^2,\qquad
-\operatorname{RMSNorm}(x)_i=\frac{x_i}{\sqrt{r^2+\epsilon}}\gamma_i$$
+$$r^2=\frac{1}{D}\sum_k x_k^2,\qquad
+\operatorname{RMSNorm}(x)_k=\frac{x_k}{\sqrt{r^2+\epsilon}}\gamma_k$$
+
+RMSNorm 少做一步“减平均”：只量一量这条向量整体有多“响”（均方根），再按这个响度把它调到统一音量。
+
+其中：$r^2$ 是各坐标平方的平均（均方），$\sqrt{r^2}$ 就是均方根，r 是本节的局部记号；$x_k$、$D$、$\epsilon$、$\gamma_k$ 同上。
 
 本章实现只有 D 个可学习的 $\gamma$，没有 $\beta$。它把向量的整体尺度调到较稳定的范围，却不强制把中心搬到 0。RMSNorm 原论文研究的正是省去重新居中后的归一化方式；论文中的实验结果不能直接成为我们这份 CPU 实现的速度保证。[来源 1]
 
-一个很有用的恒等式是 $r^2=v+\mu^2$。例如 `[1,3]` 的均值是 2，方差是 1，均方是 5，因此 $5=1+2^2$。RMSNorm 不是“LN 换个名字”：只要均值不是 0，两个分母一般不同，LN 的分子也还减了均值。
+一个很有用的恒等式是 $r^2=v+\mu^2$。例如 `[1,3]` 的均值是 2，方差是 1，均方是 5，因此 $5=1+2^2$。它来自把 $(x_k-\mu)^2$ 展开再求平均：交叉项 $-2\mu x_k$ 平均后是 $-2\mu^2$，与 $+\mu^2$ 合并，就剩“均方 = 方差 + 均值²”。RMSNorm 不是“LN 换个名字”：只要均值不是 0，两个分母一般不同，LN 的分子也还减了均值。
 
 ### 表 P13-1：两行向量，逐项手算
 
@@ -60,6 +72,10 @@ $$r^2=\frac{1}{D}\sum_i x_i^2,\qquad
 
 $$\sqrt{\operatorname{mean}(x^2)+\epsilon}\ \ne\ \sqrt{\operatorname{mean}(x^2)}+\epsilon$$
 
+白话说，ε 要加在根号**里面**：它保护的是“平方的平均”不为 0；加在外面就成了另一种函数，零向量附近的数值也不同。
+
+其中：$\operatorname{mean}(x^2)$ 是向量各坐标平方的平均，即上面的 $r^2$；$\epsilon$ 是稳定常数。
+
 右边不是本章实现。表 P13-1 的较大 ε 能让这类错误很容易暴露，生产配置的小 ε 反而可能让粗糙测试漏掉它。`norm_eps` 必须是有限正数；0、负数、NaN、无穷和布尔值都被拒绝。
 
 再看“缩放不变”这句话：当忽略 ε 且乘数 a>0 时，RMS(ax)=a·RMS(x)，因此归一化可抵消这种正的整体缩放。保留 ε 后只能在 ε 相对均方很小时近似成立；a<0 还会反转符号。不要把论文里的理想化推导写成任意输入、任意精度下的逐位相等保证。
@@ -80,20 +96,24 @@ return (work * inv_rms * self.weight.to(work.dtype)).to(x.dtype)
 
 ## P13.4 从 GELU FFN 到“内容乘以门”
 
-旧 FFN 是两次线性投影，中间加 GELU：先 D→H，再 H→D。默认 H=4D。它在同一个 token 的特征间重组信息，不是沿时间轴做卷积。
+旧 FFN 是两次线性投影，中间加 GELU：先 $D\to d_{\mathrm{ff}}$，再 $d_{\mathrm{ff}}\to D$。默认 $d_{\mathrm{ff}}=4D$（下面要和 SwiGLU 比较时，把它记作 $d_{\mathrm{ff}}^{\mathrm{GELU}}$）。它在同一个 token 的特征间重组信息，不是沿时间轴做卷积。
 
-SwiGLU 在同一个输入上走两条 D→M 支路。一条产生内容 `up(x)`，另一条经过 SiLU 后调节内容 `gate(x)`，最后通过 `down` 回到 D：
+SwiGLU 在同一个输入上走两条 $D\to d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 支路（上标 SwiGLU、GELU 用来区分两种 FFN 各自的中间宽度）。一条产生内容 `up(x)`，另一条经过 SiLU 后调节内容 `gate(x)`，最后通过 `down` 回到 D：
 
-$$g=xW_g,\quad u=xW_u,\quad z=\operatorname{SiLU}(g)\odot u,\quad y=zW_d$$
-$$\operatorname{SiLU}(t)=t\sigma(t)=\frac{t}{1+e^{-t}}$$
+$$g=xW_{\mathrm{gate}},\quad a_{\mathrm{up}}=xW_{\mathrm{up}},\quad z=\operatorname{SiLU}(g)\odot a_{\mathrm{up}},\quad y=zW_{\mathrm{down}}$$
+$$\operatorname{SiLU}(g)=g\sigma(g)=\frac{g}{1+e^{-g}}$$
 
-这里公式采用行向量右乘矩阵的记法，PyTorch `nn.Linear` 则储存转置方向的权重。`gate.weight` 与 `up.weight` 的形状是 `[M,D]`，`down.weight` 是 `[D,M]`。源码只有一行核心计算：
+第一行像“内容 × 音量旋钮”：$a_{\mathrm{up}}$ 是要传的内容，SiLU(g) 决定每个坐标放大、缩小还是反向；相乘后再用 $W_{\mathrm{down}}$ 压回主干宽度。第二行给出 SiLU 本身（逐坐标计算）：门支路 g 乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近 0。
+
+其中：x 是一个 token 的输入行向量，宽 $D$；$W_{\mathrm{gate}}$、$W_{\mathrm{up}}$ 是门支路和内容支路的投影，形状 $[D,d_{\mathrm{ff}}^{\mathrm{SwiGLU}}]$；$W_{\mathrm{down}}$ 是下投影，形状 $[d_{\mathrm{ff}}^{\mathrm{SwiGLU}},D]$；$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 是 SwiGLU 的中间宽度；g、$a_{\mathrm{up}}$ 是两条支路的中间结果（本节局部记号；不用 u，因为 u 只指上面的残差结果），z 是相乘后的结果 $\operatorname{SiLU}(g)\odot a_{\mathrm{up}}$（SiLU 的自变量是 g，不是 z），y 是输出；$\odot$ 是逐坐标相乘；$\sigma(g)=1/(1+e^{-g})$ 是逐坐标的 sigmoid 函数（本节局部符号）。
+
+这里公式采用行向量右乘矩阵的记法，PyTorch `nn.Linear` 则储存转置方向的权重。`gate.weight` 与 `up.weight` 的形状是 $[d_{\mathrm{ff}}^{\mathrm{SwiGLU}},D]$，`down.weight` 是 $[D,d_{\mathrm{ff}}^{\mathrm{SwiGLU}}]$。源码只有一行核心计算：
 
 ```python
 return self.down(F.silu(self.gate(x)) * self.up(x))
 ```
 
-SiLU 是 Swish 在参数 β=1 时的形式。GLU 变体论文将这类两路相乘的结构用于 Transformer FFN；SwiGLU 对门支路使用 Swish，而不是把 FFN 中的 GELU 单独换成 SiLU 就结束。[来源 2、5]
+SiLU 是 Swish 在参数 β=1 时的形式（Swish 写作 $g\,\sigma(\beta g)$，这里的 β 是 Swish 自带的参数，与 LayerNorm 的 β 无关）。GLU 变体论文将这类两路相乘的结构用于 Transformer FFN；SwiGLU 对门支路使用 Swish，而不是把 FFN 中的 GELU 单独换成 SiLU 就结束。[来源 2、5]
 
 把 gate 类比成音量旋钮有助于记忆，但类比不能过头：**SiLU 的输出不是概率，不限于 [0,1]，可以为负，也可以大于 1**。SwiGLU 没有在若干专家中做 top-k 选择，也不是后续 MoE 的路由器。两条支路都计算，每个中间坐标都相乘。
 
@@ -109,7 +129,7 @@ down.weight = [[1, 0], [0,1]]
 
 于是 gate 的第一坐标是 1×1+2×(−1)=−1，第二坐标是 1×0+2×1=2；up 的两坐标分别是 3 和 4。
 
-| 中间坐标 | gate 投影 g | sigmoid(g) | SiLU(g)=g×sigmoid(g) | up 内容 u | 相乘结果 z |
+| 中间坐标 | gate 投影 g | sigmoid(g) | SiLU(g)=g×sigmoid(g) | up 内容 $a_{\mathrm{up}}$ | 相乘结果 z |
 | --- | --- | --- | --- | --- | --- |
 | 0 | -1 | 0.268941 | -0.268941 | 3 | -0.806824 |
 | 1 | 2 | 0.880797 | 1.761594 | 4 | 7.046377 |
@@ -120,25 +140,29 @@ down 是单位矩阵，所以输出恰好是 `[-0.806824,7.046377]`。如果误�
 
 先全部关闭 bias，GELU FFN 有两个矩阵，参数数是：
 
-$$N_{\text{GELU}}=D H+H D=2DH$$
+$$N_{\mathrm{GELU}}=Dd_{\mathrm{ff}}^{\mathrm{GELU}}+d_{\mathrm{ff}}^{\mathrm{GELU}}D=2Dd_{\mathrm{ff}}^{\mathrm{GELU}}$$
 
 SwiGLU 有三个矩阵，参数数是：
 
-$$N_{\text{SwiGLU}}=D M+D M+M D=3DM$$
+$$N_{\mathrm{SwiGLU}}=Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}D=3Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}$$
 
-如果 H=M=4D，后者的矩阵参数多 50%。然后拿训练 loss 比较并宣布“门控优于 GELU”，就把增加参数的影响混进来了。令两者相等，可得 M=2H/3；当 H=4D 时，M≈8D/3。这种收窄门控 FFN 的比较思路也出现在 GLU 变体论文中。[来源 2]
+两个式子都是“每张矩阵 = 行数 × 列数”再加起来：GELU 版两张，SwiGLU 版三张。
+
+其中：$N_{\mathrm{GELU}}$、$N_{\mathrm{SwiGLU}}$ 是一个 FFN 的无 bias 参数数；$D$ 是模型宽度；$d_{\mathrm{ff}}^{\mathrm{GELU}}$ 是 GELU FFN 的中间宽度；$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 是 SwiGLU 的中间宽度。
+
+如果 $d_{\mathrm{ff}}^{\mathrm{GELU}}=d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=4D$，后者的矩阵参数多 50%。然后拿训练 loss 比较并宣布“门控优于 GELU”，就把增加参数的影响混进来了。令两者相等，可得 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=2d_{\mathrm{ff}}^{\mathrm{GELU}}/3$；当 $d_{\mathrm{ff}}^{\mathrm{GELU}}=4D$ 时，$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\approx8D/3$。这种收窄门控 FFN 的比较思路也出现在 GLU 变体论文中。[来源 2]
 
 ### 表 P13-3：D=48 的每层 FFN 账本
 
 | FFN | 中间宽度 | 矩阵参数计算 | 无 bias 参数 |
 | --- | --- | --- | --- |
-| GELU 基线 | H=192 | 2×48×192 | 18432 |
-| SwiGLU，错误地保持同宽 | M=192 | 3×48×192 | 27648 |
-| SwiGLU，匹配预算 | M=128 | 3×48×128 | 18432 |
+| GELU 基线 | $d_{\mathrm{ff}}^{\mathrm{GELU}}=192$ | 2×48×192 | 18432 |
+| SwiGLU，错误地保持同宽 | $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=192$ | 3×48×192 | 27648 |
+| SwiGLU，匹配预算 | $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=128$ | 3×48×128 | 18432 |
 
-这里第二行不是“非法模型”，而是不适合用来隔离门控结构效果的同预算对照。M 不一定能整除，硬件对齐也可能要求它是某个数的倍数。`matched_swiglu_width` 选最接近参数预算的合法正整数宽度，平局选较小值；如设置 `multiple_of`，要重新报告真实误差。
+这里第二行不是“非法模型”，而是不适合用来隔离门控结构效果的同预算对照。$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 不一定能整除，硬件对齐也可能要求它是某个数的倍数。`matched_swiglu_width` 选最接近参数预算的合法正整数宽度，平局选较小值；如设置 `multiple_of`，要重新报告真实误差。
 
-有 bias 时也别忘了数：GELU 多 H+D，SwiGLU 多 2M+D。上述宽度对应 18672 与 18736，不再严格相等，相差 64。源码的计数函数包含这两种情况。参数数相同也不等于峰值激活内存、执行时间或训练质量相同：门控要保留额外支路中间量，kernel 和硬件的实现也不同。
+有 bias 时也别忘了数：GELU 多 $d_{\mathrm{ff}}^{\mathrm{GELU}}+D$，SwiGLU 多 $2d_{\mathrm{ff}}^{\mathrm{SwiGLU}}+D$。上述宽度对应 18672 与 18736，不再严格相等，相差 64。源码的计数函数包含这两种情况。参数数相同也不等于峰值激活内存、执行时间或训练质量相同：门控要保留额外支路中间量，kernel 和硬件的实现也不同。
 
 ## P13.6 S2 不被悄悄改写，S3 有明确配置
 
@@ -148,7 +172,7 @@ $$N_{\text{SwiGLU}}=D M+D M+M D=3DM$$
 | --- | --- | --- |
 | 注意力与位置 | MHA + RoPE | 完全保留 |
 | Norm | LayerNorm，γ 与 β | RMSNorm，只有 γ |
-| FFN | GELU，H=4D，有 bias | SwiGLU，预算匹配 M，无 bias |
+| FFN | GELU，$d_{\mathrm{ff}}^{\mathrm{GELU}}=4D$，有 bias | SwiGLU，预算匹配 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$，无 bias |
 | 残差顺序 | Pre-Norm | 完全保留 |
 | cache 路径 | S2 的 cached_forward | 调用同一函数 |
 
@@ -174,7 +198,7 @@ A→B 的 ε、γ、FFN、注意力等都固定，比较的是居中与均方归
 
 ### 整模型账本：为什么三行都是 61008
 
-设置 V=57、D=48、L=2、头数 n_head=4，embedding 与输出 head 不共享权重。每个 Block 两个 Norm，加最后一个 Norm，共 5 个。
+设置 $\lvert\mathcal V\rvert=57$、D=48、L=2、头数 $H=4$，embedding 与输出 head 不共享权重。每个 Block 两个 Norm，加最后一个 Norm，共 5 个。
 
 | 部分 | 参数计算 | 参数数 |
 | --- | --- | --- |
@@ -184,7 +208,7 @@ A→B 的 ε、γ、FFN、注意力等都固定，比较的是居中与均方归
 | 5 个仅有 γ 的 Norm | 5×48 | 240 |
 | 合计 | 5472+18432+36864+240 | 61008 |
 
-MHA 投影一行 2×4×48² 中的 4 指 Q、K、V、O 四个 48×48 矩阵，不是头数 n_head；本章的 H 仍只表示 FFN 宽度。
+MHA 投影一行 2×4×48² 中的 4 指 Q、K、V、O 四个 48×48 矩阵，不是头数 $H$；FFN 的中间宽度另记为 $d_{\mathrm{ff}}^{\mathrm{GELU}}$、$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$。
 
 原 S2 默认是 61728 个参数。对照 A 去掉两层 FFN 的 2×(192+48)=480 个 bias，再去掉 Norm 的 5×48=240 个 β，合计少 720，得到 61008。RoPE 没有可学习位置表，不能把 S0 的那张位置表又算进来。
 
@@ -235,7 +259,7 @@ S3 直接复用 S2 的 `cached_forward`。这个函数访问当前 Block 的 `ln
 1. `[1,3]` 整体加 2 后，为什么 LN 表中不变，而 RMSNorm 变了？
 2. 为什么“先 float16 平方，再转 float32”还会出错？
 3. SwiGLU 的门输出为 1.76 是否违反概率范围？
-4. D=48，GELU 的 H=192。无 bias 的 SwiGLU 应取多宽才能匹配矩阵参数？
+4. D=48，GELU 的 $d_{\mathrm{ff}}^{\mathrm{GELU}}=192$。无 bias 的 SwiGLU 应取多宽才能匹配矩阵参数？
 5. 同一个 seed 是否足以证明消融只有一个变量变化？
 6. 为什么表 P13-4 不能用来排“哪种 Block 最好”？
 7. A→B 为什么把 LayerNorm 的 β 也关闭？
@@ -246,7 +270,7 @@ S3 直接复用 S2 的 `cached_forward`。这个函数访问当前 Block 的 `ln
 1. LN 在两个输入上都减去各自均值，分子都是 `[-1,1]`，方差也都为 1，所以输出同为 `[-0.816497,0.816497]`；RMSNorm 不居中，均方从 5 变 17，分子也改变。
 2. 溢出在平方那一步已经发生，随后升精度只能保留无穷；必须先转换再平方。
 3. 不违反。SiLU 门不是概率，可以大于 1、为负；sigmoid 本身才在 0 与 1 之间。
-4. M=128，因为 2×48×192=3×48×128=18432。开启 bias 后要把 bias 额外计算，不能直接声称总参数严格相等。
+4. $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=128$，因为 2×48×192=3×48×128=18432。开启 bias 后要把 bias 额外计算，不能直接声称总参数严格相等。
 5. 不够。初始化时随机数消耗顺序可能变化，必须复制并验证不变部分，同时控制数据、优化器、步数和其他设置。
 6. 单 seed、重复 batch、无验证集，只能演示训练与数值闭环；没有足够证据做泛化质量或速度结论。
 7. 避免把“多一组可训练偏移参数”也夹在归一化机制对比里。关闭 bias 是对照准备，不宣称它单独带来收益。
@@ -260,7 +284,7 @@ RMSNorm 的关键是**均方缩放，不居中**；SwiGLU 的关键是**两路�
 
 ## P13.13 延伸阅读：SiTU-GLU {#p13.13-situ-glu}
 
-P13.4 的 SwiGLU 两个因子都没有上界，两个大坐标相乘就是离群值。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)的 SiTU-GLU 用软上限 `β tanh(x/β)` 同时限制两个因子。
+P13.4 的 SwiGLU 两个因子都没有上界，两个大坐标相乘就是离群值。[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)的 SiTU-GLU 用软上限 `β tanh(x/β)` 同时限制两个因子。它在 |x| 远小于 β 时几乎等于 x，|x| 很大时绝对值被压到不超过 β，像给音量加了一个柔和的限幅器（其中：x 是被限制的因子；β 是上限大小，局部符号，与 LayerNorm 的 β 无关；tanh 是双曲正切，取值在 −1 到 1 之间）。
 
 ## 来源与实现核对
 
