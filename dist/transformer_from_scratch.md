@@ -3033,6 +3033,20 @@ S0 的停止条件是新增字符数，没有训练 `<EOS>`。句号和 EOS 不�
 
 S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位置重新编号为 0–127。这是一个明确的**滑窗重算策略**，不是无限上下文，也不能与沿用旧绝对位置的缓存结果直接比较。P11 的缓存演示到容量上限就报错，不伪装成同一滑窗策略。
 
+
+下图把 S0 的停止与滑窗重算画成状态图：预算到了就停，句号不会停；超长时只把末 128 字送进模型，但返回的仍是完整序列。
+
+```mermaid
+stateDiagram-v2
+    %% id: p08-generate-stop
+    accTitle: S0 生成循环：预算停、句号不停、超长就滑窗重算
+    accDescr: 生成中每步接一个新字；新增数达预算就停且遇句号不停；序列超过 128 时只用最后 128 字作模型输入并把位置重编为 0–127，返回仍是完整序列。
+    [*] --> 生成中：每步接一个新字
+    生成中：每步接一个新字 --> 停止: 达预算即停
+    生成中：每步接一个新字 --> 滑窗重算: 序列超过 128
+    滑窗重算 --> 生成中：每步接一个新字: 只用最后 128 字作模型输入，返回完整序列
+```
+
 ## 8.7 保存再加载：基线必须能回来
 
 只有 loss 日志不够。后续要比较 S0/S1，必须复用完全相同的权重、配置和词表。配套 `save_checkpoint(path, model)` 保存配置、参数与字符顺序；`load_checkpoint(path)` 在 CPU 创建对应模型并恢复权重。
@@ -3124,6 +3138,35 @@ new_logits, cache = cached_forward(model, next_ids, cache)
 
 这里的片段是调用顺序，完整可运行示例在源码。`cached_forward` 不选 token，只返回当前新块的 logits；`generate_cached` 才负责选择与循环。它每次调用从空缓存开始，防止第二个请求误接在第一个请求后面。
 
+
+下图按调用顺序对照：新请求必须 `cache=None`；`cached_forward` 只回 logits，选字由 `generate_cached` 完成。
+
+```mermaid
+sequenceDiagram
+    %% id: p11-prefill-decode
+    accTitle: Prefill 写出各层 K/V；decode 只追加新位置
+    accDescr: 新请求 cache=None。Prefill 送整段 prompt，各层写入 K/V，cached_forward 返回末位 logits，generate_cached 再选出首字；随后只送新 token，各层追加 K/V 并读全部历史。
+    participant C as 调用方
+    participant L1 as 第1层
+    participant L2 as 第2层
+    participant KV as KV cache
+    Note over C,KV: 新请求 cache=None
+    Note over C,KV: Prefill
+    C->>L1: 整段 prompt
+    L1->>KV: 写 K/V
+    L1->>L2: 本层表示
+    L2->>KV: 写 K/V
+    L2-->>C: cached_forward→logits
+    C-->>C: generate_cached 选首字
+    Note over C,KV: Decode
+    C->>L1: 新 token
+    L1->>KV: 追加并读历史
+    L1->>L2: 新表示
+    L2->>KV: 追加并读历史
+    L2-->>C: cached_forward→logits
+    C-->>C: generate_cached 选下一字
+```
+
 ## P11.3 逐层形状与位置偏移
 
 设已有 P 个位置，本次新输入 C 个位置；头数 H，每头宽度 d，主干宽度 D=H×d。
@@ -3148,6 +3191,24 @@ x = model.tok_emb(idx) + model.pos_emb(pos)
 ```
 
 这里 T 是本次新块长度，`offset` 是缓存长度。旧位置向量已经进入旧 K/V 的计算，不应给旧缓存再加一次位置向量。参数表最大 128 行，索引只能是 0–127。
+
+
+下图标出新块从偏移 P 起编号后，Q 与拼好的 K/V 如何凑成矩形分数表。
+
+```mermaid
+flowchart TD
+    %% id: p11-shapes-offset
+    accTitle: 新块位置从 P 起编，拼完后分数是矩形而不是方阵
+    accDescr: 已缓存 P 个、新块 C 个即 T_q=C、T_kv=P+C；新位置是 P…P+C−1，新 Q 为 [B,H,C,d_h]，旧 K/V 拼上新的得到 [B,H,P+C,d_h]，分数 [B,H,C,P+C]。例 H=4、d_h=12、P=3、C=2。
+    A["已缓存 P 个位置；新块 C 个（T_q=C，T_kv=P+C）"] --> B["新位置编号：P … P+C−1"]
+    B --> C1["新 Q [B,H,C,d_h]"]
+    B --> C2["新 K/V [B,H,C,d_h]"]
+    D["旧 K/V [B,H,P,d_h]"] --> E["拼接后 K/V [B,H,P+C,d_h]"]
+    C2 --> E
+    C1 --> F["分数 / 权重 [B,H,C,P+C]"]
+    E --> F
+    F --> G["例：H=4，d_h=12，P=3，C=2；Q [1,4,2,12]；分数 [1,4,2,5]"]
+```
 
 ## P11.4 矩形 mask：最容易写错的两行
 
@@ -3226,6 +3287,22 @@ S0 的旧 `generate` 超长后保留最后 128 字、重置位置编号。S1 **�
 `generate_cached` 采用保守规则：提示长度+请求新增预算 ≤128。最后一个选出的 token 不一定还需送回模型，但预算规则仍把它计算在内，方便调用者预先知道边界。零新增返回原输入，不做模型前向。它和 S0 一样没有 EOS，按预算停止。
 
 批量实验只支持同长、无 padding 的 B 个请求，位置从 0 开始对齐。若要把长短不一的用户请求动态加入/退出，需要分别记录有效长度、注意力可见性与缓存所有权，本教学实现没有做到。对不同 batch 直接复用旧 cache 会报错，不会替你猜如何重排请求。
+
+
+下图按 `generate_cached` 的真实顺序：先做容量检查，再处理零预算；变长批或跨批复用缓存也在检查请求时拦下。
+
+```mermaid
+stateDiagram-v2
+    %% id: p11-length-bounds
+    accTitle: S1 超长直接拒绝，预算为 0 不进模型，缓存也不能跨批复用
+    accDescr: 提示加预算超过 128 先拒绝（删旧 K/V 不等于滑窗重编号）；新增预算为 0 则直接返回；通过后按预算 decode 且无 EOS；变长批或复用别的 batch 的缓存也在检查请求时报错。
+    [*] --> 检查请求
+    检查请求 --> 拒绝: 提示+预算 > 128（删旧 K/V ≠ 滑窗重编号）
+    检查请求 --> 直接返回: 新增预算 = 0
+    检查请求 --> Decode中: 通过容量检查
+    检查请求 --> 报错: 变长批或复用别的 batch 缓存
+    Decode中 --> 完成: 按预算跑完
+```
 
 ## P11.8 计时：首 token 与后续 token 分开记
 
@@ -3488,6 +3565,25 @@ RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：
 频段插值与注意力缩放构成这里介绍的 YaRN 核心。训练和长文本评估仍需另外说明，本章没有做论文规模的微调。不要把本章普通 RoPE 的 CPU 结果标成“YaRN 复现”。
 
 还有一个缓存陷阱：如果生成中动态改变 s，旧 K 所用的角度规则就过期。当前 S2 固定规则并拒绝改配置后复用旧缓存；它不实现 Dynamic YaRN。若要扩展，需要专门设计未旋转 K 的保留/重算等一致性策略，不能只改一个频率变量后继续拼旧 K。
+
+
+下图先按波长把频率对分成三段改 ω_i，再让 Q、K 同乘 a，使点积乘 a²；「中途改 κ」只是旁注，不接在主链上。
+
+```mermaid
+flowchart TD
+    %% id: p12-yarn-bands
+    accTitle: YaRN 先按波长分频段改 ω_i，再让 Q、K 同乘 a，点积乘 a²
+    accDescr: 每个频率对算 λ_i=2π/ω_i 与 r=T_train/λ_i，再和 α、β 比较：高频保留 ω_i，低频用 ω_i/κ，中间线性混合；随后 Q、K 都乘 a，点积乘 a²。中途改 κ 会使已旋转的旧 K 作废，图中仅作旁注。
+    A["频率对 i：λ_i=2π/ω_i，r=T_train/λ_i"] --> B{"与 α、β 比较"}
+    B --> H["高频 r>β：保留 ω_i"]
+    B --> L["低频 r<α：ω_i/κ"]
+    B --> M["中间：线性混合"]
+    H --> S["得到 ω′_i"]
+    L --> S
+    M --> S
+    S --> T["Q、K 各乘 a → 点积乘 a²"]
+    U["旁注：中途改 κ，旧 K 作废"]
+```
 
 ## P12.9 CPU 反例：短距离记住了，长距离未必记得住
 
@@ -4096,6 +4192,27 @@ $$
 对同一组低秩参数，这两种括号位置的结果应当只差浮点舍入，但两条路径相等仍不足以证明算对：它们可能一起忘记位置项，或一起用了错误的缩放分母。
 
 本函数为核对而同时保留两条路径的张量，**它本身并不是一段峰值内存优化实现**。
+
+
+下图对照展开与吸收两条算内容分数的路径：位置项加进分数后再除以 √(d_c+d_r)，最后才 Softmax；「两路结果相等」标在内容分数上。
+
+```mermaid
+flowchart TD
+    %% id: p14-mla-absorb
+    accTitle: MLA 内容分数两种括号顺序相同，位置项在 Softmax 前相加
+    accDescr: 展开路径把 c_t 上投影成各头 K/V 再与 q^C 打分；吸收路径让 q^C 乘上投影的转置直接对 c_t 打分。两路内容分数相等后，先加位置项 q^R·k^R 再除以 √(d_c+d_r)，然后 Softmax 加权；位置项不在输出之后才加。
+    subgraph expand ["展开路径"]
+      E1["c_t"] --> E2["上投影成各头 K/V"]
+      E2 --> E3["内容分数 q^C · K"]
+    end
+    subgraph absorb ["吸收路径"]
+      A1["q^C × (U^K)^⊤"] --> A2["直接对 c_t 打分"]
+    end
+    E3 --> EQ["两路内容分数相等"]
+    A2 --> EQ
+    EQ --> P["+ 位置项 q^R · k^R，再 ÷√(d_c+d_r)"]
+    P --> SM["Softmax 后加权得到输出"]
+```
 
 ## P14.10 RoPE 位置项为什么单独算
 
