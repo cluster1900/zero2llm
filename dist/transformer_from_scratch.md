@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-11-09
+% 2026-11-10
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -9131,27 +9131,29 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 ### A.5 全书符号约定：一个字母，一种意思 {#p28.a5-symbols}
 
-公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的**全局符号**，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式**要改成的写法**；某章还没改写完成时，以该式的「其中：」为准。附录自己的 A.1、A.2、D.1、F.0 也属于后续改写批次：其中 A.1 的交叉熵 $L$ 与 $\mathrm{softmax}(QK^T/\cdots)$、A.2 的每头宽度 $d$、D.1 的 $d_{\mathrm{head}}$ 与字节数 $s$、F.0 的 $\bar L$ 暂时保留旧写法，读的时候按本表换算。
+公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的**全局符号**，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式**要改成的写法**；某章还没改写完成时，以该式的「其中：」为准。附录自己的 A.1、A.2、D.1、F.0 也要按本表改写（F9）：其中 A.1 的交叉熵 $L$、稳定 softmax 的最大值 $m$、周期 $T=2\pi/\lvert\omega\rvert$ 与 $\mathrm{softmax}(QK^T/\cdots)$，A.2 的每头宽度 $d$，D.1 的 $d_{\mathrm{head}}$ 与字节数 $s$，F.0 的 $\bar L$ 暂时保留旧写法，读的时候按本表换算。
 
 **尺寸与计数**
 
 | 符号 | 唯一含义 | 常见形状或取值 | 不要和谁混 |
 |---|---|---|---|
-| $B$ | 批大小：一次并排处理几条序列 | 例：$B=2$ | 不作缩放定律里的常数 |
-| $T$ | 序列长度：一条序列有几个 token；做 KV cache 时是已缓存的 token 数 | 例：$T=3$ | 转置写 $^\top$；温度写 $\tau$ |
+| $B$ | 批大小：一次并排处理几条序列 | 例：$B=2$ | 不作缩放定律里的常数，也不作 LoRA 矩阵名 |
+| $T$ | 序列长度：一条序列有几个 token；做 KV cache 时是已缓存的 token 数 | 例：$T=3$ | 转置写 $^\top$；温度写 $\tau$；周期写 $\lambda$ |
 | $T_q,\ T_{kv}$ | 同一个式子里同时出现两种长度时：本次 query 的个数、可读 key/value 的个数 | 增量解码时 $T_q=1$ | 只有一种长度时直接写 $T$ |
 | $T_{\mathrm{train}}$ | 训练时见过的最长上下文长度（位置外推时用） | 例：$T_{\mathrm{train}}=8$ | 不再写成 $L$ |
-| $D$ | 模型宽度：每个位置的总特征数，代码里叫 `d_model` | 例：$D=8$ | 正文公式统一写 $D$，不写 $d_{model}$ |
+| $T_{\mathrm{win}}$ | 滑动窗口长度（含当前位置自己） | 例：$T_{\mathrm{win}}=3$ | 不写 $W$（$W$ 只指权重） |
+| $D$ | 模型宽度：每个位置的总特征数，代码里叫 `d_model` | 例：$D=8$ | 正文公式统一写 $D$；KL 散度写 $\operatorname{KL}$，数据并行份数写 $N_{\mathrm{dp}}$ |
 | $\mathcal V$ / $\lvert\mathcal V\rvert$ | 词表（全部 token 的集合）/ 词表大小 | embedding 表 $E\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ | 大写 $V$ 只指 Value |
 | $H$ | 注意力头数（GQA 中指 query 头数，也可写 $H_q$） | 例：$H=2$ | FFN 隐藏宽度不用 $H$；P17 的层表示 $H^{(l)}$ 改为 $X^{(l)}$ |
 | $H_{kv}$ | KV 头数：MHA 时 $H_{kv}=H$，MQA 时为 1 | $1\le H_{kv}\le H$ | 正文写数学符号 $H_{kv}$，不写代码标识符 `H_kv` |
 | $d_h$ | 单个头的宽度（Q/K/V 各头等宽时） | 例：$d_h=4$ | 不再写 $d$、$D_{head}$、$d_{\mathrm{head}}$ |
 | $d_k,\ d_v$ | 单头注意力里 Q/K 与 V 的宽度（第 3 章）；多头且等宽时 $d_k=d_v=d_h$ | $W_Q\in\mathbb R^{D\times d_k}$ | |
-| $d_{\mathrm{ff}}$ | FFN 中间层宽度 | 常见 $d_{\mathrm{ff}}=4D$ | |
+| $d_{\mathrm{ff}}$ | FFN 中间层宽度；要比较两种 FFN 时写 $d_{\mathrm{ff}}^{\mathrm{GELU}}$、$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ | 常见 $d_{\mathrm{ff}}=4D$ | 不用 $H$、$M$ |
 | $L$ | 层数；编码器、解码器分别为 $L_e$、$L_d$ | 例：$L=2$ | 损失写 $\mathcal L$，长度写 $T$ |
 | $N_E$ | MoE 的路由专家个数；第 $e$ 个专家记 $F_e$ | 路由矩阵按 $[N_E,D]$ 存，打分 $z=xW_r^\top$ | $E$ 只指 embedding 表 |
-| $b_{\mathrm{elem}}$ | 每个张量元素占几个字节 | float32 为 4，float16/bfloat16 为 2 | 不用 $s$（$s$ 留给注意力分数） |
+| $N_{\ast}$ | 带下标的 $N$ 一律表示“个数”：$N_S$ 共享专家数、$N_{\mathrm{valid}}$ 有效目标数、$N_{\mathrm{dp}}$ 数据并行份数、$N_{\mathrm{GELU}}$ 等参数个数 | 例：$N_{\mathrm{valid}}=2$ | 正文不再用不带下标的 $N$ |
 | $N_{\mathrm{param}},\ N_{\mathrm{tok}}$ | 缩放定律里的参数量、训练 token 数 | $\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}})$ | 不借用 $N$、$D$ |
+| $b_{\mathrm{elem}}$ | 每个张量元素占几个字节；带文字下标的 $b$ 都是字节数（如 ZeRO 的 $b_p,b_g,b_o$） | float32 为 4，float16/bfloat16 为 2 | 不用 $s$；FFN 偏置写 $b_1,b_2$ |
 
 **头宽与模型宽度的关系要带条件。** 只有在「各头等宽，且所有头拼起来的投影总宽等于 $D$」时，才有 $D=Hd_h$、$d_h=D/H$，输出投影 $W_O$ 才是 $[D,D]$ 的方阵。一般情况下 $W_O$ 的形状是 $[Hd_v,D]$（原论文写作 $hd_v\times d_{\mathrm{model}}$）。反例就在本书里：附录 E.2 的 Qwen3 配置 $D=1024$、16 个头、每头 128，Q 投影宽 $16\times128=2048\neq D$；P25 的微型配置也刻意保留 $H_qd_h\neq D$。
 
@@ -9161,14 +9163,17 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 |---|---|---|
 | $E$ | embedding 表，第 $i$ 行是 token $i$ 的向量 | $[\lvert\mathcal V\rvert, D]$ |
 | $X$、$X^{(l)}$ | 一层的输入表示（隐藏状态），一行一个位置；$X^{(l)}$ 是第 $l$ 层的输入，其中第 $i$ 行记 $x_i^{(l)}$ | $[T,D]$，带 batch 时 $[B,T,D]$ |
-| $Q,\ K,\ V$ | 查询、键、值矩阵 | 单头 $[T,d_k]$、$[T,d_k]$、$[T,d_v]$ |
+| $Q,\ K,\ V,\ O$ | 查询、键、值矩阵与注意力输出；小写 $q_i,k_j,v_j,o_i$ 是它们的第 $i$、$j$ 行 | 单头 $[T,d_k]$、$[T,d_k]$、$[T,d_v]$、$[T,d_v]$ |
 | $W_Q,\ W_K,\ W_V,\ W_O$ | Q/K/V 投影与输出投影；第 $h$ 个头的写 $W_h^Q$ 等 | $W_Q:[D,d_k]$；$W_O:[Hd_v,D]$，等宽且总宽为 $D$ 时为 $[D,D]$ |
-| $s_{ij}$ | 第 $i$ 个 query 对第 $j$ 个 key 的缩放分数 | 标量，整张表 $[T,T]$ |
+| $W_{\mathrm{gate}},\ W_{\mathrm{up}},\ W_{\mathrm{down}}$ | 门控 FFN 的三块权重 | $[D,d_{\mathrm{ff}}]$、$[D,d_{\mathrm{ff}}]$、$[d_{\mathrm{ff}},D]$ |
+| $s_{ij}$ | 第 $i$ 个 query 对第 $j$ 个 key 的缩放分数；一行里的最大值记 $s_{\max}$ | 标量，整张表 $[T,T]$ |
 | $M$ | 加性 mask：允许看的位置为 0，禁看的位置为 $-\infty$ | $[T,T]$ |
 | $p_i$ | 概率：softmax 输出的第 $i$ 项 | 标量，各项和为 1 |
 | $u$ | 注意力子层加完残差后的结果，$u=x+\operatorname{Attention}(\cdot)$ | 与 $x$ 同形 |
 | $\mathcal L$ | 损失（默认对有效目标取平均的交叉熵） | 标量 |
+| $\Omega$ | 参与损失的有效位置集合，$N_{\mathrm{valid}}=\lvert\Omega\rvert$ | 由 $(b,t)$ 组成 |
 | $\tau$ | 温度：采样温度或注意力 logits 的温度 | 标量，$\tau>0$ |
+| $\omega_i$、$\lambda_i$ | 第 $i$ 对维度的角频率（每前进一个位置转多少弧度）、对应波长 $\lambda_i=2\pi/\omega_i$ | 位置 $t$ 的转角是 $t\omega_i$ |
 | $\kappa$ | 位置插值、YaRN 的上下文扩展倍数 | 例：$\kappa=4$ |
 | $\epsilon$ | 防止除以零的小常数 | 例：$10^{-5}$ |
 | $\eta$ | 学习率 | 例：$0.1$ |
@@ -9177,37 +9182,62 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 | 出现在哪里 | 旧写法 | 新写法 |
 |---|---|---|
-| P15、P17 的序列长度 | $N$ | $T$（两种长度同时出现时用 $T_q$、$T_{kv}$） |
+| 第 3 章、P15 稳定 softmax 的最大值 | $m$ | $s_{\max}$（对 logits $z$ 做时写 $z_{\max}$） |
+| 第 1 章、P20、P23 的词表大小（含形状表） | $V$、`[B,T,V]`、`[V,D_model]` | $\lvert\mathcal V\rvert$；形状写 $[B,T,\lvert\mathcal V\rvert]$、$[\lvert\mathcal V\rvert,D]$ |
 | 第 5 章的位置、最大位置数 | $pos$、$L_{max}$ | $t$、$T_{\max}$ |
+| 第 5 章相对位置里的两个位置 | $p$、$q$ | $m$、$n$ |
+| 第 6 章残差要拟合的目标映射 | $H(x)$ | $\mathcal H(x)$ |
+| 第 7 章采样温度 | $T$ | $\tau$ |
+| P11、P12、P14、P24、P25、P27 的 KV 字节式 | $M_{KV}$、$s$、$b_{KV}$、$d$、$D_{head}$ | $\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}$，$b_{\mathrm{elem}}$ 按每个张量元素计 |
+| 各章每头宽度 | $d$ | $d_h$ |
 | P12 RoPE 的位置 | $p$ | $t$；讨论两个位置的相对距离时用 $m$、$n$ |
+| P12 RoPE 每对维度的频率、YaRN 混合后的频率 | $\theta_i$、$\theta'$ | $\omega_i$、$\omega'$（与第 5 章一致；原论文写作 $\theta$），转角 $t\omega_i$ |
 | P12 YaRN 的扩展倍数 | $s$ | $\kappa$（原论文写作 $s$） |
 | P12 YaRN 的原训练长度 | $L$ | $T_{\mathrm{train}}$ |
-| 第 7 章采样温度、P12 YaRN 温度 | $T$、$t$ | $\tau$ |
+| P12 YaRN 的注意力温度 | $t$ | $\tau$ |
+| P13 SiLU 的自变量 | $t$ | $z$（$t$ 只作位置编号） |
+| P13 FFN 中间宽度 | $H$、$M$ | $d_{\mathrm{ff}}^{\mathrm{GELU}}$、$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ |
+| P13、P26 门控 FFN 的权重与 up 分支 | $W_g,W_u,W_d$；$u=xW_u$ | $W_{\mathrm{gate}},W_{\mathrm{up}},W_{\mathrm{down}}$；$a_{\mathrm{up}}=xW_{\mathrm{up}}$（$u$ 只指残差结果） |
+| P14 MLA 的 KV 压缩权重 | $W_{down}$ | $W_{\mathrm{DKV}}$（$W_{\mathrm{down}}$ 只指 FFN） |
+| P15、P17 的序列长度 | $N$ | $T$（两种长度同时出现时用 $T_q$、$T_{kv}$） |
+| P15、P24 的输出 token 数 | $n$、$N$ | $T_{\mathrm{out}}$ |
+| P16、P17 的窗口长度 | $W$、$n_{win}$ | $T_{\mathrm{win}}$ |
+| P17 有界重放的段起点 | $s$ | $i_0$ |
 | P17 的层表示 | $H^{(l)}$、$h_i^{(l)}$ | $X^{(l)}$、$x_i^{(l)}$ |
-| P17 的编码器输出 | $E$ | $Z_{\mathrm{enc}}$ |
+| P17 的编码器输出 | $E$ | $X_{\mathrm{enc}}$ |
 | P18 的专家个数 | $E$ | $N_E$ |
 | P18 的共享专家个数与编号 | $S$、$s$ | $N_S$、$e'$（共享专家记 $F^{\mathrm{sh}}_{e'}$） |
 | P18 的 top-k 选中集合 | $K$ | $\mathcal I_k$ |
-| P19 Chinchilla 式 | $L(N,D)\approx E+A/N^\alpha+B/D^\beta$ | $\mathcal L\approx c_0+c_{\mathrm{param}}/N_{\mathrm{param}}^{\alpha}+c_{\mathrm{tok}}/N_{\mathrm{tok}}^{\beta}$ |
-| P20 的有效位置集合、有效目标数 | $\mathcal V$、$N$ | $\Omega$、$N_{\mathrm{valid}}=\lvert\Omega\rvert$ |
+| P18 摊平后的 token 数 | $N$ | $BT$ |
+| P18、P21、P25 的参数个数 | $P_{\ast}$ | $N_{\ast}$（如 $N_{\mathrm{total}}$、$N_{\mathrm{LoRA}}$） |
+| P19 Chinchilla 式 | $L(N,D)\approx E+A/N^\alpha+B/D^\beta$ | $\mathcal L\approx c_{\mathrm{irred}}+c_{\mathrm{param}}/N_{\mathrm{param}}^{\alpha}+c_{\mathrm{tok}}/N_{\mathrm{tok}}^{\beta}$ |
+| P20 的有效位置集合、有效目标数 | $\mathcal V$、$N$ | $\Omega$、$N_{\mathrm{valid}}$ |
+| P20 ZeRO 显存式 | $M_k$、$P$、$D$ | $\mathrm{Mem}_k$、$N_{\mathrm{param}}$、$N_{\mathrm{dp}}$ |
+| P21 SFT 损失的 mask 与分母 | $m_{b,t+1}$、$N$ | 对 $\Omega$ 求和，$N_{\mathrm{valid}}$ |
+| P21 LoRA 的两块矩阵与乘法方向 | $A,B$；$W_0x$ | $W_A,W_B$；行向量写 $xW_0^\top$、$\Delta W=\frac{\alpha}{r}W_BW_A$ |
+| P22 的 KL 散度 | $D_{\mathrm{KL}}$ | $\operatorname{KL}$ |
+| P22 GRPO 的奖励标准差、回复长度、回复个数、逐 token KL 估计 | $s$、$L_i$、$N$、$K_{i,t}$、$k$ | $\sigma_r$、$T_i$、$N_{\mathrm{resp}}$、$\widehat{\operatorname{KL}}_{i,t}$、$\widehat{\operatorname{KL}}$ |
+| P22 KL 估计里的“动作 / 状态” | $a$、$s$ | $y_t$、$(x,y_{<t})$ |
 | P23 MTP 的额外 head 个数（深度） | $D$ | $n_{\mathrm{mtp}}$ |
 | P23 第 $j$ 个 horizon 的有效位置集合 | $M_j$ | $\Omega_j$ |
-| P23 的辅助损失权重 | $\lambda$ | $w_{\mathrm{mtp}}$（$\lambda$ 只留给 YaRN 的波长） |
-| P23 的位置隐藏向量 | $h_t$ | $x_t$（$X$ 的第 $t$ 行），按行向量写成 $x_tW_j$ |
-| P22 GRPO 的回复长度 | $L_i$ | $T_i$ |
-| P13 SwiGLU 的 up 分支 | $u=xW_u$ | $a_{\mathrm{up}}=xW_{\mathrm{up}}$（$u$ 只指残差结果） |
-| P11、P12、P14、P24、P25、P27 的 KV 字节式 | $s$、$b_{KV}$、$d$、$D_{head}$ | $2LBH_{kv}Td_hb_{\mathrm{elem}}$，$b_{\mathrm{elem}}$ 按每个张量元素计 |
+| P23 的辅助损失权重 | $\lambda$ | $w_{\mathrm{mtp}}$（$\lambda$ 只指波长） |
+| P23 的 head 乘法 | $W_jh_t$ | $h_tW_j^\top$（$W_j$ 按 $[\lvert\mathcal V\rvert,D]$ 存） |
+| P24 量化步长 | $s$、$s_x$、$s_w$ | $\Delta$、$\Delta_x$、$\Delta_w$ |
+| 各章损失 | $L$、$L_{CE}$、$L_{aux}$、$L_j$ | $\mathcal L$、$\mathcal L_{\mathrm{CE}}$、$\mathcal L_{\mathrm{aux}}$、$\mathcal L_j$ |
 
 **下标与写法**
 
-- 编号字母：$i$、$j$ 是 query、key 的位置，$t$ 是时间步或当前位置，$m$、$n$ 是一对位置，$h$ 是第几个头，$e$ 是第几个专家，$l$ 是第几层。
-- 第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果 $h$ 是**本章局部字母**，在所在公式的「其中：」里说明；逐层的隐藏状态统一写 $X^{(l)}$。
-- 向量按**行向量**写，线性层写 $xW$；形状用方括号 `[B,T,D]`，从左到右是轴的顺序。权重若按 $[\text{输出},\text{输入}]$ 存（如 MoE 路由 $W_r$），乘的时候写转置 $xW_r^\top$。
-- 转置统一写 $A^\top$；Softmax 统一写 $\operatorname{softmax}$，沿最后一维（key 所在的维）归一化；$\log$ 默认是自然对数。
+- 编号字母（只当编号用）：$i$、$j$ 是 query、key 的位置，$t$ 是时间步或当前位置，$m$、$n$ 是一对位置（第 5 章、P12 和第 9 章 RoPE 例子里的“座位 $m$、$n$”都是这个意思），$h$ 是第几个头，$e$ 是第几个专家，P23 的预测距离（horizon）也用 $j$，$l$ 是第几层，$b$ 是 batch 里第几条。指数里的 $e$ 仍是自然常数。带文字下标的小写 $n$ 表示个数（如 $n_{\mathrm{mtp}}$、P18 的 $n_e$）；带下标的 $d$ 都是某种宽度（如 MLA 的 $d_c$、$d_r$，LoRA 的 $d_{\mathrm{in}}$、$d_{\mathrm{out}}$）。
+- 向量按**行向量**写，线性层写 $xW$；形状用方括号 `[B,T,D]`，从左到右是轴的顺序。权重若按 $[\text{输出},\text{输入}]$ 存（如 MoE 路由 $W_r$、MTP head $W_j$、LoRA 的 $W_0$），乘的时候写转置 $xW^\top$。
+- 转置统一写 $A^\top$；Softmax 统一写 $\operatorname{softmax}$，沿最后一维（key 所在的维）归一化；$\log$ 默认是自然对数；期望写 $\mathbb E$；单位矩阵写 $I$。
 
 **局部字母：每条公式自己说清楚**
 
-有些字母在不同章节各管一摊，硬统一反而难读，例如 $\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率等）、$\beta$（LayerNorm 偏移，或 DPO/KL 系数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（旋转角，或模型参数 $\pi_\theta$）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值等）。它们是**局部符号**：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。
+有些字母在不同章节各管一摊，硬统一反而难读。它们是**局部符号**：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。
+
+- 希腊字母：$\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率、缩放定律指数等）、$\beta$（LayerNorm 偏移、DPO/KL 系数、缩放定律指数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（夹角、旋转矩阵 $R(\theta)$ 的角，或模型参数 $\pi_\theta$、$p_\theta$）、$\pi$（圆周率，或策略 $\pi_\theta$）、$\phi$（旋转角、特征映射，或奖励模型参数）、$\rho$（概率比）、$\delta$、$\Delta$（差值、更新量 $\Delta W$、量化步长）、$\mu$（均值）。
+- 拉丁字母：$x$（某个式子的输入：一个位置的向量、它的第 $i$ 个分量，或 P21–P23 里的 token 序列）、$y$（输出向量、目标 token，或 P22 里的回复）、$h$（第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果、P23 主干最后一层的隐藏向量 $h_t$）、$a$（第 6 章 ReLU 的输出、P12 YaRN 的长度缩放系数、第 1 章的示例向量、第 3 章的注意力权重 $a_{ij}$、P15 的请求到达时刻）、$b$（第 1 章、P12 的示例向量）、$f$（第 2 章 RNN 的更新函数、P18 的分配比例 $f_e$）、$g$（SwiGLU 的门控分支、P20 的梯度）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值、特征宽度、第 3 章的求和下标）、$k$（第 5 章的位移量、top-k 的个数、P20 的训练步编号 $\theta_k$）、$q$（P23 的草稿分布 $q(x)$、P24 的量化整数）、$z$（多数时候是 softmax 之前的 logits；也作 SwiGLU 的门控乘积、线性注意力的归一化量、DPO 的间隔、P24 的零点）、$w$（单个权重、路由权重 $w_e$、注意力权重 $w_{tj}$）、$c$（第 2 章的上下文向量、P14 MLA 的压缩向量 $c_t$）、$t_1,t_{\mathrm{start}}$ 等 P15、P24 的计时时刻、$A$（注意力子层函数、GRPO 的优势 $A_i$）、$F$（第 6 章的残差分支 $F(x)$）、$P$（第 5 章的换序操作、P15 的概率矩阵）、$C$、$G$、$R$、$S$、$U$ 等只在一章出现的大写字母。
+- 第 2 章 $h_t$、第 6 章 $h$、P23 $h_t$ 都不是全局的层表示；逐层的隐藏状态统一写 $X^{(l)}$。
 
 ## 附录 B：深度学习常见“黑话”大白话翻译词典 {#附录-b深度学习常见黑话大白话翻译词典}
 
