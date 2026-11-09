@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="830" viewBox="0 0 1000 830" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 830" role="img" aria-labelledby="title desc" width="1000" height="830">
   <title id="title">S5 教学 MoE：路由专家与共享专家</title>
   <desc id="desc">S4 的 FFN 被替换为 MoE。输入进入路由器选择四个专家中的两个，再按原 affinity 的归一化权重组合。共享专家始终执行并相加。容量丢弃只用于独立实验，语言模型保持不丢弃以保证缓存分块等价。</desc>
   <defs>
@@ -19,13 +19,13 @@
   <text x="500" y="77" text-anchor="middle" class="small">保留 S4 的 RoPE、RMSNorm、GQA、残差和 compact KV cache</text>
   <rect x="340" y="105" width="320" height="65" rx="12" fill="#eaf7f0" stroke="#22a06b" stroke-width="2"/>
   <text x="500" y="133" text-anchor="middle" class="label">归一化后的输入 x</text>
-  <text x="500" y="158" text-anchor="middle" class="small">[B,T,D] → [N,D]</text>
+  <text x="500" y="158" text-anchor="middle" class="small">[B,T,D] → [B·T,D]</text>
   <path d="M440 170V204H335V230" class="line"/>
   <path d="M600 170V190H980V403H850V434" class="line"/>
   <rect x="105" y="230" width="460" height="104" rx="12" fill="#edf2ff" stroke="#6477bf" stroke-width="2"/>
-  <text x="335" y="261" text-anchor="middle" class="label">router：z = x W_r^T</text>
+  <text x="335" y="261" text-anchor="middle" class="label">router：z = x W_r⊤</text>
   <text x="335" y="290" text-anchor="middle" class="small">Softmax affinity → top-k</text>
-  <text x="335" y="316" text-anchor="middle" class="tiny">本例 E=4、k=2；平局按专家编号</text>
+  <text x="335" y="316" text-anchor="middle" class="tiny">本例 N_E=4、k=2；平局按专家编号</text>
   <rect x="655" y="241" width="300" height="109" rx="12" fill="#fff8e5" stroke="#d7a22c" stroke-width="1.5"/>
   <text x="805" y="271" text-anchor="middle" class="label">可选均衡偏置</text>
   <text x="805" y="299" text-anchor="middle" class="small">只改变选择 p + b</text>
