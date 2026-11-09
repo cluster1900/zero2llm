@@ -10460,10 +10460,10 @@ class="math inline">\(d_{\mathrm{ff}}\)</span>，每个共享专家的为 <span
 class="math inline">\(d_{\mathrm{ff}}^{\mathrm{sh}}\)</span>，则<strong>仅
 MoE 模块</strong>：</p>
 <p><span class="math display">\[
-N_{\mathrm{param}}^{\mathrm{total}}=N_E(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E,
+N_{\mathrm{total}}=N_E(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E,
 \]</span></p>
 <p><span class="math display">\[
-N_{\mathrm{param}}^{\mathrm{active}}=k(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E.
+N_{\mathrm{active}}=k(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E.
 \]</span></p>
 <p>这里的 active 是不丢弃时，每 token
 参与运算的权重预算。路由器需要给全部 <span
@@ -10472,11 +10472,12 @@ class="math inline">\(N_E\)</span> 个专家打分，所以不能只算 k 个 ro
 head，更不是整模型内存公式。两式只差第一项：店里养着 <span
 class="math inline">\(N_E\)</span> 位路由师傅，每张工单只请 k
 位，而共享师傅和前台每次都在。</p>
-<p>其中：<span
-class="math inline">\(N_{\mathrm{param}}^{\mathrm{total}}\)</span> 是
-MoE 模块保存的参数总数；<span
-class="math inline">\(N_{\mathrm{param}}^{\mathrm{active}}\)</span> 是每
-token 参与运算的参数预算；3 对应 gate、up、down 三张矩阵；<span
+<p>其中：<span class="math inline">\(N_{\mathrm{total}}\)</span> 是 MoE
+模块保存的参数总数；<span
+class="math inline">\(N_{\mathrm{active}}\)</span> 是每 token
+参与运算的参数预算（参数个数各用自己的下标名，<span
+class="math inline">\(N_{\mathrm{param}}\)</span> 只留给 P19
+缩放定律）；3 对应 gate、up、down 三张矩阵；<span
 class="math inline">\(N_E\)</span>、<span
 class="math inline">\(N_S\)</span> 是路由专家与共享专家个数；<span
 class="math inline">\(DN_E\)</span> 是路由矩阵 <span

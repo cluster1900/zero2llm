@@ -111,16 +111,16 @@ $$
 设每个路由专家的中间宽度为 $d_{\mathrm{ff}}$，每个共享专家的为 $d_{\mathrm{ff}}^{\mathrm{sh}}$，则**仅 MoE 模块**：
 
 $$
-N_{\mathrm{param}}^{\mathrm{total}}=N_E(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E,
+N_{\mathrm{total}}=N_E(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E,
 $$
 
 $$
-N_{\mathrm{param}}^{\mathrm{active}}=k(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E.
+N_{\mathrm{active}}=k(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E.
 $$
 
 这里的 active 是不丢弃时，每 token 参与运算的权重预算。路由器需要给全部 $N_E$ 个专家打分，所以不能只算 k 个 router 行；共享专家也不能漏算。两式都不包含 attention、norm、embedding 和输出 head，更不是整模型内存公式。两式只差第一项：店里养着 $N_E$ 位路由师傅，每张工单只请 k 位，而共享师傅和前台每次都在。
 
-其中：$N_{\mathrm{param}}^{\mathrm{total}}$ 是 MoE 模块保存的参数总数；$N_{\mathrm{param}}^{\mathrm{active}}$ 是每 token 参与运算的参数预算；3 对应 gate、up、down 三张矩阵；$N_E$、$N_S$ 是路由专家与共享专家个数；$DN_E$ 是路由矩阵 $W_r$ 的元素数。
+其中：$N_{\mathrm{total}}$ 是 MoE 模块保存的参数总数；$N_{\mathrm{active}}$ 是每 token 参与运算的参数预算（参数个数各用自己的下标名，$N_{\mathrm{param}}$ 只留给 P19 缩放定律）；3 对应 gate、up、down 三张矩阵；$N_E$、$N_S$ 是路由专家与共享专家个数；$DN_E$ 是路由矩阵 $W_r$ 的元素数。
 
 手算 $D=4$、$N_E=4$、$k=2$、$d_{\mathrm{ff}}=2$、$N_S=1$、$d_{\mathrm{ff}}^{\mathrm{sh}}=2$：
 
