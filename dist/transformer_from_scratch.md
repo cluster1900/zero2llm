@@ -1472,6 +1472,19 @@ $$\operatorname{Attention}(PX)=P\operatorname{Attention}(X).$$
 3. $QK^\top$ 的查询行、键列同步换序；Softmax 只是在每行内重新排列同一批分数。
 4. 加权时，权重列和 $V$ 的行同步换序，因此各 token 收集的内容并没改变；输出只跟着输入换行。
 
+下面这张图把四步串起来：没有位置信息时，注意力只跟着行置换走，认不出谁在谁前面。
+
+```mermaid
+flowchart TD
+    %% id: ch05-permutation-equivariance
+    accTitle: 没有位置信息时，换序只让注意力跟着换行
+    accDescr: X 形状为 [T,D]，按置换 P 换行后，共用投影使 Q、K、V 的行同步换；分数表的行与列也同步换；乘完 V 后输出等于 P 作用在原 Attention(X) 上。
+    A["X 形状 [T,D]<br/>按置换 P 换行"] --> B["共用投影<br/>Q、K、V 行同步换"]
+    B --> C["分数表 QK⊤<br/>查询行与键列同换"]
+    C --> D["Softmax 每行内重排<br/>再乘 V"]
+    D --> E["输出 = P · Attention(X)<br/>没有位置时只跟着换位"]
+```
+
 于是“吃”仍然面对同一个邻居集合，它不知道小猫在自己前面还是后面。若最后再对所有行求和或平均，这种不依赖顺序的汇总才是**置换不变**。
 
 ### 一次能运行的换词实验
@@ -1713,6 +1726,24 @@ Add=(1, 2, 4)；Concat=(1, 2, 8)
 2. **实现是否允许？** 如果模型只预存了 8 行位置表、8 格 mask 或有限缓存，即使采用正弦，也可能先在实现处越界。可学习表若只有 8 行，直接查下标 8 的行就超出索引范围；预分配 12 行可以避免越界，却不代表新行已经训练好。
 3. **任务质量是否保持？** 训练只见过 8-token 的依赖模式，12-token 输入改变了分布。能跑完前向不等于预测正确；仍需在更长长度上测 loss 或具体任务表现，并检查资源成本。
 
+以训练最长 $T_{\mathrm{train}}=8$、测试 $T=12$ 为例，三本账互不蕴含：能算出编码、实现不越界、任务质量保持，是三件不同的事。
+
+```mermaid
+flowchart TD
+    %% id: ch05-length-three-ledgers
+    accTitle: 长度要分三本账：能算、不越界、质量保持互不蕴含
+    accDescr: 训练最长 T_train=8、测试 T=12 时，正弦公式能给出 [12,D] 且前 8 行不变；实现仍可能因位置表、mask 或缓存越界；任务质量还要另测 loss。三本账彼此独立。
+    S["例：T_train=8，测 T=12"] --> G
+    subgraph G["彼此独立，互不蕴含"]
+      direction TB
+      A["账 1 公式：能否给出 [12,D]<br/>正弦可以；前 8 行不变"]
+      B["账 2 实现：会不会越界<br/>位置表 / mask / 缓存都可能挡住"]
+      C["账 3 质量：是否保持<br/>要另测 loss；能跑通 ≠ 预测对"]
+      A ~~~ B
+      B ~~~ C
+    end
+```
+
 代码的 `length_example()` 只做前两项的微型检查，打印：
 
 ```text
@@ -1821,17 +1852,17 @@ $$y=x+F(x)$$
 
 这里的“残差”不是考试剩下的误差，而是相对于当前表示的**增量**。如果想得到的映射是 $H(x)$，支路可以学习 $H(x)-x$，加回 $x$ 后就得到 $H(x)$。这也是残差学习论文的基本出发点。[来源：Deep Residual Learning，§3.1–3.2](https://arxiv.org/pdf/1512.03385)
 
-```
-              输入 x ─────────────┐ (原始录音笔: 抄近道)
-                 │                │
-                 ▼                │
-          ┌─────────────┐         │
-          │ 复杂神经计算 │         │
-          │    F(x)     │         │
-          └─────────────┘         │
-                 │                │
-                 ▼                ▼
-                 [   相加求和: x + F(x)   ]
+原稿走捷径，批注走支路；两路在相加处会合，这就是残差要表达的结构。
+
+```mermaid
+flowchart TD
+    %% id: ch06-residual-shortcut
+    accTitle: 残差：支路算增量，捷径保留原稿，两路相加
+    accDescr: 输入 x 分两路，支路计算 F(x)，捷径直达相加点，输出为 x+F(x)。
+    X["输入 x"] --> F["支路 F(x)"]
+    X --> ADD["相加 x + F(x)"]
+    F --> ADD
+    ADD --> Y["输出 y"]
 ```
 
 ### 先加四个数字，再谈深层网络
@@ -1975,6 +2006,32 @@ $$\text{Pre-LN:}\quad y=x+F(\operatorname{LN}(x))$$
 $$\text{Post-LN:}\quad y=\operatorname{LN}(x+F(x))$$
 
 Pre 的意思是“**在 F 之前**”：支路拿到的是归一化后的输入，但捷径传来的仍然是原始 $x$。Post 的意思是“**在相加之后**”：原输入和增量先相加，整个和再经过 LN。不要把 Pre-LN 错写成 $\operatorname{LN}(x)+F(\operatorname{LN}(x))$，那样原始输入也被改掉了。
+
+零件相同、只换顺序时，捷径上保留的是哪个向量全看顺序；左图 Pre-LN 的主干不经过 LN，右图 Post-LN 则让整个和过 LN。
+
+```mermaid
+flowchart LR
+    %% id: ch06-pre-post-ln
+    accTitle: Pre-LN 与 Post-LN：零件相同，捷径保留的向量不同
+    accDescr: Pre-LN 是 x 经 LN 再 F，加回原始 x；Post-LN 是 x 经 F 后与 x 相加，整个和再过 LN。
+    subgraph Pre["Pre-LN"]
+      direction TB
+      Px["x"] --> Pln["LN"]
+      Pln --> Pf["F"]
+      Px --> Padd["加回 x"]
+      Pf --> Padd
+      Padd --> Py["y = x + F(LN(x))"]
+    end
+    subgraph Post["Post-LN"]
+      direction TB
+      Qx["x"] --> Qf["F"]
+      Qx --> Qadd["x + F(x)"]
+      Qf --> Qadd
+      Qadd --> Qln["LN"]
+      Qln --> Qy["y = LN(x + F(x))"]
+    end
+    Pre ~~~ Post
+```
 
 ### 把同一个小函数放进两种顺序
 
@@ -2356,7 +2413,22 @@ flowchart TD
 - K/V 由编码器输出投影得到；
 - 权重沿源序列位置归一化，而不是沿译文词表归一化。
 
-例如 batch=1，译文当前有 2 个位置、原文有 3 个位置，每头宽度 4。省略头轴后，Q 形状 (1,2,4)，K 与 V 形状 (1,3,4)；分数形状 (1,2,3)，聚合结果形状 (1,2,4)。输入输出长度不必相同，也不需要把它们硬凑成方阵。另取一个 $d_v=2$ 的手算例子：给第一行三份资料权重 [0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是 [0.7,0.8]，不是机械复制某一个词。
+例如 batch=1，译文当前有 2 个位置、原文有 3 个位置，每头宽度 4。省略头轴后，Q 形状 (1,2,4)，K 与 V 形状 (1,3,4)；分数形状 (1,2,3)，聚合结果形状 (1,2,4)。输入输出长度不必相同，也不需要把它们硬凑成方阵。
+
+目标长度 $T_q$ 与源长度 $T_{kv}$ 可以不同：分数沿源位置归一化，再加权 V，输出长度仍跟查询侧走。
+
+```mermaid
+flowchart TD
+    %% id: ch07-cross-attn-shapes
+    accTitle: Cross-attention：查询跟目标走，分数沿源位置归一化
+    accDescr: 解码器 Q 形状 [1,2,4]（T_q=2），编码器 K/V 形状 [1,3,4]（T_kv=3）；分数 [1,2,3]，每行对 3 个源位置 Softmax 后加权 V，得到 [1,2,4]。
+    Q["解码器 Q<br/>[1,2,4]（T_q=2）"] --> S["分数<br/>[1,2,3]"]
+    KV["编码器 K / V<br/>[1,3,4]（T_kv=3）"] --> S
+    S --> SM["每行对 3 个源位置 Softmax"]
+    SM --> OUT["加权 V → [1,2,4]"]
+```
+
+另取一个 $d_v=2$ 的手算例子：给第一行三份资料权重 [0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是 [0.7,0.8]，不是机械复制某一个词。
 
 有源端 padding 时也要屏蔽对应 K/V 位置。
 
@@ -2447,6 +2519,26 @@ $$p_i(T)=\frac{\exp(z_i/T)}{\sum_j\exp(z_j/T)},\qquad T>0.$$
 - `max_new_tokens=2`：第 2 步后就达到新增上限，返回“床前明月”，没有生成 EOS，停止原因是长度预算。
 - `max_new_tokens=0`：不调用预测函数、无新增 token。若前缀本来已以 EOS 结尾，本教学函数立即按 EOS 停止。
 
+EOS、新增上限、零预算是三个不同出口；追踪表只能演示其中几条路径，状态图把出口一次画全。
+
+```mermaid
+stateDiagram-v2
+    %% id: ch07-generation-stop
+    accTitle: 生成停止：先查前缀 EOS，零预算与新增上限都返回 max_new_tokens
+    accDescr: 前缀已以 EOS 结尾则按 eos 返回且不调模型；否则预算为 0 按 max_new_tokens 返回且不调模型；生成中每步追加一个 token 后，先查 EOS，再查是否达新增上限（EOS 优先于上限）。
+    [*] --> 检查前缀
+    检查前缀 --> 停于EOS: 前缀已以 EOS 结尾
+    检查前缀 --> 检查预算: 前缀未以 EOS 结尾
+    检查预算 --> 停于上限: 否则，预算为 0
+    检查预算 --> 生成中: 预算大于 0
+    生成中 --> 刚追加: 调用模型并追加 token
+    刚追加 --> 停于EOS: 是 EOS → eos
+    刚追加 --> 停于上限: 否则，新增数达上限 → max_new_tokens
+    刚追加 --> 生成中: 都不是，继续
+    停于EOS --> [*]: 出口 eos
+    停于上限 --> [*]: 出口 max_new_tokens
+```
+
 这里的上限计**新增 token**，不把 2 个提示 token 算进去；实际框架里的 `max_length` 与 `max_new_tokens` 含义可能不同，调用时需查版本文档。长度停止可能截断一句话；模型预测 EOS 也不代表内容必然完整或正确。
 
 把循环逐行拆开看：
@@ -2516,18 +2608,23 @@ python3 -m unittest discover -s tests -p 'test_generation.py' -v
 
 训练像练习默写：模型交一份答题纸，损失函数评分，梯度告诉我们怎样微调，优化器实施调整。类比的边界是：模型没有老师式理解；一次更新是数值计算，不保证每道题都改对，也不保证下一次总分必然更好。
 
-```text
-原文 -> 按文档分组 -> 训练文档 -> 抽一个 batch
-                         |           |
-                         |       前向得到 logits
-                         |           |
-                         |       对齐答案算 loss
-                         |           |
-                         |       backward 算梯度
-                         |           |
-                         +------ step 改参数
+练习册走更新环，考试卷只评分；一张图把两边分清楚，就不用在箭头字符里对行了。
 
-独立保留文档 -----------------> 只评分，不更新
+```mermaid
+flowchart TD
+    %% id: ch07a-train-eval-loop
+    accTitle: 训练环更新参数，保留文档只评分不更新
+    accDescr: 原文按文档分组后，训练文档抽 batch、前向得 logits、对齐答案算 loss、backward、step 改参数再回到抽 batch；独立保留文档只评分，不更新。
+    A["原文"] --> B["按文档分组"]
+    B --> C["训练文档"]
+    B --> H["独立保留文档"]
+    C --> D["抽一个 batch"]
+    D --> E["前向得到 logits"]
+    E --> F["对齐答案算 loss"]
+    F --> G["backward 算梯度"]
+    G --> I["step 改参数"]
+    I --> D
+    H --> J["只评分，不更新"]
 ```
 
 先分文档，再抽窗口。把同一首诗的许多重叠窗口随机分成“训练/验证”，相当于考试卷藏着练习册里几乎相同的题。窗口不相同，也不代表来源独立。
@@ -2622,6 +2719,24 @@ optimizer.step()
 3. 前向调用模型，得到分数和当前损失；autograd 记录需要求导的运算。
 4. `backward()` 按链式法则算梯度并写入参数的 `.grad`，还没有修改权重。
 5. `step()` 根据梯度更新权重。脚本使用 AdamW，下面的手算则用 SGD；不要把 SGD 的一步公式当成 AdamW 的精确公式。
+
+清梯度、写 `.grad`、改权重是三步；漏了 `zero_grad`，下一轮梯度会叠在旧账上。
+
+```mermaid
+sequenceDiagram
+    %% id: ch07a-zero-grad-step
+    accTitle: zero_grad 清空、backward 只写梯度、step 才改参数
+    accDescr: 训练循环先对参数调用 zero_grad 清空 .grad，再前向得 loss，backward 只写入 .grad，最后 step 读取 .grad 更新参数。
+    participant L as 训练循环
+    participant P as 参数
+    participant G as .grad
+    participant O as AdamW
+    L->>G: zero_grad 清空
+    L->>P: 前向得 loss
+    L->>G: backward 只写 .grad
+    O->>G: step 读取 .grad
+    O->>P: 更新参数
+```
 
 为什么每轮清零？PyTorch 默认把新梯度加到旧梯度上。对同一个参数、不更新参数地反传同一道题两次，`[-0.25,0.25]` 会变成 `[-0.5,0.5]`。有意积累多个 micro-batch 可以节省显存，但需要设计缩放和更新时机；本实验每 batch 更新一次，不需要跨 batch 积累。
 
@@ -2918,6 +3033,20 @@ S0 的停止条件是新增字符数，没有训练 `<EOS>`。句号和 EOS 不�
 
 S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位置重新编号为 0–127。这是一个明确的**滑窗重算策略**，不是无限上下文，也不能与沿用旧绝对位置的缓存结果直接比较。P11 的缓存演示到容量上限就报错，不伪装成同一滑窗策略。
 
+
+下图把 S0 的停止与滑窗重算画成状态图：预算到了就停，句号不会停；超长时只把末 128 字送进模型，但返回的仍是完整序列。
+
+```mermaid
+stateDiagram-v2
+    %% id: p08-generate-stop
+    accTitle: S0 生成循环：预算停、句号不停、超长就滑窗重算
+    accDescr: 生成中每步接一个新字；新增数达预算就停且遇句号不停；序列超过 128 时只用最后 128 字作模型输入并把位置重编为 0–127，返回仍是完整序列。
+    [*] --> 生成中：每步接一个新字
+    生成中：每步接一个新字 --> 停止: 达预算即停
+    生成中：每步接一个新字 --> 滑窗重算: 序列超过 128
+    滑窗重算 --> 生成中：每步接一个新字: 只用最后 128 字作模型输入，返回完整序列
+```
+
 ## 8.7 保存再加载：基线必须能回来
 
 只有 loss 日志不够。后续要比较 S0/S1，必须复用完全相同的权重、配置和词表。配套 `save_checkpoint(path, model)` 保存配置、参数与字符顺序；`load_checkpoint(path)` 在 CPU 创建对应模型并恢复权重。
@@ -3009,6 +3138,35 @@ new_logits, cache = cached_forward(model, next_ids, cache)
 
 这里的片段是调用顺序，完整可运行示例在源码。`cached_forward` 不选 token，只返回当前新块的 logits；`generate_cached` 才负责选择与循环。它每次调用从空缓存开始，防止第二个请求误接在第一个请求后面。
 
+
+下图按调用顺序对照：新请求必须 `cache=None`；`cached_forward` 只回 logits，选字由 `generate_cached` 完成。
+
+```mermaid
+sequenceDiagram
+    %% id: p11-prefill-decode
+    accTitle: Prefill 写出各层 K/V；decode 只追加新位置
+    accDescr: 新请求 cache=None。Prefill 送整段 prompt，各层写入 K/V，cached_forward 返回末位 logits，generate_cached 再选出首字；随后只送新 token，各层追加 K/V 并读全部历史。
+    participant C as 调用方
+    participant L1 as 第1层
+    participant L2 as 第2层
+    participant KV as KV cache
+    Note over C,KV: 新请求 cache=None
+    Note over C,KV: Prefill
+    C->>L1: 整段 prompt
+    L1->>KV: 写 K/V
+    L1->>L2: 本层表示
+    L2->>KV: 写 K/V
+    L2-->>C: cached_forward→logits
+    C-->>C: generate_cached 选首字
+    Note over C,KV: Decode
+    C->>L1: 新 token
+    L1->>KV: 追加并读历史
+    L1->>L2: 新表示
+    L2->>KV: 追加并读历史
+    L2-->>C: cached_forward→logits
+    C-->>C: generate_cached 选下一字
+```
+
 ## P11.3 逐层形状与位置偏移
 
 设已有 P 个位置，本次新输入 C 个位置；头数 H，每头宽度 d，主干宽度 D=H×d。
@@ -3033,6 +3191,24 @@ x = model.tok_emb(idx) + model.pos_emb(pos)
 ```
 
 这里 T 是本次新块长度，`offset` 是缓存长度。旧位置向量已经进入旧 K/V 的计算，不应给旧缓存再加一次位置向量。参数表最大 128 行，索引只能是 0–127。
+
+
+下图标出新块从偏移 P 起编号后，Q 与拼好的 K/V 如何凑成矩形分数表。
+
+```mermaid
+flowchart TD
+    %% id: p11-shapes-offset
+    accTitle: 新块位置从 P 起编，拼完后分数是矩形而不是方阵
+    accDescr: 已缓存 P 个、新块 C 个即 T_q=C、T_kv=P+C；新位置是 P…P+C−1，新 Q 为 [B,H,C,d_h]，旧 K/V 拼上新的得到 [B,H,P+C,d_h]，分数 [B,H,C,P+C]。例 H=4、d_h=12、P=3、C=2。
+    A["已缓存 P 个位置；新块 C 个（T_q=C，T_kv=P+C）"] --> B["新位置编号：P … P+C−1"]
+    B --> C1["新 Q [B,H,C,d_h]"]
+    B --> C2["新 K/V [B,H,C,d_h]"]
+    D["旧 K/V [B,H,P,d_h]"] --> E["拼接后 K/V [B,H,P+C,d_h]"]
+    C2 --> E
+    C1 --> F["分数 / 权重 [B,H,C,P+C]"]
+    E --> F
+    F --> G["例：H=4，d_h=12，P=3，C=2；Q [1,4,2,12]；分数 [1,4,2,5]"]
+```
 
 ## P11.4 矩形 mask：最容易写错的两行
 
@@ -3111,6 +3287,22 @@ S0 的旧 `generate` 超长后保留最后 128 字、重置位置编号。S1 **�
 `generate_cached` 采用保守规则：提示长度+请求新增预算 ≤128。最后一个选出的 token 不一定还需送回模型，但预算规则仍把它计算在内，方便调用者预先知道边界。零新增返回原输入，不做模型前向。它和 S0 一样没有 EOS，按预算停止。
 
 批量实验只支持同长、无 padding 的 B 个请求，位置从 0 开始对齐。若要把长短不一的用户请求动态加入/退出，需要分别记录有效长度、注意力可见性与缓存所有权，本教学实现没有做到。对不同 batch 直接复用旧 cache 会报错，不会替你猜如何重排请求。
+
+
+下图按 `generate_cached` 的真实顺序：先做容量检查，再处理零预算；变长批或跨批复用缓存也在检查请求时拦下。
+
+```mermaid
+stateDiagram-v2
+    %% id: p11-length-bounds
+    accTitle: S1 超长直接拒绝，预算为 0 不进模型，缓存也不能跨批复用
+    accDescr: 提示加预算超过 128 先拒绝（删旧 K/V 不等于滑窗重编号）；新增预算为 0 则直接返回；通过后按预算 decode 且无 EOS；变长批或复用别的 batch 的缓存也在检查请求时报错。
+    [*] --> 检查请求
+    检查请求 --> 拒绝: 提示+预算 > 128（删旧 K/V ≠ 滑窗重编号）
+    检查请求 --> 直接返回: 新增预算 = 0
+    检查请求 --> Decode中: 通过容量检查
+    检查请求 --> 报错: 变长批或复用别的 batch 缓存
+    Decode中 --> 完成: 按预算跑完
+```
 
 ## P11.8 计时：首 token 与后续 token 分开记
 
@@ -3373,6 +3565,25 @@ RoPE 也不能代替因果 mask。P=3、C=2 的 mask 仍是：
 频段插值与注意力缩放构成这里介绍的 YaRN 核心。训练和长文本评估仍需另外说明，本章没有做论文规模的微调。不要把本章普通 RoPE 的 CPU 结果标成“YaRN 复现”。
 
 还有一个缓存陷阱：如果生成中动态改变 s，旧 K 所用的角度规则就过期。当前 S2 固定规则并拒绝改配置后复用旧缓存；它不实现 Dynamic YaRN。若要扩展，需要专门设计未旋转 K 的保留/重算等一致性策略，不能只改一个频率变量后继续拼旧 K。
+
+
+下图先按波长把频率对分成三段改 ω_i，再让 Q、K 同乘 a，使点积乘 a²；「中途改 κ」只是旁注，不接在主链上。
+
+```mermaid
+flowchart TD
+    %% id: p12-yarn-bands
+    accTitle: YaRN 先按波长分频段改 ω_i，再让 Q、K 同乘 a，点积乘 a²
+    accDescr: 每个频率对算 λ_i=2π/ω_i 与 r=T_train/λ_i，再和 α、β 比较：高频保留 ω_i，低频用 ω_i/κ，中间线性混合；随后 Q、K 都乘 a，点积乘 a²。中途改 κ 会使已旋转的旧 K 作废，图中仅作旁注。
+    A["频率对 i：λ_i=2π/ω_i，r=T_train/λ_i"] --> B{"与 α、β 比较"}
+    B --> H["高频 r>β：保留 ω_i"]
+    B --> L["低频 r<α：ω_i/κ"]
+    B --> M["中间：线性混合"]
+    H --> S["得到 ω′_i"]
+    L --> S
+    M --> S
+    S --> T["Q、K 各乘 a → 点积乘 a²"]
+    U["旁注：中途改 κ，旧 K 作废"]
+```
 
 ## P12.9 CPU 反例：短距离记住了，长距离未必记得住
 
@@ -3981,6 +4192,27 @@ $$
 对同一组低秩参数，这两种括号位置的结果应当只差浮点舍入，但两条路径相等仍不足以证明算对：它们可能一起忘记位置项，或一起用了错误的缩放分母。
 
 本函数为核对而同时保留两条路径的张量，**它本身并不是一段峰值内存优化实现**。
+
+
+下图对照展开与吸收两条算内容分数的路径：位置项加进分数后再除以 √(d_c+d_r)，最后才 Softmax；「两路结果相等」标在内容分数上。
+
+```mermaid
+flowchart TD
+    %% id: p14-mla-absorb
+    accTitle: MLA 内容分数两种括号顺序相同，位置项在 Softmax 前相加
+    accDescr: 展开路径把 c_t 上投影成各头 K/V 再与 q^C 打分；吸收路径让 q^C 乘上投影的转置直接对 c_t 打分。两路内容分数相等后，先加位置项 q^R·k^R 再除以 √(d_c+d_r)，然后 Softmax 加权；位置项不在输出之后才加。
+    subgraph expand ["展开路径"]
+      E1["c_t"] --> E2["上投影成各头 K/V"]
+      E2 --> E3["内容分数 q^C · K"]
+    end
+    subgraph absorb ["吸收路径"]
+      A1["q^C × (U^K)^⊤"] --> A2["直接对 c_t 打分"]
+    end
+    E3 --> EQ["两路内容分数相等"]
+    A2 --> EQ
+    EQ --> P["+ 位置项 q^R · k^R，再 ÷√(d_c+d_r)"]
+    P --> SM["Softmax 后加权得到输出"]
+```
 
 ## P14.10 RoPE 位置项为什么单独算
 
