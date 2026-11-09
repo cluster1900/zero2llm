@@ -43,6 +43,10 @@
     "width": 850,
     "height": 520
   },
+  "flow-ch04-three-ledgers": {
+    "width": 340.34375,
+    "height": 461
+  },
   "flow-ch05-permutation-equivariance": {
     "width": 256.15625,
     "height": 518
@@ -155,17 +159,61 @@
     "width": 920.0,
     "height": 650.0
   },
+  "flow-p15-online-softmax": {
+    "width": 361.96484375,
+    "height": 594
+  },
+  "flow-p15-cow-write": {
+    "width": 490.03125,
+    "height": 462
+  },
+  "flow-p15-prefix-cache": {
+    "width": 723.484375,
+    "height": 613
+  },
+  "flow-p15-continuous-batch": {
+    "width": 557,
+    "height": 589
+  },
+  "flow-p15-ttft-tpot": {
+    "width": 385,
+    "height": 531
+  },
   "p16-sparse-linear": {
-    "width": 980.0,
-    "height": 520.0
+    "width": 980,
+    "height": 520
+  },
+  "flow-p16-sparse-mixed": {
+    "width": 316.25,
+    "height": 464
+  },
+  "flow-p17-codec-names": {
+    "width": 834.138427734375,
+    "height": 472.665771484375
   },
   "p17-ced": {
-    "width": 980.0,
-    "height": 660.0
+    "width": 980,
+    "height": 660
+  },
+  "flow-p17-csa2-modes": {
+    "width": 342.84375,
+    "height": 513
   },
   "p18-moe": {
-    "width": 1000.0,
-    "height": 830.0
+    "width": 1000,
+    "height": 830
+  },
+  "flow-p18-dispatch-combine": {
+    "width": 299.359375,
+    "height": 568
+  },
+  "flow-p18-grad-paths": {
+    "width": 532,
+    "height": 384
+  },
+  "flow-p18-expert-parallel": {
+    "width": 566,
+    "height": 721
   },
   "p19-pretraining": {
     "width": 1000.0,
@@ -175,41 +223,13 @@
     "width": 1000.0,
     "height": 790.0
   },
-  "flow-p20-double-shift": {
-    "width": 383.125,
-    "height": 647
-  },
-  "flow-p20-ddp-steps": {
-    "width": 874,
-    "height": 1261
-  },
-  "flow-p20-tp-pp-ep": {
-    "width": 574.34375,
-    "height": 357
-  },
-  "flow-p20-framework-choice": {
-    "width": 324,
-    "height": 491
-  },
   "p21-sft": {
     "width": 1000.0,
     "height": 910.0
   },
-  "flow-p21-drop-turns": {
-    "width": 451.5,
-    "height": 931
-  },
   "p22-preference": {
     "width": 1080.0,
     "height": 850.0
-  },
-  "flow-p22-logp-pair": {
-    "width": 317.03125,
-    "height": 437
-  },
-  "flow-p22-clip-sign": {
-    "width": 464.78125,
-    "height": 576.015625
   },
   "p23-mtp": {
     "width": 1120.0,
