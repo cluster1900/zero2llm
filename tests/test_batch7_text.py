@@ -53,5 +53,9 @@ class Batch7TextTests(unittest.TestCase):
 
     def test_math_uses_pandoc_supported_delimiters(self):
         chapter = (ROOT / "chapters/08j_training_frameworks.md").read_text()
-        self.assertIn(r"其中有效集合 $\mathcal V$", chapter)
+        # bot-hub#126 F7: the valid-position set is renamed from $\mathcal V$ to $\Omega$
+        # because appendix A.5 reserves $\mathcal V$ for the vocabulary.
+        self.assertIn(r"其中：有效集合 $\Omega$", chapter)
+        self.assertNotIn(r"\(\Omega\)", chapter)
         self.assertNotIn(r"\(\mathcal V\)", chapter)
+        self.assertNotIn(r"(b,t)\in\mathcal V", chapter)

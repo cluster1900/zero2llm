@@ -1472,6 +1472,19 @@ $$\operatorname{Attention}(PX)=P\operatorname{Attention}(X).$$
 3. $QK^\top$ 的查询行、键列同步换序；Softmax 只是在每行内重新排列同一批分数。
 4. 加权时，权重列和 $V$ 的行同步换序，因此各 token 收集的内容并没改变；输出只跟着输入换行。
 
+下面这张图把四步串起来：没有位置信息时，注意力只跟着行置换走，认不出谁在谁前面。
+
+```mermaid
+flowchart TD
+    %% id: ch05-permutation-equivariance
+    accTitle: 没有位置信息时，换序只让注意力跟着换行
+    accDescr: X 形状为 [T,D]，按置换 P 换行后，共用投影使 Q、K、V 的行同步换；分数表的行与列也同步换；乘完 V 后输出等于 P 作用在原 Attention(X) 上。
+    A["X 形状 [T,D]<br/>按置换 P 换行"] --> B["共用投影<br/>Q、K、V 行同步换"]
+    B --> C["分数表 QK⊤<br/>查询行与键列同换"]
+    C --> D["Softmax 每行内重排<br/>再乘 V"]
+    D --> E["输出 = P · Attention(X)<br/>没有位置时只跟着换位"]
+```
+
 于是“吃”仍然面对同一个邻居集合，它不知道小猫在自己前面还是后面。若最后再对所有行求和或平均，这种不依赖顺序的汇总才是**置换不变**。
 
 ### 一次能运行的换词实验
@@ -1712,6 +1725,24 @@ Add=(1, 2, 4)；Concat=(1, 2, 8)
 1. **编码能否生成？** 正弦公式可以生成位置 8 到 11；`generate_positional_encoding(12, 8)` 返回 $[12,8]$，且前 8 行与原来的表相同。公式不依赖当前句长。
 2. **实现是否允许？** 如果模型只预存了 8 行位置表、8 格 mask 或有限缓存，即使采用正弦，也可能先在实现处越界。可学习表若只有 8 行，直接查下标 8 的行就超出索引范围；预分配 12 行可以避免越界，却不代表新行已经训练好。
 3. **任务质量是否保持？** 训练只见过 8-token 的依赖模式，12-token 输入改变了分布。能跑完前向不等于预测正确；仍需在更长长度上测 loss 或具体任务表现，并检查资源成本。
+
+以训练最长 $T_{\mathrm{train}}=8$、测试 $T=12$ 为例，三本账互不蕴含：能算出编码、实现不越界、任务质量保持，是三件不同的事。
+
+```mermaid
+flowchart TD
+    %% id: ch05-length-three-ledgers
+    accTitle: 长度要分三本账：能算、不越界、质量保持互不蕴含
+    accDescr: 训练最长 T_train=8、测试 T=12 时，正弦公式能给出 [12,D] 且前 8 行不变；实现仍可能因位置表、mask 或缓存越界；任务质量还要另测 loss。三本账彼此独立。
+    S["例：T_train=8，测 T=12"] --> G
+    subgraph G["彼此独立，互不蕴含"]
+      direction TB
+      A["账 1 公式：能否给出 [12,D]<br/>正弦可以；前 8 行不变"]
+      B["账 2 实现：会不会越界<br/>位置表 / mask / 缓存都可能挡住"]
+      C["账 3 质量：是否保持<br/>要另测 loss；能跑通 ≠ 预测对"]
+      A ~~~ B
+      B ~~~ C
+    end
+```
 
 代码的 `length_example()` 只做前两项的微型检查，打印：
 
@@ -5672,13 +5703,17 @@ P09 为复用三首诗的字符词表，提前知道了保留诗歌的字符。�
 | 6 | EOS / 2 | 2 | 4、5、6 | -100 | 否 |
 | 7 | PAD / 0 | 占位为 0 | 无 | -100 | 否 |
 
-行长 T=8，模型输入是 `[B,T]`，输出 logits 是 `[B,T,V]`，这里 B=1、V=18。位置 ID 在每篇 BOS 重置为 0；整箱中的“下标 4 的格”不是文档 B 中下标 4 的位置。
+行长 $T=8$，模型输入是 `[B,T]`，输出 logits 是 $[B,T,\lvert\mathcal V\rvert]$，这里 $B=1$、$\lvert\mathcal V\rvert=18$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。位置 ID 在每篇 BOS 重置为 0；整箱中的“下标 4 的格”不是文档 B 中下标 4 的位置。
 
 本章的布尔 attention mask 中，`True` 表示**允许**，不是“挡住”：
 
 ```text
 允许(i,j) = i、j 属于同一个非 PAD 文档，并且 j <= i
 ```
+
+**大白话：**每个格子只读“同一篇文档里、位置不晚于自己”的格子；PAD 不读别人，也没人读它。一条规则同时挡住了偷看未来和跨文档串味。
+
+其中：$i$ 是发起读取的格子（query）下标，$j$ 是被读取的格子（key）下标，都按整箱从 0 计数；结果为 `True` 表示允许读取。
 
 不同 API 对布尔 mask 的约定可能相反，接入框架前必须核对。本模型使用自己的显式 attention 函数，不把这个矩阵不加检查地送给任意接口。
 
@@ -5707,13 +5742,25 @@ PAD 查询整行都不可见，直接对全是负无穷的分数做 softmax 会�
 
 总 loss 是 `9 × ln(2) = 6.238324625`，有效目标数是 5，平均是 **1.247664925**。不是除以 8，也不是只除以正文字符数 3。
 
+**大白话：**每道有效小题按 $-\ln p$ 扣分，扣分加总后除以“真正出了几道题”；被忽略的格子既不扣分，也不占分母名额。
+
+其中：$p$ 是模型给正确答案的概率，$\ln$ 是自然对数；分母 5 是有效目标数，不是格子数 8。
+
 脚本没有把概率直接塞给 `cross_entropy`。它构造完整 18 类 logits：其他 17 类分数为 0，目标类分数设为 `ln(17p/(1-p))`，softmax 后的目标概率才恰好为 p。标准库的 `scalar_loss` 用稳定 log-sum-exp 独立计算。
+
+**大白话：**目标类分数取 $z=\ln\frac{17p}{1-p}$ 时，softmax 给它的概率是 $\frac{e^{z}}{e^{z}+17}=p$：其余 17 类每类贡献 $e^{0}=1$，合起来的 17 正好和分子里的 17 抵消。
+
+其中：$z$ 是目标类的 logit；$p$ 是想要得到的目标概率；17 是除目标类以外的类别数，即词表大小 $\lvert\mathcal V\rvert=18$ 减 1。
 
 为什么不能平均文档均值？A 有 3 个目标，均值为 `4ln(2)/3 ≈ 0.924196241`；B 有 2 个，均值为 `5ln(2)/2 ≈ 1.732867951`。正确合并方式是：
 
 ```text
 (3 × A均值 + 2 × B均值) / (3 + 2) = 1.247664925
 ```
+
+**大白话：**先把每篇的均值还原成总扣分（均值 × 题数），加起来再除以总题数，就等于把五道题放在一起直接平均。
+
+其中：A均值、B均值是文档 A、B 各自有效目标的平均 loss；3 和 2 是两篇的有效目标数。
 
 简单平均两份均值会得到约 **1.328532096**，给短文档额外权重。评估多个长度不同的 batch 时也是一样：累计 loss 总和与有效 token 总数，最后只除一次。
 
@@ -5826,6 +5873,10 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 2,040 个参数可以这样复算（单个 block，词表 18、块长 12、宽度 12、SwiGLU 中间维 24）：token embedding 18×12=216，位置 embedding 12×12=144，两个 RMSNorm 2×12=24，QKV 12×36=432，输出投影 12×12=144，SwiGLU 三个投影 3×12×24=864，输出头 12×18=216，合计 2,040。
 
+**大白话：**参数量就是把每张权重表的“行 × 列”逐个加起来；这个模型的线性层不带 bias，每个 RMSNorm 只有一条长为宽度的缩放向量。
+
+其中：18 是词表大小 $\lvert\mathcal V\rvert$；位置 embedding 12×12 中的第一个 12 是块长（位置表的行数），其余各处的 12 都是模型宽度 $D$，本例二者恰好相等；24 是 SwiGLU 中间宽度 $d_{\mathrm{ff}}$；36=3×12 是 Q、K、V 三份投影拼在一起的输出宽度。
+
 模型复用 P13 / S3 的 RMSNorm 与 SwiGLU，但为了让文档边界可逐格检查，另写了单头显式 attention 与文档内学习式位置 embedding。**它不是把 S3 的 cache 模型无缝升级成另一条主线**，也没有实现 RoPE、KV cache 或高效变长 attention kernel。此处关注数据契约，后续接入框架时再验证接口对应。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
@@ -5836,9 +5887,17 @@ python -m unittest discover -s tests -p test_pretraining_pipeline.py -v
 
 一种常见的理解方式是把训练结束时的预测 loss 拟合成：
 
-$$L(N,D) \approx E + A/N^{\alpha} + B/D^{\beta}.$$
+$$\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}}) \approx c_{\mathrm{irred}} + \frac{c_{\mathrm{param}}}{N_{\mathrm{param}}^{\alpha}} + \frac{c_{\mathrm{tok}}}{N_{\mathrm{tok}}^{\beta}}.$$
 
-N 是参数量，D 是训练 token 数；E、A、B、α、β 是在具体实验设置下估计的量。该论文在所讨论的数据充足设置中使用平滑训练 loss 作为测试 loss 的估计；本章反复使用同一小语料，不满足这个前提，不能拿训练 loss 充当独立验证 loss。增加 N 或 D 时，可下降的部分逐渐变小，所以同一预算下需要分配。对某些稠密模型训练的粗略计算账本，还会使用 `C ≈ 6ND`；它忽略或近似了若干开销，不是任意结构、序列长度或硬件下的精确 FLOPs。
+**大白话：**最终 loss 分三块：再大的模型、再多的数据也去不掉的底线，加上“模型不够大”和“数据不够多”各自欠下的一笔账。两笔账都随规模按幂次慢慢还，所以同一预算下要在两者之间分配。
+
+其中：$\mathcal L$ 是训练结束时的预测 loss；$N_{\mathrm{param}}$ 是参数量，$N_{\mathrm{tok}}$ 是训练 token 数；$c_{\mathrm{irred}}$ 是不可约的 loss 底线（irreducible）；$c_{\mathrm{param}}$、$c_{\mathrm{tok}}$ 是两笔账的系数，$\alpha$、$\beta$ 是两笔账的下降指数（局部符号，只在本式有效）。后五个都是在具体实验设置下估计的量。原论文把它们写作 $E$、$A$、$B$、$\alpha$、$\beta$；本书改写是为了不和 embedding 表 $E$、批大小 $B$ 撞名。
+
+该论文在所讨论的数据充足设置中使用平滑训练 loss 作为测试 loss 的估计；本章反复使用同一小语料，不满足这个前提，不能拿训练 loss 充当独立验证 loss。增加 $N_{\mathrm{param}}$ 或 $N_{\mathrm{tok}}$ 时，可下降的部分逐渐变小，所以同一预算下需要分配。对某些稠密模型训练的粗略计算账本，还会使用 $C\approx 6N_{\mathrm{param}}N_{\mathrm{tok}}$（常简称 6ND）；它忽略或近似了若干开销，不是任意结构、序列长度或硬件下的精确 FLOPs。
+
+**大白话：**每个参数每见一个训练 token，大约要做 6 次浮点运算：前向一次乘加算 2 次，反向大约是前向的两倍，再算 4 次。
+
+其中：$C$ 是训练总计算量（浮点运算次数）；$N_{\mathrm{param}}$、$N_{\mathrm{tok}}$ 同上式。
 
 使用这些关系前，应检查：架构与优化方法是否接近、数据分布与质量是否稳定、训练范围是否支持外推、重复数据如何计数、评估指标是什么、预算是否只算训练。MoE 的总参数与激活参数不同，长上下文 attention 的成本也不同；模型未来要服务多少次推理，又可能改变整个生命周期的最优选择。不要把某个经验 token/parameter 比例当成所有项目的固定常数。
 
@@ -5957,7 +6016,7 @@ attention_mask[0] = [1, 1, 1, 1, 1, 1]
 attention_mask[1] = [1, 1, 1, 1, 1, 0]
 ```
 
-因此 input_ids 的形状为 [B,T]=[2,6]。模型输出 logits 的形状是 [B,T,V]=[2,6,12]：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
+因此 input_ids 的形状为 $[B,T]=[2,6]$。模型输出 logits 的形状是 $[B,T,\lvert\mathcal V\rvert]=[2,6,12]$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）：每个输入位置各给出一个“下一个 token”的 12 类预测。tokenizer 的词表大小、特殊 token ID、模型 embedding 行号必须一致；把两个相同大小但 ID 排列不同的词表互换，形状检查仍可能通过，语义却已经错了。
 
 unknown 词会变成 ID 1。
 
@@ -5978,11 +6037,13 @@ labels[1] = [-100, 7, 8, 10, 3, -100]
 独立参考计算不调用模型返回的 loss，也不调用框架的交叉熵函数，而是自己写：
 
 $$
-\mathcal L=\frac{1}{N}\sum_{(b,t)\in\mathcal V}
-\left[\log\sum_v\exp(z_{b,t,v})-z_{b,t,y_{b,t+1}}\right],
+\mathcal L=\frac{1}{N_{\mathrm{valid}}}\sum_{(b,t)\in\Omega}
+\left[\log\sum_{v\in\mathcal V}\exp(z_{b,t,v})-z_{b,t,y_{b,t+1}}\right],
 $$
 
-其中有效集合 $\mathcal V$ 只包含下一位置标签不是 -100 的预测位置，N 是这些位置的数量。本例第一行 5 个目标、第二行 4 个目标，所以 N=9，不是输入张量的 12 个格子。
+**大白话：**对每个要评分的位置，先用 log-sum-exp 量出“所有候选一起的总分”，再减去正确答案的分数，差值正是 $-\log p(\text{正确答案})$；把这些扣分加起来，只除以真正评分的位置数。
+
+其中：有效集合 $\Omega$ 只包含下一位置标签不是 -100 的预测位置，$N_{\mathrm{valid}}=|\Omega|$ 是这些位置的数量；$b$ 是第几条样本，$t$ 是输入位置；$z_{b,t,v}$ 是该位置给词表 $\mathcal V$ 中 token $v$ 的 logit；$y_{b,t+1}$ 是下一位置的标签 ID。本例第一行 5 个目标、第二行 4 个目标，所以 $N_{\mathrm{valid}}=9$，不是输入张量的 12 个格子。
 
 代码先取 logits[:, :-1] 与 labels[:, 1:]，筛掉忽略项，再用 logsumexp 减去目标 logit。
 
@@ -6001,8 +6062,12 @@ $$
 为什么不直接用 AdamW？不是说 SGD 更适合大模型，而是本实验要先回答“Trainer 是否执行了同一个更新”。SGD 的式子很简单：
 
 $$
-\theta_{k+1}=\theta_k-0.02\nabla_\theta\mathcal L_k.
+\theta_{k+1}=\theta_k-\eta\nabla_\theta\mathcal L_k,\qquad \eta=0.02.
 $$
+
+**大白话：**沿着让 loss 上升最快的反方向，迈一小步；步长固定，没有动量，也没有自适应缩放，所以两边结果好对账。
+
+其中：$\theta_k$ 是第 $k$ 次更新前的全部参数；$\mathcal L_k$ 是第 $k$ 个 batch 的 loss，$\nabla_\theta\mathcal L_k$ 是它对参数的梯度；$\eta$ 是学习率。
 
 我们从相同的初始权重复制两份模型：
 
@@ -6065,7 +6130,17 @@ rank 是分布式进程的编号；world size 是进程总数。常见 GPU 训�
 
 最容易理解的数据并行是 DDP：各 rank 持有同一模型副本，读取不同数据，反向传播时同步梯度，再按一致规则更新。它提高了可以共同处理的数据量，**没有自动把模型参数、梯度和普通优化器状态都分成几份**。DDP 也不会替你切分输入数据，数据采样器必须配合。相关职责见 [PyTorch 2.14 固定版 DDP API](https://docs.pytorch.org/docs/2.14/generated/torch.nn.parallel.DistributedDataParallel.html)；这里引用其机制说明，不声称本次运行了 PyTorch 2.14 的多卡测试。
 
-假设每个 rank 一次处理 b 条，累积 A 次后更新，数据并行组有 D 个 rank，理想情况下每次更新包含 b×A×D 条样本。若长度不一，有效监督 token 数不一定按样本数平均；还要检查各 rank 的 loss 归一化与梯度汇总口径。P19 中关于有效 token 和梯度累积的约定，并不会因为加了 DDP 就消失。
+假设每个 rank 一次处理 $B$ 条，累积 $n_{\mathrm{acc}}$ 次后更新，数据并行组有 $N_{\mathrm{dp}}$ 个 rank，理想情况下每次更新包含的样本条数为：
+
+$$
+B_{\mathrm{global}}=B\times n_{\mathrm{acc}}\times N_{\mathrm{dp}}.
+$$
+
+**大白话：**每张卡每次吃 $B$ 条，攒 $n_{\mathrm{acc}}$ 次才更新一次，一共 $N_{\mathrm{dp}}$ 张卡并排吃，三者相乘就是一次更新真正“见过”的样本条数。
+
+其中：$B_{\mathrm{global}}$ 是一次参数更新用到的总样本条数；$B$ 是每个 rank 每次前向的批大小（micro-batch）；$n_{\mathrm{acc}}$ 是梯度累积次数；$N_{\mathrm{dp}}$ 是数据并行组的 rank 数，即代码里的 world size。
+
+若长度不一，有效监督 token 数不一定按样本数平均；还要检查各 rank 的 loss 归一化与梯度汇总口径。P19 中关于有效 token 和梯度累积的约定，并不会因为加了 DDP 就消失。
 
 一个反直觉的结论是：单卡放不下的模型，简单复制到 4 张卡上仍可能每张都放不下。要减少每卡状态冗余，需要看下一节的分片。
 
@@ -6081,7 +6156,7 @@ rank 是分布式进程的编号；world size 是进程总数。常见 GPU 训�
 
 本例共 16 bytes/参数元素。**这不是所有 Adam、BF16 或 PyTorch 训练的固定规律。** 有的路径保留 FP32 梯度，有的没有单独 master copy；本章真实 CPU smoke 用的是 float32 + SGD，也不能套用这份 Adam 账本。
 
-设参数元素数为 P，参数 / 梯度 / 优化器侧每元素字节分别为 b_p、b_g、b_o。这里 b_o=2×moment_bytes+master_bytes，默认 12。经典 ZeRO 的分级思路是：Stage 1 切优化器状态，Stage 2 再切梯度，Stage 3 再切参数。出处是 [ZeRO 原始论文 v3](https://arxiv.org/abs/1910.02054v3) 以及 [DeepSpeed v0.16.5 的 ZeRO 官方说明源码](https://github.com/deepspeedai/DeepSpeed/blob/v0.16.5/docs/code-docs/source/zero3.rst)。
+设参数元素数为 $N_{\mathrm{param}}$，参数 / 梯度 / 优化器侧每元素字节分别为 $b_p$、$b_g$、$b_o$（它们都是附录 A.5 里 $b_{\mathrm{elem}}$ 这类“每元素字节数”，只是按用途分开记）。这里 $b_o$ = 2×moment_bytes+master_bytes，默认 2×4+4=12。经典 ZeRO 的分级思路是：Stage 1 切优化器状态，Stage 2 再切梯度，Stage 3 再切参数。出处是 [ZeRO 原始论文 v3](https://arxiv.org/abs/1910.02054v3) 以及 [DeepSpeed v0.16.5 的 ZeRO 官方说明源码](https://github.com/deepspeedai/DeepSpeed/blob/v0.16.5/docs/code-docs/source/zero3.rst)。
 
 | 方式 | 参数 | 梯度 | 优化器侧状态 |
 | --- | --- | --- | --- |
@@ -6094,18 +6169,22 @@ rank 是分布式进程的编号；world size 是进程总数。常见 GPU 训�
 
 $$
 \begin{aligned}
-M_0 &= P(b_p+b_g+b_o),\\
-M_1 &= P(b_p+b_g)+\frac{P}{D}b_o,\\
-M_2 &= Pb_p+\frac{P}{D}(b_g+b_o),\\
-M_3 &= \frac{P}{D}(b_p+b_g+b_o).
+\mathrm{Mem}_0 &= N_{\mathrm{param}}(b_p+b_g+b_o),\\
+\mathrm{Mem}_1 &= N_{\mathrm{param}}(b_p+b_g)+\frac{N_{\mathrm{param}}}{N_{\mathrm{dp}}}b_o,\\
+\mathrm{Mem}_2 &= N_{\mathrm{param}}b_p+\frac{N_{\mathrm{param}}}{N_{\mathrm{dp}}}(b_g+b_o),\\
+\mathrm{Mem}_3 &= \frac{N_{\mathrm{param}}}{N_{\mathrm{dp}}}(b_p+b_g+b_o).
 \end{aligned}
 $$
+
+**大白话：**Stage 0 每张卡把参数、梯度、优化器状态三样全背着；每升一级，就多一样东西被 $N_{\mathrm{dp}}$ 张卡平分，每张卡只背自己那 $1/N_{\mathrm{dp}}$。
+
+其中：$\mathrm{Mem}_k$ 是 ZeRO Stage $k$ 下每个 rank 的持久状态字节数；$N_{\mathrm{param}}$ 是参数元素个数；$b_p$、$b_g$、$b_o$ 是参数、梯度、优化器侧的每元素字节数；$N_{\mathrm{dp}}$ 是数据并行组的 rank 数。式子假设 $N_{\mathrm{param}}$ 能被 $N_{\mathrm{dp}}$ 整除。
 
 Stage 3 并不是每个 rank 永远只看自己的一小片参数。执行某层计算时仍需按实现聚合所需权重，并在合适时机释放或重新切分。节省常驻冗余往往要付出通信、调度和临时空间成本。CPU/NVMe offload 又是把状态放到别的位置，不是与 Stage 1/2/3 同义的第四个数字。
 
 ### 十个参数，四个 rank，亲手算一遍
 
-P=10、D=4 不能整除。我们的教学分配不加 padding，前两个 rank 各负责 3 个元素，后两个各负责 2 个，记作 [3,3,2,2]。这只是平衡所有权模型，不模拟 DeepSpeed 内部的 bucket / 对齐布局。
+$N_{\mathrm{param}}=10$、$N_{\mathrm{dp}}=4$ 不能整除。我们的教学分配不加 padding，前两个 rank 各负责 3 个元素，后两个各负责 2 个，记作 [3,3,2,2]。这只是平衡所有权模型，不模拟 DeepSpeed 内部的 bucket / 对齐布局。
 
 以 rank 0 为例：
 
@@ -6113,6 +6192,8 @@ P=10、D=4 不能整除。我们的教学分配不加 padding，前两个 rank �
 - Stage 1：10×2 + 10×2 + 3×12 = 76 bytes。
 - Stage 2：10×2 + 3×2 + 3×12 = 62 bytes。
 - Stage 3：3×2 + 3×2 + 3×12 = 48 bytes。
+
+每一行都是把上面的 $\mathrm{Mem}_k$ 代入 $N_{\mathrm{param}}=10$、$b_p=b_g=2$、$b_o=12$，并把 $N_{\mathrm{param}}/N_{\mathrm{dp}}$ 换成 rank 0 实际分到的 3 个元素。
 
 全部 rank 的结果是：
 
@@ -6123,9 +6204,9 @@ P=10、D=4 不能整除。我们的教学分配不加 padding，前两个 rank �
 | Stage 2 | 62 | 62 | 48 | 48 | 220 |
 | Stage 3 | 48 | 48 | 32 | 32 | 160 |
 
-单位全部是 bytes。最大的 rank 分片应使用 ceil(P/D)=3，而不是 floor(P/D)=2。若用浮点 2.5 个参数来估算最满的 rank，会低估；若每个 rank 都实际分配 3 个槽位，则又是含 padding 的另一种账本，集群合计不能仍写 10 个槽位。
+单位全部是 bytes。最大的 rank 分片应使用 $\lceil N_{\mathrm{param}}/N_{\mathrm{dp}}\rceil=3$，而不是 $\lfloor N_{\mathrm{param}}/N_{\mathrm{dp}}\rfloor=2$（$\lceil\cdot\rceil$ 向上取整，$\lfloor\cdot\rfloor$ 向下取整）。若用浮点 2.5 个参数来估算最满的 rank，会低估；若每个 rank 都实际分配 3 个槽位，则又是含 padding 的另一种账本，集群合计不能仍写 10 个槽位。
 
-脚本用 divmod 得到商和余数，逐 rank 返回真实元素数，保证总和严格等于 P；D>P 时允许部分 rank 拥有 0 个分片元素，不能凭空多出参数。
+脚本用 divmod 得到商和余数，逐 rank 返回真实元素数，保证总和严格等于 $N_{\mathrm{param}}$；$N_{\mathrm{dp}}>N_{\mathrm{param}}$ 时允许部分 rank 拥有 0 个分片元素，不能凭空多出参数。
 
 ### 账本不是显存峰值
 
@@ -6133,7 +6214,7 @@ P=10、D=4 不能整除。我们的教学分配不加 padding，前两个 rank �
 
 bytes、GB 和 GiB 也要区分：1 GB=10^9 bytes，1 GiB=2^30 bytes。10^9 bytes 大约是 0.9313 GiB，而不是 1 GiB。本章 byte_units 同时返回两种单位；不要把 GPU 标称容量与程序输出混用后得出“刚好能放下”的结论。
 
-现在做一个修改练习：把 gradient_bytes 从 2 改成 4，同时把 master_bytes 改成 0。P=10、D=4 时，Stage 2 的每 rank 结果应为 [56,56,44,44] bytes。这个练习强迫我们把“梯度什么 dtype”和“优化器状态什么 dtype”分开，而不是机械背诵“每参数 16 字节”。
+现在做一个修改练习：把 gradient_bytes 从 2 改成 4，同时把 master_bytes 改成 0。$N_{\mathrm{param}}=10$、$N_{\mathrm{dp}}=4$ 时，Stage 2 的每 rank 结果应为 [56,56,44,44] bytes。这个练习强迫我们把“梯度什么 dtype”和“优化器状态什么 dtype”分开，而不是机械背诵“每参数 16 字节”。
 
 ## P20.7 TP、PP、EP：切的不是同一条轴
 
@@ -6141,11 +6222,13 @@ ZeRO 主要回答“数据并行组中谁保存哪些训练状态”。其他并
 
 **Tensor parallel，张量并行（TP）：**把一层里的张量运算分给多个设备。例如线性层 Y=XW，可以按 W 的输出列拆成 W_1、W_2，两个设备各算出一部分输出列，需要完整输出时把它们拼接起来；若按 W 的输入行拆，每个设备得到的是同形状的部分和，要用 all-reduce 相加。Megatron 的 MLP 把两者配对：第一层按列拆、第二层按行拆，中间不通信。它不是让两个 rank 各读不同样本，而是合作完成同一层的计算。通信经常落在层内，互联条件很重要。[Megatron-LM 原始论文](https://arxiv.org/abs/1909.08053)
 
+其中：$X$ 是这一层的输入，$W$ 是权重，$Y=XW$ 是输出。按列拆时 $W=[W_1\ W_2]$，两台设备分别算 $XW_1$、$XW_2$，拼起来就是 $Y$；按行拆时 $X$ 也相应分成左右两块 $X_1$、$X_2$，$Y=X_1W_1+X_2W_2$，所以要把两份部分和加起来。
+
 **Pipeline parallel，流水线并行（PP）：**把不同层放到不同设备。例如 4 层网络，设备 A 负责第 1–2 层，设备 B 负责第 3–4 层。样本的激活先从 A 传给 B，反向梯度再反方向流回。把大 batch 切为 microbatch 可以让不同阶段交错工作，但启动、收尾或阶段不均衡会产生空闲时间，称为 pipeline bubble。不是把层拆开就能永远满载。[Megatron 的大规模训练论文](https://arxiv.org/abs/2104.04473)
 
 **Expert parallel，专家并行（EP）：**把 MoE 专家分散到不同设备，路由后把 token 发给相应专家，再把输出送回。它和 P18 的“一个 token 只激活少数专家”有关，但不是同一概念：稀疏激活描述模型计算，EP 描述专家放在哪。路由不均衡会让某些设备忙、某些设备闲；跨设备 token 交换也有成本。[Megatron-Core core_v0.12.0 的 MoE 与并行说明](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0)
 
-这些策略可以组合，但**不能把所有并行度数字无脑相乘**。简单的纯 dense DP×TP×PP 布局常可按独立进程组规划；加入 EP、context parallel 或不同专家组后，要按框架实际 rank 分组规则检查哪些维度独立、哪些共享。不清楚自己的 data-parallel group 大小时，前一节的 D 也就可能填错。
+这些策略可以组合，但**不能把所有并行度数字无脑相乘**。简单的纯 dense DP×TP×PP 布局常可按独立进程组规划；加入 EP、context parallel 或不同专家组后，要按框架实际 rank 分组规则检查哪些维度独立、哪些共享。不清楚自己的 data-parallel group 大小时，前一节的 $N_{\mathrm{dp}}$ 也就可能填错。
 
 ## P20.8 Transformers、TRL、DeepSpeed、Megatron 应该怎么选
 
@@ -6190,7 +6273,7 @@ python code/21_training_frameworks.py --hf --output-dir /tmp/p20-checkpoint-demo
 
 1. “我把 config.json 改成两倍 hidden size，原权重就变强了。”这句话有什么问题？
 2. 两条长度分别为 6、5 的含 BOS/EOS 序列，右侧补齐到 6。首列与 PAD 忽略时，监督位置数是多少？若恢复首列 BOS，本例版本的 Trainer 计数和实际 next-token 目标数有什么不同？
-3. P=7、D=3，默认每元素 2+2+12 bytes。Stage 3 每个 rank 的所有权、状态字节和合计是多少？
+3. $N_{\mathrm{param}}=7$、$N_{\mathrm{dp}}=3$，默认每元素 2+2+12 bytes。Stage 3 每个 rank 的所有权、状态字节和合计是多少？
 4. 为本章代码故意制造一个错误，说明哪条测试应该发现它。只让 loss 下降，能否作为验收？
 
 ### 参考答案
@@ -6324,15 +6407,19 @@ predictions = logits[:, :-1]
 
 所以位置 5 的 logits 预测位置 6 的“红”，位置 6 的 logits 预测位置 7 的 EOS。我们**不是**用“红”位置的 logits 预测同一个“红”；那样会让模型看到答案再复述答案。最后一个输入位置的 logits 没有下一个真实标签，本例不使用它。
 
-写成数学式，令 m 表示一个目标位置是否应评分：
+写成数学式，把所有应评分的预测位置收进集合 $\Omega$：
 
 $$
-\mathcal L=-\frac{1}{N}\sum_{b=1}^{B}\sum_{t=0}^{T-2}
- m_{b,t+1}\log p_\theta(x_{b,t+1}\mid x_{b,\le t}),
-\qquad N=\sum_{b,t}m_{b,t+1}.
+\mathcal L=-\frac{1}{N_{\mathrm{valid}}}\sum_{(b,t)\in\Omega}
+ \log p_\theta(x_{b,t+1}\mid x_{b,\le t}),
+\qquad N_{\mathrm{valid}}=\lvert\Omega\rvert.
 $$
 
-这个 N 是有效目标数，不是 batch 大小，也不是 `B×T`。本例 N=2。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：
+**大白话：**把每条样本里“该评分”的位置挑出来，看模型给下一个正确 token 多少概率，取负对数当扣分，最后按评分位置的个数求平均；不评分的位置根本不进 $\Omega$，等于直接划掉。
+
+其中：$b$ 是第几条样本，$B$ 是批大小；$t$ 是输入位置，$T$ 是序列长度；$x_{b,t}$ 是第 $b$ 条样本位置 $t$ 的 token，$x_{b,\le t}$ 是到位置 $t$ 为止的前缀；$\Omega$ 是有效集合，只收下一位置 $t+1$ 的 label 不是 -100 的 $(b,t)$，$t$ 从 0 到 $T-2$；$p_\theta$ 是参数为 $\theta$ 的模型给出的概率；$N_{\mathrm{valid}}=\lvert\Omega\rvert$ 是评分位置总数（和 [P20](#p20-frameworks) 的写法一致）。
+
+这个 $N_{\mathrm{valid}}$ 是有效目标数，不是批大小，也不是 `B×T`。本例 $N_{\mathrm{valid}}=2$。假设模型给正确“红”的概率是 0.5，给正确 EOS 的概率是 0.25：
 
 $$
 \mathcal L=-\frac{\ln 0.5+\ln 0.25}{2}
@@ -6340,6 +6427,8 @@ $$
 =\frac{0.69314718+1.38629436}{2}
 \approx1.03972077.
 $$
+
+其中：0.5、0.25 是模型给正确的“红”和 EOS 的概率，分母 2 就是上式的 $N_{\mathrm{valid}}$。
 
 这是自然对数下的平均负对数似然。除以八个输入格子，会错误得到四分之一大小的 loss 与梯度；只要分母错误固定，loss 依然可能下降，因此“曲线看起来正常”不能代替索引检查。
 
@@ -6393,66 +6482,82 @@ PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加 0�
 
 ### 零个目标不能“平均一下”
 
-如果 shift 之后所有标签都是 -100，N=0。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常。
+如果 shift 之后所有标签都是 -100，$N_{\mathrm{valid}}=0$。不能产生 NaN 再让 optimizer 继续，也不能悄悄说“loss=0，训练很好”。`masked_causal_loss` 在这种情况下抛出清晰异常。
 
 我们的数据函数 `encode_chat` 通常会更早拒绝没有完整监督轮的样本；loss 层仍保留这道检查，防止别的数据入口绕过前置约束。
 
 ## P21.5 全量更新与 LoRA：改整张表，还是加一条窄支路
 
-对一个线性层，采用列向量记法：
+对一个线性层，按全书的行向量写法：
 
 $$
-y=W_0x,\qquad W_0\in\mathbb R^{d_{out}\times d_{in}}.
+y=xW_0^\top,\qquad W_0\in\mathbb R^{d_{\mathrm{out}}\times d_{\mathrm{in}}}.
 $$
 
-全量更新允许直接调整 W0 中的全部元素。普通 LoRA 冻结它，增加两个小矩阵：
+其中：$x$ 是长 $d_{\mathrm{in}}$ 的输入行向量，$y$ 是长 $d_{\mathrm{out}}$ 的输出行向量，$W_0$ 是预训练得到的原权重，按 $[d_{\mathrm{out}},d_{\mathrm{in}}]$（输出×输入）存，和 PyTorch `nn.Linear.weight` 一样，所以乘的时候写转置 $^\top$。LoRA 原论文用列向量写成 $y=W_0x$，两种写法互为转置，内容完全一样。
+
+全量更新允许直接调整 $W_0$ 中的全部元素。普通 LoRA 冻结它，增加两个小矩阵：
 
 $$
-A\in\mathbb R^{r\times d_{in}},\quad
-B\in\mathbb R^{d_{out}\times r},\quad
-\Delta W=\frac{\alpha}{r}BA,\quad
-y=W_0x+\frac{\alpha}{r}B(Ax).
+\begin{aligned}
+&W_A\in\mathbb R^{r\times d_{\mathrm{in}}},\quad
+W_B\in\mathbb R^{d_{\mathrm{out}}\times r},\quad
+\Delta W=\frac{\alpha}{r}W_BW_A\in\mathbb R^{d_{\mathrm{out}}\times d_{\mathrm{in}}},\\
+&y=x(W_0+\Delta W)^\top=xW_0^\top+\frac{\alpha}{r}\,(xW_A^\top)\,W_B^\top.
+\end{aligned}
 $$
 
-可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是**这次更新**：`rank(BA)≤r`，还可能低于 r。
+**大白话：**原权重 $W_0$ 冻住不动，旁边并一条“先压窄到 $r$ 维、再放宽回来”的小支路，训练只调这条支路；$\alpha/r$ 像支路的音量旋钮。
 
-这里是 [LoRA 原论文 v2](https://arxiv.org/abs/2106.09685v2) 的普通低秩更新及 alpha/r 缩放形式。PyTorch 的 Linear 接受行式 batch，所以实现写成先 `F.linear(x,A)` 再 `F.linear(...,B)`；不要因为记法切换就把 BA 的乘法顺序颠倒。
+其中：$W_A$ 是把输入压到 $r$ 维的下投影，形状 $[r,d_{\mathrm{in}}]$；$W_B$ 是放回 $d_{\mathrm{out}}$ 维的上投影，形状 $[d_{\mathrm{out}},r]$（原论文和代码把它们叫 A、B；本书写 $W_A$、$W_B$，免得和批大小 $B$ 混淆）；两者都和 $W_0$ 一样按“输出×输入”存，所以行向量前向里每一项都带转置；$r$ 是秩，即支路宽度；$\alpha$ 是缩放超参数；$\Delta W$ 是这次更新给原权重带来的增量，和 $W_0$ 同形，因此可以直接相加。注意第二个等号右边两项**都**要转置：$\Delta W$ 和 $W_0$ 同形（输出×输入），所以它也要先转置，才能被行向量 $x$ 右乘。
+
+可以把它想成给固定机器加一条可调节的小支路，而不是重新铸造所有零件。但“支路很窄”不保证任何任务都适合，也不表示原模型本身是低秩的。受约束的是**这次更新**：$\operatorname{rank}(W_BW_A)\le r$，还可能低于 $r$。
+
+这里是 [LoRA 原论文 v2](https://arxiv.org/abs/2106.09685v2) 的普通低秩更新及 alpha/r 缩放形式。PyTorch 的 Linear 接受行式 batch，所以实现写成先 `F.linear(x,A)` 再 `F.linear(...,B)`：`F.linear(x,A)` 算的就是 $xW_A^\top$，第二步再右乘 $W_B^\top$，正好是上式的支路项；不要因为记法切换就把 $W_BW_A$ 的乘法顺序颠倒。
 
 ### 先数参数，再谈节省
 
 不计 bias 等额外可训练项时：
 
 $$
-P_{full}=d_{out}d_{in},\qquad P_{LoRA}=r(d_{in}+d_{out}).
+N_{\mathrm{full}}=d_{\mathrm{out}}d_{\mathrm{in}},\qquad N_{\mathrm{LoRA}}=r(d_{\mathrm{in}}+d_{\mathrm{out}}).
 $$
 
-例如 `d_in=d_out=4096，r=8`：原矩阵有 16,777,216 个参数，A/B 合计 65,536 个，是原矩阵的 1/256，约 0.390625%。这只是这一层的**新增可训练参数比例**；冻结的 16,777,216 个原参数仍需保存和参与前向。
+**大白话：**全量更新时原矩阵每一格都是可训练参数；LoRA 只多出两条细长矩阵，一条 $r\times d_{\mathrm{in}}$，一条 $d_{\mathrm{out}}\times r$。
+
+其中：$N_{\mathrm{full}}$ 是全量更新这一层时的可训练参数数；$N_{\mathrm{LoRA}}$ 是 LoRA 新增的可训练参数数（附录 A.5：参数个数一律写带下标的 $N$）；$r$、$d_{\mathrm{in}}$、$d_{\mathrm{out}}$ 同上。
+
+例如 `d_in=d_out=4096，r=8`：原矩阵有 16,777,216 个参数，$W_A$、$W_B$ 合计 65,536 个，是原矩阵的 1/256，约 0.390625%。这只是这一层的**新增可训练参数比例**；冻结的 16,777,216 个原参数仍需保存和参与前向。
 
 当矩阵很小或 r 很大时，LoRA 甚至可能比原矩阵参数更多。例如 2×3 的层，r=2 时有 2×(3+2)=10 个适配参数，超过原来的 6 个。低秩不是免费的效果保证。
 
-本章小模型只给 q_proj 和 v_proj 接上 LoRA。每个原矩阵为 16×16，r=2，A/B 合计 64 个；两个投影合计 **128 个可训练参数**。其余 3,760 个基础参数全部冻结，包括 embedding、位置表、norm、FFN 和输出层。加入 adapter 后模型实际总参数为 3,888，不是变成只有 128 个参数。
+本章小模型只给 q_proj 和 v_proj 接上 LoRA。每个原矩阵为 16×16，r=2，$W_A$、$W_B$ 合计 64 个；两个投影合计 **128 个可训练参数**。其余 3,760 个基础参数全部冻结，包括 embedding、位置表、norm、FFN 和输出层。加入 adapter 后模型实际总参数为 3,888，不是变成只有 128 个参数。
 
 少算基础权重的梯度和优化器状态，通常能降低相应训练状态开销；但基础权重、激活、中间结果及部分反向计算仍存在。可训练参数减少 99%，不能据此声称峰值显存或训练时间也减少 99%。本章不做 GPU 显存和速度测试。
 
 ## P21.6 一个可以手算到底的 LoRA 层
 
-取输入 x、基础矩阵 W0 和适配矩阵如下，r=1、alpha=2，因此缩放系数为 2：
+取输入行向量 $x$、基础矩阵 $W_0$ 和适配矩阵如下，r=1、alpha=2，因此缩放系数为 2：
 
 $$
-x=\begin{bmatrix}2\\-1\\0.5\end{bmatrix},\quad
+x=\begin{bmatrix}2&-1&0.5\end{bmatrix},\quad
 W_0=\begin{bmatrix}1&2&3\\4&5&6\end{bmatrix},\quad
-A=\begin{bmatrix}1&0&2\end{bmatrix},\quad
-B=\begin{bmatrix}3\\-1\end{bmatrix}.
+W_A=\begin{bmatrix}1&0&2\end{bmatrix},\quad
+W_B=\begin{bmatrix}3\\-1\end{bmatrix}.
 $$
+
+其中：这里 $d_{\mathrm{in}}=3$、$d_{\mathrm{out}}=2$、$r=1$、$\alpha=2$，所以缩放系数 $\alpha/r=2$；$W_0$ 是 $[2,3]$，$W_A$ 是 $[1,3]$，$W_B$ 是 $[2,1]$，都按“输出×输入”存。
 
 逐步相乘：
 
 $$
-W_0x=\begin{bmatrix}1.5\\6\end{bmatrix},\quad
-Ax=3,\quad
-2B(Ax)=\begin{bmatrix}18\\-6\end{bmatrix},\quad
-y=\begin{bmatrix}19.5\\0\end{bmatrix}.
+xW_0^\top=\begin{bmatrix}1.5&6\end{bmatrix},\quad
+xW_A^\top=3,\quad
+2\,(xW_A^\top)\,W_B^\top=\begin{bmatrix}18&-6\end{bmatrix},\quad
+y=\begin{bmatrix}19.5&0\end{bmatrix}.
 $$
+
+**大白话：**主路照常算 $xW_0^\top$；支路先把三维输入压成一个数 $xW_A^\top=3$，乘上缩放 2，再由 $W_B^\top$ 放回两维；两路相加就是输出。
 
 只写一句“输出等于基础输出加 adapter 输出”很容易让两个实现一起错。
 
@@ -6460,21 +6565,25 @@ $$
 
 `requires_grad_(False)` 让基础参数不接收梯度更新；它不等于把经过基础层的全部运算包进 `no_grad()`。有些早先层的 adapter 仍需要通过后面的冻结层回传梯度。把整条主路断开，可能切断正确的学习路径。
 
-令这个手算例子的标量目标为 `L=y₁+y₂`，链式法则给出：
+令这个手算例子的标量目标为 $\mathcal L=y_1+y_2$，链式法则给出：
 
 $$
-\frac{\partial L}{\partial B}=\begin{bmatrix}6\\6\end{bmatrix},\quad
-\frac{\partial L}{\partial A}=\begin{bmatrix}8&-4&2\end{bmatrix},\quad
-\frac{\partial L}{\partial x}=\begin{bmatrix}9\\7\\17\end{bmatrix}.
+\frac{\partial \mathcal L}{\partial W_B}=\begin{bmatrix}6\\6\end{bmatrix},\quad
+\frac{\partial \mathcal L}{\partial W_A}=\begin{bmatrix}8&-4&2\end{bmatrix},\quad
+\frac{\partial \mathcal L}{\partial x}=\begin{bmatrix}9&7&17\end{bmatrix}.
 $$
 
-W0 的梯度为 None，因为它被显式冻结。输入 x 仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。
+**大白话：**把两个输出加起来当“考分”，问每个数字轻轻动一下，考分会跟着变多少。比如 $W_B$ 的每一项都乘着同一个 $\frac{\alpha}{r}(xW_A^\top)=2\times3=6$，所以梯度都是 6。
 
-### 为什么初始 B 为零，不代表学习卡死
+其中：$y_1$、$y_2$ 是输出 $y$ 的两个分量；$\partial\mathcal L/\partial W_B$ 等是 $\mathcal L$ 对该矩阵（或向量）逐元素的偏导，形状与它本身相同。逐项来源（$\mathbf 1=[1,1]$ 是 $\partial\mathcal L/\partial y$，全 1 行向量）：$\partial\mathcal L/\partial W_B=\frac{\alpha}{r}\,\mathbf 1^\top(xW_A^\top)=2\times3\times[1,1]^\top$，$\partial\mathcal L/\partial W_A=\frac{\alpha}{r}(\mathbf 1W_B)^\top x=2\times2\times[2,-1,0.5]$，$\partial\mathcal L/\partial x=\mathbf 1W_0+\frac{\alpha}{r}(\mathbf 1W_B)W_A=[5,7,9]+4\times[1,0,2]$。
 
-代码使用随机初始化 A、零初始化 B，保证刚插入 adapter 时 `BA=0`，不改变原模型预测。具体采用 Kaiming-uniform 初始化 A；它是本实现的选择，不声称逐项复现原论文的高斯初始化。固定版 [PEFT 0.15.0 LoRA 配置说明](https://huggingface.co/docs/peft/v0.15.0/package_reference/lora) 也区分初始化、rank、alpha 与 target modules；本章没有调用 PEFT。
+$W_0$ 的梯度为 None，因为它被显式冻结。输入 x 仍有梯度，说明“权重固定”和“信息不能穿过”是两件事。
 
-在第一步，如果 B=0，则对 A 的梯度为 0，但对 B 的梯度通常不为 0。B 更新之后，下一步 A 也能获得梯度。若 A、B 都初始化为零，两个方向都可能没有初始学习信号；不要因为“初始更新应为零”就把两个矩阵都清零。
+### 为什么初始 $W_B$ 为零，不代表学习卡死
+
+代码使用随机初始化 $W_A$（代码里的 `A`）、零初始化 $W_B$（代码里的 `B`），保证刚插入 adapter 时 $W_BW_A=0$，不改变原模型预测。具体采用 Kaiming-uniform 初始化 $W_A$；它是本实现的选择，不声称逐项复现原论文的高斯初始化。固定版 [PEFT 0.15.0 LoRA 配置说明](https://huggingface.co/docs/peft/v0.15.0/package_reference/lora) 也区分初始化、rank、alpha 与 target modules；本章没有调用 PEFT。
+
+在第一步，如果 $W_B=0$，则对 $W_A$ 的梯度为 0，但对 $W_B$ 的梯度通常不为 0。$W_B$ 更新之后，下一步 $W_A$ 也能获得梯度。若 $W_A$、$W_B$ 都初始化为零，两个方向都可能没有初始学习信号；不要因为“初始更新应为零”就把两个矩阵都清零。
 
 ## P21.7 真正训练一次，明确哪些结果不能比较
 
@@ -6521,7 +6630,7 @@ _updates(model, batch, steps=24, lr=0.5)
 | 冻结基础参数 / 梯度 | 逐元素未变 / 全部为 None |
 | 合并前后 logits 最大差 | 约 7.15e-7 |
 
-第二阶段只再降约 0.0008：它从第一阶段终点 0.61146003 起步，只训练 q/v 投影上的 128 个 LoRA 参数（B 初始为零），参数最大变化约 0.036，远小于第一阶段的约 0.766；本章没有另做实验区分这几个因素各自的作用。
+第二阶段只再降约 0.0008：它从第一阶段终点 0.61146003 起步，只训练 q/v 投影上的 128 个 LoRA 参数（$W_B$ 初始为零），参数最大变化约 0.036，远小于第一阶段的约 0.766；本章没有另做实验区分这几个因素各自的作用。
 
 训练 loss 的下降证明这个目标在这批数据上被优化，不证明模型会回答新问题。脚本显式输出 `heldout_quality_evaluated=false` 与 `hf_peft_qlora_run=false`，避免把未测项目混进“通过”的结果。
 
@@ -6550,24 +6659,30 @@ python -m unittest discover -s tests -p 'test_sft_lora.py' -v
 普通、无量化、无 LoRA dropout 的线性层，可以构造：
 
 $$
-W_{merged}=W_0+\frac{\alpha}{r}BA.
+W_{\mathrm{merged}}=W_0+\frac{\alpha}{r}W_BW_A.
 $$
 
-于是 `W_merged x` 与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：
+**大白话：**支路说到底只是给 $W_0$ 加了一个固定增量；训练完把增量直接加回原矩阵，以后只走一条路，算出来一样。
+
+其中：$W_{\mathrm{merged}}$ 是合并后的普通权重，和 $W_0$ 同形，前向写 $y=xW_{\mathrm{merged}}^\top$；$W_0$、$W_B$、$W_A$、$\alpha$、$r$ 同上。
+
+于是 $xW_{\mathrm{merged}}^\top$ 与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：
 
 $$
-W_{merged}=\begin{bmatrix}7&2&15\\2&5&2\end{bmatrix}.
+W_{\mathrm{merged}}=\begin{bmatrix}7&2&15\\2&5&2\end{bmatrix}.
 $$
 
-代码的 `merged()` 返回一个**新的普通 Linear**，保留原来的 bias，不改原 adapter 或基础层。调用两次也各自从同一个原始 W0 出发，不会把 BA 重复加两遍。合并后的模型不再额外执行 adapter 支路；若既改了原权重又保留支路，更新就会被算两次。
+其中：$W_BW_A=\begin{bmatrix}3&0&6\\-1&0&-2\end{bmatrix}$，乘以 $\alpha/r=2$ 后逐元素加到 $W_0$ 上。
+
+代码的 `merged()` 返回一个**新的普通 Linear**，保留原来的 bias，不改原 adapter 或基础层。调用两次也各自从同一个原始 $W_0$ 出发，不会把 $W_BW_A$ 重复加两遍。合并后的模型不再额外执行 adapter 支路；若既改了原权重又保留支路，更新就会被算两次。
 
 float64 小整数例子得到精确对齐；float32 整模因乘法顺序不同，按 `atol=2e-6、rtol=2e-5` 检查。这里验证的是数值等价，不是实测推理加速。
 
-实际保存 adapter 时，还需要记录基础 checkpoint 的精确版本、目标层名、rank/alpha、tokenizer/template、额外训练的 embedding 或其他模块。只有 A/B 文件并不等于一个独立完整模型。**本章没有实现 adapter 保存/重载或跨框架转换**，不声称这条部署链已经通过测试。
+实际保存 adapter 时，还需要记录基础 checkpoint 的精确版本、目标层名、rank/alpha、tokenizer/template、额外训练的 embedding 或其他模块。只有 $W_A$、$W_B$ 文件并不等于一个独立完整模型。**本章没有实现 adapter 保存/重载或跨框架转换**，不声称这条部署链已经通过测试。
 
 ## P21.9 QLoRA：冻结的底座换成低比特存储
 
-QLoRA 的 Q 指 quantization。它不是“把 A/B 变成 4 bit 再训练”，也不是“训练中直接对 4 bit 整数权重做普通梯度下降”。[QLoRA 原论文 v1](https://arxiv.org/abs/2305.14314v1) 的关键思路是冻结量化后的基础模型，通过相应计算路径，把梯度传到可训练的低秩 adapter；论文还讨论 NF4、量化常数的再次量化和 paged optimizers。
+QLoRA 的 Q 指 quantization。它不是“把 $W_A$、$W_B$ 变成 4 bit 再训练”，也不是“训练中直接对 4 bit 整数权重做普通梯度下降”。[QLoRA 原论文 v1](https://arxiv.org/abs/2305.14314v1) 的关键思路是冻结量化后的基础模型，通过相应计算路径，把梯度传到可训练的低秩 adapter；论文还讨论 NF4、量化常数的再次量化和 paged optimizers。
 
 需要区分三件事：基础权重的存储格式、运算时使用的计算精度、adapter / 梯度 / 优化器状态的精度。它们不必相同。基础参数“4 bit”也不表示整个训练进程只占 `参数数×0.5` 字节；量化元数据、激活、临时反量化结果及优化器状态仍要计算。
 
@@ -6600,7 +6715,7 @@ LoRA 不是数据审校器，也不能保证不遗忘既有能力。SFT 通过�
 
 “问红 → 红”的八个输入位置，哪些 labels 保留？哪些 logits 被评分？若两个正确目标概率分别为 0.5、0.25，平均 loss 是多少？
 
-**参考答案：** labels 仅位置 6=13、7=6，其余为 -100；logits 位置 5、6 被评分；N=2，loss≈1.03972077。不能把 labels 提前左移，也不能除以八。对应 `test_hand_example_literal_ids`、`test_scalar_loss_hand_answer_and_large_offsets` 与独立 log-probability 测试。
+**参考答案：** labels 仅位置 6=13、7=6，其余为 -100；logits 位置 5、6 被评分；$N_{\mathrm{valid}}=2$，loss≈1.03972077。不能把 labels 提前左移，也不能除以八。对应 `test_hand_example_literal_ids`、`test_scalar_loss_hand_answer_and_large_offsets` 与独立 log-probability 测试。
 
 ### 题 2：多轮与 EOS
 
@@ -6616,27 +6731,27 @@ LoRA 不是数据审校器，也不能保证不遗忘既有能力。SFT 通过�
 
 ### 题 4：LoRA 的参数账
 
-4096×4096 的层用 r=8，A/B 有多少参数？本章两个 16×16 投影用 r=2 又有多少？是否可以说本章模型只剩 128 个参数？
+4096×4096 的层用 r=8，$W_A$、$W_B$ 有多少参数？本章两个 16×16 投影用 r=2 又有多少？是否可以说本章模型只剩 128 个参数？
 
 **参考答案：** 前者 65,536，相对原矩阵 16,777,216 是 1/256；后者每层 64，共 128。不能说模型只有 128 个参数，它还保存 3,760 个被冻结的基础参数，总计 3,888。对应参数算术测试和真实训练报告测试。
 
 ### 题 5：矩阵与合并
 
-使用 P21.6 的 W0、A、B、x，算出输出与合并权重；若忘记 alpha/r，结果还能一样吗？
+使用 P21.6 的 $W_0$、$W_A$、$W_B$、$x$，算出输出与合并权重；若忘记 alpha/r，结果还能一样吗？
 
 **参考答案：** 输出 `[19.5,0]`，合并权重 `[[7,2,15],[2,5,2]]`。忘记系数 2 会得到错误输出 `[10.5,3]`。矩阵 oracle 直接检查手算答案。
 
 ### 题 6：梯度到哪里
 
-仍用该例子，令 L=y₁+y₂，求 A、B、x 的梯度。为什么冻结 W0 后 x 仍可能有梯度？
+仍用该例子，令 $\mathcal L=y_1+y_2$，求 $W_A$、$W_B$、$x$ 的梯度。为什么冻结 $W_0$ 后 $x$ 仍可能有梯度？
 
-**参考答案：** A 梯度 `[8,-4,2]`，B 梯度 `[6,6]`，x 梯度 `[9,7,17]`；固定 W0 不等于切断对输入的导数。`test_lora_gradients_match_manual_chain_rule` 逐项核对。另一个测试验证 user 内容虽然不被当成标签，仍可通过上下文影响 loss。
+**参考答案：** $W_A$ 梯度 `[8,-4,2]`，$W_B$ 梯度 `[6,6]`（形状 [2,1]），$x$ 梯度 `[9,7,17]`；固定 $W_0$ 不等于切断对输入的导数。`test_lora_gradients_match_manual_chain_rule` 逐项核对。另一个测试验证 user 内容虽然不被当成标签，仍可通过上下文影响 loss。
 
 ### 题 7：两个“零”是否一样
 
-B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽略时，loss 返回零再更新是否合适？
+$W_B$ 初始为零时，$W_A$ 第一轮梯度为零，是 bug 吗？所有 labels 都忽略时，loss 返回零再更新是否合适？
 
-**参考答案：** 前者不一定是 bug：B 先获得梯度，更新后 A 也能获得梯度。后者不合适：有效目标数为零，平均 loss 未定义；本代码在更新前报错，并验证参数完全不变。对应两步初始化梯度测试和 all-ignored 测试。
+**参考答案：** 前者不一定是 bug：$W_B$ 先获得梯度，更新后 $W_A$ 也能获得梯度。后者不合适：有效目标数为零，平均 loss 未定义；本代码在更新前报错，并验证参数完全不变。对应两步初始化梯度测试和 all-ignored 测试。
 
 ### 题 8：什么叫“验证过”
 
@@ -6648,7 +6763,7 @@ B 初始为零时，A 第一轮梯度为零，是 bug 吗？所有 labels 都忽
 
 ## 本章小结与来源边界
 
-SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 A/B 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
+SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 $W_A$、$W_B$ 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
 
 来源按附录 H 所列日期核验，固定版本而非追随 latest：
 
@@ -6703,11 +6818,17 @@ $$
 \pi(y\mid x)=0.5\times0.25=0.125.
 $$
 
+**大白话：**整条答案的概率，等于每一步“接对下一个 token”的条件概率连乘。
+
+其中：$x$ 是问题（含前文），$y$ 是一整条答案；$\pi$ 是策略，也就是语言模型给出的概率分布。
+
 使用自然对数 ln，有：
 
 $$
 \log\pi(y\mid x)=\log0.5+\log0.25\approx-2.07944.
 $$
+
+其中：$\log$ 是自然对数 ln；$x$、$y$、$\pi$ 同上。
 
 这里的第二个概率已经以第一个 token 为条件，**不是假设 token 彼此独立**。对数把很长的概率连乘变成相加，数值上更方便。概率在 0 到 1 之间，对数概率通常为负；从 −3 提高到 −2，是概率增加，不是下降。
 
@@ -6728,19 +6849,27 @@ $$
 =\sum_y\pi(y)r(y)=0.5.
 $$
 
-符号 y∼π 表示按策略抽样。多抽几次再取奖励均值，可以估计这个期望，但有限样本有波动。贪心只选最大概率答案，不是在进行同一种抽样。本章 `sample_rollouts` 用固定种子的有放回抽样，temperature=1，不做 top-k / top-p 截断。
+**大白话：**每个答案的奖励乘上它被抽中的概率，再加总；相当于抽很多很多次以后奖励的平均。
+
+其中：$r(y)$ 是答案 $y$ 的奖励（局部符号）；$\mathbb E$ 表示期望；求和遍历所有答案。
+
+符号 $y\sim\pi$ 表示按策略 $\pi$ 抽样。多抽几次再取奖励均值，可以估计这个期望，但有限样本有波动。贪心只选最大概率答案，不是在进行同一种抽样。本章 `sample_rollouts` 用固定种子的有放回抽样，temperature=1，不做 top-k / top-p 截断。
 
 ### KL 比较两份完整分布
 
 参考策略 π_ref 像一张固定的起点照片。我们希望提高奖励，又不无节制地偏离它。一种约束量是：
 
 $$
-D_{\mathrm{KL}}(\pi_\theta\Vert\pi_{\mathrm{ref}})
+\operatorname{KL}(\pi_\theta\Vert\pi_{\mathrm{ref}})
 =\sum_y\pi_\theta(y)
 \left[\log\pi_\theta(y)-\log\pi_{\mathrm{ref}}(y)\right].
 $$
 
-两份分布相同时 KL=0；一般不对称，不能调换左右。代码在有限 logits 上用 log-softmax，枚举所有动作计算。手算 p=[0.6,0.3,0.1]、q=[0.2,0.5,0.3]，得到约 0.396058 nats。它不是“只看 chosen 的概率变化”，也不是两个 logits 的欧氏距离。
+**大白话：**按当前策略自己的概率加权，平均地看“我给每个答案的对数概率比参考策略多出多少”；两份分布一模一样时结果为 0，差得越多越大。
+
+其中：$\pi_\theta$ 是正在训练的策略（参数为 $\theta$），$\pi_{\mathrm{ref}}$ 是固定的参考策略；求和遍历所有可能的答案 $y$；用自然对数时单位是 nats；$\operatorname{KL}(\cdot\Vert\cdot)$ 是 KL 散度（附录 A.5 不写 $D_{\mathrm{KL}}$，因为 $D$ 只指模型宽度）。
+
+两份分布相同时 KL=0；一般不对称，不能调换左右。代码在有限 logits 上用 log-softmax，枚举所有动作计算。手算 p=[0.6,0.3,0.1]、q=[0.2,0.5,0.3]（p 作 $\pi_\theta$，q 作 $\pi_{\mathrm{ref}}$），得到约 0.396058 nats。它不是“只看 chosen 的概率变化”，也不是两个 logits 的欧氏距离。
 
 对真正的自回归模型，在一个固定前缀上枚举词表，得到的是**该前缀下的条件下一 token KL**。对旧策略采到的若干前缀取平均，并不自动成为完整答案分布的精确 KL。本章后面打印的“精确答案 KL”之所以成立，是因为玩具策略只有三个完整答案，能够全部枚举。
 
@@ -6761,6 +6890,10 @@ $$
 =-\log\sigma\big(r_\phi(x,y_w)-r_\phi(x,y_l)\big),
 \qquad \sigma(z)=\frac{1}{1+e^{-z}}.
 $$
+
+**大白话：**奖励模型给好、坏两份答案各打一分；好答案领先越多，sigmoid 越接近 1，loss 越接近 0。它只在乎“好的比坏的高多少”，不在乎分数本身多大。
+
+其中：$r_\phi(x,y)$ 是参数为 $\phi$ 的奖励模型给问题 $x$、答案 $y$ 打的分；$y_w$、$y_l$ 是同一问题下较受偏好和较不受偏好的答案；$\sigma$ 是 sigmoid 函数（局部符号，这里不是标准差），$z$ 是它的输入。
 
 w 表示较受偏好的答案，l 表示较不受偏好的答案。只比较差值，所以对同一问题把两个评分都加 100，并不改变偏好概率。评分没有天然的“满分 100”含义。
 
@@ -6789,6 +6922,10 @@ z &= \beta(\Delta_\theta-\Delta_{\mathrm{ref}}),\\
 \mathcal L_{\mathrm{DPO}} &= -\log\sigma(z)=\operatorname{softplus}(-z).
 \end{aligned}
 $$
+
+**大白话：**先量“现在的模型比起 rejected 多偏爱 chosen 多少”，再扣掉参考模型原本就有的偏爱，乘上 $\beta$ 送进 $-\log\sigma$：相对起点越偏向 chosen，loss 越小。
+
+其中：$\pi_\theta$、$\pi_{\mathrm{ref}}$ 是当前策略与参考策略；$\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两者对 chosen（$y_w$）与 rejected（$y_l$）的整条答案对数概率之差；$\beta$ 是控制偏离强度的系数（局部符号）；$z$ 是乘过 $\beta$ 的相对 margin；$\sigma$ 是 sigmoid，$\operatorname{softplus}(u)=\log(1+e^{u})$。
 
 来源是 [DPO 论文 v3，式 (7)，2024-07-29](https://arxiv.org/html/2305.18290v3#S4)。直觉是：不只问策略是否喜欢 chosen，而是问它**相对于原来，更偏向 chosen 了吗？** 参考策略可能本来就偏爱某个答案，减掉参考差值可以把这一点纳入目标。
 
@@ -6828,7 +6965,7 @@ loss = torch.nn.functional.softplus(-beta * margin).mean()
 
 ## P22.5 从变长 token 到一对概率：形状不能代替对齐
 
-语言模型 logits 为 [B,T,V]，input_ids 和 attention_mask 为 [B,T]。本章的 `completion_log_probs` 做三步：
+语言模型 logits 为 $[B,T,\lvert\mathcal V\rvert]$，input_ids 和 attention_mask 为 $[B,T]$（$B$ 是批大小，$T$ 是序列长度，$\lvert\mathcal V\rvert$ 是词表大小）。本章的 `completion_log_probs` 做三步：
 
 ```python
 next_logps = logits[:, :-1].log_softmax(dim=-1)
@@ -6863,16 +7000,20 @@ EOS 如果确实属于答案，应当计入；PAD 不计入。这个 helper 只�
 设一个问题采样 G 份答案，奖励为 r₁…r_G。本章明确选择总体标准差，即分母为 G：
 
 $$
-\bar r=\frac1G\sum_i r_i,\qquad
-s=\sqrt{\frac1G\sum_i(r_i-\bar r)^2},\qquad
-A_i=\frac{r_i-\bar r}{s+\delta},\quad\delta=10^{-8}.
+\bar r=\frac1G\sum_{i=1}^{G} r_i,\qquad
+\sigma_r=\sqrt{\frac1G\sum_{i=1}^{G}(r_i-\bar r)^2},\qquad
+A_i=\frac{r_i-\bar r}{\sigma_r+\epsilon},\quad\epsilon=10^{-8}.
 $$
 
-δ 放在平方根**外面**。这里的选择用于手算和可重复的教学实现，不意味着所有 GRPO 实现都采用同一个标准差、epsilon 或归一化方式。
+**大白话：**同一道题的几份答案互相比：先看比组平均好多少，再除以组内分数的波动幅度，得到每份答案的“相对成绩”。
+
+其中：$G$ 是同一问题采样的答案数，$r_i$ 是第 $i$ 份答案的奖励；$\bar r$ 是组内平均奖励，$\sigma_r$ 是组内总体标准差（分母为 $G$）；$A_i$ 是第 $i$ 份答案的优势值；$\epsilon$ 是防止除以零的小常数，代码里叫 `epsilon`。
+
+$\epsilon$ 放在平方根**外面**。这里的选择用于手算和可重复的教学实现，不意味着所有 GRPO 实现都采用同一个标准差、epsilon 或归一化方式。
 
 ### 手算一组 [0,1,1,2]
 
-平均奖励为 1，方差为 (1+0+0+1)/4=0.5，标准差约 0.707107。忽略很小的 δ 后，优势约为：
+平均奖励为 1，方差为 (1+0+0+1)/4=0.5，标准差约 0.707107。忽略很小的 $\epsilon$ 后，优势约为：
 
 ```text
 奖励：  0          1       1       2
@@ -6881,7 +7022,7 @@ $$
 
 相对本组平均更好的是最后一份答案；第一份较差。这里没有给另一道更难的题“借用平均值”。代码按 prompt_id 分组，即使样本交错排列也不会混组。每组要求至少两份答案。
 
-如果一组奖励为 [2,2,2,2]，减去平均后全为 0，分母为 δ，优势正好全为 0，不会产生 NaN。它可能表示全部答对、全部答错，或者评分器太粗糙；**仅凭零优势无法知道是哪一种**。这组没有奖励比较带来的策略梯度，但若策略已经偏离 reference，非零 KL 惩罚仍可能产生梯度。
+如果一组奖励为 [2,2,2,2]，减去平均后全为 0，分母为 $\epsilon$，优势正好全为 0，不会产生 NaN。它可能表示全部答对、全部答错，或者评分器太粗糙；**仅凭零优势无法知道是哪一种**。这组没有奖励比较带来的策略梯度，但若策略已经偏离 reference，非零 KL 惩罚仍可能产生梯度。
 
 ### 概率比、clip 和最小化符号
 
@@ -6893,18 +7034,24 @@ $$
 -\log\pi_{\mathrm{old}}(y_{i,t}\mid x,y_{i,<t})\right).
 $$
 
-本章使用 clip ε=0.2，并把“最大化收益”写成优化器常用的“最小化负收益”：
+**大白话：**同一个 token，现在的策略和当初采样时的旧策略各给多少概率，取二者之比；先把对数相减再取 exp，比直接相除更稳。
+
+其中：$y_{i,t}$ 是第 $i$ 份答案的第 $t$ 个 token，$y_{i,<t}$ 是它之前的部分；$\pi_\theta$ 是当前策略，$\pi_{\mathrm{old}}$ 是采样这批答案时的策略快照；$\rho_{i,t}$ 是概率比。
+
+本章使用 clip 范围 $\epsilon_{\mathrm{clip}}=0.2$（即把概率比夹在 $[0.8,1.2]$ 内），并把“最大化收益”写成优化器常用的“最小化负收益”：
 
 $$
 \mathcal L=
-\frac1N\sum_{i=1}^{N}\frac1{L_i}
-\sum_{t=1}^{L_i}
+\frac1{N_{\mathrm{resp}}}\sum_{i=1}^{N_{\mathrm{resp}}}\frac1{T_i}
+\sum_{t=1}^{T_i}
 \left[-\min\left(\rho_{i,t}A_i,
 \operatorname{clip}(\rho_{i,t},0.8,1.2)A_i\right)
-+\beta K_{i,t}\right].
++\beta\,\operatorname{KL}_{i,t}\right].
 $$
 
-N 是这批答案总数，L_i 是第 i 份答案的有效长度，K 是该前缀的 KL 项。本章各题采样数相同，因此对答案均权也使题目均权。不同组大小时还需明确是否要对题目再次加权。
+**大白话：**优势为正就鼓励这个 token，为负就压低它；但概率比一旦跑出 $[0.8,1.2]$，就不再为同方向的变化加奖，外加一小笔“别离参考策略太远”的 KL 罚款。每份答案先在自己的 token 上取平均，再在答案之间平均。
+
+其中：$N_{\mathrm{resp}}$ 是这批答案（回复）总数，$T_i$ 是第 $i$ 份答案的有效长度（token 数）；$\operatorname{KL}_{i,t}$ 是第 $i$ 份答案在第 $t$ 个前缀上、当前策略对参考策略的**精确**条件 KL（本章枚举整个词表算出，不是估计，所以不加帽子）；$\rho_{i,t}$、$A_i$ 同上；$\operatorname{clip}(\rho,0.8,1.2)$ 把 $\rho$ 截到 $[0.8,1.2]$ 之内；$\beta$ 是 KL 惩罚系数（局部符号，本章 GRPO 取 0.04）。本章各题采样数相同，因此对答案均权也使题目均权。不同组大小时还需明确是否要对题目再次加权。
 
 两个检查符号的例子：
 
@@ -6915,16 +7062,20 @@ clip 的作用依赖优势符号和更新方向，并不是所有范围外的概
 
 ### 本章的 KL 和长度归约，刻意写清楚
 
-`grpo_loss` 输入 logits/reference=[N,L,V]，targets/old_logps/mask=[N,L]，advantages=[N]。old、reference、advantages 都停止梯度；当前 logits 保留梯度。mask 中每行至少一个 True。有限的 log probability 不保证 exp 后仍然有限；如果概率比、逐 token loss 或归约超出 dtype 的有限范围，代码明确报错，不用 clip 掩盖溢出，也不让 0×∞ 静默变成 NaN。
+`grpo_loss` 输入 logits/reference=$[N_{\mathrm{resp}},T,\lvert\mathcal V\rvert]$，targets/old_logps/mask=$[N_{\mathrm{resp}},T]$，advantages=$[N_{\mathrm{resp}}]$（$T$ 是补齐后的答案长度，每份答案的有效长度 $T_i\le T$，多出的位置由 mask 排除）。old、reference、advantages 都停止梯度；当前 logits 保留梯度。mask 中每行至少一个 True。有限的 log probability 不保证 exp 后仍然有限；如果概率比、逐 token loss 或归约超出 dtype 的有限范围，代码明确报错，不用 clip 掩盖溢出，也不让 0×∞ 静默变成 NaN。
 
-本章词表很小，K 使用枚举整个词表的精确条件 KL，而不是采样估计。原论文使用的一个逐 token KL 估计写成：
+本章词表很小，$\operatorname{KL}_{i,t}$ 使用枚举整个词表的精确条件 KL，而不是采样估计。原论文使用的一个逐 token KL **估计量**写成（只有估计量加帽子）：
 
 $$
-k=\frac{\pi_{\mathrm{ref}}(a\mid s)}{\pi_\theta(a\mid s)}
--\log\frac{\pi_{\mathrm{ref}}(a\mid s)}{\pi_\theta(a\mid s)}-1.
+\widehat{\operatorname{KL}}_{i,t}=\frac{\pi_{\mathrm{ref}}(y_{i,t}\mid x,y_{i,<t})}{\pi_\theta(y_{i,t}\mid x,y_{i,<t})}
+-\log\frac{\pi_{\mathrm{ref}}(y_{i,t}\mid x,y_{i,<t})}{\pi_\theta(y_{i,t}\mid x,y_{i,<t})}-1.
 $$
 
-若动作 a 真按当前 π_θ 抽样，且支持集条件满足，它的期望等于相应 KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与 old 不同，也不能不加说明地把旧样本均值称为精确 KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 K 的教学目标说成原论文代码逐行复现。
+**大白话：**只看抽中的那一个 token：记 $u$ 为“参考概率 / 当前概率”，算 $u-\log u-1$。这个数永远不小于 0，两边相同时恰好为 0；按当前策略抽很多次取平均，就逼近精确的 $\operatorname{KL}_{i,t}$。
+
+其中：$y_{i,t}$ 是抽到的 token（强化学习里叫“动作”），$(x,y_{i,<t})$ 是它前面的上下文，即题目加已生成部分（强化学习里叫“状态”，常写作 $s$；本书把 $s$ 留给注意力分数）；$\widehat{\operatorname{KL}}_{i,t}$ 是单个样本上的 KL 估计值，帽子表示“估计量”，用来和上面损失里的精确项 $\operatorname{KL}_{i,t}$ 区分。
+
+若 $y_{i,t}$ 真按当前 $\pi_\theta$ 抽样，且支持集条件满足，它的期望等于相应 KL；单个样本不是精确分布 KL。若样本来自固定 old，已经更新后的 current 与 old 不同，也不能不加说明地把旧样本均值称为精确 KL。本章不拿这个估计量冒充精确监测值，亦不把替换成精确 $\operatorname{KL}_{i,t}$ 的教学目标说成原论文代码逐行复现。
 
 长度归约先做“每个答案内 token 平均”，再对答案平均。若答案长度分别为 2 和 4，每份答案总权重都是 1/2；若改成六个 token 统一平均，两份答案的总权重则为 1/3 和 2/3。两者都能写成 loss，但不是同一个目标。
 
@@ -6952,9 +7103,9 @@ python -m unittest discover -s tests -p test_preference_optimization.py -v
 之后复制两份策略：
 
 - DPO：chosen 为各题正确答案，rejected 都是“我猜是 0”，β=0.5，学习率 0.4，更新 6 次。
-- GRPO：每题从 SFT 策略有放回采样 8 个动作，精确匹配正确答案得 1，否则得 0；保存 old 概率，同一批更新 3 次，学习率 0.2，β=0.04，clip ε=0.2。
+- GRPO：每题从 SFT 策略有放回采样 8 个动作，精确匹配正确答案得 1，否则得 0；保存 old 概率，同一批更新 3 次，学习率 0.2，β=0.04，$\epsilon_{\mathrm{clip}}=0.2$。
 
-GRPO 的一次动作代表一整份答案，所以优化张量的 L=1；“我猜是 0”虽然字符更多，也不是多个策略动作。不要把这两层混写成“已经训练了一个生成式小 LLM”。
+GRPO 的一次动作代表一整份答案，所以优化张量的 $T=1$；“我猜是 0”虽然字符更多，也不是多个策略动作。不要把这两层混写成“已经训练了一个生成式小 LLM”。
 
 在附录 H 所列环境下（CPU、seed=22、单线程）实测：
 
@@ -7069,7 +7220,7 @@ On-policy 蒸馏让学生自己采样，再请老师给学生写下的每个 tok
 
 ## P22.12 延伸阅读：Softmax Cancellation {#p22.12-softmax-cancellation}
 
-这篇论文已在 [P04 3.3a](#p04-softmax-collapse) 介绍；其 §3 讨论软目标交叉熵梯度 $q-p$ 的抵消与修法，本书不展开。
+这篇论文已在 [P04 3.3a](#p04-softmax-collapse) 介绍；其 §3 讨论软目标交叉熵梯度 $q-p$（$q$ 是学生的 softmax 分布，$p$ 是老师给的软目标）的抵消与修法，本书不展开。
 
 ## 本章小结
 
