@@ -27,27 +27,27 @@ Norm 和 FFN 都分别作用于每个 token 的最后一维。它们本身不把
 
 LayerNorm 先减均值，再除以标准差：
 
-$$\mu=\frac{1}{D}\sum_i x_i,\qquad v=\frac{1}{D}\sum_i(x_i-\mu)^2$$
-$$\operatorname{LN}(x)_i=\frac{x_i-\mu}{\sqrt{v+\epsilon}}\gamma_i+\beta_i$$
+$$\mu=\frac{1}{D}\sum_k x_k,\qquad v=\frac{1}{D}\sum_k(x_k-\mu)^2$$
+$$\operatorname{LN}(x)_k=\frac{x_k-\mu}{\sqrt{v+\epsilon}}\gamma_k+\beta_k$$
 
 第一行算出这一个 token 的“平均水平” μ 和“起伏大小” v；第二行先减掉平均、再除以起伏，把向量搬到“均值 0、方差约为 1”的标准位置，最后用 γ、β 让模型自己决定要放大多少、平移多少。
 
-其中：$D$ 是模型宽度；$x_i$ 是向量 $x$ 的第 $i$ 个坐标，$\sum_i$ 对 $i=1,\ldots,D$ 求和；$\mu$ 是均值；v 是方差（本节局部记号）；$\epsilon$ 是防止除以零的小常数；$\gamma_i$、$\beta_i$ 是第 $i$ 个坐标可学习的缩放与偏移（局部符号，本节指 LayerNorm 参数）。
+其中：$D$ 是模型宽度；$x_k$ 是向量 $x$ 的第 $k$ 个坐标，$\sum_k$ 对 $k=1,\ldots,D$ 求和；$\mu$ 是均值；v 是方差（本节局部记号）；$\epsilon$ 是防止除以零的小常数；$\gamma_k$、$\beta_k$ 是第 $k$ 个坐标可学习的缩放与偏移（局部符号，本节指 LayerNorm 参数）。
 
 这里方差除以 D，不是统计学无偏估计的 D−1。PyTorch LayerNorm 对应 `correction=0`。它在训练和推理时都使用当前输入的统计量，没有 BatchNorm 那种运行均值表。[来源 3]
 
 RMS 是 root mean square，中文是“均方根”：先平方、求平均，再开平方。RMSNorm **不减均值**：
 
-$$r^2=\frac{1}{D}\sum_i x_i^2,\qquad
-\operatorname{RMSNorm}(x)_i=\frac{x_i}{\sqrt{r^2+\epsilon}}\gamma_i$$
+$$r^2=\frac{1}{D}\sum_k x_k^2,\qquad
+\operatorname{RMSNorm}(x)_k=\frac{x_k}{\sqrt{r^2+\epsilon}}\gamma_k$$
 
 RMSNorm 少做一步“减平均”：只量一量这条向量整体有多“响”（均方根），再按这个响度把它调到统一音量。
 
-其中：$r^2$ 是各坐标平方的平均（均方），$\sqrt{r^2}$ 就是均方根，r 是本节的局部记号；$x_i$、$D$、$\epsilon$、$\gamma_i$ 同上。
+其中：$r^2$ 是各坐标平方的平均（均方），$\sqrt{r^2}$ 就是均方根，r 是本节的局部记号；$x_k$、$D$、$\epsilon$、$\gamma_k$ 同上。
 
 本章实现只有 D 个可学习的 $\gamma$，没有 $\beta$。它把向量的整体尺度调到较稳定的范围，却不强制把中心搬到 0。RMSNorm 原论文研究的正是省去重新居中后的归一化方式；论文中的实验结果不能直接成为我们这份 CPU 实现的速度保证。[来源 1]
 
-一个很有用的恒等式是 $r^2=v+\mu^2$。例如 `[1,3]` 的均值是 2，方差是 1，均方是 5，因此 $5=1+2^2$。它来自把 $(x_i-\mu)^2$ 展开再求平均：交叉项 $-2\mu x_i$ 平均后是 $-2\mu^2$，与 $+\mu^2$ 合并，就剩“均方 = 方差 + 均值²”。RMSNorm 不是“LN 换个名字”：只要均值不是 0，两个分母一般不同，LN 的分子也还减了均值。
+一个很有用的恒等式是 $r^2=v+\mu^2$。例如 `[1,3]` 的均值是 2，方差是 1，均方是 5，因此 $5=1+2^2$。它来自把 $(x_k-\mu)^2$ 展开再求平均：交叉项 $-2\mu x_k$ 平均后是 $-2\mu^2$，与 $+\mu^2$ 合并，就剩“均方 = 方差 + 均值²”。RMSNorm 不是“LN 换个名字”：只要均值不是 0，两个分母一般不同，LN 的分子也还减了均值。
 
 ### 表 P13-1：两行向量，逐项手算
 

@@ -252,14 +252,14 @@ $$
 本章演示的解耦方案把打分拆成两项：
 
 $$
-\text{score}_{h,i,t}
-=\frac{q^C_{i,h}(k^C_{t,h})^\top
-+q^R_{i,h}(k^R_t)^\top}{\sqrt{d_c+d_r}}
+\text{score}_{h,i,j}
+=\frac{q^C_{i,h}(k^C_{j,h})^\top
++q^R_{i,h}(k^R_j)^\top}{\sqrt{d_c+d_r}}
 $$
 
 分子就是两份分数相加：一份只看内容（不旋转，所以能用上面的吸收技巧），一份只看位置（单独旋转）；分母照旧是“拼起来的总宽度”开根号，让分数不随宽度变大而膨胀。
 
-其中：$\text{score}_{h,i,t}$ 是第 h 头、query 位置 i 对 key 位置 t 的缩放分数；$q^C_{i,h}$、$k^C_{t,h}$ 是内容 query、内容 key（宽 $d_c$）；$q^R_{i,h}$、$k^R_t$ 是旋转后的位置 query、位置 key（宽 $d_r$，上标 R 表示 RoPE，$k^R_t$ 各头共享）；$d_c+d_r$ 是拼接后 Q/K 的总宽度。
+其中：$\text{score}_{h,i,j}$ 是第 h 头、query 位置 i 对 key 位置 j 的缩放分数；$q^C_{i,h}$、$k^C_{j,h}$ 是内容 query、内容 key（宽 $d_c$）；$q^R_{i,h}$、$k^R_j$ 是旋转后的位置 query、位置 key（宽 $d_r$，上标 R 表示 RoPE，$k^R_j$ 各头共享；下面列表里的 $c_t$、$k^R_t$ 是同一套量写在一般位置 t 上）；$d_c+d_r$ 是拼接后 Q/K 的总宽度。
 
 - 内容项：K 从 c_t 得到，不对这一部分施加 RoPE，才能使用上面的矩阵结合律。
 - 位置项：单独投影并旋转得到 q^R 和 k^R。这里 k^R_t 跨头共享，但 q^R_{i,h} 可以随头不同。
