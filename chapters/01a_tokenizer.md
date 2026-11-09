@@ -110,6 +110,22 @@ sequences = [merge_pair(ids, pair, new_id) for ids in sequences]
 
 `zip(ids, ids[1:])` 把每个位置和紧跟它的位置配对；`Counter` 累加出现次数；`min` 的排序键先比较负频数，所以频数最高的优先，再用 ID 对解决并列。随后给合并结果分配 ID、拼接其 bytes，并更新每篇文档。完整代码在 `counts` 为空时停止，避免对空集合求最小值。
 
+训练的一轮可以画成下面这张循环图：按文档统计 → 选最高频对 → 分配新 ID → 不重叠替换，直到合并次数用完。
+
+```mermaid
+flowchart TD
+    %% id: ch01a-bpe-merge-loop
+    accTitle: 最小字节 BPE：每轮只合并当前最常见的一对
+    accDescr: 各文档分别统计相邻对，取次数最高的一对（并列取较小 ID 对），新 ID 从 256 起并拼接 bytes，从左到右替换命中对并跳两格，循环到合并次数用完。
+    A["各文档分别统计相邻对"] --> B["取次数最高一对（并列取较小 ID 对）"]
+    B --> C["新 ID 从 256 起，bytes 拼接"]
+    C --> D["从左到右扫描：命中就替换并跳两格"]
+    D --> E{"合并次数用完？"}
+    E -->|否| A
+    E -->|是| F["得到 merges 与 vocab"]
+```
+
+
 `merge_pair` 必须处理重叠。例如把 `aaa` 里的 `aa` 合并，结果应是 `[aa, a]`，不能同时把中间的 `a` 用两次：
 
 ```python
@@ -193,6 +209,22 @@ trainer = trainers.BpeTrainer(
 ## 1A.7 生产环境还多了哪些步骤？
 
 真实流水线常包含归一化、预切分、子词编码、特殊 token 插入、padding / truncation 和解码。逐项检查，比只问“用了 BPE 吗”更有用。
+
+教学里的 BPE 主要覆盖「子词编码」；生产环境通常还要串上下面几步：
+
+```mermaid
+flowchart TD
+    %% id: ch01a-prod-pipeline
+    accTitle: 生产分词流水线比教学 BPE 多出归一化、预切分与填充
+    accDescr: 原文经归一化、预切分、子词编码、特殊 token 或模板、截断或填充（填充另配 attention mask），得到 ID 序列。
+    A["原文"] --> B["归一化（可能不可还原）"]
+    B --> C["预切分"]
+    C --> D["子词编码"]
+    D --> E["特殊 token / 模板"]
+    E --> F["截断或填充<br/>填充另配 attention mask"]
+    F --> G["ID 序列"]
+```
+
 
 - **归一化**可能把大写变小写或统一 Unicode 表示。这有时有帮助，却可能让解码无法恢复原文；本章刻意不做。
 - **特殊 token**可表示序列结束、角色边界或填充。它们是明确约定，不是看到字符串 `<eos>` 就一定自动成为控制符。本章教学实现把这样的字符串当普通文字。

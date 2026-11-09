@@ -173,6 +173,23 @@ allowed = allowed & torch.ones(T, T, dtype=torch.bool).tril()
 
 `valid` 是 [B,T]，两个切片分别变成 [B,1,T,1] 与 [B,1,1,T]，广播后得到 [B,1,T,T]；中间那根长度为 1 的轴留给第 4 章的多个头共享。若单头分数是 [B,T,T]，使用 `allowed[:, 0]`；不要误把 [B,T] 直接广播成分数矩阵。上面的片段省略了 device；`code/attention_core.py` 中的完整版本创建下三角时指定与输入相同的 device。
 
+形状广播可以画成这样：先扩成查询侧与键侧，再与下三角取与；损失掩码仍要另算。
+
+```mermaid
+flowchart TD
+    %% id: ch03-mask-broadcast
+    accTitle: 因果掩码与补位掩码先广播再取与，得到 [B,1,T,T]
+    accDescr: valid 形状 [B,T]；查询侧扩成 [B,1,T,1]、键侧扩成 [B,1,1,T]，再与下三角 [T,T] 取与，得到 [B,1,T,T]。损失掩码另算，不能用注意力 mask 代替。
+    A["valid [B,T]"] --> Q["查询侧 [B,1,T,1]"]
+    A --> K["键侧 [B,1,1,T]"]
+    Q --> P["补位可见 [B,1,T,T]"]
+    K --> P
+    P --> F["allowed [B,1,T,T]"]
+    T["下三角 [T,T]"] --> F
+    N["旁注：损失掩码另算 ≠ 注意力 mask"] -.-> F
+```
+
+
 注意不同 API 的约定不同：PyTorch 2.14 的 functional SDPA 布尔 mask 中 True 表示参与，`nn.MultiheadAttention` 的布尔禁止掩码使用相反语义。不要把同一个布尔张量不经核对就换接口。
 
 ## 3.5 全部禁止的一行：明确约定，避免 NaN
@@ -181,7 +198,19 @@ allowed = allowed & torch.ones(T, T, dtype=torch.bool).tril()
 
 也不能简单改成 `-1e9`：它不是所有 dtype 都可表示的数，而且一整行同样的有限负数仍会得到均匀权重，反而让禁止项“复活”。
 
-本书选一个明确的教学策略：**全禁用行返回全零权重，其加权输出为零**，不是和为 1 的概率分布。核心步骤如下：
+本书选一个明确的教学策略：**全禁用行返回全零权重，其加权输出为零**，不是和为 1 的概率分布。判断流程如下：
+
+```mermaid
+flowchart TD
+    %% id: ch03-all-masked-row
+    accTitle: 全禁止行直接 Softmax 会出 NaN，本书约定权重与输出全为 0
+    accDescr: 若该行还有可见位置，禁止处填 −∞ 再 Softmax，权重和为 1；若整行都禁止，按约定权重与输出全为 0，不用有限大负数冒充。
+    A{"这一行有可见位置吗？"} -->|有| B["禁止处填 −∞"]
+    B --> C["Softmax，权重和为 1"]
+    A -->|没有| D["按约定：权重与输出全为 0"]
+```
+
+核心步骤如下：
 
 ```python
 any_allowed = allowed.any(dim=-1, keepdim=True)
