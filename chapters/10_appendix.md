@@ -15,14 +15,14 @@
 | 长度 | $\|x\|_2=\sqrt{\sum_i x_i^2}$ | 衡量数值大小，不能单凭长度判断模型理解程度 |
 | 点积 | $x\cdot y=\sum_i x_i y_i$ | 注意力打分；两向量最后一维相同 |
 | 余弦 | $\cos\theta=(x\cdot y)/(\|x\|_2\|y\|_2)$ | 比较方向；零向量时分母为零，需要约定或拒绝 |
-| 稳定 softmax | $p_i=e^{z_i-m}/\sum_j e^{z_j-m},\ m=\max_j z_j$ | 减共同最大值不改变概率，避免大正数指数溢出；全 mask 行另行处理 |
-| 交叉熵 | $L=-\log p_y$ | 对正确目标的自然对数损失，单位 nat；有效目标数决定平均分母 |
+| 稳定 softmax | $p_i=e^{z_i-z_{\max}}/\sum_j e^{z_j-z_{\max}},\ z_{\max}=\max_j z_j$ | 减共同最大值不改变概率，避免大正数指数溢出；全 mask 行另行处理 |
+| 交叉熵 | $\mathcal L=-\log p_y$ | 对正确目标的自然对数损失，单位 nat；有效目标数决定平均分母 |
 | 均值/方差 | $\mu=d^{-1}\sum_i x_i,\quad v=d^{-1}\sum_i(x_i-\mu)^2$ | LayerNorm 的总体方差，不用 $d-1$ |
 | LayerNorm | $y_i=\gamma_i(x_i-\mu)/\sqrt{v+\epsilon}+\beta_i$ | 归一化后还有可学习仿射；有 epsilon 时方差不严格等于 1 |
 | RMSNorm | $y_i=\gamma_i x_i/\sqrt{d^{-1}\sum_j x_j^2+\epsilon}$ | 不减均值；不能用 LayerNorm 的输出当参考 |
 | 方差相加 | $\mathrm{Var}(X+Y)=\mathrm{Var}(X)+\mathrm{Var}(Y)$ | 独立或协方差为零时成立；一般还要加 $2\mathrm{Cov}(X,Y)$ |
-| 缩放注意力 | $\mathrm{softmax}(QK^T/\sqrt{d_k}+M)V$ | 行是 query，列是 key；禁看位置的加性 mask 为负无穷 |
-| 周期 | $\sin(\omega t),\quad T=2\pi/\lvert\omega\rvert$ | 正弦位置编码的频率；频率非零才有这个有限周期 |
+| 缩放注意力 | $\mathrm{softmax}(QK^\top/\sqrt{d_k}+M)V$ | 行是 query，列是 key；禁看位置的加性 mask 为负无穷 |
+| 周期 | $\sin(\omega t),\quad \lambda=2\pi/\lvert\omega\rvert$ | 正弦位置编码的频率与波长；频率非零才有这个有限周期（这里 $\omega$ 是局部角频率，$\lambda$ 是对应波长，与 A.5 的 $\omega_i,\lambda_i$ 同族） |
 | 和角 | $\cos(a+b)=\cos a\cos b-\sin a\sin b$ | 说明相对位移的三角关系，不自动保证长度外推质量 |
 | 平面旋转 | $R_\theta=\begin{pmatrix}\cos\theta&-\sin\theta\\\sin\theta&\cos\theta\end{pmatrix}$ | RoPE 在成对维度旋转；相邻配对与 split-half 约定不能混用 |
 | 链式法则 | $\partial L/\partial w=(\partial L/\partial z)(\partial z/\partial w)$ | 反向传播沿计算图传递导数 |
@@ -30,9 +30,11 @@
 
 这些公式在正文中都有推导，旋转约定详见 [P12 RoPE](#p12-rope)，归一化和门控详见 [P13](#p13-modern-block)。注意力原式见 [Vaswani 等 1706.03762v7 §3.2][attention]；本表的简单算术是教学推导，不是某个真实模型的测评。
 
+**其中（表 A-1 记号）：** $\mathcal L$ 是损失；$z_i$ 是第 $i$ 个 logit，$z_{\max}$ 是同一行里最大的 logit（减它只为数值稳定，不改概率）；$\omega$ 是局部角频率，$\lambda=2\pi/\lvert\omega\rvert$ 是对应波长；$QK^\top$ 的转置写 $^	op$；$d_k$ 是单头 Q/K 宽度。**白话：** 这张卡是翻书时的速查，字母已与 A.5 对齐；细节推导仍回各章。
+
 ### A.2 一张形状卡：先写轴，再乘矩阵
 
-令 batch $B=2$、长度 $T=3$、query 头数 $H_q=4$、KV 头数 $H_{kv}=2$、每头维度 $d=8$。本例另设模型宽度 $D=32=H_q d$；这是这个小 GQA 玩具的选择，不是所有真实配置的恒等式：
+令 batch $B=2$、长度 $T=3$、query 头数 $H_q=4$、KV 头数 $H_{kv}=2$、每头维度 $d_h=8$。本例另设模型宽度 $D=32=H_q d_h$；这是这个小 GQA 玩具的选择，不是所有真实配置的恒等式：
 
 | 对象 | 形状 | 元素数 |
 |---|---|---:|
@@ -42,6 +44,8 @@
 | 拼回模型宽度的输出 | `[2,3,32]` | 192 |
 
 Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 KV 下标 1 的头。对单层未展开 K+V，float32 payload 是 $2\times96\times4=768$ 字节，不是分数矩阵的大小。这里不包含 allocator、索引、量化 scale 或工作区，详见 [P14](#p14-grouped-kv)。换轴后元素数可能不变，所以“shape 对了”不是全部正确性证明。
+
+其中：$B$、$T$、$H_q$、$H_{kv}$、$d_h$、$D$ 见 A.5；$96=B\cdot H_{kv}\cdot T\cdot d_h$ 是未展开的单份 K（或 V）元素数；乘 2 是 K+V，再乘 4 是 float32 的 $b_{\mathrm{elem}}$。**白话：** 先数清轴上有几个数，再乘每元素字节，得到的是 cache 载荷，不是整网显存。
 
 ### A.3 三个可以手算的校验点
 
@@ -63,7 +67,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 ### A.5 全书符号约定：一个字母，一种意思 {#p28.a5-symbols}
 
-公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的**全局符号**，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式**要改成的写法**；某章还没改写完成时，以该式的「其中：」为准。附录自己的 A.1、A.2、D.1、F.0 也要按本表改写（F9）：其中 A.1 的交叉熵 $L$、稳定 softmax 的最大值 $m$、周期 $T=2\pi/\lvert\omega\rvert$ 与 $\mathrm{softmax}(QK^T/\cdots)$，A.2 的每头宽度 $d$，D.1 的 $d_{\mathrm{head}}$ 与字节数 $s$，F.0 的 $\bar L$ 暂时保留旧写法，读的时候按本表换算。
+公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的**全局符号**，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式**要改成的写法**；某章还没改写完成时，以该式的「其中：」为准。附录自己的 A.1、A.2、D.1、F.0 已按本表改写（F9）：交叉熵写 $\mathcal L$，稳定 softmax 的最大值写 $z_{\max}$，波长写 $\lambda=2\pi/\lvert\omega\rvert$，注意力写 $QK^\top$，A.2 每头宽度写 $d_h$，D.1 写 $\mathrm{Mem}_{KV}$ 与 $d_h$、$b_{\mathrm{elem}}$，F.0 平均损失写 $\bar{\mathcal L}$；E.0 的 $\Delta$ 本就表示差值，保持不变。
 
 **尺寸与计数**
 
@@ -84,7 +88,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 | $L$ | 层数；编码器、解码器分别为 $L_e$、$L_d$ | 例：$L=2$ | 损失写 $\mathcal L$，长度写 $T$ |
 | $N_E$ | MoE 的路由专家个数；第 $e$ 个专家记 $F_e$ | 路由矩阵按 $[N_E,D]$ 存，打分 $z=xW_r^\top$ | $E$ 只指 embedding 表 |
 | $N_{\ast}$ | 带下标的 $N$ 一律表示“个数”：$N_S$ 共享专家数、$N_{\mathrm{valid}}$ 有效目标数、$N_{\mathrm{dp}}$ 数据并行份数、$N_{\mathrm{GELU}}$ 等参数个数 | 例：$N_{\mathrm{valid}}=2$ | 正文不再用不带下标的 $N$ |
-| $N_{\mathrm{param}},\ N_{\mathrm{tok}}$ | 缩放定律里的参数量、训练 token 数 | $\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}})$ | 不借用 $N$、$D$ |
+| $N_{\mathrm{param}},\ N_{\mathrm{tok}}$ | 整个模型的参数元素个数（缩放定律与 ZeRO 等处共用；embedding 计入，见 P19/08i 玩具账本）、训练 token 数 | $\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}})$ | 不借用 $N$、$D$；MoE 模块内的 $N_{\mathrm{total}}$/$N_{\mathrm{active}}$ 另有下标 |
 | $b_{\mathrm{elem}}$ | 每个张量元素占几个字节；带文字下标的 $b$ 都是字节数（如 ZeRO 的 $b_p,b_g,b_o$） | float32 为 4，float16/bfloat16 为 2 | 不用 $s$；FFN 偏置写 $b_1,b_2$ |
 
 **头宽与模型宽度的关系要带条件。** 只有在「各头等宽，且所有头拼起来的投影总宽等于 $D$」时，才有 $D=Hd_h$、$d_h=D/H$，输出投影 $W_O$ 才是 $[D,D]$ 的方阵。一般情况下 $W_O$ 的形状是 $[Hd_v,D]$（原论文写作 $hd_v\times d_{\mathrm{model}}$）。反例就在本书里：附录 E.2 的 Qwen3 配置 $D=1024$、16 个头、每头 128，Q 投影宽 $16\times128=2048\neq D$；P25 的微型配置也刻意保留 $H_qd_h\neq D$。
@@ -123,7 +127,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 | P11、P12、P14、P24、P25、P27 的 KV 字节式 | $M_{KV}$、$s$、$b_{KV}$、$d$、$D_{head}$ | $\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}$，$b_{\mathrm{elem}}$ 按每个张量元素计 |
 | 各章每头宽度 | $d$ | $d_h$ |
 | P12 RoPE 的位置 | $p$ | $t$；讨论两个位置的相对距离时用 $m$、$n$ |
-| P12 RoPE 每对维度的频率、YaRN 混合后的频率 | $\theta_i$、$\theta'$；P12.3 不带下标的 $\theta$（$R(m\theta)$、例子里的 $\theta=1$） | $\omega_i$、$\omega'$（与第 5 章一致；原论文写作 $\theta$），转角 $t\omega_i$；只看一对维度时写 $R(m\omega_i)$、$\omega_i=1$ |
+| P12 RoPE 每对维度的频率、YaRN 混合后的频率 | $\theta_i$、$\theta'$；P12.3 不带下标的 $\theta$（$R(m\theta)$、例子里的 $\theta=1$） | $\omega_i$、$\omega'$（与第 5 章一致；原论文写作 $\theta$），转角 $t\omega_i$；只看一对维度时写 $R(m\omega_i)$、$\omega_i=1$；第 5 章正文写 $\omega_k$，因为该章 §5.2 已用 $i$ 作 query 位置，维度对编号改用 $k$，与表中 $\omega_i$ 是同一类量 |
 | P12 YaRN 的扩展倍数 | $s$ | $\kappa$（原论文写作 $s$） |
 | P12 YaRN 的原训练长度 | $L$ | $T_{\mathrm{train}}$ |
 | P12 YaRN 的注意力温度 | $t$ | $\tau$ |
@@ -170,8 +174,8 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 有些字母在不同章节各管一摊，硬统一反而难读。它们是**局部符号**：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。
 
-- 希腊字母：$\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率、缩放定律指数等）、$\beta$（LayerNorm 偏移、DPO/KL 系数、缩放定律指数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（夹角、旋转矩阵 $R(\theta)$ 的角，或模型参数 $\pi_\theta$、$p_\theta$）、$\pi$（圆周率，或策略 $\pi_\theta$）、$\phi$（旋转角、特征映射，或奖励模型参数）、$\rho$（概率比）、$\delta$、$\Delta$（不带下标的 $\Delta$ 只表示差值，如 P12 的 $\Delta=n-m$、E.0 的 $\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}$；$\Delta W$ 是更新量；P22 DPO 的 $\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两个对数比的差；量化步长只写带下标的 $\Delta_x$、$\Delta_w$）、$\mu$（均值）。
-- 拉丁字母：$x$（某个式子的输入：一个位置的向量、它的第 $i$ 个分量，或 P21–P23 里的 token 序列）、$y$（输出向量、目标 token，或 P22 里的回复）、$h$（第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果、P23 主干最后一层的隐藏向量 $h_t$）、$a$（第 6 章 ReLU 的输出、P12 YaRN 的长度缩放系数、第 1 章的示例向量、第 3 章的注意力权重 $a_{ij}$、P15 的请求到达时刻）、$b$（第 1 章、P12 的示例向量）、$f$（第 2 章 RNN 的更新函数、P18 的分配比例 $f_e$）、$g$（SwiGLU 的门控分支、P20 的梯度）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值、特征宽度、第 3 章的求和下标）、$k$（第 5 章的位移量、top-k 的个数、P20 的训练步编号 $\theta_k$）、$q$（P23 的草稿分布 $q(x)$、P24 的量化整数）、$z$（多数时候是 softmax 之前的 logits；也作 SwiGLU 的门控乘积、线性注意力的归一化量、DPO 的间隔、P24 的零点）、$w$（单个权重、路由权重 $w_e$、注意力权重 $w_{tj}$）、$c$（第 2 章的上下文向量、P14 MLA 的压缩向量 $c_t$）、$t_1,t_{\mathrm{start}}$ 等 P15、P24 的计时时刻、$A$（注意力子层函数、GRPO 的优势 $A_i$）、$F$（第 6 章的残差分支 $F(x)$）、$P$（第 5 章的换序操作、P15 的概率矩阵）、$C$、$G$、$R$、$S$、$U$ 等只在一章出现的大写字母。
+- 希腊字母：$\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率、缩放定律指数等）、$\beta$（LayerNorm 偏移、DPO/KL 系数、缩放定律指数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（夹角；RoPE 的转角写进 $R(m\omega_i)$，不另写裸 $R(\theta)$；或模型参数 $\pi_\theta$、$p_\theta$）、$\pi$（圆周率，或策略 $\pi_\theta$）、$\phi$（旋转角、特征映射，或奖励模型参数）、$\rho$（概率比）、$\delta$、$\Delta$（不带下标的 $\Delta$ 只表示差值，如 P12 的 $\Delta=n-m$、E.0 的 $\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}$；$\Delta W$ 是更新量；P22 DPO 的 $\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两个对数比的差；量化步长只写带下标的 $\Delta_x$、$\Delta_w$）、$\mu$（均值）。
+- 拉丁字母：$x$（某个式子的输入：一个位置的向量、它的第 $i$ 个分量，或 P21–P23 里的 token 序列）、$y$（输出向量、目标 token，或 P22 里的回复；$y_l$ 是 DPO 的 rejected 答案，下标 $l$ 不是层号）、$h$（第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果、P23 主干最后一层的隐藏向量 $h_t$）、$a$（第 6 章 ReLU 的输出、P12 YaRN 的长度缩放系数、第 1 章的示例向量、第 3 章的注意力权重 $a_{ij}$、P15 的请求到达时刻）、$b$（第 1 章、P12 的示例向量）、$f$（第 2 章 RNN 的更新函数、P18 的分配比例 $f_e$）、$g$（SwiGLU 的门控分支、P20 的梯度）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值、特征宽度、第 3 章的求和下标）、$k$（第 5 章的维度对编号（$\omega_k$，即表中的 $\omega_i$；该章位移改记 $\Delta$）、top-k 的个数、P20 的训练步编号 $\theta_k$）、$q$（P23 的草稿分布 $q(x)$、P24 的量化整数）、$z$（多数时候是 softmax 之前的 logits；也作 SwiGLU 的门控乘积、线性注意力的归一化量、DPO 的间隔、P24 的零点）、$w$（单个权重、路由权重 $w_e$、注意力权重 $w_{tj}$）、$c$（第 2 章的上下文向量、P14 MLA 的压缩向量 $c_t$）、$t_1,t_{\mathrm{start}}$ 等 P15、P24 的计时时刻、$A$（注意力子层函数、GRPO 的优势 $A_i$）、$F$（第 6 章的残差分支 $F(x)$）、$P$（第 5 章的换序操作、P15 的概率矩阵）、$C$、$G$、$R$、$S$、$U$ 等只在一章出现的大写字母。
 - 第 2 章 $h_t$、第 6 章 $h$、P23 $h_t$ 都不是全局的层表示；逐层的隐藏状态统一写 $X^{(l)}$。
 
 ## 附录 B：深度学习常见“黑话”大白话翻译词典 {#附录-b深度学习常见黑话大白话翻译词典}
@@ -228,9 +232,11 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 对未量化的 K/V 张量，按实际保存的头数计算：
 
-$$\mathrm{bytes}=2\times L\times B\times H_{kv}\times T\times d_{\mathrm{head}}\times s.$$
+$$\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}.$$
 
-用 P27 教学配置 $L=2,B=2,H_{kv}=2,T=8,d_{\mathrm{head}}=4,s=4$（float32）代入：$2\times2\times2\times2\times8\times4\times4=2048$ bytes。把 GQA 的 $H_{kv}=2$ 改成 MHA 的 $H_{kv}=4$，同一账本得到 4096 bytes。这只核算缓存张量 payload，可与 `numel × element_size` 核对，不代替进程内存峰值。
+其中：$L$ 是层数，$B$ 是批大小，$H_{kv}$ 是 KV 头数，$T$ 是已缓存长度，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是每元素字节数；乘 2 是因为 K 与 V 各存一份。**白话：** 这是 KV cache 张量自己的字节数，不是整进程显存峰值。
+
+用 P27 教学配置 $L=2,B=2,H_{kv}=2,T=8,d_h=4,b_{\mathrm{elem}}=4$（float32）代入：$2\cdot2\cdot2\cdot2\cdot8\cdot4\cdot4=2048$ bytes。把 GQA 的 $H_{kv}=2$ 改成 MHA 的 $H_{kv}=4$，同一账本得到 4096 bytes。这只核算缓存张量 payload，可与 `numel × element_size` 核对，不代替进程内存峰值。
 
 | 你要做的事 | 先运行什么 | 不能据此声称什么 |
 |---|---|---|
@@ -252,6 +258,8 @@ $$\mathrm{bytes}=2\times L\times B\times H_{kv}\times T\times d_{\mathrm{head}}\
 比较两个固定版本的同一字段时，先把绝对差和相对差分开：
 
 $$\Delta=x_{\mathrm{new}}-x_{\mathrm{old}},\qquad r=\Delta/x_{\mathrm{old}}.$$
+
+其中：$\Delta$ 是新旧字段的差（裸 $\Delta$ 只表示差值，见 A.5）；$x_{\mathrm{new}}$、$x_{\mathrm{old}}$ 是同一字段的两个固定取值；$r$ 是相对变化。**白话：** 先问“变了多少”，再问“相对原来占几成”，两者不要混成一句广告语。
 
 例如旧配置最大长度为 40960，新版本为 32768，则 $\Delta=-8192$，$r=-8192/40960=-0.20$，即减少 20%。这个结果只描述已锁定字段；硬件速度或模型质量需要另外的测量记录。
 
@@ -308,7 +316,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 ### F.0 平均值与一步更新速查
 
-$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
+$\bar{\mathcal L}_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar{\mathcal L}_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $\mathcal L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
 
 仓库根目录的 `python -m unittest discover -s tests -v` 检查示例与契约，`python scripts/check_book.py` 检查已生成制品的资源/链接，`npm run check:layout` 检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当前 CI 运行结果为准，运行环境版本见[附录 H](#p28.h-版本与来源)，不在这里保留会迅速过时的全书总数。
 

@@ -121,7 +121,7 @@ decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串
 
 replay（重放）就是重新运行一段历史的计算，用它恢复当前需要的状态。它不是把历史文字再生成一遍，也不是修改用户输入。
 
-设局部窗口 $T_{\mathrm{win}}$ 包含当前 token，每层最多再读取 $T_{\mathrm{win}}-1$ 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 $T_{\mathrm{win}}$ 行还在”不等于“能从这 $T_{\mathrm{win}}$ 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。
+设局部窗口 $T_{\mathrm{win}}$ 包含当前 token，每层最多再读取 $T_{\mathrm{win}}-1$ 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 $T_{\mathrm{win}}$ 行还在”不等于“能从这 $T_{\mathrm{win}}$ 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小，即本书的 $T_{\mathrm{win}}$）。
 
 [报告 §3.2.2](https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2) 的 Bounded Replay 只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 $i_0$、当前 query 为 i，局部可见范围变成：
 

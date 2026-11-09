@@ -4305,7 +4305,7 @@ layers.append((k, v))
 本章 K、V 每头同宽，且不量化。$L$ 层、batch $B$、长度 $T$、每个数 $b_{\mathrm{elem}}$ 字节时：
 
 $$
-\mathrm{Mem}_{KV}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}
 $$
 
 它和 P11.6 的 MHA 账本是同一张表，只是把“每层存几份头”从 $H$ 换成真正保存的 $H_{kv}$：query 头再多，只要共用 KV 头，缓存就按 KV 头数算。
@@ -4586,7 +4586,7 @@ $$
 
 账本就是 $T^2\times b_{\mathrm{elem}}$：长度翻倍，表的边长翻倍，面积变成 4 倍。其中 $T$ 是序列长度，$b_{\mathrm{elem}}$ 是每个数的字节数（这里为 2）。这里 MiB=2²⁰ 字节，不是十进制 MB。多 batch、多头会继续乘上相应维度。
 
-GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 $T\times T$ 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 $O(T^2d_k)$，不是 $O(Td_k)$（论文把长度记作 N、宽度记作 d）。[FlashAttention 原论文（arXiv 2205.14135v2），§3](https://arxiv.org/pdf/2205.14135v2)
+GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 $T\times T$ 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 $O(T^2(d_k+d_v))$，不是 $O(T(d_k+d_v))$（当 $d_k=d_v=d$ 时即论文的 $O(N^2d)$；论文把长度记作 N、宽度记作 d）。[FlashAttention 原论文（arXiv 2205.14135v2），§3](https://arxiv.org/pdf/2205.14135v2)
 
 这还涉及 GPU 内核融合、线程组织、反向传播重计算等。本章只实现其中容易手算的**前向归一化递推**。
 
@@ -5062,7 +5062,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 参考答案：
 
-1. 它保留全部合法 QK 配对，标准稠密算术量仍为 $O(T^2d_k)$，重点是计算组织与 IO。GQA 改变 KV 头共享方式，属于模型表示的改变。
+1. 它保留全部合法 QK 配对，标准稠密算术量仍为 $O(T^2(d_k+d_v))$，重点是计算组织与 IO。GQA 改变 KV 头共享方式，属于模型表示的改变。
 2. 32 MiB → 128 MiB，增长 4 倍；这只是单张矩阵，不是完整模型峰值。
 3. alpha=0.5，ell=1.75，acc=10.5，输出=6。错误的块均值平均是 17/3，约 5.6667。
 4. 空块跳过，保持 ell=0；首个合法块用 alpha=0。整行无合法 key 返回全零，这是明确约定，不是正常概率分布。
@@ -5274,12 +5274,12 @@ $$
 $$
 S_t=S_{t-1}+\phi(k_t)v_t^\top,\qquad
 z_t=z_{t-1}+\phi(k_t),\qquad
-y_t=\frac{\phi(q_t)^\top S_t}{\phi(q_t)^\top z_t}
+y_t=\frac{S_t^\top\phi(q_t)}{z_t^\top\phi(q_t)}
 $$
 
 这三步就是把上一节的两个求和“做成存折”：$S_t$ 存分子里与 query 无关的部分，$z_t$ 存分母里与 query 无关的部分，每来一个 token 往里存一笔；读的时候只需拿 $\phi(q_t)$ 和两本存折各做一次内积，不用回头翻历史。
 
-其中：$S_t$ 是 $[r,d_v]$ 的状态矩阵，$z_t$ 是 $r$ 维的归一化状态，下标 $t$ 表示已存入位置 0…t；$\phi(k_t)v_t^\top$ 是外积；$v_t^\top$ 是 $v_t$ 的转置；其余符号同上。
+其中：$S_t$ 是 $[r,d_v]$ 的状态矩阵，$z_t$ 是 $r$ 维的归一化状态，下标 $t$ 表示已存入位置 0…t；读出按列向量写 $S_t^\top\phi(q_t)$、$z_t^\top\phi(q_t)$（与 $\phi(q_t)^\top S_t$、$\phi(q_t)^\top z_t$ 等价）；$\phi(k_t)v_t^\top$ 是外积；$v_t^\top$ 是 $v_t$ 的转置；其余符号同上。
 
 外积把 r 个 key 特征与 $d_v$ 个 value 分量两两相乘，产生 r×d_v 个数。先把当前 k、v 加入状态，再读取，才能包含 j=t。这里的矩阵结合律对**选定的核**精确成立；它不能把已经改掉的核变回 Softmax。
 
@@ -5287,10 +5287,10 @@ $$
 
 | t | q_t | k_t | v_t | 更新后的 S_t | 更新后的 z_t | 输出 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | [0,0] | [0,0] | 2 | [2,2]ᵀ | [1,1] | 4/2=2 |
-| 1 | [0,1] | [1,0] | 4 | [10,6]ᵀ | [3,2] | 22/7 |
+| 0 | [0,0] | [0,0] | 2 | $[2,2]^\top$ | [1,1] | 4/2=2 |
+| 1 | [0,1] | [1,0] | 4 | $[10,6]^\top$ | [3,2] | 22/7 |
 
-第二行：φ(q)=[1,2]、φ(k)=[2,1]；新外积是 `[8,4]ᵀ`，加上旧状态得到 `[10,6]ᵀ`。分子 `1×10+2×6=22`，分母 `1×3+2×2=7`。也可以直接对两条历史算权重 3、4，得到 `(3×2+4×4)/(3+4)=22/7`。
+第二行：φ(q)=[1,2]、φ(k)=[2,1]；新外积是 `$[8,4]^\top$`，加上旧状态得到 `$[10,6]^\top$`。分子 `1×10+2×6=22`，分母 `1×3+2×2=7`。也可以直接对两条历史算权重 3、4，得到 `(3×2+4×4)/(3+4)=22/7`。
 
 对应源码的循环核心：
 
@@ -5358,7 +5358,7 @@ Softmax 的目标与干扰打分差是 $64/\sqrt2$（点积 32 与 −32 之差�
 
 第三行需特别注意：如果未来有一个全局 query 要直接读取全部旧 key，就不能提前只留窗口与若干全局 key。本章只画 mask，没有实现这种缓存生命周期；不能拿稀疏边数代替完整的存储证明。g 若随 T 增长，也不能再把它视为固定常数。
 
-本章的窗口函数只是产生 bool mask，`masked_softmax_attention()` 仍先计算完整 QKᵀ。它证明可见性，不兑现表格里的稀疏执行成本；`linear_parallel()` 同样只是 O(T²) 对照。递推函数保留全部输出，训练时普通 autograd 还会保存历史计算图，所以固定的推理状态不等于固定的训练峰值内存。
+本章的窗口函数只是产生 bool mask，`masked_softmax_attention()` 仍先计算完整 $QK^\top$。它证明可见性，不兑现表格里的稀疏执行成本；`linear_parallel()` 同样只是 O(T²) 对照。递推函数保留全部输出，训练时普通 autograd 还会保存历史计算图，所以固定的推理状态不等于固定的训练峰值内存。
 
 实际选择要同时看质量、长距离检索、状态/缓存、吞吐和延迟。[P15](#p15-attention-systems) 的 FlashAttention 优化计算和访存；FLA 是另一个实现库，名称相似不代表算法相同。这里只提供 [FLA 官方仓库](https://github.com/fla-org/flash-linear-attention) 作为实现阅读入口，不安装、不调用，也不把库中的其他架构或速度声明算作本章实验结果。
 
@@ -5409,7 +5409,7 @@ python -m unittest discover -s tests -p test_sparse_linear_attention.py -v
 5. `2×(3×2+3)×8=144` 字节。固定 B、r、d_v 时，最终 S/z 不因 T 翻倍而增大；输入、输出和训练计算图不能据此忽略。
 6. 正特征权重还要除以总权重 7。省略分母会改变函数，不再是这个归一化注意力。
 7. 不能。这里只展示指定 ELU+1 核、固定输入幅度、未训练单头的干扰累积；不代表所有特征映射、状态更新或训练模型。
-8. 它先做完整 QKᵀ，再遮罩，并没有稀疏 kernel。MLA 压缩每位置的表示，不自动决定读取哪些位置。
+8. 它先做完整 $QK^\top$，再遮罩，并没有稀疏 kernel。MLA 压缩每位置的表示，不自动决定读取哪些位置。
 
 下一章 [P17](#p17-ced) 再用这些信息路径概念理解因果编码器—解码器。不要把“局部窗口”“低维 KV”“固定状态”或“编码/解码”几个词互相替代。
 
@@ -5556,7 +5556,7 @@ decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串
 
 replay（重放）就是重新运行一段历史的计算，用它恢复当前需要的状态。它不是把历史文字再生成一遍，也不是修改用户输入。
 
-设局部窗口 $T_{\mathrm{win}}$ 包含当前 token，每层最多再读取 $T_{\mathrm{win}}-1$ 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 $T_{\mathrm{win}}$ 行还在”不等于“能从这 $T_{\mathrm{win}}$ 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。
+设局部窗口 $T_{\mathrm{win}}$ 包含当前 token，每层最多再读取 $T_{\mathrm{win}}-1$ 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 $T_{\mathrm{win}}$ 行还在”不等于“能从这 $T_{\mathrm{win}}$ 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小，即本书的 $T_{\mathrm{win}}$）。
 
 [报告 §3.2.2](https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2) 的 Bounded Replay 只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 $i_0$、当前 query 为 i，局部可见范围变成：
 
@@ -5869,12 +5869,12 @@ z 是分数，p 是本章选用的 Softmax affinity，意思是 token 对专家�
 
 $$
 w_e=\frac{p_e}{\sum_{j\in\mathcal I_k}p_j}\quad(e\in\mathcal I_k),\qquad
-\operatorname{MoE}(x)=\sum_{e\in\mathcal I_k}w_e F_e(x)+\sum_{e'=1}^{N_S}F^{\mathrm{sh}}_{e'}(x).
+\operatorname{MoE}(x)=\sum_{e\in\mathcal I_k}w_e F_e(x)+\sum_{e'=0}^{N_S-1}F^{\mathrm{sh}}_{e'}(x).
 $$
 
 没有被选中的路由专家不计算 F_e(x)，也不参与这次加权和。共享专家全部执行，输出直接相加，不与路由专家一起归一化，也不除以 $N_S$。先在被选中的几位师傅之间重新分配话语权，让它们的权重加起来为 1；再把每张工单都要做的共享检查原样加上。
 
-其中：$\mathcal I_k$ 是 affinity 最大的 k 个路由专家的编号集合；k 是每 token 选几个；$w_e$ 是被选专家 e 的组合权重；$F_e$ 是第 e 个路由专家（一个 SwiGLU FFN）；$N_S$ 是共享专家个数；$e'$ 是共享专家编号，$F^{\mathrm{sh}}_{e'}$ 是第 $e'$ 个共享专家。
+其中：$\mathcal I_k$ 是 affinity 最大的 k 个路由专家的编号集合；k 是每 token 选几个；$w_e$ 是被选专家 e 的组合权重；$F_e$ 是第 e 个路由专家（一个 SwiGLU FFN）；$N_S$ 是共享专家个数；$e'$ 是共享专家编号（从 0 数到 $N_S-1$，与路由专家下标同一套从 0 起的约定），$F^{\mathrm{sh}}_{e'}$ 是第 $e'$ 个共享专家。
 
 这是本书明确选择的一套教学约定，不是“所有 MoE 的唯一公式”。尤其要区分原始 Softmax、所选权重归一化、Sigmoid affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生不同输出。
 
@@ -10239,14 +10239,14 @@ miniGPT 的升级，是让每个变化都有明确的**输入、状态、参照�
 | 长度 | $\|x\|_2=\sqrt{\sum_i x_i^2}$ | 衡量数值大小，不能单凭长度判断模型理解程度 |
 | 点积 | $x\cdot y=\sum_i x_i y_i$ | 注意力打分；两向量最后一维相同 |
 | 余弦 | $\cos\theta=(x\cdot y)/(\|x\|_2\|y\|_2)$ | 比较方向；零向量时分母为零，需要约定或拒绝 |
-| 稳定 softmax | $p_i=e^{z_i-m}/\sum_j e^{z_j-m},\ m=\max_j z_j$ | 减共同最大值不改变概率，避免大正数指数溢出；全 mask 行另行处理 |
-| 交叉熵 | $L=-\log p_y$ | 对正确目标的自然对数损失，单位 nat；有效目标数决定平均分母 |
+| 稳定 softmax | $p_i=e^{z_i-z_{\max}}/\sum_j e^{z_j-z_{\max}},\ z_{\max}=\max_j z_j$ | 减共同最大值不改变概率，避免大正数指数溢出；全 mask 行另行处理 |
+| 交叉熵 | $\mathcal L=-\log p_y$ | 对正确目标的自然对数损失，单位 nat；有效目标数决定平均分母 |
 | 均值/方差 | $\mu=d^{-1}\sum_i x_i,\quad v=d^{-1}\sum_i(x_i-\mu)^2$ | LayerNorm 的总体方差，不用 $d-1$ |
 | LayerNorm | $y_i=\gamma_i(x_i-\mu)/\sqrt{v+\epsilon}+\beta_i$ | 归一化后还有可学习仿射；有 epsilon 时方差不严格等于 1 |
 | RMSNorm | $y_i=\gamma_i x_i/\sqrt{d^{-1}\sum_j x_j^2+\epsilon}$ | 不减均值；不能用 LayerNorm 的输出当参考 |
 | 方差相加 | $\mathrm{Var}(X+Y)=\mathrm{Var}(X)+\mathrm{Var}(Y)$ | 独立或协方差为零时成立；一般还要加 $2\mathrm{Cov}(X,Y)$ |
-| 缩放注意力 | $\mathrm{softmax}(QK^T/\sqrt{d_k}+M)V$ | 行是 query，列是 key；禁看位置的加性 mask 为负无穷 |
-| 周期 | $\sin(\omega t),\quad T=2\pi/\lvert\omega\rvert$ | 正弦位置编码的频率；频率非零才有这个有限周期 |
+| 缩放注意力 | $\mathrm{softmax}(QK^\top/\sqrt{d_k}+M)V$ | 行是 query，列是 key；禁看位置的加性 mask 为负无穷 |
+| 周期 | $\sin(\omega t),\quad \lambda=2\pi/\lvert\omega\rvert$ | 正弦位置编码的频率与波长；频率非零才有这个有限周期（这里 $\omega$ 是局部角频率，$\lambda$ 是对应波长，与 A.5 的 $\omega_i,\lambda_i$ 同族） |
 | 和角 | $\cos(a+b)=\cos a\cos b-\sin a\sin b$ | 说明相对位移的三角关系，不自动保证长度外推质量 |
 | 平面旋转 | $R_\theta=\begin{pmatrix}\cos\theta&-\sin\theta\\\sin\theta&\cos\theta\end{pmatrix}$ | RoPE 在成对维度旋转；相邻配对与 split-half 约定不能混用 |
 | 链式法则 | $\partial L/\partial w=(\partial L/\partial z)(\partial z/\partial w)$ | 反向传播沿计算图传递导数 |
@@ -10254,9 +10254,11 @@ miniGPT 的升级，是让每个变化都有明确的**输入、状态、参照�
 
 这些公式在正文中都有推导，旋转约定详见 [P12 RoPE](#p12-rope)，归一化和门控详见 [P13](#p13-modern-block)。注意力原式见 [Vaswani 等 1706.03762v7 §3.2][attention]；本表的简单算术是教学推导，不是某个真实模型的测评。
 
+**其中（表 A-1 记号）：** $\mathcal L$ 是损失；$z_i$ 是第 $i$ 个 logit，$z_{\max}$ 是同一行里最大的 logit（减它只为数值稳定，不改概率）；$\omega$ 是局部角频率，$\lambda=2\pi/\lvert\omega\rvert$ 是对应波长；$QK^\top$ 的转置写 $^	op$；$d_k$ 是单头 Q/K 宽度。**白话：** 这张卡是翻书时的速查，字母已与 A.5 对齐；细节推导仍回各章。
+
 ### A.2 一张形状卡：先写轴，再乘矩阵
 
-令 batch $B=2$、长度 $T=3$、query 头数 $H_q=4$、KV 头数 $H_{kv}=2$、每头维度 $d=8$。本例另设模型宽度 $D=32=H_q d$；这是这个小 GQA 玩具的选择，不是所有真实配置的恒等式：
+令 batch $B=2$、长度 $T=3$、query 头数 $H_q=4$、KV 头数 $H_{kv}=2$、每头维度 $d_h=8$。本例另设模型宽度 $D=32=H_q d_h$；这是这个小 GQA 玩具的选择，不是所有真实配置的恒等式：
 
 | 对象 | 形状 | 元素数 |
 |---|---|---:|
@@ -10266,6 +10268,8 @@ miniGPT 的升级，是让每个变化都有明确的**输入、状态、参照�
 | 拼回模型宽度的输出 | `[2,3,32]` | 192 |
 
 Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 KV 下标 1 的头。对单层未展开 K+V，float32 payload 是 $2\times96\times4=768$ 字节，不是分数矩阵的大小。这里不包含 allocator、索引、量化 scale 或工作区，详见 [P14](#p14-grouped-kv)。换轴后元素数可能不变，所以“shape 对了”不是全部正确性证明。
+
+其中：$B$、$T$、$H_q$、$H_{kv}$、$d_h$、$D$ 见 A.5；$96=B\cdot H_{kv}\cdot T\cdot d_h$ 是未展开的单份 K（或 V）元素数；乘 2 是 K+V，再乘 4 是 float32 的 $b_{\mathrm{elem}}$。**白话：** 先数清轴上有几个数，再乘每元素字节，得到的是 cache 载荷，不是整网显存。
 
 ### A.3 三个可以手算的校验点
 
@@ -10287,7 +10291,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 ### A.5 全书符号约定：一个字母，一种意思 {#p28.a5-symbols}
 
-公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的**全局符号**，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式**要改成的写法**；某章还没改写完成时，以该式的「其中：」为准。附录自己的 A.1、A.2、D.1、F.0 也要按本表改写（F9）：其中 A.1 的交叉熵 $L$、稳定 softmax 的最大值 $m$、周期 $T=2\pi/\lvert\omega\rvert$ 与 $\mathrm{softmax}(QK^T/\cdots)$，A.2 的每头宽度 $d$，D.1 的 $d_{\mathrm{head}}$ 与字节数 $s$，F.0 的 $\bar L$ 暂时保留旧写法，读的时候按本表换算。
+公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的**全局符号**，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式**要改成的写法**；某章还没改写完成时，以该式的「其中：」为准。附录自己的 A.1、A.2、D.1、F.0 已按本表改写（F9）：交叉熵写 $\mathcal L$，稳定 softmax 的最大值写 $z_{\max}$，波长写 $\lambda=2\pi/\lvert\omega\rvert$，注意力写 $QK^\top$，A.2 每头宽度写 $d_h$，D.1 写 $\mathrm{Mem}_{KV}$ 与 $d_h$、$b_{\mathrm{elem}}$，F.0 平均损失写 $\bar{\mathcal L}$；E.0 的 $\Delta$ 本就表示差值，保持不变。
 
 **尺寸与计数**
 
@@ -10308,7 +10312,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 | $L$ | 层数；编码器、解码器分别为 $L_e$、$L_d$ | 例：$L=2$ | 损失写 $\mathcal L$，长度写 $T$ |
 | $N_E$ | MoE 的路由专家个数；第 $e$ 个专家记 $F_e$ | 路由矩阵按 $[N_E,D]$ 存，打分 $z=xW_r^\top$ | $E$ 只指 embedding 表 |
 | $N_{\ast}$ | 带下标的 $N$ 一律表示“个数”：$N_S$ 共享专家数、$N_{\mathrm{valid}}$ 有效目标数、$N_{\mathrm{dp}}$ 数据并行份数、$N_{\mathrm{GELU}}$ 等参数个数 | 例：$N_{\mathrm{valid}}=2$ | 正文不再用不带下标的 $N$ |
-| $N_{\mathrm{param}},\ N_{\mathrm{tok}}$ | 缩放定律里的参数量、训练 token 数 | $\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}})$ | 不借用 $N$、$D$ |
+| $N_{\mathrm{param}},\ N_{\mathrm{tok}}$ | 整个模型的参数元素个数（缩放定律与 ZeRO 等处共用；embedding 计入，见 P19/08i 玩具账本）、训练 token 数 | $\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}})$ | 不借用 $N$、$D$；MoE 模块内的 $N_{\mathrm{total}}$/$N_{\mathrm{active}}$ 另有下标 |
 | $b_{\mathrm{elem}}$ | 每个张量元素占几个字节；带文字下标的 $b$ 都是字节数（如 ZeRO 的 $b_p,b_g,b_o$） | float32 为 4，float16/bfloat16 为 2 | 不用 $s$；FFN 偏置写 $b_1,b_2$ |
 
 **头宽与模型宽度的关系要带条件。** 只有在「各头等宽，且所有头拼起来的投影总宽等于 $D$」时，才有 $D=Hd_h$、$d_h=D/H$，输出投影 $W_O$ 才是 $[D,D]$ 的方阵。一般情况下 $W_O$ 的形状是 $[Hd_v,D]$（原论文写作 $hd_v\times d_{\mathrm{model}}$）。反例就在本书里：附录 E.2 的 Qwen3 配置 $D=1024$、16 个头、每头 128，Q 投影宽 $16\times128=2048\neq D$；P25 的微型配置也刻意保留 $H_qd_h\neq D$。
@@ -10347,7 +10351,7 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 | P11、P12、P14、P24、P25、P27 的 KV 字节式 | $M_{KV}$、$s$、$b_{KV}$、$d$、$D_{head}$ | $\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}$，$b_{\mathrm{elem}}$ 按每个张量元素计 |
 | 各章每头宽度 | $d$ | $d_h$ |
 | P12 RoPE 的位置 | $p$ | $t$；讨论两个位置的相对距离时用 $m$、$n$ |
-| P12 RoPE 每对维度的频率、YaRN 混合后的频率 | $\theta_i$、$\theta'$；P12.3 不带下标的 $\theta$（$R(m\theta)$、例子里的 $\theta=1$） | $\omega_i$、$\omega'$（与第 5 章一致；原论文写作 $\theta$），转角 $t\omega_i$；只看一对维度时写 $R(m\omega_i)$、$\omega_i=1$ |
+| P12 RoPE 每对维度的频率、YaRN 混合后的频率 | $\theta_i$、$\theta'$；P12.3 不带下标的 $\theta$（$R(m\theta)$、例子里的 $\theta=1$） | $\omega_i$、$\omega'$（与第 5 章一致；原论文写作 $\theta$），转角 $t\omega_i$；只看一对维度时写 $R(m\omega_i)$、$\omega_i=1$；第 5 章正文写 $\omega_k$，因为该章 §5.2 已用 $i$ 作 query 位置，维度对编号改用 $k$，与表中 $\omega_i$ 是同一类量 |
 | P12 YaRN 的扩展倍数 | $s$ | $\kappa$（原论文写作 $s$） |
 | P12 YaRN 的原训练长度 | $L$ | $T_{\mathrm{train}}$ |
 | P12 YaRN 的注意力温度 | $t$ | $\tau$ |
@@ -10394,8 +10398,8 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 有些字母在不同章节各管一摊，硬统一反而难读。它们是**局部符号**：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。
 
-- 希腊字母：$\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率、缩放定律指数等）、$\beta$（LayerNorm 偏移、DPO/KL 系数、缩放定律指数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（夹角、旋转矩阵 $R(\theta)$ 的角，或模型参数 $\pi_\theta$、$p_\theta$）、$\pi$（圆周率，或策略 $\pi_\theta$）、$\phi$（旋转角、特征映射，或奖励模型参数）、$\rho$（概率比）、$\delta$、$\Delta$（不带下标的 $\Delta$ 只表示差值，如 P12 的 $\Delta=n-m$、E.0 的 $\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}$；$\Delta W$ 是更新量；P22 DPO 的 $\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两个对数比的差；量化步长只写带下标的 $\Delta_x$、$\Delta_w$）、$\mu$（均值）。
-- 拉丁字母：$x$（某个式子的输入：一个位置的向量、它的第 $i$ 个分量，或 P21–P23 里的 token 序列）、$y$（输出向量、目标 token，或 P22 里的回复）、$h$（第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果、P23 主干最后一层的隐藏向量 $h_t$）、$a$（第 6 章 ReLU 的输出、P12 YaRN 的长度缩放系数、第 1 章的示例向量、第 3 章的注意力权重 $a_{ij}$、P15 的请求到达时刻）、$b$（第 1 章、P12 的示例向量）、$f$（第 2 章 RNN 的更新函数、P18 的分配比例 $f_e$）、$g$（SwiGLU 的门控分支、P20 的梯度）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值、特征宽度、第 3 章的求和下标）、$k$（第 5 章的位移量、top-k 的个数、P20 的训练步编号 $\theta_k$）、$q$（P23 的草稿分布 $q(x)$、P24 的量化整数）、$z$（多数时候是 softmax 之前的 logits；也作 SwiGLU 的门控乘积、线性注意力的归一化量、DPO 的间隔、P24 的零点）、$w$（单个权重、路由权重 $w_e$、注意力权重 $w_{tj}$）、$c$（第 2 章的上下文向量、P14 MLA 的压缩向量 $c_t$）、$t_1,t_{\mathrm{start}}$ 等 P15、P24 的计时时刻、$A$（注意力子层函数、GRPO 的优势 $A_i$）、$F$（第 6 章的残差分支 $F(x)$）、$P$（第 5 章的换序操作、P15 的概率矩阵）、$C$、$G$、$R$、$S$、$U$ 等只在一章出现的大写字母。
+- 希腊字母：$\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率、缩放定律指数等）、$\beta$（LayerNorm 偏移、DPO/KL 系数、缩放定律指数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（夹角；RoPE 的转角写进 $R(m\omega_i)$，不另写裸 $R(\theta)$；或模型参数 $\pi_\theta$、$p_\theta$）、$\pi$（圆周率，或策略 $\pi_\theta$）、$\phi$（旋转角、特征映射，或奖励模型参数）、$\rho$（概率比）、$\delta$、$\Delta$（不带下标的 $\Delta$ 只表示差值，如 P12 的 $\Delta=n-m$、E.0 的 $\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}$；$\Delta W$ 是更新量；P22 DPO 的 $\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两个对数比的差；量化步长只写带下标的 $\Delta_x$、$\Delta_w$）、$\mu$（均值）。
+- 拉丁字母：$x$（某个式子的输入：一个位置的向量、它的第 $i$ 个分量，或 P21–P23 里的 token 序列）、$y$（输出向量、目标 token，或 P22 里的回复；$y_l$ 是 DPO 的 rejected 答案，下标 $l$ 不是层号）、$h$（第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果、P23 主干最后一层的隐藏向量 $h_t$）、$a$（第 6 章 ReLU 的输出、P12 YaRN 的长度缩放系数、第 1 章的示例向量、第 3 章的注意力权重 $a_{ij}$、P15 的请求到达时刻）、$b$（第 1 章、P12 的示例向量）、$f$（第 2 章 RNN 的更新函数、P18 的分配比例 $f_e$）、$g$（SwiGLU 的门控分支、P20 的梯度）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值、特征宽度、第 3 章的求和下标）、$k$（第 5 章的维度对编号（$\omega_k$，即表中的 $\omega_i$；该章位移改记 $\Delta$）、top-k 的个数、P20 的训练步编号 $\theta_k$）、$q$（P23 的草稿分布 $q(x)$、P24 的量化整数）、$z$（多数时候是 softmax 之前的 logits；也作 SwiGLU 的门控乘积、线性注意力的归一化量、DPO 的间隔、P24 的零点）、$w$（单个权重、路由权重 $w_e$、注意力权重 $w_{tj}$）、$c$（第 2 章的上下文向量、P14 MLA 的压缩向量 $c_t$）、$t_1,t_{\mathrm{start}}$ 等 P15、P24 的计时时刻、$A$（注意力子层函数、GRPO 的优势 $A_i$）、$F$（第 6 章的残差分支 $F(x)$）、$P$（第 5 章的换序操作、P15 的概率矩阵）、$C$、$G$、$R$、$S$、$U$ 等只在一章出现的大写字母。
 - 第 2 章 $h_t$、第 6 章 $h$、P23 $h_t$ 都不是全局的层表示；逐层的隐藏状态统一写 $X^{(l)}$。
 
 ## 附录 B：深度学习常见“黑话”大白话翻译词典 {#附录-b深度学习常见黑话大白话翻译词典}
@@ -10452,9 +10456,11 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 对未量化的 K/V 张量，按实际保存的头数计算：
 
-$$\mathrm{bytes}=2\times L\times B\times H_{kv}\times T\times d_{\mathrm{head}}\times s.$$
+$$\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}.$$
 
-用 P27 教学配置 $L=2,B=2,H_{kv}=2,T=8,d_{\mathrm{head}}=4,s=4$（float32）代入：$2\times2\times2\times2\times8\times4\times4=2048$ bytes。把 GQA 的 $H_{kv}=2$ 改成 MHA 的 $H_{kv}=4$，同一账本得到 4096 bytes。这只核算缓存张量 payload，可与 `numel × element_size` 核对，不代替进程内存峰值。
+其中：$L$ 是层数，$B$ 是批大小，$H_{kv}$ 是 KV 头数，$T$ 是已缓存长度，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是每元素字节数；乘 2 是因为 K 与 V 各存一份。**白话：** 这是 KV cache 张量自己的字节数，不是整进程显存峰值。
+
+用 P27 教学配置 $L=2,B=2,H_{kv}=2,T=8,d_h=4,b_{\mathrm{elem}}=4$（float32）代入：$2\cdot2\cdot2\cdot2\cdot8\cdot4\cdot4=2048$ bytes。把 GQA 的 $H_{kv}=2$ 改成 MHA 的 $H_{kv}=4$，同一账本得到 4096 bytes。这只核算缓存张量 payload，可与 `numel × element_size` 核对，不代替进程内存峰值。
 
 | 你要做的事 | 先运行什么 | 不能据此声称什么 |
 |---|---|---|
@@ -10476,6 +10482,8 @@ $$\mathrm{bytes}=2\times L\times B\times H_{kv}\times T\times d_{\mathrm{head}}\
 比较两个固定版本的同一字段时，先把绝对差和相对差分开：
 
 $$\Delta=x_{\mathrm{new}}-x_{\mathrm{old}},\qquad r=\Delta/x_{\mathrm{old}}.$$
+
+其中：$\Delta$ 是新旧字段的差（裸 $\Delta$ 只表示差值，见 A.5）；$x_{\mathrm{new}}$、$x_{\mathrm{old}}$ 是同一字段的两个固定取值；$r$ 是相对变化。**白话：** 先问“变了多少”，再问“相对原来占几成”，两者不要混成一句广告语。
 
 例如旧配置最大长度为 40960，新版本为 32768，则 $\Delta=-8192$，$r=-8192/40960=-0.20$，即减少 20%。这个结果只描述已锁定字段；硬件速度或模型质量需要另外的测量记录。
 
@@ -10532,7 +10540,7 @@ python -m unittest discover -s tests -p 'test_reference_appendix.py' -v
 
 ### F.0 平均值与一步更新速查
 
-$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
+$\bar{\mathcal L}_{\mathrm{doc}}=(2+4)/2=3$，而 $\bar{\mathcal L}_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。学习率 $0.1$ 后 $w'=1-0.1\times4=0.6$，新损失 $\mathcal L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。
 
 仓库根目录的 `python -m unittest discover -s tests -v` 检查示例与契约，`python scripts/check_book.py` 检查已生成制品的资源/链接，`npm run check:layout` 检查正常浏览器视口布局。公式正确、链接存在、图片可读与代码通过互不替代。具体通过与跳过数以当前 CI 运行结果为准，运行环境版本见[附录 H](#p28.h-版本与来源)，不在这里保留会迅速过时的全书总数。
 

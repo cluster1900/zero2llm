@@ -139,7 +139,7 @@ layers.append((k, v))
 本章 K、V 每头同宽，且不量化。$L$ 层、batch $B$、长度 $T$、每个数 $b_{\mathrm{elem}}$ 字节时：
 
 $$
-\mathrm{Mem}_{KV}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}
+\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}
 $$
 
 它和 P11.6 的 MHA 账本是同一张表，只是把“每层存几份头”从 $H$ 换成真正保存的 $H_{kv}$：query 头再多，只要共用 KV 头，缓存就按 KV 头数算。

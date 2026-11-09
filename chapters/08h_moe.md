@@ -50,12 +50,12 @@ z 是分数，p 是本章选用的 Softmax affinity，意思是 token 对专家�
 
 $$
 w_e=\frac{p_e}{\sum_{j\in\mathcal I_k}p_j}\quad(e\in\mathcal I_k),\qquad
-\operatorname{MoE}(x)=\sum_{e\in\mathcal I_k}w_e F_e(x)+\sum_{e'=1}^{N_S}F^{\mathrm{sh}}_{e'}(x).
+\operatorname{MoE}(x)=\sum_{e\in\mathcal I_k}w_e F_e(x)+\sum_{e'=0}^{N_S-1}F^{\mathrm{sh}}_{e'}(x).
 $$
 
 没有被选中的路由专家不计算 F_e(x)，也不参与这次加权和。共享专家全部执行，输出直接相加，不与路由专家一起归一化，也不除以 $N_S$。先在被选中的几位师傅之间重新分配话语权，让它们的权重加起来为 1；再把每张工单都要做的共享检查原样加上。
 
-其中：$\mathcal I_k$ 是 affinity 最大的 k 个路由专家的编号集合；k 是每 token 选几个；$w_e$ 是被选专家 e 的组合权重；$F_e$ 是第 e 个路由专家（一个 SwiGLU FFN）；$N_S$ 是共享专家个数；$e'$ 是共享专家编号，$F^{\mathrm{sh}}_{e'}$ 是第 $e'$ 个共享专家。
+其中：$\mathcal I_k$ 是 affinity 最大的 k 个路由专家的编号集合；k 是每 token 选几个；$w_e$ 是被选专家 e 的组合权重；$F_e$ 是第 e 个路由专家（一个 SwiGLU FFN）；$N_S$ 是共享专家个数；$e'$ 是共享专家编号（从 0 数到 $N_S-1$，与路由专家下标同一套从 0 起的约定），$F^{\mathrm{sh}}_{e'}$ 是第 $e'$ 个共享专家。
 
 这是本书明确选择的一套教学约定，不是“所有 MoE 的唯一公式”。尤其要区分原始 Softmax、所选权重归一化、Sigmoid affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生不同输出。
 

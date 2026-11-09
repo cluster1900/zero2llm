@@ -161,8 +161,11 @@ class ReferenceAppendixTests(unittest.TestCase):
         self.assertIn('不能推出速度', BODY)
 
     def test_positive_period_for_both_frequency_signs(self):
-        self.assertIn(r'T=2\pi/\lvert\omega\rvert', BODY)
-        self.assertIn('$D=32=H_q d$', BODY)
+        # bot-hub#126 F9: A.1 period letter T→λ; A.2 head width d→d_h (A.5)
+        self.assertIn(r'\lambda=2\pi/\lvert\omega\rvert', BODY)
+        self.assertNotIn(r'T=2\pi/\lvert\omega\rvert', BODY)
+        self.assertIn('$D=32=H_q d_h$', BODY)
+        self.assertNotIn('$D=32=H_q d$', BODY)
         for omega in (2., -2., .5, -.5):
             period = 2*math.pi/abs(omega)
             self.assertGreater(period, 0)

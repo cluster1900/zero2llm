@@ -7,9 +7,10 @@ APPENDIX = ROOT / "chapters" / "10_appendix.md"
 
 # New F.0 body (independent derivation only).
 NEW_F0 = (
-    r"$\bar L_{\mathrm{doc}}=(2+4)/2=3$，而 "
-    r"$\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。学习率 $0.1$ 后 "
-    r"$w'=1-0.1\times4=0.6$，新损失 $L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。"
+    # bot-hub#126 F9: F.0 \bar L / L' → \bar{\mathcal L} / \mathcal L' (A.5 loss letter)
+    r"$\bar{\mathcal L}_{\mathrm{doc}}=(2+4)/2=3$，而 "
+    r"$\bar{\mathcal L}_{\mathrm{token}}=(1\times2+3\times4)/4=3.5$。学习率 $0.1$ 后 "
+    r"$w'=1-0.1\times4=0.6$，新损失 $\mathcal L'=(0.6\times2)^2/2=0.72$。这两个分母和更新顺序是核对训练日志的最小账本。"
 )
 
 # Old overlapping prose removed from F.0 (still present in A.3/A.4 in other forms).
@@ -23,10 +24,10 @@ OLD_F0 = (
 PINS = [
     ("### F.0 平均值与一步更新速查", 1),
     (NEW_F0, 1),
-    (r"\bar L_{\mathrm{doc}}=(2+4)/2=3", 1),
-    (r"\bar L_{\mathrm{token}}=(1\times2+3\times4)/4=3.5", 1),
+    (r"\bar{\mathcal L}_{\mathrm{doc}}=(2+4)/2=3", 1),
+    (r"\bar{\mathcal L}_{\mathrm{token}}=(1\times2+3\times4)/4=3.5", 1),
     (r"w'=1-0.1\times4=0.6", 1),
-    (r"L'=(0.6\times2)^2/2=0.72", 1),
+    (r"\mathcal L'=(0.6\times2)^2/2=0.72", 1),
     ("这两个分母和更新顺序是核对训练日志的最小账本", 1),
     (OLD_F0, 0),
     ("文档平均与 token 平均使用不同分母", 0),
