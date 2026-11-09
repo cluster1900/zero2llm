@@ -188,26 +188,26 @@ MLA 是 Multi-head Latent Attention，首先由 DeepSeek-V2 提出。其关键�
 为了与 PyTorch 批量张量的方向一致，下面都用**行向量右乘矩阵**。这与论文常用的列向量写法互为转置，不是换了算法。设单个 token 输入为 $x_t$，潜变量宽度 r，内容 key 宽度 $d_c$，value 宽度 $d_v$：
 
 $$
-c_t=x_t W_{down},\qquad k^C_{t,h}=c_t U^K_h,\qquad v_{t,h}=c_t U^V_h
+c_t=x_t W_{\mathrm{DKV}},\qquad k^C_{t,h}=c_t U^K_h,\qquad v_{t,h}=c_t U^V_h
 $$
 
 | 对象 | 形状 | 作用 |
 | --- | --- | --- |
 | x_t | [D] | 本层输入 |
-| W_down | [D,r] | 降到潜变量 |
+| $W_{\mathrm{DKV}}$ | [D,r] | 降到潜变量 |
 | c_t | [r] | 内容 K/V 共同使用 |
 | U^K_h | [r,d_c] | 第 h 头的内容 key 映射 |
 | U^V_h | [r,d_v] | 第 h 头的 value 映射 |
 
 这一行说的是“先压缩、再按头展开”：每个 token 只存一份短短的 $c_t$，第 h 个头需要 key 或 value 时，再各用自己的矩阵把它“放大”回来。
 
-其中：$x_t$ 是第 t 个 token 的本层输入（行向量，宽 $D$）；$W_{down}$ 是降维矩阵；$c_t$ 是潜变量，宽 r（r 是本节的局部记号）；h 是头编号；$U^K_h$、$U^V_h$ 是第 h 头的 key、value 上投影；$k^C_{t,h}$ 是内容 key（上标 C 表示 content），$v_{t,h}$ 是 value；形状见下表。
+其中：$x_t$ 是第 t 个 token 的本层输入（行向量，宽 $D$）；$W_{\mathrm{DKV}}$ 是 K/V 共用的降维矩阵（下标 DKV 取自论文的 down-projection for KV；不写 $W_{\mathrm{down}}$，它只指 FFN 的下投影）；$c_t$ 是潜变量，宽 r（r 是本节的局部记号）；h 是头编号；$U^K_h$、$U^V_h$ 是第 h 头的 key、value 上投影；$k^C_{t,h}$ 是内容 key（上标 C 表示 content），$v_{t,h}$ 是 value；形状见下表。
 
 GQA 中，同组 query 使用**相同完整 K/V**。这里不同头的 U 可以不同，所以同一个 c_t 可以产生不同头的 K/V；共享的是潜在表示，不是说这些头的 K/V 必须相等。
 
 **教学简化要单独记住**：完整 MLA 还包含 query 的低秩降维/升维分支，用来减少训练激活内存，但不进一步缩小历史 KV 缓存。本实验省略该分支，直接给定两头的内容 query 数值，把其一半作为旋转前的位置 query；也不包含完整输出投影 W_O、量化或并行实现。它验证的是 KV 侧吸收与解耦位置的矩阵关系，不是完整 MLA 模型。[V2 v5，§2.1.2，式 12–13](https://arxiv.org/html/2405.04434v5#S2.SS1.SSS2)
 
-“先降维、再升维”也不是任意矩阵的免费无损压缩。`W_down @ U` 的秩最多是 r。比如目标矩阵 `diag(3,2,1)` 的秩为 3，用秩 2 的 `diag(3,2,0)` 代替，最后一个方向被丢掉，Frobenius 误差为 1。源码会打印这个反例。模型必须在这种表示约束下学习；本章不把已有 MHA 权重直接变成等价 MLA。
+“先降维、再升维”也不是任意矩阵的免费无损压缩。乘积 $W_{\mathrm{DKV}}U$ 的秩最多是 r。比如目标矩阵 `diag(3,2,1)` 的秩为 3，用秩 2 的 `diag(3,2,0)` 代替，最后一个方向被丢掉，Frobenius 误差为 1。源码会打印这个反例。模型必须在这种表示约束下学习；本章不把已有 MHA 权重直接变成等价 MLA。
 
 ## P14.9 为什么能不存展开的内容 K/V
 

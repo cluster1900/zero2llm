@@ -17,9 +17,9 @@ CHANGED = [
     ("assets/diagrams/transformer_block.svg", "任意堆叠", "• 像乐高一样可重复堆叠！"),
     ("chapters/06_residual_layernorm_ffn.md", "图中的“无损直达”“任意堆叠”", "图中的“残差直通”“可重复堆叠”不是总梯度或训练效果的保证"),
     ("chapters/07_encoder_decoder.md", "不是每一轮都重新读完一切", "## 7.6 Prefill 与 decode：本章仍整段重算\n\n前面几节讲的是带编码器的翻译双塔；这一节换成只有 decoder、没有编码器的续写"),
-    # bot-hub#126 F5：附录 A.5 统一后 H 只表示头数，FFN 宽度改记 d_ff / d_ff'，词表大小记 |V|。
+    # bot-hub#126 F5：附录 A.5 统一后 H 只表示头数，FFN 宽度改记 d_ff^GELU / d_ff^SwiGLU（F0 r3 定稿，取代旧的 d_ff'），词表大小记 |V|。
     ("chapters/08c_modern_block.md", "头数 n_head=4", "设置 $\\lvert\\mathcal V\\rvert=57$、D=48、L=2、头数 $H=4$，embedding"),
-    ("chapters/08c_modern_block.md", "本章的 H 仍只表示 FFN 宽度", "MHA 投影一行 2×4×48² 中的 4 指 Q、K、V、O 四个 48×48 矩阵，不是头数 $H$；FFN 的中间宽度另记为 $d_{\\mathrm{ff}}$、$d_{\\mathrm{ff}}'$。"),
+    ("chapters/08c_modern_block.md", "本章的 H 仍只表示 FFN 宽度", "MHA 投影一行 2×4×48² 中的 4 指 Q、K、V、O 四个 48×48 矩阵，不是头数 $H$；FFN 的中间宽度另记为 $d_{\\mathrm{ff}}^{\\mathrm{GELU}}$、$d_{\\mathrm{ff}}^{\\mathrm{SwiGLU}}$。"),
     ("chapters/08i_pretraining_pipeline.md", None, "2,040 参数的玩具实验只演示数据到训练再到恢复的流程，规模太小，不能用来检验 Chinchilla、6ND 或涌现这类缩放律结论。"),
 ]
 

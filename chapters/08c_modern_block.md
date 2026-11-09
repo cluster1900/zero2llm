@@ -96,24 +96,24 @@ return (work * inv_rms * self.weight.to(work.dtype)).to(x.dtype)
 
 ## P13.4 从 GELU FFN 到“内容乘以门”
 
-旧 FFN 是两次线性投影，中间加 GELU：先 $D\to d_{\mathrm{ff}}$，再 $d_{\mathrm{ff}}\to D$。默认 $d_{\mathrm{ff}}=4D$。它在同一个 token 的特征间重组信息，不是沿时间轴做卷积。
+旧 FFN 是两次线性投影，中间加 GELU：先 $D\to d_{\mathrm{ff}}$，再 $d_{\mathrm{ff}}\to D$。默认 $d_{\mathrm{ff}}=4D$（下面要和 SwiGLU 比较时，把它记作 $d_{\mathrm{ff}}^{\mathrm{GELU}}$）。它在同一个 token 的特征间重组信息，不是沿时间轴做卷积。
 
-SwiGLU 在同一个输入上走两条 $D\to d_{\mathrm{ff}}'$ 支路（加撇是为了和 GELU FFN 的宽度 $d_{\mathrm{ff}}$ 区分）。一条产生内容 `up(x)`，另一条经过 SiLU 后调节内容 `gate(x)`，最后通过 `down` 回到 D：
+SwiGLU 在同一个输入上走两条 $D\to d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 支路（上标 SwiGLU、GELU 用来区分两种 FFN 各自的中间宽度）。一条产生内容 `up(x)`，另一条经过 SiLU 后调节内容 `gate(x)`，最后通过 `down` 回到 D：
 
-$$g=xW_g,\quad a_{\mathrm{up}}=xW_{\mathrm{up}},\quad z=\operatorname{SiLU}(g)\odot a_{\mathrm{up}},\quad y=zW_d$$
-$$\operatorname{SiLU}(t)=t\sigma(t)=\frac{t}{1+e^{-t}}$$
+$$g=xW_{\mathrm{gate}},\quad a_{\mathrm{up}}=xW_{\mathrm{up}},\quad z=\operatorname{SiLU}(g)\odot a_{\mathrm{up}},\quad y=zW_{\mathrm{down}}$$
+$$\operatorname{SiLU}(g)=g\sigma(g)=\frac{g}{1+e^{-g}}$$
 
-第一行像“内容 × 音量旋钮”：$a_{\mathrm{up}}$ 是要传的内容，SiLU(g) 决定每个坐标放大、缩小还是反向；相乘后再用 $W_d$ 压回主干宽度。第二行给出 SiLU 本身：输入乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近 0。
+第一行像“内容 × 音量旋钮”：$a_{\mathrm{up}}$ 是要传的内容，SiLU(g) 决定每个坐标放大、缩小还是反向；相乘后再用 $W_{\mathrm{down}}$ 压回主干宽度。第二行给出 SiLU 本身（逐坐标计算）：门支路 g 乘以它自己的 sigmoid，大正数几乎原样通过，大负数被压到接近 0。
 
-其中：x 是一个 token 的输入行向量，宽 $D$；$W_g$、$W_{\mathrm{up}}$ 是门支路和内容支路的投影，形状 $[D,d_{\mathrm{ff}}']$；$W_d$ 是下投影，形状 $[d_{\mathrm{ff}}',D]$；g、$a_{\mathrm{up}}$ 是两条支路的中间结果（本节局部记号；不用 u，因为 u 只指上面的残差结果），z 是相乘后的结果，y 是输出；$\odot$ 是逐坐标相乘；t 是 SiLU 的任意实数输入；$\sigma(t)=1/(1+e^{-t})$ 是 sigmoid 函数（本节局部符号）。
+其中：x 是一个 token 的输入行向量，宽 $D$；$W_{\mathrm{gate}}$、$W_{\mathrm{up}}$ 是门支路和内容支路的投影，形状 $[D,d_{\mathrm{ff}}^{\mathrm{SwiGLU}}]$；$W_{\mathrm{down}}$ 是下投影，形状 $[d_{\mathrm{ff}}^{\mathrm{SwiGLU}},D]$；$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 是 SwiGLU 的中间宽度；g、$a_{\mathrm{up}}$ 是两条支路的中间结果（本节局部记号；不用 u，因为 u 只指上面的残差结果），z 是相乘后的结果 $\operatorname{SiLU}(g)\odot a_{\mathrm{up}}$（SiLU 的自变量是 g，不是 z），y 是输出；$\odot$ 是逐坐标相乘；$\sigma(g)=1/(1+e^{-g})$ 是逐坐标的 sigmoid 函数（本节局部符号）。
 
-这里公式采用行向量右乘矩阵的记法，PyTorch `nn.Linear` 则储存转置方向的权重。`gate.weight` 与 `up.weight` 的形状是 `[d_ff',D]`，`down.weight` 是 `[D,d_ff']`。源码只有一行核心计算：
+这里公式采用行向量右乘矩阵的记法，PyTorch `nn.Linear` 则储存转置方向的权重。`gate.weight` 与 `up.weight` 的形状是 $[d_{\mathrm{ff}}^{\mathrm{SwiGLU}},D]$，`down.weight` 是 $[D,d_{\mathrm{ff}}^{\mathrm{SwiGLU}}]$。源码只有一行核心计算：
 
 ```python
 return self.down(F.silu(self.gate(x)) * self.up(x))
 ```
 
-SiLU 是 Swish 在参数 β=1 时的形式（Swish 写作 $t\,\sigma(\beta t)$，这里的 β 是 Swish 自带的参数，与 LayerNorm 的 β 无关）。GLU 变体论文将这类两路相乘的结构用于 Transformer FFN；SwiGLU 对门支路使用 Swish，而不是把 FFN 中的 GELU 单独换成 SiLU 就结束。[来源 2、5]
+SiLU 是 Swish 在参数 β=1 时的形式（Swish 写作 $g\,\sigma(\beta g)$，这里的 β 是 Swish 自带的参数，与 LayerNorm 的 β 无关）。GLU 变体论文将这类两路相乘的结构用于 Transformer FFN；SwiGLU 对门支路使用 Swish，而不是把 FFN 中的 GELU 单独换成 SiLU 就结束。[来源 2、5]
 
 把 gate 类比成音量旋钮有助于记忆，但类比不能过头：**SiLU 的输出不是概率，不限于 [0,1]，可以为负，也可以大于 1**。SwiGLU 没有在若干专家中做 top-k 选择，也不是后续 MoE 的路由器。两条支路都计算，每个中间坐标都相乘。
 
@@ -140,29 +140,29 @@ down 是单位矩阵，所以输出恰好是 `[-0.806824,7.046377]`。如果误�
 
 先全部关闭 bias，GELU FFN 有两个矩阵，参数数是：
 
-$$N_{\text{GELU}}=Dd_{\mathrm{ff}}+d_{\mathrm{ff}}D=2Dd_{\mathrm{ff}}$$
+$$N_{\text{GELU}}=Dd_{\mathrm{ff}}^{\mathrm{GELU}}+d_{\mathrm{ff}}^{\mathrm{GELU}}D=2Dd_{\mathrm{ff}}^{\mathrm{GELU}}$$
 
 SwiGLU 有三个矩阵，参数数是：
 
-$$N_{\text{SwiGLU}}=Dd_{\mathrm{ff}}'+Dd_{\mathrm{ff}}'+d_{\mathrm{ff}}'D=3Dd_{\mathrm{ff}}'$$
+$$N_{\text{SwiGLU}}=Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}D=3Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}$$
 
 两个式子都是“每张矩阵 = 行数 × 列数”再加起来：GELU 版两张，SwiGLU 版三张。
 
-其中：$N_{\text{GELU}}$、$N_{\text{SwiGLU}}$ 是一个 FFN 的无 bias 参数数；$D$ 是模型宽度；$d_{\mathrm{ff}}$ 是 GELU FFN 的中间宽度；$d_{\mathrm{ff}}'$ 是 SwiGLU 的中间宽度。
+其中：$N_{\text{GELU}}$、$N_{\text{SwiGLU}}$ 是一个 FFN 的无 bias 参数数；$D$ 是模型宽度；$d_{\mathrm{ff}}^{\mathrm{GELU}}$ 是 GELU FFN 的中间宽度；$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 是 SwiGLU 的中间宽度。
 
-如果 $d_{\mathrm{ff}}=d_{\mathrm{ff}}'=4D$，后者的矩阵参数多 50%。然后拿训练 loss 比较并宣布“门控优于 GELU”，就把增加参数的影响混进来了。令两者相等，可得 $d_{\mathrm{ff}}'=2d_{\mathrm{ff}}/3$；当 $d_{\mathrm{ff}}=4D$ 时，$d_{\mathrm{ff}}'\approx8D/3$。这种收窄门控 FFN 的比较思路也出现在 GLU 变体论文中。[来源 2]
+如果 $d_{\mathrm{ff}}^{\mathrm{GELU}}=d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=4D$，后者的矩阵参数多 50%。然后拿训练 loss 比较并宣布“门控优于 GELU”，就把增加参数的影响混进来了。令两者相等，可得 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=2d_{\mathrm{ff}}^{\mathrm{GELU}}/3$；当 $d_{\mathrm{ff}}^{\mathrm{GELU}}=4D$ 时，$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\approx8D/3$。这种收窄门控 FFN 的比较思路也出现在 GLU 变体论文中。[来源 2]
 
 ### 表 P13-3：D=48 的每层 FFN 账本
 
 | FFN | 中间宽度 | 矩阵参数计算 | 无 bias 参数 |
 | --- | --- | --- | --- |
-| GELU 基线 | $d_{\mathrm{ff}}=192$ | 2×48×192 | 18432 |
-| SwiGLU，错误地保持同宽 | $d_{\mathrm{ff}}'=192$ | 3×48×192 | 27648 |
-| SwiGLU，匹配预算 | $d_{\mathrm{ff}}'=128$ | 3×48×128 | 18432 |
+| GELU 基线 | $d_{\mathrm{ff}}^{\mathrm{GELU}}=192$ | 2×48×192 | 18432 |
+| SwiGLU，错误地保持同宽 | $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=192$ | 3×48×192 | 27648 |
+| SwiGLU，匹配预算 | $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=128$ | 3×48×128 | 18432 |
 
-这里第二行不是“非法模型”，而是不适合用来隔离门控结构效果的同预算对照。$d_{\mathrm{ff}}'$ 不一定能整除，硬件对齐也可能要求它是某个数的倍数。`matched_swiglu_width` 选最接近参数预算的合法正整数宽度，平局选较小值；如设置 `multiple_of`，要重新报告真实误差。
+这里第二行不是“非法模型”，而是不适合用来隔离门控结构效果的同预算对照。$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 不一定能整除，硬件对齐也可能要求它是某个数的倍数。`matched_swiglu_width` 选最接近参数预算的合法正整数宽度，平局选较小值；如设置 `multiple_of`，要重新报告真实误差。
 
-有 bias 时也别忘了数：GELU 多 $d_{\mathrm{ff}}+D$，SwiGLU 多 $2d_{\mathrm{ff}}'+D$。上述宽度对应 18672 与 18736，不再严格相等，相差 64。源码的计数函数包含这两种情况。参数数相同也不等于峰值激活内存、执行时间或训练质量相同：门控要保留额外支路中间量，kernel 和硬件的实现也不同。
+有 bias 时也别忘了数：GELU 多 $d_{\mathrm{ff}}^{\mathrm{GELU}}+D$，SwiGLU 多 $2d_{\mathrm{ff}}^{\mathrm{SwiGLU}}+D$。上述宽度对应 18672 与 18736，不再严格相等，相差 64。源码的计数函数包含这两种情况。参数数相同也不等于峰值激活内存、执行时间或训练质量相同：门控要保留额外支路中间量，kernel 和硬件的实现也不同。
 
 ## P13.6 S2 不被悄悄改写，S3 有明确配置
 
@@ -172,7 +172,7 @@ $$N_{\text{SwiGLU}}=Dd_{\mathrm{ff}}'+Dd_{\mathrm{ff}}'+d_{\mathrm{ff}}'D=3Dd_{\
 | --- | --- | --- |
 | 注意力与位置 | MHA + RoPE | 完全保留 |
 | Norm | LayerNorm，γ 与 β | RMSNorm，只有 γ |
-| FFN | GELU，$d_{\mathrm{ff}}=4D$，有 bias | SwiGLU，预算匹配 $d_{\mathrm{ff}}'$，无 bias |
+| FFN | GELU，$d_{\mathrm{ff}}^{\mathrm{GELU}}=4D$，有 bias | SwiGLU，预算匹配 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$，无 bias |
 | 残差顺序 | Pre-Norm | 完全保留 |
 | cache 路径 | S2 的 cached_forward | 调用同一函数 |
 
@@ -208,7 +208,7 @@ A→B 的 ε、γ、FFN、注意力等都固定，比较的是居中与均方归
 | 5 个仅有 γ 的 Norm | 5×48 | 240 |
 | 合计 | 5472+18432+36864+240 | 61008 |
 
-MHA 投影一行 2×4×48² 中的 4 指 Q、K、V、O 四个 48×48 矩阵，不是头数 $H$；FFN 的中间宽度另记为 $d_{\mathrm{ff}}$、$d_{\mathrm{ff}}'$。
+MHA 投影一行 2×4×48² 中的 4 指 Q、K、V、O 四个 48×48 矩阵，不是头数 $H$；FFN 的中间宽度另记为 $d_{\mathrm{ff}}^{\mathrm{GELU}}$、$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$。
 
 原 S2 默认是 61728 个参数。对照 A 去掉两层 FFN 的 2×(192+48)=480 个 bias，再去掉 Norm 的 5×48=240 个 β，合计少 720，得到 61008。RoPE 没有可学习位置表，不能把 S0 的那张位置表又算进来。
 
@@ -259,7 +259,7 @@ S3 直接复用 S2 的 `cached_forward`。这个函数访问当前 Block 的 `ln
 1. `[1,3]` 整体加 2 后，为什么 LN 表中不变，而 RMSNorm 变了？
 2. 为什么“先 float16 平方，再转 float32”还会出错？
 3. SwiGLU 的门输出为 1.76 是否违反概率范围？
-4. D=48，GELU 的 $d_{\mathrm{ff}}=192$。无 bias 的 SwiGLU 应取多宽才能匹配矩阵参数？
+4. D=48，GELU 的 $d_{\mathrm{ff}}^{\mathrm{GELU}}=192$。无 bias 的 SwiGLU 应取多宽才能匹配矩阵参数？
 5. 同一个 seed 是否足以证明消融只有一个变量变化？
 6. 为什么表 P13-4 不能用来排“哪种 Block 最好”？
 7. A→B 为什么把 LayerNorm 的 β 也关闭？
@@ -270,7 +270,7 @@ S3 直接复用 S2 的 `cached_forward`。这个函数访问当前 Block 的 `ln
 1. LN 在两个输入上都减去各自均值，分子都是 `[-1,1]`，方差也都为 1，所以输出同为 `[-0.816497,0.816497]`；RMSNorm 不居中，均方从 5 变 17，分子也改变。
 2. 溢出在平方那一步已经发生，随后升精度只能保留无穷；必须先转换再平方。
 3. 不违反。SiLU 门不是概率，可以大于 1、为负；sigmoid 本身才在 0 与 1 之间。
-4. $d_{\mathrm{ff}}'=128$，因为 2×48×192=3×48×128=18432。开启 bias 后要把 bias 额外计算，不能直接声称总参数严格相等。
+4. $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=128$，因为 2×48×192=3×48×128=18432。开启 bias 后要把 bias 额外计算，不能直接声称总参数严格相等。
 5. 不够。初始化时随机数消耗顺序可能变化，必须复制并验证不变部分，同时控制数据、优化器、步数和其他设置。
 6. 单 seed、重复 batch、无验证集，只能演示训练与数值闭环；没有足够证据做泛化质量或速度结论。
 7. 避免把“多一组可训练偏移参数”也夹在归一化机制对比里。关闭 bias 是对照准备，不宣称它单独带来收益。
