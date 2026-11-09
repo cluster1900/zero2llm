@@ -157,7 +157,7 @@ FFN 中间宽度，以及表 P13-4 的每层 FFN 参数和整模型参数，也�
 
 还有 double 精度自动微分数值检查、全零与半精度大输入的有限反向、真实参数计数、显式复制后的数值一致性、S2 兼容模式及缓存对齐。
 
-为守住旧行为，测试还构建一个兼容设置：`norm_kind='layernorm'`、`ffn_kind='gelu'`、`norm_bias=True`、`ffn_bias=True`、ε=1e-5、H=4D。它在相同 seed 下与 S2 的每个 state tensor、每个输出 logit 精确相同。
+为守住旧行为，测试还构建一个兼容设置：`norm_kind='layernorm'`、`ffn_kind='gelu'`、`norm_bias=True`、`ffn_bias=True`、ε=1e-5、$d_{\mathrm{ff}}=4D$。它在相同 seed 下与 S2 的每个 state tensor、每个输出 logit 精确相同。
 
 源码的计数函数包含这两种情况，测试再用真实 `numel()` 交叉检查。
 

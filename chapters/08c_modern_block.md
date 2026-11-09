@@ -140,15 +140,15 @@ down 是单位矩阵，所以输出恰好是 `[-0.806824,7.046377]`。如果误�
 
 先全部关闭 bias，GELU FFN 有两个矩阵，参数数是：
 
-$$N_{\text{GELU}}=Dd_{\mathrm{ff}}^{\mathrm{GELU}}+d_{\mathrm{ff}}^{\mathrm{GELU}}D=2Dd_{\mathrm{ff}}^{\mathrm{GELU}}$$
+$$N_{\mathrm{GELU}}=Dd_{\mathrm{ff}}^{\mathrm{GELU}}+d_{\mathrm{ff}}^{\mathrm{GELU}}D=2Dd_{\mathrm{ff}}^{\mathrm{GELU}}$$
 
 SwiGLU 有三个矩阵，参数数是：
 
-$$N_{\text{SwiGLU}}=Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}D=3Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}$$
+$$N_{\mathrm{SwiGLU}}=Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}+d_{\mathrm{ff}}^{\mathrm{SwiGLU}}D=3Dd_{\mathrm{ff}}^{\mathrm{SwiGLU}}$$
 
 两个式子都是“每张矩阵 = 行数 × 列数”再加起来：GELU 版两张，SwiGLU 版三张。
 
-其中：$N_{\text{GELU}}$、$N_{\text{SwiGLU}}$ 是一个 FFN 的无 bias 参数数；$D$ 是模型宽度；$d_{\mathrm{ff}}^{\mathrm{GELU}}$ 是 GELU FFN 的中间宽度；$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 是 SwiGLU 的中间宽度。
+其中：$N_{\mathrm{GELU}}$、$N_{\mathrm{SwiGLU}}$ 是一个 FFN 的无 bias 参数数；$D$ 是模型宽度；$d_{\mathrm{ff}}^{\mathrm{GELU}}$ 是 GELU FFN 的中间宽度；$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ 是 SwiGLU 的中间宽度。
 
 如果 $d_{\mathrm{ff}}^{\mathrm{GELU}}=d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=4D$，后者的矩阵参数多 50%。然后拿训练 loss 比较并宣布“门控优于 GELU”，就把增加参数的影响混进来了。令两者相等，可得 $d_{\mathrm{ff}}^{\mathrm{SwiGLU}}=2d_{\mathrm{ff}}^{\mathrm{GELU}}/3$；当 $d_{\mathrm{ff}}^{\mathrm{GELU}}=4D$ 时，$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\approx8D/3$。这种收窄门控 FFN 的比较思路也出现在 GLU 变体论文中。[来源 2]
 

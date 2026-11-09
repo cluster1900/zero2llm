@@ -139,12 +139,12 @@ layers.append((k, v))
 本章 K、V 每头同宽，且不量化。$L$ 层、batch $B$、长度 $T$、每个数 $b_{\mathrm{elem}}$ 字节时：
 
 $$
-\text{KV 字节数}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}
+\mathrm{Mem}_{KV}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}
 $$
 
 它和 P11.6 的 MHA 账本是同一张表，只是把“每层存几份头”从 $H$ 换成真正保存的 $H_{kv}$：query 头再多，只要共用 KV 头，缓存就按 KV 头数算。
 
-其中：$L$ 是层数；$B$ 是批大小；$T$ 是缓存的 token 数；$H_{kv}$ 是 KV 头数；$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是每个元素的字节数；开头的 2 表示 K、V 两份。
+其中：$\mathrm{Mem}_{KV}$ 是全部层 K/V 缓存的逻辑字节数（KV 字节数）；$L$ 是层数；$B$ 是批大小；$T$ 是缓存的 token 数；$H_{kv}$ 是 KV 头数；$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是每个元素的字节数；开头的 2 表示 K、V 两份。
 
 固定 $H_q$ 和 $d_h$，缓存相对 MHA 的比例是 $H_{kv}/H_q$，不是其平方。query 不在这个缓存里。
 
