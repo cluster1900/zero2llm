@@ -6576,7 +6576,7 @@ $$
 
 其中：$W_{\mathrm{merged}}$ 是合并后的普通权重，和 $W_0$ 同形，前向写 $y=xW_{\mathrm{merged}}^\top$；$W_0$、$W_B$、$W_A$、$\alpha$、$r$ 同上。
 
-于是 `W_merged x` 与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：
+于是 $xW_{\mathrm{merged}}^\top$ 与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：
 
 $$
 W_{\mathrm{merged}}=\begin{bmatrix}7&2&15\\2&5&2\end{bmatrix}.
@@ -6625,7 +6625,7 @@ LoRA 不是数据审校器，也不能保证不遗忘既有能力。SFT 通过�
 
 “问红 → 红”的八个输入位置，哪些 labels 保留？哪些 logits 被评分？若两个正确目标概率分别为 0.5、0.25，平均 loss 是多少？
 
-**参考答案：** labels 仅位置 6=13、7=6，其余为 -100；logits 位置 5、6 被评分；N=2，loss≈1.03972077。不能把 labels 提前左移，也不能除以八。对应 `test_hand_example_literal_ids`、`test_scalar_loss_hand_answer_and_large_offsets` 与独立 log-probability 测试。
+**参考答案：** labels 仅位置 6=13、7=6，其余为 -100；logits 位置 5、6 被评分；$N_{\mathrm{valid}}=2$，loss≈1.03972077。不能把 labels 提前左移，也不能除以八。对应 `test_hand_example_literal_ids`、`test_scalar_loss_hand_answer_and_large_offsets` 与独立 log-probability 测试。
 
 ### 题 2：多轮与 EOS
 
@@ -6673,7 +6673,7 @@ $W_B$ 初始为零时，$W_A$ 第一轮梯度为零，是 bug 吗？所有 label
 
 ## 本章小结与来源边界
 
-SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 A/B 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
+SFT 的第一步不是选显卡，而是确定“谁的哪几个 token 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩 $W_A$、$W_B$ 表示允许学习的更新。参数更少不代表模型更小到只剩 adapter，也不代表数据更可靠。
 
 来源按附录 H 所列日期核验，固定版本而非追随 latest：
 

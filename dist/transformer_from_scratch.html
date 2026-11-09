@@ -12743,7 +12743,7 @@ class="math inline">\(W_B\)</span>、<span
 class="math inline">\(W_A\)</span>、<span
 class="math inline">\(\alpha\)</span>、<span
 class="math inline">\(r\)</span> 同上。</p>
-<p>于是 <code>W_merged x</code>
+<p>于是 <span class="math inline">\(xW_{\mathrm{merged}}^\top\)</span>
 与原先两条支路之和在实数算术中相等。上一节手算例子的合并权重为：</p>
 <p><span class="math display">\[
 W_{\mathrm{merged}}=\begin{bmatrix}7&amp;2&amp;15\\2&amp;5&amp;2\end{bmatrix}.
@@ -12820,8 +12820,9 @@ forcing loss
 <p>“问红 → 红”的八个输入位置，哪些 labels 保留？哪些 logits
 被评分？若两个正确目标概率分别为 0.5、0.25，平均 loss 是多少？</p>
 <p><strong>参考答案：</strong> labels 仅位置 6=13、7=6，其余为
--100；logits 位置 5、6 被评分；N=2，loss≈1.03972077。不能把 labels
-提前左移，也不能除以八。对应
+-100；logits 位置 5、6 被评分；<span
+class="math inline">\(N_{\mathrm{valid}}=2\)</span>，loss≈1.03972077。不能把
+labels 提前左移，也不能除以八。对应
 <code>test_hand_example_literal_ids</code>、<code>test_scalar_loss_hand_answer_and_large_offsets</code>
 与独立 log-probability 测试。</p>
 <h3 id="题-2多轮与-eos">题 2：多轮与 EOS</h3>
@@ -12894,7 +12895,9 @@ held-out 质量评估。</p>
 <p>SFT 的第一步不是选显卡，而是确定“谁的哪几个 token
 在被学习”。模板决定输入，causal shift 决定预测对齐，label mask
 决定评分位置；三者必须一起检查。LoRA 另管一件事：冻结基础权重，用低秩
-A/B 表示允许学习的更新。参数更少不代表模型更小到只剩
+<span class="math inline">\(W_A\)</span>、<span
+class="math inline">\(W_B\)</span>
+表示允许学习的更新。参数更少不代表模型更小到只剩
 adapter，也不代表数据更可靠。</p>
 <p>来源按附录 H 所列日期核验，固定版本而非追随 latest：</p>
 <ul>
