@@ -3195,6 +3195,17 @@ class="math inline">\([T,D]\)</span>。</li>
 <li>加权时，权重列和 <span class="math inline">\(V\)</span>
 的行同步换序，因此各 token 收集的内容并没改变；输出只跟着输入换行。</li>
 </ol>
+<p>下面这张图把四步串起来：没有位置信息时，注意力只跟着行置换走，认不出谁在谁前面。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-ch05-permutation-equivariance.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ch05-permutation-equivariance.svg"
+class="book-diagram" width="256"
+alt="没有位置信息时，换序只让注意力跟着换行。X 形状为 [T,D]，按置换 P 换行后，共用投影使 Q、K、V 的行同步换；分数表的行与列也同步换；乘完 V 后输出等于 P 作用在原 Attention(X) 上。" /></a>
+<div class="diagram-caption">
+没有位置信息时，换序只让注意力跟着换行
+</div>
+</div>
 <p>于是“吃”仍然面对同一个邻居集合，它不知道小猫在自己前面还是后面。若最后再对所有行求和或平均，这种不依赖顺序的汇总才是<strong>置换不变</strong>。</p>
 <h3 id="一次能运行的换词实验">一次能运行的换词实验</h3>
 <p>为了不被投影参数干扰，令 <span
@@ -3868,6 +3879,20 @@ mask 或有限缓存，即使采用正弦，也可能先在实现处越界。可
 输入改变了分布。能跑完前向不等于预测正确；仍需在更长长度上测 loss
 或具体任务表现，并检查资源成本。</li>
 </ol>
+<p>以训练最长 <span
+class="math inline">\(T_{\mathrm{train}}=8\)</span>、测试 <span
+class="math inline">\(T=12\)</span>
+为例，三本账互不蕴含：能算出编码、实现不越界、任务质量保持，是三件不同的事。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-ch05-length-three-ledgers.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-ch05-length-three-ledgers.svg"
+class="book-diagram" width="361"
+alt="长度要分三本账：能算、不越界、质量保持互不蕴含。训练最长 T_train=8、测试 T=12 时，正弦公式能给出 [12,D] 且前 8 行不变；实现仍可能因位置表、mask 或缓存越界；任务质量还要另测 loss。三本账彼此独立。" /></a>
+<div class="diagram-caption">
+长度要分三本账：能算、不越界、质量保持互不蕴含
+</div>
+</div>
 <p>代码的 <code>length_example()</code> 只做前两项的微型检查，打印：</p>
 <pre class="text"><code>可学习表参数=64；位置 8 越界=True
 正弦扩展形状=(12, 8)；前 8 行不变=True</code></pre>
