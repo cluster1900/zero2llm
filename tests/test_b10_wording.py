@@ -17,8 +17,9 @@ CHANGED = [
     ("assets/diagrams/transformer_block.svg", "任意堆叠", "• 像乐高一样可重复堆叠！"),
     ("chapters/06_residual_layernorm_ffn.md", "图中的“无损直达”“任意堆叠”", "图中的“残差直通”“可重复堆叠”不是总梯度或训练效果的保证"),
     ("chapters/07_encoder_decoder.md", "不是每一轮都重新读完一切", "## 7.6 Prefill 与 decode：本章仍整段重算\n\n前面几节讲的是带编码器的翻译双塔；这一节换成只有 decoder、没有编码器的续写"),
-    ("chapters/08c_modern_block.md", "L=2、H=4", "设置 V=57、D=48、L=2、头数 n_head=4，embedding"),
-    ("chapters/08c_modern_block.md", None, "MHA 投影一行 2×4×48² 中的 4 指 Q、K、V、O 四个 48×48 矩阵，不是头数 n_head"),
+    # bot-hub#126 F5：附录 A.5 统一后 H 只表示头数，FFN 宽度改记 d_ff / d_ff'，词表大小记 |V|。
+    ("chapters/08c_modern_block.md", "头数 n_head=4", "设置 $\\lvert\\mathcal V\\rvert=57$、D=48、L=2、头数 $H=4$，embedding"),
+    ("chapters/08c_modern_block.md", "本章的 H 仍只表示 FFN 宽度", "MHA 投影一行 2×4×48² 中的 4 指 Q、K、V、O 四个 48×48 矩阵，不是头数 $H$；FFN 的中间宽度另记为 $d_{\\mathrm{ff}}$、$d_{\\mathrm{ff}}'$。"),
     ("chapters/08i_pretraining_pipeline.md", None, "2,040 参数的玩具实验只演示数据到训练再到恢复的流程，规模太小，不能用来检验 Chinchilla、6ND 或涌现这类缩放律结论。"),
 ]
 
@@ -66,7 +67,10 @@ class TestB10Wording(unittest.TestCase):
         self.assertEqual(doc.count("代码测试会发现：预测被忽略 token 的那组 logits"), 1)
 
     def test_08c_head_symbol_guard(self):
-        self.assertIsNone(re.search(r"(?<![\w_])H=4(?!D)", read("chapters/08c_modern_block.md")))
+        # bot-hub#126 F5：H 改为只表示头数（附录 A.5），守卫反过来：08c 里不能再把 H 当 FFN 宽度。
+        text = read("chapters/08c_modern_block.md")
+        self.assertIsNone(re.search(r"(?<![\w_{])H=(4D|192)|D→H|H→D|2DH|M=(128|192)\b", text))
+        self.assertNotIn("n_head", text)
 
     def test_no_legacy_ch9_title(self):
         self.assertNotIn("旧版第 9 章", read("chapters/09_modern_llms.md"))
