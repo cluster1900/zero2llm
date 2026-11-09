@@ -70,8 +70,8 @@ V3 的 MTP 是**顺序模块**，不是在同一 hidden state 上并排挂几个
 flowchart TD
     %% id: p26-mtp-depth
     accTitle: 顺序 MTP：每一深度接上上一表示和对应 token 向量
-    accDescr: 主干 x_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，共享输出头预测 t+2；更深依此类推；训练用真 token，部署不能偷看。
-    A["主干表示 x_t"] --> B["主头 → 预测 t+1"]
+    accDescr: 主干 h_t 由主头预测 t+1；深度 1 把上一表示与 emb(t+1) 送入额外 Transformer 块，共享输出头预测 t+2；更深依此类推；训练用真 token，部署不能偷看。
+    A["主干表示 h_t"] --> B["主头 → 预测 t+1"]
     A --> C["深度 1：上一表示 + emb(t+1)"]
     C --> D["额外 Transformer 块"]
     D --> E["共享输出头 → 预测 t+2"]

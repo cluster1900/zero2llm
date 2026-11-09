@@ -248,7 +248,7 @@
     },
     "flow-p26-mtp-depth": {
       "kind": "mermaid",
-      "sha256": "21289dbd09db50254083925bd52a28c0e77fc87900d76a0a0d2cd089cee60c30",
+      "sha256": "5dee6959d70469eb2ab2b4032dfc19e4748c8fc2bd888c15b0ad05ab77876ce1",
       "renderer": "scripts/render_diagrams.mjs mermaid@11.17.2 @mermaid-js/mermaid-cli@11.12.0 puppeteer@23.11.1"
     },
     "flow-p26-vision-pack": {
