@@ -323,17 +323,13 @@ def build_html(document_path):
     print(f"✓ 同步生成入口: {index_out}")
     return True
 
-def main(renderer=None):
+def main(renderer=None, cache_dir=None, renderer_label=None):
     print("=" * 65)
     print("【Transformer 初学者启蒙书：全自动编译交付流水线】")
     print("=" * 65)
     if not require_command("pandoc", "EPUB 和 HTML 都需要它"):
         return 1
-    if renderer is None and not require_command("node", "预渲染全书图表需要 Node.js；安装后先运行 npm ci"):
-        return 1
-    if renderer is None and not os.path.isdir(os.path.join(BASE_DIR, "node_modules", "@mermaid-js", "mermaid-cli")):
-        print("❌ 缺少图表构建依赖，请先运行 npm ci")
-        return 1
+    # Node.js / npm ci 只在有新增或改动的图需要渲染时才用到；未改动的图复用上次的渲染。
     ensure_dirs()
     # GitHub Pages 以静态文件方式发布 dist/，避免 Jekyll 改写资源路径。
     with open(os.path.join(DIST_DIR, ".nojekyll"), "w", encoding="utf-8") as f:
@@ -341,6 +337,12 @@ def main(renderer=None):
     
     # 1. 复制资源文件到 dist/ 以便相对路径正常解析
     dist_assets = os.path.join(DIST_DIR, "assets")
+    # 上次构建的图表渲染先挪到临时缓存：源码未变的图直接复用，不重新渲染（docs/diagrams.md）。
+    cache_root = tempfile.TemporaryDirectory(prefix="zero2llm-render-cache-")
+    previous_render = os.path.join(dist_assets, "rendered")
+    if cache_dir is None and os.path.isdir(previous_render):
+        cache_dir = os.path.join(cache_root.name, "rendered")
+        shutil.copytree(previous_render, cache_dir)
     if os.path.exists(dist_assets):
         shutil.rmtree(dist_assets)
     shutil.copytree(ASSETS_DIR, dist_assets)
@@ -362,14 +364,21 @@ def main(renderer=None):
     # 3. 在临时目录准备两种输出的文档树；任何图表失败都会终止构建。
     try:
         with tempfile.TemporaryDirectory(prefix="zero2llm-") as temp_dir:
-            epub_doc, html_doc = prepare_documents(merged_md, temp_dir, BASE_DIR, MD_FORMAT, renderer=renderer)
+            epub_doc, html_doc = prepare_documents(merged_md, temp_dir, BASE_DIR, MD_FORMAT, renderer=renderer,
+                                                   cache_dir=cache_dir, renderer_label=renderer_label)
             epub_ok = build_epub(epub_doc)
             html_ok = build_html(html_doc)
         if epub_ok and html_ok:
             check_book(DIST_DIR)
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"❌ 构建或产物校验失败：{exc}")
+        # 渲染中途失败时，把上次的渲染放回去，免得丢掉还没提交的新图。
+        if cache_dir and not os.path.isfile(os.path.join(previous_render, "manifest.json")):
+            shutil.rmtree(previous_render, ignore_errors=True)
+            shutil.copytree(cache_dir, previous_render)
         return 1
+    finally:
+        cache_root.cleanup()
 
     print("\n" + "=" * 65)
     if epub_ok and html_ok:

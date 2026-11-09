@@ -11,6 +11,20 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
 
+try:
+    from scripts.diagram_ids import MANIFEST, mermaid_blocks, mermaid_id, sha256_bytes, sha256_text
+except ImportError:  # run as `python scripts/check_book.py`
+    from diagram_ids import MANIFEST, mermaid_blocks, mermaid_id, sha256_bytes, sha256_text
+
+# Mermaid source must never reach a reader: an EPUB <pre>/<code> element that
+# starts with a diagram header (after optional front matter and %% comment
+# lines such as `%% id:` / `%% accTitle:`) means a block escaped pre-rendering.
+MERMAID_SOURCE = re.compile(
+    r'^\s*(?:---\n.*?\n---\s*\n\s*)?(?:%%[^\n]*\n\s*)*(?:flowchart\s|sequenceDiagram\b|mindmap\b'
+    # Other diagram keywords are ordinary words too, so require a following line.
+    r'|(?:graph\s+(?:TB|TD|BT|RL|LR)|stateDiagram(?:-v2)?|block-beta|gantt|classDiagram|architecture-beta'
+    r'|erDiagram|journey|timeline|pie|quadrantChart|xychart-beta|sankey-beta|gitGraph)\b[^\n]*\n)', re.S)
+
 
 class WebDocument(HTMLParser):
     def __init__(self):
@@ -49,11 +63,52 @@ def check_dist_md_matches_chapters(dist):
     return None
 
 
+def check_render_manifest(dist, markdown, sizes):
+    """Every rendered figure must come from the current source (stable id + sha256)."""
+    errors = []
+    path = dist / 'assets/rendered' / MANIFEST
+    if not path.is_file():
+        return [f'缺少渲染清单：assets/rendered/{MANIFEST}']
+    manifest = json.loads(path.read_text())['diagrams']
+    if list(manifest) != list(sizes):
+        errors.append('渲染清单与 dimensions.json 的图表 id 不一致')
+    wanted = {}
+    for definition in mermaid_blocks(markdown):
+        try:
+            diagram_id = mermaid_id(definition)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        if wanted.setdefault(diagram_id, sha256_text(definition)) != sha256_text(definition):
+            errors.append(f'两张不同的 Mermaid 图用了同一个 id：{diagram_id}')
+    for diagram_id, digest in wanted.items():
+        entry = manifest.get(diagram_id)
+        if not entry or entry.get('kind') != 'mermaid':
+            errors.append(f'Mermaid 图没有渲染：{diagram_id}')
+        elif entry.get('sha256') != digest:
+            errors.append(f'Mermaid 图的渲染已过期（源码改了但没重新构建）：{diagram_id}')
+    for diagram_id, entry in manifest.items():
+        if entry.get('kind') == 'mermaid':
+            if diagram_id not in wanted:
+                errors.append(f'渲染清单里有书稿中不存在的 Mermaid 图：{diagram_id}')
+        elif entry.get('kind') == 'static':
+            source = dist / entry.get('source', '')
+            if not source.is_file():
+                errors.append(f'静态图源文件缺失：{diagram_id}')
+            elif sha256_bytes(source.read_bytes()) != entry.get('sha256'):
+                errors.append(f'静态图的渲染已过期（SVG 改了但没重新构建）：{diagram_id}')
+        else:
+            errors.append(f'渲染清单条目类型未知：{diagram_id}')
+    return errors
+
+
 def check_book(dist_dir):
     dist = Path(dist_dir)
     errors = []
-    expected_flows = len(re.findall(r'^```mermaid\s*$', (dist / 'transformer_from_scratch.md').read_text(), re.M))
+    markdown = (dist / 'transformer_from_scratch.md').read_text()
+    expected_flows = len(re.findall(r'^```mermaid\s*$', markdown, re.M))
     sizes = json.loads((dist / 'assets/rendered/dimensions.json').read_text())
+    errors.extend(check_render_manifest(dist, markdown, sizes))
     if len([key for key in sizes if key.startswith('flow-')]) != expected_flows:
         errors.append('渲染图表数量与书稿不一致')
     for name, size in sizes.items():
@@ -85,7 +140,7 @@ def check_book(dist_dir):
                 tag = el.tag.rsplit('}', 1)[-1]
                 if 'mermaid' in el.get('class', '').split() or tag == 'script':
                     errors.append(f'EPUB 遗留未渲染图表或脚本：{name}')
-                if tag in ('pre', 'code') and re.match(r'\s*(flowchart |sequenceDiagram\b|mindmap\b)', ''.join(el.itertext())):
+                if tag in ('pre', 'code') and MERMAID_SOURCE.match(''.join(el.itertext())):
                     errors.append(f'EPUB 出现流程图源码：{name}')
                 if tag == 'img':
                     epub_images += 1
