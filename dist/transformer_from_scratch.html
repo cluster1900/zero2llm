@@ -17562,7 +17562,15 @@ class="math inline">\((1\times2+3\times4)/4=3.5\)</span>；</li>
 都可能被忽略，但 attention mask 和 loss mask 仍是两件事，见 <a
 href="#p19-pretraining">P19</a>。</p>
 <h3 id="p28.a5-symbols">A.5 全书符号约定：一个字母，一种意思</h3>
-<p>公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的<strong>全局符号</strong>，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。个别章节若暂时写法不同，以本表为准。</p>
+<p>公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的<strong>全局符号</strong>，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式<strong>要改成的写法</strong>；某章还没改写完成时，以该式的「其中：」为准。附录自己的
+A.1、A.2、D.1、F.0 也属于后续改写批次：其中 A.1 的交叉熵 <span
+class="math inline">\(L\)</span> 与 <span
+class="math inline">\(\mathrm{softmax}(QK^T/\cdots)\)</span>、A.2
+的每头宽度 <span class="math inline">\(d\)</span>、D.1 的 <span
+class="math inline">\(d_{\mathrm{head}}\)</span> 与字节数 <span
+class="math inline">\(s\)</span>、F.0 的 <span
+class="math inline">\(\bar L\)</span>
+暂时保留旧写法，读的时候按本表换算。</p>
 <p><strong>尺寸与计数</strong></p>
 <div class="table-wrapper"><table>
 <colgroup>
@@ -17582,7 +17590,7 @@ href="#p19-pretraining">P19</a>。</p>
 <tbody>
 <tr>
 <td><span class="math inline">\(B\)</span></td>
-<td>batch 大小：一次并排处理几条序列</td>
+<td>批大小：一次并排处理几条序列</td>
 <td>例：<span class="math inline">\(B=2\)</span></td>
 <td>不作缩放定律里的常数</td>
 </tr>
@@ -17593,6 +17601,13 @@ href="#p19-pretraining">P19</a>。</p>
 <td>例：<span class="math inline">\(T=3\)</span></td>
 <td>转置写 <span class="math inline">\(^\top\)</span>；温度写 <span
 class="math inline">\(\tau\)</span></td>
+</tr>
+<tr>
+<td><span class="math inline">\(T_q,\ T_{kv}\)</span></td>
+<td>同一个式子里同时出现两种长度时：本次 query 的个数、可读 key/value
+的个数</td>
+<td>增量解码时 <span class="math inline">\(T_q=1\)</span></td>
+<td>只有一种长度时直接写 <span class="math inline">\(T\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(T_{\mathrm{train}}\)</span></td>
@@ -17619,20 +17634,24 @@ R^{\lvert\mathcal V\rvert\times D}\)</span></td>
 <td><span class="math inline">\(H\)</span></td>
 <td>注意力头数（GQA 中指 query 头数，也可写 <span
 class="math inline">\(H_q\)</span>）</td>
-<td><span class="math inline">\(D=H d_h\)</span></td>
-<td>FFN 隐藏宽度不用 <span class="math inline">\(H\)</span></td>
+<td>例：<span class="math inline">\(H=2\)</span></td>
+<td>FFN 隐藏宽度不用 <span class="math inline">\(H\)</span>；P17
+的层表示 <span class="math inline">\(H^{(l)}\)</span> 改为 <span
+class="math inline">\(X^{(l)}\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(H_{kv}\)</span></td>
 <td>KV 头数：MHA 时 <span class="math inline">\(H_{kv}=H\)</span>，MQA
 时为 1</td>
 <td><span class="math inline">\(1\le H_{kv}\le H\)</span></td>
-<td>正文不写成 <code>H_kv</code></td>
+<td>正文写数学符号 <span
+class="math inline">\(H_{kv}\)</span>，不写代码标识符
+<code>H_kv</code></td>
 </tr>
 <tr>
 <td><span class="math inline">\(d_h\)</span></td>
-<td>每个头的宽度</td>
-<td><span class="math inline">\(d_h=D/H\)</span></td>
+<td>单个头的宽度（Q/K/V 各头等宽时）</td>
+<td>例：<span class="math inline">\(d_h=4\)</span></td>
 <td>不再写 <span class="math inline">\(d\)</span>、<span
 class="math inline">\(D_{head}\)</span>、<span
 class="math inline">\(d_{\mathrm{head}}\)</span></td>
@@ -17662,10 +17681,10 @@ class="math inline">\(T\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(N_E\)</span></td>
-<td>MoE 的专家个数；第 <span class="math inline">\(e\)</span> 个专家记
-<span class="math inline">\(F_e\)</span></td>
-<td>路由权重 <span class="math inline">\(W_r\in\mathbb R^{N_E\times
-D}\)</span></td>
+<td>MoE 的路由专家个数；第 <span class="math inline">\(e\)</span>
+个专家记 <span class="math inline">\(F_e\)</span></td>
+<td>路由矩阵按 <span class="math inline">\([N_E,D]\)</span> 存，打分
+<span class="math inline">\(z=xW_r^\top\)</span></td>
 <td><span class="math inline">\(E\)</span> 只指 embedding 表</td>
 </tr>
 <tr>
@@ -17686,6 +17705,21 @@ class="math inline">\(D\)</span></td>
 </tr>
 </tbody>
 </table></div>
+<p><strong>头宽与模型宽度的关系要带条件。</strong>
+只有在「各头等宽，且所有头拼起来的投影总宽等于 <span
+class="math inline">\(D\)</span>」时，才有 <span
+class="math inline">\(D=Hd_h\)</span>、<span
+class="math inline">\(d_h=D/H\)</span>，输出投影 <span
+class="math inline">\(W_O\)</span> 才是 <span
+class="math inline">\([D,D]\)</span> 的方阵。一般情况下 <span
+class="math inline">\(W_O\)</span> 的形状是 <span
+class="math inline">\([Hd_v,D]\)</span>（原论文写作 <span
+class="math inline">\(hd_v\times
+d_{\mathrm{model}}\)</span>）。反例就在本书里：附录 E.2 的 Qwen3 配置
+<span class="math inline">\(D=1024\)</span>、16 个头、每头 128，Q 投影宽
+<span class="math inline">\(16\times128=2048\neq D\)</span>；P25
+的微型配置也刻意保留 <span class="math inline">\(H_qd_h\neq
+D\)</span>。</p>
 <p><strong>张量与运算</strong></p>
 <div class="table-wrapper"><table>
 <colgroup>
@@ -17709,8 +17743,13 @@ class="math inline">\(D\)</span></td>
 D]\)</span></td>
 </tr>
 <tr>
-<td><span class="math inline">\(X\)</span></td>
-<td>一层的输入表示，一行一个位置</td>
+<td><span class="math inline">\(X\)</span>、<span
+class="math inline">\(X^{(l)}\)</span></td>
+<td>一层的输入表示（隐藏状态），一行一个位置；<span
+class="math inline">\(X^{(l)}\)</span> 是第 <span
+class="math inline">\(l\)</span> 层的输入，其中第 <span
+class="math inline">\(i\)</span> 行记 <span
+class="math inline">\(x_i^{(l)}\)</span></td>
 <td><span class="math inline">\([T,D]\)</span>，带 batch 时 <span
 class="math inline">\([B,T,D]\)</span></td>
 </tr>
@@ -17725,8 +17764,10 @@ class="math inline">\([T,d_v]\)</span></td>
 <td><span class="math inline">\(W_Q,\ W_K,\ W_V,\ W_O\)</span></td>
 <td>Q/K/V 投影与输出投影；第 <span class="math inline">\(h\)</span>
 个头的写 <span class="math inline">\(W_h^Q\)</span> 等</td>
-<td><span class="math inline">\(W_Q:[D,d_k]\)</span>，<span
-class="math inline">\(W_O:[D,D]\)</span></td>
+<td><span class="math inline">\(W_Q:[D,d_k]\)</span>；<span
+class="math inline">\(W_O:[Hd_v,D]\)</span>，等宽且总宽为 <span
+class="math inline">\(D\)</span> 时为 <span
+class="math inline">\([D,D]\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(s_{ij}\)</span></td>
@@ -17739,6 +17780,18 @@ class="math inline">\(j\)</span> 个 key 的缩放分数</td>
 <td>加性 mask：允许看的位置为 0，禁看的位置为 <span
 class="math inline">\(-\infty\)</span></td>
 <td><span class="math inline">\([T,T]\)</span></td>
+</tr>
+<tr>
+<td><span class="math inline">\(p_i\)</span></td>
+<td>概率：softmax 输出的第 <span class="math inline">\(i\)</span>
+项</td>
+<td>标量，各项和为 1</td>
+</tr>
+<tr>
+<td><span class="math inline">\(u\)</span></td>
+<td>注意力子层加完残差后的结果，<span
+class="math inline">\(u=x+\operatorname{Attention}(\cdot)\)</span></td>
+<td>与 <span class="math inline">\(x\)</span> 同形</td>
 </tr>
 <tr>
 <td><span class="math inline">\(\mathcal L\)</span></td>
@@ -17767,21 +17820,171 @@ class="math inline">\(-\infty\)</span></td>
 </tr>
 </tbody>
 </table></div>
+<p><strong>改名对照：各章旧写法换成什么</strong></p>
+<div class="table-wrapper"><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>出现在哪里</th>
+<th>旧写法</th>
+<th>新写法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P15、P17 的序列长度</td>
+<td><span class="math inline">\(N\)</span></td>
+<td><span class="math inline">\(T\)</span>（两种长度同时出现时用 <span
+class="math inline">\(T_q\)</span>、<span
+class="math inline">\(T_{kv}\)</span>）</td>
+</tr>
+<tr>
+<td>第 5 章的位置、最大位置数</td>
+<td><span class="math inline">\(pos\)</span>、<span
+class="math inline">\(L_{max}\)</span></td>
+<td><span class="math inline">\(t\)</span>、<span
+class="math inline">\(T_{\max}\)</span></td>
+</tr>
+<tr>
+<td>P12 RoPE 的位置</td>
+<td><span class="math inline">\(p\)</span></td>
+<td><span class="math inline">\(t\)</span>；讨论两个位置的相对距离时用
+<span class="math inline">\(m\)</span>、<span
+class="math inline">\(n\)</span></td>
+</tr>
+<tr>
+<td>P12 YaRN 的扩展倍数</td>
+<td><span class="math inline">\(s\)</span></td>
+<td><span class="math inline">\(\kappa\)</span>（原论文写作 <span
+class="math inline">\(s\)</span>）</td>
+</tr>
+<tr>
+<td>P12 YaRN 的原训练长度</td>
+<td><span class="math inline">\(L\)</span></td>
+<td><span class="math inline">\(T_{\mathrm{train}}\)</span></td>
+</tr>
+<tr>
+<td>第 7 章采样温度、P12 YaRN 温度</td>
+<td><span class="math inline">\(T\)</span>、<span
+class="math inline">\(t\)</span></td>
+<td><span class="math inline">\(\tau\)</span></td>
+</tr>
+<tr>
+<td>P17 的层表示</td>
+<td><span class="math inline">\(H^{(l)}\)</span>、<span
+class="math inline">\(h_i^{(l)}\)</span></td>
+<td><span class="math inline">\(X^{(l)}\)</span>、<span
+class="math inline">\(x_i^{(l)}\)</span></td>
+</tr>
+<tr>
+<td>P17 的编码器输出</td>
+<td><span class="math inline">\(E\)</span></td>
+<td><span class="math inline">\(Z_{\mathrm{enc}}\)</span></td>
+</tr>
+<tr>
+<td>P18 的专家个数</td>
+<td><span class="math inline">\(E\)</span></td>
+<td><span class="math inline">\(N_E\)</span></td>
+</tr>
+<tr>
+<td>P18 的共享专家个数与编号</td>
+<td><span class="math inline">\(S\)</span>、<span
+class="math inline">\(s\)</span></td>
+<td><span class="math inline">\(N_S\)</span>、<span
+class="math inline">\(e&#39;\)</span>（共享专家记 <span
+class="math inline">\(F^{\mathrm{sh}}_{e&#39;}\)</span>）</td>
+</tr>
+<tr>
+<td>P18 的 top-k 选中集合</td>
+<td><span class="math inline">\(K\)</span></td>
+<td><span class="math inline">\(\mathcal I_k\)</span></td>
+</tr>
+<tr>
+<td>P19 Chinchilla 式</td>
+<td><span class="math inline">\(L(N,D)\approx
+E+A/N^\alpha+B/D^\beta\)</span></td>
+<td><span class="math inline">\(\mathcal L\approx
+c_0+c_{\mathrm{param}}/N_{\mathrm{param}}^{\alpha}+c_{\mathrm{tok}}/N_{\mathrm{tok}}^{\beta}\)</span></td>
+</tr>
+<tr>
+<td>P20 的有效位置集合、有效目标数</td>
+<td><span class="math inline">\(\mathcal V\)</span>、<span
+class="math inline">\(N\)</span></td>
+<td><span class="math inline">\(\Omega\)</span>、<span
+class="math inline">\(N_{\mathrm{valid}}=\lvert\Omega\rvert\)</span></td>
+</tr>
+<tr>
+<td>P23 MTP 的额外 head 个数（深度）</td>
+<td><span class="math inline">\(D\)</span></td>
+<td><span class="math inline">\(n_{\mathrm{mtp}}\)</span></td>
+</tr>
+<tr>
+<td>P23 第 <span class="math inline">\(j\)</span> 个 horizon
+的有效位置集合</td>
+<td><span class="math inline">\(M_j\)</span></td>
+<td><span class="math inline">\(\Omega_j\)</span></td>
+</tr>
+<tr>
+<td>P23 的辅助损失权重</td>
+<td><span class="math inline">\(\lambda\)</span></td>
+<td><span class="math inline">\(w_{\mathrm{mtp}}\)</span>（<span
+class="math inline">\(\lambda\)</span> 只留给 YaRN 的波长）</td>
+</tr>
+<tr>
+<td>P23 的位置隐藏向量</td>
+<td><span class="math inline">\(h_t\)</span></td>
+<td><span class="math inline">\(x_t\)</span>（<span
+class="math inline">\(X\)</span> 的第 <span
+class="math inline">\(t\)</span> 行），按行向量写成 <span
+class="math inline">\(x_tW_j\)</span></td>
+</tr>
+<tr>
+<td>P22 GRPO 的回复长度</td>
+<td><span class="math inline">\(L_i\)</span></td>
+<td><span class="math inline">\(T_i\)</span></td>
+</tr>
+<tr>
+<td>P13 SwiGLU 的 up 分支</td>
+<td><span class="math inline">\(u=xW_u\)</span></td>
+<td><span
+class="math inline">\(a_{\mathrm{up}}=xW_{\mathrm{up}}\)</span>（<span
+class="math inline">\(u\)</span> 只指残差结果）</td>
+</tr>
+<tr>
+<td>P11、P12、P14、P24、P25、P27 的 KV 字节式</td>
+<td><span class="math inline">\(s\)</span>、<span
+class="math inline">\(b_{KV}\)</span>、<span
+class="math inline">\(d\)</span>、<span
+class="math inline">\(D_{head}\)</span></td>
+<td><span
+class="math inline">\(2LBH_{kv}Td_hb_{\mathrm{elem}}\)</span>，<span
+class="math inline">\(b_{\mathrm{elem}}\)</span> 按每个张量元素计</td>
+</tr>
+</tbody>
+</table></div>
 <p><strong>下标与写法</strong></p>
 <ul>
-<li>下标字母只当“编号”：<span class="math inline">\(i\)</span>、<span
+<li>编号字母：<span class="math inline">\(i\)</span>、<span
 class="math inline">\(j\)</span> 是 query、key 的位置，<span
 class="math inline">\(t\)</span> 是时间步或当前位置，<span
-class="math inline">\(p\)</span> 是 RoPE 里的位置，<span
-class="math inline">\(h\)</span> 是第几个头，<span
-class="math inline">\(e\)</span>
-是第几个专家。它们只出现在下标里，不和上表的量冲突；第 2 章 RNN
-的记忆状态 <span class="math inline">\(h_t\)</span> 是唯一一处把 <span
-class="math inline">\(h\)</span> 当作量来用的地方，FFN 的中间结果改写为
-<span class="math inline">\(u\)</span>。</li>
+class="math inline">\(m\)</span>、<span class="math inline">\(n\)</span>
+是一对位置，<span class="math inline">\(h\)</span> 是第几个头，<span
+class="math inline">\(e\)</span> 是第几个专家，<span
+class="math inline">\(l\)</span> 是第几层。</li>
+<li>第 2 章 RNN 的记忆状态 <span class="math inline">\(h_t\)</span>、第
+6 章 FFN 激活前的中间结果 <span class="math inline">\(h\)</span>
+是<strong>本章局部字母</strong>，在所在公式的「其中：」里说明；逐层的隐藏状态统一写
+<span class="math inline">\(X^{(l)}\)</span>。</li>
 <li>向量按<strong>行向量</strong>写，线性层写 <span
 class="math inline">\(xW\)</span>；形状用方括号
-<code>[B,T,D]</code>，从左到右是轴的顺序。</li>
+<code>[B,T,D]</code>，从左到右是轴的顺序。权重若按 <span
+class="math inline">\([\text{输出},\text{输入}]\)</span> 存（如 MoE 路由
+<span class="math inline">\(W_r\)</span>），乘的时候写转置 <span
+class="math inline">\(xW_r^\top\)</span>。</li>
 <li>转置统一写 <span class="math inline">\(A^\top\)</span>；Softmax
 统一写 <span
 class="math inline">\(\operatorname{softmax}\)</span>，沿最后一维（key
