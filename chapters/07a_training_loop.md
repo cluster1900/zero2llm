@@ -129,7 +129,7 @@ sequenceDiagram
     accDescr: 训练循环先对参数调用 zero_grad 清空 .grad，再前向得 loss，backward 只写入 .grad，最后 step 读取 .grad 更新参数。
     participant L as 训练循环
     participant P as 参数
-    participant G as ".grad"
+    participant G as .grad
     participant O as AdamW
     L->>G: zero_grad 清空
     L->>P: 前向得 loss

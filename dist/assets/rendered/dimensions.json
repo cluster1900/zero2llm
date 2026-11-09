@@ -76,7 +76,7 @@
     "height": 480
   },
   "flow-ch07-cross-attn-shapes": {
-    "width": 438.5625,
+    "width": 422.4375,
     "height": 358
   },
   "flow-ed42531e828f": {
@@ -84,8 +84,8 @@
     "height": 523
   },
   "flow-ch07-generation-stop": {
-    "width": 523.1859130859375,
-    "height": 463
+    "width": 671.46875,
+    "height": 709
   },
   "flow-ch07a-train-eval-loop": {
     "width": 440.5078125,

@@ -2391,10 +2391,10 @@ flowchart TD
     %% id: ch07-cross-attn-shapes
     accTitle: Cross-attention：查询跟目标走，分数沿源位置归一化
     accDescr: 解码器 Q 形状 [1,2,4]（T_q=2），编码器 K/V 形状 [1,3,4]（T_kv=3）；分数 [1,2,3]，每行对 3 个源位置 Softmax 后加权 V，得到 [1,2,4]。
-    Q["解码器 Q<br/>[1, 2, 4]（T_q=2）"] --> S["分数<br/>[1, 2, 3]"]
-    KV["编码器 K / V<br/>[1, 3, 4]（T_kv=3）"] --> S
+    Q["解码器 Q<br/>[1,2,4]（T_q=2）"] --> S["分数<br/>[1,2,3]"]
+    KV["编码器 K / V<br/>[1,3,4]（T_kv=3）"] --> S
     S --> SM["每行对 3 个源位置 Softmax"]
-    SM --> OUT["加权 V → [1, 2, 4]"]
+    SM --> OUT["加权 V → [1,2,4]"]
 ```
 
 另取一个 $d_v=2$ 的手算例子：给第一行三份资料权重 [0.2,0.3,0.5]，三份 V 分别为 [1,0]、[0,1]、[1,1]，读到的内容便是 [0.7,0.8]，不是机械复制某一个词。
@@ -2493,17 +2493,19 @@ EOS、新增上限、零预算是三个不同出口；追踪表只能演示其�
 ```mermaid
 stateDiagram-v2
     %% id: ch07-generation-stop
-    accTitle: 生成停止：零预算、EOS 与新增上限是三个出口
-    accDescr: 预算为 0 时直接返回不调用模型；生成中每步追加一个 token；遇到 EOS 按 eos 停；新增数达上限按 length 停。
-    [*] --> CheckBudget
-    CheckBudget --> DoneZero: 预算=0 直接返回
-    CheckBudget --> Generating: 预算>0
-    Generating --> Generating: 追加 token
-    Generating --> DoneEos: 遇 EOS
-    Generating --> DoneLen: 达新增上限
-    DoneZero --> [*]: 出口 zero
-    DoneEos --> [*]: 出口 eos
-    DoneLen --> [*]: 出口 length
+    accTitle: 生成停止：先查前缀 EOS，零预算与新增上限都返回 max_new_tokens
+    accDescr: 前缀已以 EOS 结尾则按 eos 返回且不调模型；否则预算为 0 按 max_new_tokens 返回且不调模型；生成中每步追加一个 token，先查 EOS，再查是否达新增上限。
+    [*] --> 检查前缀
+    检查前缀 --> 停于EOS: 前缀已以 EOS 结尾
+    检查前缀 --> 检查预算: 前缀未以 EOS 结尾
+    检查预算 --> 停于上限: 预算为 0（不调模型）
+    检查预算 --> 生成中: 预算大于 0
+    生成中 --> 刚追加: 调用模型并追加 token
+    刚追加 --> 停于EOS: 新 token 是 EOS
+    刚追加 --> 停于上限: 新增数达上限
+    刚追加 --> 生成中: 未停，继续
+    停于EOS --> [*]: 出口 eos
+    停于上限 --> [*]: 出口 max_new_tokens
 ```
 
 这里的上限计**新增 token**，不把 2 个提示 token 算进去；实际框架里的 `max_length` 与 `max_new_tokens` 含义可能不同，调用时需查版本文档。长度停止可能截断一句话；模型预测 EOS 也不代表内容必然完整或正确。
@@ -2696,7 +2698,7 @@ sequenceDiagram
     accDescr: 训练循环先对参数调用 zero_grad 清空 .grad，再前向得 loss，backward 只写入 .grad，最后 step 读取 .grad 更新参数。
     participant L as 训练循环
     participant P as 参数
-    participant G as ".grad"
+    participant G as .grad
     participant O as AdamW
     L->>G: zero_grad 清空
     L->>P: 前向得 loss
