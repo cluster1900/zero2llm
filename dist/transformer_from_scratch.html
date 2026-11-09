@@ -2942,6 +2942,18 @@ equivariance）</strong>，不是“所有输出完全不变”。用 <span
 class="math inline">\(P\)</span> 表示重新排列表格行的操作：</p>
 <p><span
 class="math display">\[\operatorname{Attention}(PX)=P\operatorname{Attention}(X).\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(X\)</span>
+是输入表示，形状 <span class="math inline">\([T,D]\)</span>，一行一个
+token；<span class="math inline">\(T\)</span> 是序列长度（token
+个数），<span class="math inline">\(D\)</span> 是模型宽度；<span
+class="math inline">\(P\)</span> 是 <span
+class="math inline">\([T,T]\)</span> 的置换矩阵，每行、每列恰好有一个
+1，左乘 <span class="math inline">\(PX\)</span> 就是把 <span
+class="math inline">\(X\)</span> 的行换个顺序；<span
+class="math inline">\(\operatorname{Attention}\)</span>
+是上面限定条件下的自注意力。</p>
+<p><strong>白话：</strong>
+先换座位再算注意力，和先算注意力再换座位，结果一模一样。注意力只认“谁和谁在一桌”，不认“谁坐在哪”。</p>
 <p>跟着形状走一遍：</p>
 <ol type="1">
 <li><span class="math inline">\(X\)</span> 的形状是 <span
@@ -2949,7 +2961,7 @@ class="math inline">\([T,D]\)</span>，换序后仍是 <span
 class="math inline">\([T,D]\)</span>。</li>
 <li>共用投影使 <span class="math inline">\(Q,K,V\)</span>
 的行也一起换序。</li>
-<li><span class="math inline">\(QK^T\)</span>
+<li><span class="math inline">\(QK^\top\)</span>
 的查询行、键列同步换序；Softmax 只是在每行内重新排列同一批分数。</li>
 <li>加权时，权重列和 <span class="math inline">\(V\)</span>
 的行同步换序，因此各 token 收集的内容并没改变；输出只跟着输入换行。</li>
@@ -2963,7 +2975,19 @@ class="math inline">\(Q=K=V=X\)</span>，三行分别表示小猫、吃、小鱼
      [1, 1]]        形状 [3, 2]
 换序 order = [2, 1, 0]</code></pre>
 <p>脚本的 <code>permutation_example()</code> 计算 <span
-class="math inline">\(\operatorname{softmax}(XX^T/\sqrt{2})X\)</span>。“吃”的输出在换序前后都是约
+class="math inline">\(\operatorname{softmax}(XX^\top/\sqrt{2})X\)</span>。</p>
+<p><strong>其中：</strong> <span class="math inline">\(XX^\top\)</span>
+是三行两两做点积得到的 <span class="math inline">\([3,3]\)</span>
+分数表；除以 <span class="math inline">\(\sqrt{2}\)</span> 是第 3
+章的缩放，因为这里每行宽度 <span
+class="math inline">\(d_k=2\)</span>；<span
+class="math inline">\(\operatorname{softmax}\)</span>
+沿每一行归一化成权重；最后乘 <span
+class="math inline">\(X\)</span>，按权重把各行加起来。</p>
+<p><strong>白话：</strong> 这就是第 3
+章的缩放点积注意力，只是把三个投影都省掉，让 <span
+class="math inline">\(Q=K=V=X\)</span>，好让换序的效果一眼看清。</p>
+<p>“吃”的输出在换序前后都是约
 <code>[0.5989, 0.8022]</code>。然后给各座位加入本章的正弦编码，只换词、保持座位号不动：</p>
 <pre class="text"><code>不加位置，换序误差=0.000000
 固定座位编码，只换词，换序误差=0.971712</code></pre>
@@ -2994,9 +3018,9 @@ mask：一个告诉模型位置，一个限制哪些内容可见。</p>
 <tr>
 <td style="text-align: left;">可学习绝对位置</td>
 <td style="text-align: left;">“我坐在下标 <span
-class="math inline">\(pos\)</span> 的座位”</td>
+class="math inline">\(t\)</span> 的座位”</td>
 <td style="text-align: left;">一张 <span
-class="math inline">\([L_{max},D]\)</span>
+class="math inline">\([T_{\max},D]\)</span>
 参数表，按位置查行，再与词向量相加</td>
 <td
 style="text-align: left;">表有固定行数；未训练过的行也不会自动具有有用含义</td>
@@ -3021,12 +3045,21 @@ style="text-align: left;">有不同实现；距离可被分桶或截断，不一
 </tr>
 </tbody>
 </table></div>
+<p><strong>其中：</strong> <span class="math inline">\(t\)</span>
+是位置下标（从 0 起，代码里叫 <code>pos</code>）；<span
+class="math inline">\(T_{\max}\)</span>
+是可学习位置表预留的最多位置数，也就是表的行数；<span
+class="math inline">\(T\)</span> 是当前序列长度，<span
+class="math inline">\(D\)</span> 是模型宽度；<span
+class="math inline">\(i\)</span>、<span class="math inline">\(j\)</span>
+分别是查询（query）和键（key）的位置，<span
+class="math inline">\(j-i&gt;0\)</span> 表示键在查询右边。</p>
 <p>原版 Transformer
 对固定正弦与可学习绝对位置都做过实验；论文报告二者在所测翻译设置下效果接近，不能把正弦写成唯一正确答案。[来源
 1，§3.5；表 3(E) 见 §6.2]</p>
 <p>可学习表与词表类似，但索引不同：词向量用 token ID
 查表，位置向量用位置索引查表。例如 <span
-class="math inline">\(L_{max}=8,D=8\)</span> 时，位置表有 <span
+class="math inline">\(T_{\max}=8,D=8\)</span> 时，位置表有 <span
 class="math inline">\(8\times8=64\)</span>
 个可训练参数。固定正弦表没有这 64
 个可训练参数，但把它预先存成矩阵仍然占内存。</p>
@@ -3040,50 +3073,77 @@ class="math inline">\(j-i=3\)</span>；二者同时右移一格，差仍是 3。
 <h3 id="为什么不直接写一个整数">为什么不直接写一个整数？</h3>
 <p>当然可以把位置写成一个标量特征，不是数学上禁止。只是需要处理两个问题：</p>
 <ul>
-<li>直接用 <span class="math inline">\(pos\)</span>
+<li>直接用 <span class="math inline">\(t\)</span>
 时，较大位置可能与词向量分量处于不同尺度；还要决定如何把一个数送进 <span
 class="math inline">\(D\)</span>
 维网络。这是尺度与建模设计问题，不是“整数必然让网络爆炸”。</li>
 <li>若改成 <span
-class="math inline">\(pos/T\)</span>，相邻位置的步长随句长变化：<span
+class="math inline">\(t/T\)</span>，相邻位置的步长随句长变化：<span
 class="math inline">\(T=3\)</span> 时是 <span
 class="math inline">\(1/3\)</span>，<span
 class="math inline">\(T=100\)</span> 时是 <span
 class="math inline">\(1/100\)</span>。同样的“隔一个
 token”，数值差却不同。</li>
 </ul>
+<p><strong>白话：</strong> 相邻两个位置在 <span
+class="math inline">\(t/T\)</span> 下相差 <span
+class="math inline">\(\frac{t+1}{T}-\frac{t}{T}=\frac1T\)</span>，尺子的刻度跟着句长伸缩，模型就没法记住“一格有多长”。</p>
 <p>接下来学习的正弦方案给每个位置一组有界、且不依赖当前句长 <span
 class="math inline">\(T\)</span> 的数字，便于观察这些取舍。</p>
 <h2 id="不同频率把一根指针变成一组指针">5.3
 不同频率：把一根指针变成一组指针</h2>
-<p>本章位置从 0 开始，<span
-class="math inline">\(D=d_{model}\)</span>。公式中的 <span
-class="math inline">\(i\)</span>
+<p>本章位置从 0 开始，<span class="math inline">\(D\)</span>
+是模型宽度（代码里叫 <code>d_model</code>）。公式中的 <span
+class="math inline">\(k\)</span>
 是<strong>维度对的下标</strong>，不是已经乘过 2 的列号：</p>
 <p><span
-class="math display">\[PE_{(pos,2i)}=\sin\left(\frac{pos}{10000^{2i/D}}\right),\]</span></p>
+class="math display">\[PE_{(t,2k)}=\sin\left(\frac{t}{10000^{2k/D}}\right),\]</span></p>
 <p><span
-class="math display">\[PE_{(pos,2i+1)}=\cos\left(\frac{pos}{10000^{2i/D}}\right).\]</span></p>
+class="math display">\[PE_{(t,2k+1)}=\cos\left(\frac{t}{10000^{2k/D}}\right).\]</span></p>
+<p><strong>其中：</strong> <span
+class="math inline">\(PE_{(t,2k)}\)</span>、<span
+class="math inline">\(PE_{(t,2k+1)}\)</span> 是位置编码表中下标 <span
+class="math inline">\(t\)</span> 的那一行里，下标 <span
+class="math inline">\(2k\)</span>（偶数列）和 <span
+class="math inline">\(2k+1\)</span>（紧挨着的奇数列）两格的数；<span
+class="math inline">\(t\)</span> 是位置下标；<span
+class="math inline">\(k=0,1,2,\dots\)</span> 是维度对的下标；<span
+class="math inline">\(D\)</span> 是模型宽度；10000
+是原论文选定的常数，决定最慢那一对转得有多慢。</p>
+<p><strong>白话：</strong> 每两列组成一对“指针”，偶数列读 sin、奇数列读
+cos；<span class="math inline">\(k\)</span>
+越大，分母越大，这对指针转得越慢。同一个位置在快针、慢针上各有一个读数，合起来就是它的座位号。</p>
 <p>两式来自原版 Transformer 的 §3.5。[来源 1]
 这里的角度单位是<strong>弧度</strong>。一个整圆是 <span
 class="math inline">\(2\pi\)</span> 弧度；<span
-class="math inline">\(pos=1\)</span>、分母为 1 时走了 1 弧度，约 57
+class="math inline">\(t=1\)</span>、分母为 1 时走了 1 弧度，约 57
 度，不是一整圈。</p>
-<p>把 <span class="math inline">\(\omega_i=10000^{-2i/D}\)</span>
+<p>把 <span class="math inline">\(\omega_k=10000^{-2k/D}\)</span>
 叫作角频率，就可以写成 <span
-class="math inline">\(\sin(pos\,\omega_i)\)</span>、<span
-class="math inline">\(\cos(pos\,\omega_i)\)</span>。同一对 sin/cos
+class="math inline">\(\sin(t\,\omega_k)\)</span>、<span
+class="math inline">\(\cos(t\,\omega_k)\)</span>。同一对 sin/cos
 使用同一个频率；分母越大，每前进一个位置转过的角度越小。每圈所需的位置间隔，也就是周期，为
-<span class="math inline">\(2\pi/\omega_i\)</span>。</p>
+<span class="math inline">\(2\pi/\omega_k\)</span>。</p>
+<p><strong>其中：</strong> <span class="math inline">\(\omega_k\)</span>
+是维度对 <span class="math inline">\(k\)</span>
+的角频率，即每前进一个位置这对指针转过的弧度，就是附录 A.5 的 <span
+class="math inline">\(\omega_i\)</span>（本章 <span
+class="math inline">\(i\)</span> 已用作查询位置，所以维度对的编号写成
+<span class="math inline">\(k\)</span>）；<span
+class="math inline">\(2\pi\)</span> 是一整圈的弧度；周期 <span
+class="math inline">\(2\pi/\omega_k\)</span> 就是 A.5 所说的波长 <span
+class="math inline">\(\lambda_k\)</span>。<strong>白话：</strong> <span
+class="math inline">\(\omega_k\)</span>
+是这对指针的“转速”，周期就是“转一圈要走几个座位”。</p>
 <p>令 <span class="math inline">\(D=8\)</span>，逐对代入：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
 <th style="text-align: left;">维度对</th>
 <th style="text-align: center;"><span
-class="math inline">\(i\)</span></th>
+class="math inline">\(k\)</span></th>
 <th style="text-align: center;">分母 <span
-class="math inline">\(10000^{2i/8}\)</span></th>
+class="math inline">\(10000^{2k/8}\)</span></th>
 <th style="text-align: center;">角频率</th>
 <th style="text-align: center;">周期，约多少个位置</th>
 </tr>
@@ -3134,10 +3194,10 @@ width="720" alt="图 5-1：不同频率的正弦波形示意" /></a>
 <figcaption>图 5-1：不同频率的正弦波形示意</figcaption>
 </figure>
 <p>图 5-1 为了在位置 0 到 24 的同一画布上看清变化，使用 <span
-class="math inline">\(\sin(pos)\)</span>、<span
-class="math inline">\(\sin(pos/8)\)</span>、<span
-class="math inline">\(\sin(pos/80)\)</span>
-三条示意曲线；<strong>不是下方 <span class="math inline">\(D=8\)</span>
+class="math inline">\(\sin(t)\)</span>、<span
+class="math inline">\(\sin(t/8)\)</span>、<span
+class="math inline">\(\sin(t/80)\)</span> 三条示意曲线；<strong>不是下方
+<span class="math inline">\(D=8\)</span>
 表格中的三个实际列</strong>。图中红点表示算出的函数值。</p>
 <p>这个类比不保证“无限多个座位都有永不重复、容易识别的指纹”。周期分量会回头，组合也可能很接近；浮点精度有限，模型还需要学习如何利用它。我们能核验的是指定长度内的具体数值与关系，而不是任意长上下文的唯一性或可辨识性。</p>
 <h3 id="表-5-2前-8-个位置与全部-8-个维度d8保留两位小数">表 5-2：前 8
@@ -3158,7 +3218,7 @@ class="math inline">\(D=8\)</span>（保留两位小数）</h3>
 <thead>
 <tr>
 <th style="text-align: center;">位置序号 <span
-class="math inline">\(pos\)</span></th>
+class="math inline">\(t\)</span></th>
 <th style="text-align: center;">d0 (<span
 class="math inline">\(\sin\)</span>)</th>
 <th style="text-align: center;">d1 (<span
@@ -3270,13 +3330,13 @@ class="math inline">\(\cos\)</span>)</th>
 </table></div>
 <p>用位置 1 跟算：</p>
 <ul>
-<li>d0：<span class="math inline">\(i=0\)</span>，<span
+<li>d0：<span class="math inline">\(k=0\)</span>，<span
 class="math inline">\(\sin(1/1)\approx0.84\)</span>。</li>
-<li>d2：<span class="math inline">\(i=1\)</span>，<span
+<li>d2：<span class="math inline">\(k=1\)</span>，<span
 class="math inline">\(\sin(1/10)\approx0.10\)</span>。</li>
-<li>d4：<span class="math inline">\(i=2\)</span>，<span
+<li>d4：<span class="math inline">\(k=2\)</span>，<span
 class="math inline">\(\sin(1/100)\approx0.01\)</span>。</li>
-<li>d6：<span class="math inline">\(i=3\)</span>，<span
+<li>d6：<span class="math inline">\(k=3\)</span>，<span
 class="math inline">\(\sin(1/1000)\approx0.001\)</span>，保留两位小数显示为
 0.00，<strong>不是真正的零</strong>。</li>
 </ul>
@@ -3290,13 +3350,39 @@ class="math inline">\(D\)</span>，每对满足 <span
 class="math inline">\(\sin^2\theta+\cos^2\theta=1\)</span>，所以每行的平方范数为
 <span class="math inline">\(D/2\)</span>。当 <span
 class="math inline">\(D=8\)</span>，每行范数都是 2。</p>
+<p><strong>其中：</strong> <span class="math inline">\(\theta\)</span>
+代表某一对在该位置的角度 <span
+class="math inline">\(t\,\omega_k\)</span>；平方范数是一行所有数的平方和，范数是它的平方根。<strong>白话：</strong>
+每对 sin/cos 的平方和固定是 1，<span class="math inline">\(D/2\)</span>
+对加起来就是 <span
+class="math inline">\(D/2\)</span>，所以每个座位向量一样长，谁也不比谁“嗓门大”。</p>
 <p>两行的点积可以按维度对拆开：</p>
 <p><span
-class="math display">\[\sin(p\omega_i)\sin(q\omega_i)+\cos(p\omega_i)\cos(q\omega_i)
-=\cos((p-q)\omega_i).\]</span></p>
+class="math display">\[\sin(m\omega_k)\sin(n\omega_k)+\cos(m\omega_k)\cos(n\omega_k)
+=\cos((m-n)\omega_k).\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(m\)</span>、<span
+class="math inline">\(n\)</span> 是要比较的两个位置下标；<span
+class="math inline">\(\omega_k\)</span> 是维度对 <span
+class="math inline">\(k\)</span> 的角频率。</p>
+<p><strong>白话：</strong> 一对 sin/cos 就是一根长度为 1
+的指针，两根指针的点积只看它们的夹角 <span
+class="math inline">\((m-n)\omega_k\)</span>，与各自从哪儿开始转无关。</p>
 <p>因此对完整的 sin/cos 对：</p>
-<p><span class="math display">\[\operatorname{cosine}(PE_p,PE_q)
-=\frac{1}{D/2}\sum_{i=0}^{D/2-1}\cos((p-q)\omega_i).\]</span></p>
+<p><span class="math display">\[\operatorname{cosine}(PE_m,PE_n)
+=\frac{1}{D/2}\sum_{k=0}^{D/2-1}\cos((m-n)\omega_k).\]</span></p>
+<p><strong>其中：</strong> <span
+class="math inline">\(PE_m\)</span>、<span
+class="math inline">\(PE_n\)</span> 是位置 <span
+class="math inline">\(m\)</span>、<span class="math inline">\(n\)</span>
+的整行编码向量；<span
+class="math inline">\(\operatorname{cosine}(a,b)\)</span>
+是余弦相似度，即点积除以两个向量范数的乘积；两行范数都是 <span
+class="math inline">\(\sqrt{D/2}\)</span>，相乘正好是分母 <span
+class="math inline">\(D/2\)</span>；求和遍历全部 <span
+class="math inline">\(D/2\)</span> 个维度对。</p>
+<p><strong>白话：</strong> 余弦相似度就是把 <span
+class="math inline">\(D/2\)</span>
+根指针各自的“夹角余弦”取平均。快针可能已经转回来，慢针几乎没动，平均下来自然忽高忽低。</p>
 <p>右边是一组不同频率余弦的平均，<strong>不是必然随距离下降的函数</strong>。分数与距离有关，并不等于它能直接充当距离。</p>
 <h3 id="表-5-3位置-0-与后面各位置的余弦相似度d8">表 5-3：位置 0
 与后面各位置的余弦相似度（<span
@@ -3370,7 +3456,9 @@ style="text-align: left;"><code>████████████████
 </table></div>
 <p>表中数值保留三位小数，条形长度由脚本按 <span
 class="math inline">\(\lfloor25\times\text{相似度}\rfloor\)</span>
-生成。位置 3 的相似度约 0.491，距离更远的位置 6 却约
+生成（<span class="math inline">\(\lfloor\cdot\rfloor\)</span>
+是向下取整，例如 <span class="math inline">\(25\times0.884=22.1\)</span>
+画 22 格）。位置 3 的相似度约 0.491，距离更远的位置 6 却约
 0.946，已经给出一个明确反例。</p>
 <p>为什么？最快的一对在 6
 附近快转完一圈，较慢的几对又还比较接近起点。相似度很高不等于编码相同：d2
@@ -3382,22 +3470,36 @@ sine，没有 d5 的
 cosine。这个选择保留公式的每个合法列，但最后一列没有配对，所以恒定范数与上面的成对余弦平均公式不能直接套用。本章两个数值表都使用偶数宽度
 8。</p>
 <h2 id="用和角公式看相隔几格">5.5 用和角公式看“相隔几格”</h2>
-<p>正弦编码按绝对位置生成，却含有便于表达相对偏移的结构。固定一个维度对、一个偏移量
-<span class="math inline">\(k\)</span>，令 <span
-class="math inline">\(\alpha=p\omega_i\)</span>、<span
-class="math inline">\(\beta=k\omega_i\)</span>：</p>
+<p>正弦编码按绝对位置生成，却含有便于表达相对偏移的结构。固定一个维度对
+<span class="math inline">\(k\)</span>、一个偏移量 <span
+class="math inline">\(\Delta\)</span>，令 <span
+class="math inline">\(\alpha=t\omega_k\)</span>、<span
+class="math inline">\(\beta=\Delta\omega_k\)</span>，代入和角公式 <span
+class="math inline">\(\sin(\alpha+\beta)=\sin\alpha\cos\beta+\cos\alpha\sin\beta\)</span>、<span
+class="math inline">\(\cos(\alpha+\beta)=\cos\alpha\cos\beta-\sin\alpha\sin\beta\)</span>：</p>
 <p><span
-class="math display">\[\sin((p+k)\omega_i)=\sin(p\omega_i)\cos(k\omega_i)+\cos(p\omega_i)\sin(k\omega_i),\]</span></p>
+class="math display">\[\sin((t+\Delta)\omega_k)=\sin(t\omega_k)\cos(\Delta\omega_k)+\cos(t\omega_k)\sin(\Delta\omega_k),\]</span></p>
 <p><span
-class="math display">\[\cos((p+k)\omega_i)=\cos(p\omega_i)\cos(k\omega_i)-\sin(p\omega_i)\sin(k\omega_i).\]</span></p>
-<p>当 <span class="math inline">\(k\)</span> 固定时，右边的两个系数
-<span class="math inline">\(\sin(k\omega_i)\)</span>、<span
-class="math inline">\(\cos(k\omega_i)\)</span> 不依赖 <span
-class="math inline">\(p\)</span>。所以每一个完整维度对都可以通过<strong>相同的线性变换</strong>，从位置
-<span class="math inline">\(p\)</span> 推到位置 <span
-class="math inline">\(p+k\)</span>。例如最快的那一对，从位置 0 的
+class="math display">\[\cos((t+\Delta)\omega_k)=\cos(t\omega_k)\cos(\Delta\omega_k)-\sin(t\omega_k)\sin(\Delta\omega_k).\]</span></p>
+<p><strong>其中：</strong> <span class="math inline">\(t\)</span>
+是出发的位置；<span class="math inline">\(\Delta\)</span>
+是往后挪的格数（整数）；<span class="math inline">\(\omega_k\)</span>
+是维度对 <span class="math inline">\(k\)</span> 的角频率；<span
+class="math inline">\(\alpha\)</span>、<span
+class="math inline">\(\beta\)</span> 只是代入和角公式时的临时记号。</p>
+<p>当 <span class="math inline">\(\Delta\)</span> 固定时，右边的两个系数
+<span class="math inline">\(\sin(\Delta\omega_k)\)</span>、<span
+class="math inline">\(\cos(\Delta\omega_k)\)</span> 不依赖 <span
+class="math inline">\(t\)</span>。所以每一个完整维度对都可以通过<strong>相同的线性变换</strong>，从位置
+<span class="math inline">\(t\)</span> 推到位置 <span
+class="math inline">\(t+\Delta\)</span>。例如最快的那一对，从位置 0 的
 <code>[0, 1]</code> 走一步，得到 <code>[sin(1), cos(1)]</code>，约
 <code>[0.841, 0.540]</code>。</p>
+<p><strong>白话：</strong>
+这就像拨表针：不管现在指几点，拨快同样的格数用的都是同一个动作。“往后挪
+<span class="math inline">\(\Delta\)</span> 格”对应一个只由 <span
+class="math inline">\(\Delta\)</span> 决定的固定旋转，与出发点 <span
+class="math inline">\(t\)</span> 无关。</p>
 <p>这是“模型有机会利用相对关系”的数学依据，不是“训练一定会学会距离”的证明，也不是“加法位置编码的整个注意力分数只取决于距离”。加入内容并经过不同的
 <span class="math inline">\(W_Q,W_K\)</span>
 后，还会出现内容与位置的交叉项。</p>
@@ -3417,6 +3519,18 @@ class="math inline">\(X\)</span>，不再额外乘缩放系数：</p>
 PE[0] = [0, 1, 0, 1]
 PE[1] = [sin(1), cos(1), sin(0.01), cos(0.01)]
                                          PE: [2, 4]</code></pre>
+<p><strong>其中：</strong> <span class="math inline">\(X\)</span>
+是词向量，形状 <span
+class="math inline">\([B,T,D]=[1,2,4]\)</span>，<span
+class="math inline">\(B\)</span> 是批大小；<span
+class="math inline">\(PE\)</span> 是位置表，<span
+class="math inline">\(PE[t]\)</span> 是下标 <span
+class="math inline">\(t\)</span> 的那一行。<span
+class="math inline">\(D=4\)</span> 时第二对（<span
+class="math inline">\(k=1\)</span>）的分母是 <span
+class="math inline">\(10000^{2/4}=100\)</span>，所以位置 1 的后两格是
+<span class="math inline">\(\sin(0.01)\)</span>、<span
+class="math inline">\(\cos(0.01)\)</span>。</p>
 <p>先为 PE 加一个 batch 轴，变成 <span
 class="math inline">\([1,T,D]\)</span>。若 <span
 class="math inline">\(B&gt;1\)</span>，加法广播会把同一张位置表应用到每个样本，本身不新增训练参数。这里假设每个样本的有效序列都从位置
@@ -3424,6 +3538,10 @@ class="math inline">\(B&gt;1\)</span>，加法广播会把同一张位置表应�
 <p>对位置 0，逐项算：</p>
 <p><span
 class="math display">\[[0.2,-0.1,0.4,0.0]+[0,1,0,1]=[0.2,0.9,0.4,1.0].\]</span></p>
+<p><strong>白话：</strong>
+对应格子相加，词向量的每一格都被“座位号”推了一下，宽度仍是 4。左边是
+<span class="math inline">\(X\)</span> 的位置 0 行，右边加上的是 <span
+class="math inline">\(PE[0]\)</span>。</p>
 <p>两个位置的结果由 <code>addition_concat_example()</code> 打印为：</p>
 <pre class="text"><code>Add 位置 0: [0.200, 0.900, 0.400, 1.000]
 Add 位置 1: [1.341, 0.840, -0.190, 1.100]
@@ -3469,6 +3587,14 @@ class="math inline">\(W_Q:[2D,D]\)</span></td>
 </tr>
 </tbody>
 </table></div>
+<p><strong>其中：</strong> <span class="math inline">\(X+PE\)</span>
+是逐格相加；<span class="math inline">\([X;PE]\)</span>
+表示沿最后一维把两张表左右拼接；<span class="math inline">\(W_Q\)</span>
+是 Q 投影矩阵，<span class="math inline">\([D,D]\)</span> 表示 <span
+class="math inline">\(D\)</span> 行 <span
+class="math inline">\(D\)</span> 列，参数量就是行数乘列数：<span
+class="math inline">\(4\times4=16\)</span>，<span
+class="math inline">\(8\times4=32\)</span>。</p>
 <p>这里仅比较<strong>同样保持 Q 输出宽度为 <span
 class="math inline">\(D\)</span>
 的一张投影矩阵</strong>，不是宣称整个模型参数、显存、运行时间都翻倍。也可以用较窄的两部分再拼成
@@ -3479,13 +3605,23 @@ class="math inline">\(D\)</span>，但那已经改变了本例的维度分配。
 <code>[1,1]</code>，因此只给一个和，不能一般性地恢复两个任意输入。不要用“高维向量天生正交”来保证词义与位置能无损拆开；学习到的词向量和固定
 PE 并没有这种自动保证。</p>
 <p>它仍然是一个可训练的设计选择：加法保持输入宽度，词向量与后续层共同适应这种混合。对一个线性投影，<span
-class="math inline">\((X+PE)W=XW+PEW\)</span>；拼接则允许使用分别作用于内容和位置的
-<span
-class="math inline">\(W_x,W_p\)</span>。二者约束不同，是否更好需要实验。原论文采用相加。注意：原论文在相加前先把词嵌入乘以
+class="math inline">\((X+PE)W=XW+PE\,W\)</span>；拼接则相当于 <span
+class="math inline">\([X;PE]W=XW_x+PE\,W_p\)</span>，允许内容和位置各用一块权重。二者约束不同，是否更好需要实验。原论文采用相加。注意：原论文在相加前先把词嵌入乘以
 <span
 class="math inline">\(\sqrt{D}\)</span>。本例为便于手算不做这一步，把
 <span class="math inline">\(X\)</span> 直接当作待相加的输入。[来源
 1，§3.4–3.5]</p>
+<p><strong>其中：</strong> <span class="math inline">\(W\)</span>
+是线性层的权重；拼接时 <span class="math inline">\(W\)</span> 有 <span
+class="math inline">\(2D\)</span> 行，上面 <span
+class="math inline">\(D\)</span> 行记 <span
+class="math inline">\(W_x\)</span>，下面 <span
+class="math inline">\(D\)</span> 行记 <span
+class="math inline">\(W_p\)</span>；<span
+class="math inline">\(\sqrt{D}\)</span>
+是原论文给词嵌入乘的缩放系数。<strong>白话：</strong>
+相加时内容和位置只能共用同一块 <span
+class="math inline">\(W\)</span>，拼接时可以各配一块，代价是输入变宽。</p>
 <h2 id="长度要分三本账">5.7 长度要分三本账</h2>
 <p>假设训练样本最长为 8 个 token，位置都从 0 开始；现在想测试 12 个
 token。</p>
@@ -3521,6 +3657,12 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb41-1"><a h
 <span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>        pe[pos, <span class="dv">2</span> <span class="op">*</span> k] <span class="op">=</span> math.sin(pos <span class="op">/</span> div_term)</span>
 <span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span> <span class="op">&lt;</span> d_model:</span>
 <span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>            pe[pos, <span class="dv">2</span> <span class="op">*</span> k <span class="op">+</span> <span class="dv">1</span>] <span class="op">=</span> math.cos(pos <span class="op">/</span> div_term)</span></code></pre></div>
+<p><strong>对照公式：</strong> 代码的 <code>pos</code> 就是位置 <span
+class="math inline">\(t\)</span>，<code>k</code> 就是维度对下标 <span
+class="math inline">\(k\)</span>，<code>d_model</code> 是 <span
+class="math inline">\(D\)</span>，<code>div_term</code> 是分母 <span
+class="math inline">\(10000^{2k/D}\)</span>，<code>max_seq_len</code>
+是要生成的行数 <span class="math inline">\(T\)</span>。</p>
 <p>逐行核对：</p>
 <ul>
 <li>外层遍历位置 0 到 <span
@@ -3549,13 +3691,13 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb42-1"><a href=
 <li>无 mask、无位置的双向注意力，把三个 token 按 <code>[2,1,0]</code>
 换序后，输出是完全不变，还是跟着换行？固定因果 mask
 后还可以直接套同一结论吗？</li>
-<li><span class="math inline">\(D=8,pos=1\)</span> 时，d2 的分母是 10
-还是 100？这个分量保留三位小数是多少？</li>
+<li><span class="math inline">\(D=8,t=1\)</span> 时，d2 的分母是 10 还是
+100？这个分量保留三位小数是多少？</li>
 <li>表 5-3 中，哪个更像位置 0：位置 3 还是位置
 6？能否由此判断模型更关注谁？</li>
 <li>用 §5.6 的输入算位置 0 的加法结果。Add 与 Concat
 分别是什么形状？输出宽度都保持为 4 的无 bias Q 投影各有多少个参数？</li>
-<li>如果 <span class="math inline">\(D=5,pos=1\)</span>，最后的 d4
+<li>如果 <span class="math inline">\(D=5,t=1\)</span>，最后的 d4
 是什么？为什么不能直接套“每行范数为 <span
 class="math inline">\(\sqrt{D/2}\)</span>”？</li>
 <li>8 行的可学习位置表有多少参数（<span
@@ -3566,7 +3708,8 @@ class="math inline">\(D=8\)</span>）？正弦编码能生成 12
 <ol type="1">
 <li>输出跟着换行，这是置换等变，不是每个格子不变。固定因果 mask
 的可见前缀与顺序有关，不能直接套用。</li>
-<li>分母是 <span class="math inline">\(10000^{2/8}=10\)</span>；<span
+<li>d2 属于维度对 <span class="math inline">\(k=1\)</span>，分母是 <span
+class="math inline">\(10000^{2k/D}=10000^{2/8}=10\)</span>；<span
 class="math inline">\(\sin(0.1)\approx\mathbf{0.100}\)</span>。不要把“第二个偶数列”误写成指数里的
 <span class="math inline">\(4/8\)</span>。</li>
 <li>位置 6 更像：约 <strong>0.946 &gt;
@@ -3574,7 +3717,8 @@ class="math inline">\(\sin(0.1)\approx\mathbf{0.100}\)</span>。不要把“第�
 <li><strong>[0.200, 0.900, 0.400, 1.000]</strong>；形状为
 <strong>[1,2,4]</strong> 与 <strong>[1,2,8]</strong>；Q 投影分别有
 <strong>16</strong> 与 <strong>32</strong> 个参数。</li>
-<li><span
+<li>d4 属于维度对 <span class="math inline">\(k=2\)</span>，指数 <span
+class="math inline">\(2k/D=4/5\)</span>，所以是 <span
 class="math inline">\(\sin(1/10000^{4/5})\approx\mathbf{0.000631}\)</span>，不是零。最后的
 sine 没有 cosine 配对，不能用每对平方和为 1 来计算整行范数。</li>
 <li><strong>64</strong> 个可训练参数。生成 12
@@ -13171,51 +13315,19 @@ token 预算单调上升</strong>。</p>
 <p>本节只运行确定性算法，没有训练／验证泄漏的模型实验，也没有未披露的教师模型调用。</p>
 <h2 id="p23.4-mtp在同一位置多问几个未来问题">P23.4
 MTP：在同一位置多问几个未来问题</h2>
-<p>普通 next-token prediction 在位置 <span
-class="math inline">\(t\)</span> 的隐藏状态 <span
-class="math inline">\(x_t\)</span> 上，预测下一个 token <span
-class="math inline">\(x_{t+1}\)</span>。S6 的教学旁路另外增加独立线性
-head，用<strong>同一个 <span class="math inline">\(x_t\)</span></strong>
-预测 <span class="math inline">\(x_{t+2}\)</span>、<span
-class="math inline">\(x_{t+3}\)</span>……。</p>
-<p>设有 <span class="math inline">\(n_{\mathrm{mtp}}\)</span> 个额外
-head，总共 <span class="math inline">\(n_{\mathrm{mtp}}+1\)</span>
-个预测距离，记为 horizon <span class="math inline">\(j\)</span>：</p>
+<p>普通 next-token prediction 在位置 t 的隐藏向量 h_t 上，预测下一个
+token x_{t+1}。S6 的教学旁路另外增加独立线性 head，用<strong>同一个
+h_t</strong> 预测 x_{t+2}、x_{t+3}……。</p>
+<p>设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon j：</p>
 <p><span class="math display">\[
-z_t^{(1)}=x_tW_1,\qquad
-z_t^{(j)}=x_tW_j\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
+z_t^{(1)}=W_1h_t,\qquad
+z_t^{(j)}=W_jh_t\quad(j=2,\ldots,D+1).
 \]</span></p>
-<p><strong>大白话：</strong>同一个位置的隐藏状态，同时交给几位“考官”：主
-head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head
-只是换一张输出矩阵，读的是同一份表示。</p>
-<p>其中：<span class="math inline">\(x_t\)</span> 是最后一层（经过最终
-RMSNorm）的隐藏状态 <span class="math inline">\(X^{(L)}\)</span> 在位置
-<span class="math inline">\(t\)</span> 的那一行，长 <span
-class="math inline">\(D\)</span> 的行向量（小写 <span
-class="math inline">\(x_t\)</span> 加下标 <span
-class="math inline">\(t\)</span> 指隐藏向量；<span
-class="math inline">\(x_{t+1}\)</span>、<span
-class="math inline">\(x_{t+j}\)</span> 这类带“<span
-class="math inline">\(+j\)</span>”的写法指该位置的真实
-token，两者别混）；<span class="math inline">\(W_j\in\mathbb
-R^{D\times\lvert\mathcal V\rvert}\)</span> 是第 <span
-class="math inline">\(j\)</span> 个 horizon 的输出矩阵（代码里
-<code>nn.Linear</code> 存成 <span class="math inline">\([\lvert\mathcal
-V\rvert,D]\)</span>，即 <span
-class="math inline">\(W_j^\top\)</span>）；<span
-class="math inline">\(z_t^{(j)}\)</span> 是预测位置 <span
-class="math inline">\(t+j\)</span> 的 logits，长 <span
-class="math inline">\(\lvert\mathcal V\rvert\)</span>；<span
-class="math inline">\(j\)</span> 是预测距离；<span
-class="math inline">\(n_{\mathrm{mtp}}\)</span> 是额外 head 数，代码里叫
-<code>depth</code>。</p>
-<p>主 head 是 S5 原来的 head，不是再复制一个。<span
-class="math inline">\(x_t\)</span> 只能看见当前位置及之前的
-token；为了预测更远处，我们没有把真实未来 token 偷塞进 <span
-class="math inline">\(x_t\)</span>。</p>
+<p>主 head 是 S5 原来的 head，不是再复制一个。h_t
+只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token
+偷塞进 h_t。</p>
 <h3 id="五个-token把标签写出来">五个 token，把标签写出来</h3>
-<p>输入为 <code>[1,2,3,4,5]</code>，<span
-class="math inline">\(n_{\mathrm{mtp}}=2\)</span>。这里的整数是 token
+<p>输入为 <code>[1,2,3,4,5]</code>，D=2。这里的整数是 token
 ID，不是它们的数值大小。</p>
 <div class="table-wrapper"><table>
 <thead>
@@ -13260,10 +13372,6 @@ ID，不是它们的数值大小。</p>
 后忘记遮住尾部，否则最后一个位置会被要求预测窗口开头，制造不存在的循环文本。</p>
 <p>张量账本如下：</p>
 <div class="table-wrapper"><table>
-<colgroup>
-<col style="width: 50%" />
-<col style="width: 50%" />
-</colgroup>
 <thead>
 <tr>
 <th>项目</th>
@@ -13277,16 +13385,15 @@ ID，不是它们的数值大小。</p>
 </tr>
 <tr>
 <td>归一化后的隐藏状态</td>
-<td><span class="math inline">\([B,T,D]\)</span></td>
+<td>[B,T,D_model]</td>
 </tr>
 <tr>
-<td>每个 head 的权重（<code>nn.Linear</code> 存储形状）</td>
-<td><span class="math inline">\([\lvert\mathcal V\rvert,D]\)</span></td>
+<td>每个 head 的权重</td>
+<td>[V,D_model]</td>
 </tr>
 <tr>
 <td>每个 horizon 的 logits</td>
-<td><span class="math inline">\([B,T,\lvert\mathcal
-V\rvert]\)</span></td>
+<td>[B,T,V]</td>
 </tr>
 <tr>
 <td>每个 horizon 的 CE</td>
@@ -13294,12 +13401,9 @@ V\rvert]\)</span></td>
 </tr>
 </tbody>
 </table></div>
-<p>这里 <span class="math inline">\(n_{\mathrm{mtp}}\)</span>
-表示“额外预测 head 数”，<span class="math inline">\(D\)</span>
-表示隐藏宽度，<span class="math inline">\(\lvert\mathcal
-V\rvert\)</span> 表示词表大小。代码同样用 <code>depth</code> 与
-<code>config.d_model</code>
-区分这两个数，不要把它们混写成同一个字母。</p>
+<p>这里 D 表示“额外预测 head 数”，D_model 表示隐藏宽度，V
+表示词表大小。代码特意用 <code>depth</code> 与
+<code>config.d_model</code> 区分，避免把两个 D 混写。</p>
 <h3 id="这是教学并行旁路不是完整-v3-mtp">这是教学并行旁路，不是完整 V3
 MTP</h3>
 <p>DeepSeek-V3 的版本化报告描述的是<strong>串行</strong> MTP
@@ -13313,54 +13417,20 @@ head，是为了用最小改动看清标签对齐和梯度。多个 head
 从同一前缀预测未来边际结果，也不等于它们已经正确建模了“先生成第一个草稿，再条件于它生成第二个”的联合链条。</p>
 <h2 id="p23.5-损失先算哪些格再决定怎么平均">P23.5
 损失：先算哪些格，再决定怎么平均</h2>
-<p>对 horizon <span class="math inline">\(j\)</span> 的有效位置集合
-<span class="math inline">\(\Omega_j\)</span>，本章定义：</p>
+<p>对 horizon j 的有效位置集合 M_j，本章定义：</p>
 <p><span class="math display">\[
-\mathcal L_j=-\frac{1}{|\Omega_j|}\sum_{(b,t)\in \Omega_j}
+L_j=-\frac{1}{|M_j|}\sum_{(b,t)\in M_j}
 \log\operatorname{softmax}(z_{b,t}^{(j)})[x_{b,t+j}].
 \]</span></p>
-<p><strong>大白话：</strong>第 <span class="math inline">\(j\)</span>
-位考官只在“还有答案可对”的格子上考试：看它给真正的第 <span
-class="math inline">\(t+j\)</span> 个 token
-多少概率，取负对数当扣分，再按这些格子的个数求平均。</p>
-<p>其中：<span class="math inline">\(\Omega_j\)</span> 是 horizon <span
-class="math inline">\(j\)</span> 下标签不是 -100 的位置 <span
-class="math inline">\((b,t)\)</span> 集合，<span
-class="math inline">\(|\Omega_j|\)</span> 是它的元素个数；<span
-class="math inline">\(b\)</span> 是第几条样本，<span
-class="math inline">\(t\)</span> 是位置；<span
-class="math inline">\(z_{b,t}^{(j)}\)</span> 是该位置第 <span
-class="math inline">\(j\)</span> 个 head 的 logits；<span
-class="math inline">\([x_{b,t+j}]\)</span> 表示取出真实 token <span
-class="math inline">\(x_{b,t+j}\)</span> 那一项的概率；<span
-class="math inline">\(\mathcal L_j\)</span> 是该 horizon
-的平均交叉熵。</p>
-<p>若 <span class="math inline">\(\Omega_j\)</span> 为空，令 <span
-class="math inline">\(\mathcal
-L_j=0\)</span>，并保留可反向传播的零值。否则“对空集合取均值”可能得到
+<p>若 M_j 为空，令
+L_j=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到
 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。</p>
-<p>S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 <span
-class="math inline">\(n_{\mathrm{mtp}}\)</span> 个额外 head
+<p>S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 D 个额外 head
 的损失取平均：</p>
 <p><span class="math display">\[
-\mathcal L=\mathcal
-L_1+\frac{w_{\mathrm{mtp}}}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal
-L_j+\mathcal L_{\mathrm{MoE}}\quad(n_{\mathrm{mtp}}&gt;0).
+L=L_1+\frac{\lambda}{D}\sum_{j=2}^{D+1}L_j+L_{MoE}\quad(D&gt;0).
 \]</span></p>
-<p><strong>大白话：</strong>主任务的分数照记；几位旁路考官的分数先取平均，再乘一个小权重
-<span class="math inline">\(w_{\mathrm{mtp}}\)</span> 当“附加题”；MoE
-的负载均衡罚款原样加上。</p>
-<p>其中：<span class="math inline">\(\mathcal L\)</span>
-是总训练损失；<span class="math inline">\(\mathcal L_1\)</span> 是主
-head（下一个 token）的损失，<span class="math inline">\(\mathcal
-L_j\)</span> 见上式；<span
-class="math inline">\(w_{\mathrm{mtp}}\)</span> 是 MTP
-辅助损失的权重（代码里的 <code>weight</code>）；<span
-class="math inline">\(\mathcal L_{\mathrm{MoE}}\)</span> 是 S5
-已乘过系数的负载辅助项。</p>
-<p><span class="math inline">\(n_{\mathrm{mtp}}=0\)</span>
-时省略中间项；<span class="math inline">\(\mathcal
-L_{\mathrm{MoE}}\)</span> 是 S5
+<p>D=0 时省略中间项；L_MoE 是 S5
 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon
 没有标签时，其 CE 为零，但<strong>整项训练损失未必为零</strong>，因为
 MoE 辅助项可能仍存在。把所有 horizon
@@ -13372,17 +13442,11 @@ id="两个有效位置手算交叉熵与梯度">两个有效位置，手算交�
 <code>[3/6,2/6,1/6]</code>，标签是下标 1
 的类别。两者中间有一个忽略位置：</p>
 <p><span class="math display">\[
-\mathcal L=\frac{-\log(3/6)-\log(2/6)}{2}
+L=\frac{-\log(3/6)-\log(2/6)}{2}
 =\frac{\log 2+\log 3}{2}.
 \]</span></p>
-<p>其中：3/6、2/6 是两个有效位置上正确类别的概率，分母 2
-是有效位置数；<span class="math inline">\(\log\)</span> 为自然对数。</p>
-<p>对第一个位置的 logits，梯度是 <span
-class="math inline">\((p-\mathrm{onehot})/2\)</span>，即
-<code>[1/12,1/6,-1/4]</code>（<span class="math inline">\(p\)</span>
-是该位置的 softmax 概率，<span
-class="math inline">\(\mathrm{onehot}\)</span> 是标签的独热向量，除以 2
-是因为对两个有效位置取平均）。第二个有效位置为
+<p>对第一个位置的 logits，梯度是 <code>(概率 − one_hot)/2</code>，即
+<code>[1/12,1/6,-1/4]</code>。第二个有效位置为
 <code>[1/4,-1/3,1/12]</code>；忽略位置的三个梯度全为 0。</p>
 <h3 id="三种-mask-不要混用">三种 mask 不要混用</h3>
 <p><code>future_labels</code> 接受三个可选输入，形状都是 [B,T]：</p>
@@ -13415,9 +13479,7 @@ compact GQA cache，只走主模型；生成时不反向传播。</li>
 辅助项，方便看清训练信号从哪里来。</p>
 <p>沿源码阅读 <code>mtp_logits</code>：</p>
 <ul>
-<li><code>tok_emb(idx)</code> 把 <span
-class="math inline">\([B,T]\)</span> 转成 <span
-class="math inline">\([B,T,D]\)</span>。</li>
+<li><code>tok_emb(idx)</code> 把 [B,T] 转成 [B,T,D_model]。</li>
 <li>依次经过 S5 原来的 blocks，继续保留因果注意力和 MoE。</li>
 <li><code>ln_f(hidden)</code> 得到各个 head 共用的表示。</li>
 <li>原 head 生成 horizon 1 的 logits，额外线性层分别生成 horizon
@@ -13551,26 +13613,11 @@ token x 使用：</p>
 <p><span class="math display">\[
 \alpha(x)=\min(1,p(x)/q(x)).
 \]</span></p>
-<p><strong>大白话：</strong>草稿抽到 <span
-class="math inline">\(x\)</span>
-后，目标模型觉得它“至少和草稿一样可能”就照单全收；否则按两者概率之比打折接受。</p>
-<p>其中：<span class="math inline">\(p\)</span>
-是目标模型的概率分布，<span class="math inline">\(q\)</span>
-是草稿模型的概率分布，<span class="math inline">\(x\)</span> 是从 <span
-class="math inline">\(q\)</span> 抽出的 token；<span
-class="math inline">\(\alpha(x)\)</span> 是接受概率（局部符号）。</p>
 <p>拒绝时不能随意重抽，也不能直接选目标最大项，而应从归一化的正差分布抽取：</p>
 <p><span class="math display">\[
 r(x)=\frac{\max(0,p(x)-q(x))}
 {\sum_y\max(0,p(y)-q(y))}.
 \]</span></p>
-<p><strong>大白话：</strong>被拒绝后，只从“目标比草稿更想要”的那些 token
-里补抽，补抽比例正好填平草稿少给的概率，所以最终分布仍与目标 <span
-class="math inline">\(p\)</span> 一致。</p>
-<p>其中：<span class="math inline">\(r(x)\)</span>
-是拒绝后重新抽样用的残差分布（局部符号）；<span
-class="math inline">\(y\)</span> 遍历整个词表；<span
-class="math inline">\(\max(0,\cdot)\)</span> 只保留正差。</p>
 <p>这套接受与校正规则的依据见 <a
 href="https://arxiv.org/html/2211.17192v2">Fast Inference from
 Transformers via Speculative Decoding v2，§2.3 与附录 A</a>。若
@@ -13580,8 +13627,8 @@ q(x)=0，正常从 q 采样不会得到该 x；p=q
 和修改后的概率。</p>
 <p>手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B
 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4
-的拒绝质量。正差 <span class="math inline">\(p-q\)</span> 只在 A
-上为正，所以这 0.4 全补给 A，最后恰好得到 [0.6,0.4]。</p>
+的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到
+[0.6,0.4]。</p>
 <p><strong>本章只对这个概率恒等式做精确分数验算，没有随机投机采样器。</strong>
 代码中的 <code>greedy_decode</code> 不接受 temperature、top-p 或随机
 generator，也没有概率校正实现。不要删除这条边界，再把“贪心序列相同”写成“随机采样分布保持”。</p>
@@ -13777,8 +13824,7 @@ X；已经见过的 token 还留下 K/V，供后续查询。三者的生命周�
 </tr>
 <tr>
 <td>KV cache</td>
-<td>每层各一份 <span
-class="math inline">\([B,H_{kv},T,d_h]\)</span></td>
+<td>每层各一份 [B,H_kv,T,D_head]</td>
 <td>prefill 写入，decode 继续追加</td>
 <td>K/V 的尺度、cache dtype、注意力内核与长序列误差</td>
 </tr>
@@ -13795,19 +13841,9 @@ v1</a> 是在冻结的量化基座上训练 LoRA 的方法，不是“任何 4
 <p>权重压小不会自动把 KV 压小。标准 GQA 的缓存主体字节数仍可按 <a
 href="#p14-grouped-kv">P14</a> 计算：</p>
 <p><span class="math display">\[
-M_{KV}=2L B H_{kv} T d_h\,b_{\mathrm{elem}}.
+M_{KV}=2L B H_{kv} T D_{head}\,b_{KV}.
 \]</span></p>
-<p><strong>大白话：</strong>每层、每条序列、每个 KV 头、每个 token
-都要存一条长 <span class="math inline">\(d_h\)</span> 的 K 和一条
-V；把这些个数乘起来，再乘每个数占几个字节。</p>
-<p>其中：2 是 K 和 V 两份；<span class="math inline">\(L\)</span>
-是层数，<span class="math inline">\(B\)</span> 是批大小，<span
-class="math inline">\(H_{kv}\)</span> 是 KV 头数，<span
-class="math inline">\(T\)</span> 是已缓存的 token 数，<span
-class="math inline">\(d_h\)</span> 是每头宽度；<span
-class="math inline">\(b_{\mathrm{elem}}\)</span> 是 K/V
-张量每元素的字节数；<span class="math inline">\(M_{KV}\)</span>
-是缓存主体的总字节数。把 2 字节换成 1
+<p>这里 2 是 K 和 V，b_KV 是每元素的字节数。把 2 字节换成 1
 字节，只是<strong>数据主体</strong>约减半；scale、分页、对齐、临时缓冲和其他层仍需要空间。MLA、跨层共享等结构不能直接套同一个账本。</p>
 <h2 id="p24.2-一把短尺子scale-与-zero-point">P24.2 一把短尺子：scale 与
 zero-point</h2>
@@ -13819,21 +13855,6 @@ q_{min},\ q_{max}\bigr),
 \qquad
 \hat x=s(q-z).
 \]</span></p>
-<p><strong>大白话：</strong>先用尺子的刻度 <span
-class="math inline">\(s\)</span> 量出 <span
-class="math inline">\(x\)</span> 是几格，四舍五入到整数格，再整体平移
-<span class="math inline">\(z\)</span>
-格，超出码表就贴到端点；读回时反过来减去平移、乘回刻度。</p>
-<p>其中：<span class="math inline">\(x\)</span> 是原始浮点值，<span
-class="math inline">\(q\)</span> 是存下来的整数码，<span
-class="math inline">\(\hat x\)</span> 是反量化后的近似值；<span
-class="math inline">\(s\)</span> 是
-scale（量化刻度，局部符号，本章不指注意力分数），<span
-class="math inline">\(z\)</span> 是 zero-point；<span
-class="math inline">\(q_{min}\)</span>、<span
-class="math inline">\(q_{max}\)</span> 是码的上下界；<span
-class="math inline">\(\operatorname{round}_{even}\)</span>
-是“恰好一半取偶数”的舍入。下面的列表逐项再解释一遍。</p>
 <ul>
 <li><strong>scale，s</strong>：相邻两个格点间隔多远，必须有限且大于
 0。</li>
@@ -13942,14 +13963,6 @@ id="手算表二仿射量化把零点挪一挪">手算表二：仿射量化，�
 s=(2-(-1))/255=1/85,
 \qquad z=-128-\operatorname{round}(-1/s)=-43.
 \]</span></p>
-<p><strong>大白话：</strong>把 <span
-class="math inline">\([-1,2]\)</span> 这段长度 3 平均切成 255 格，每格
-<span class="math inline">\(1/85\)</span>；再挪动零点，让最小值 <span
-class="math inline">\(-1\)</span> 正好落在码 <span
-class="math inline">\(-128\)</span> 上。</p>
-<p>其中：255 是 <span class="math inline">\([-128,127]\)</span>
-之间的格数；<span class="math inline">\(s\)</span>、<span
-class="math inline">\(z\)</span> 同上式。</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -14151,17 +14164,8 @@ group=8 到 4 没变，MSE 却下降了，说明只看一个误差指标也不�
 整数乘法：乘的是码，累加器不能也是 8 位</h2>
 <p>忽略 bias，一个点积近似为：</p>
 <p><span class="math display">\[
-\sum_k x_kw_k\ \approx\ s_xs_w\sum_k(q_{x,k}-z_x)(q_{w,k}-z_w).
+\sum_i x_iw_i\ \approx\ s_xs_w\sum_i(q_{x,i}-z_x)(q_{w,i}-z_w).
 \]</span></p>
-<p><strong>大白话：</strong>两边各自先减掉零点、在整数里乘加，最后只乘一次两把尺子的刻度，就回到浮点结果；整数部分可以交给快的整数乘法器。</p>
-<p>其中：<span class="math inline">\(x_k\)</span>、<span
-class="math inline">\(w_k\)</span> 是激活和权重的第 <span
-class="math inline">\(k\)</span> 维；<span
-class="math inline">\(q_{x,k}\)</span>、<span
-class="math inline">\(q_{w,k}\)</span> 是它们的整数码；<span
-class="math inline">\(s_x,z_x\)</span> 与 <span
-class="math inline">\(s_w,z_w\)</span> 分别是激活、权重的 scale 和
-zero-point。</p>
 <p>对称 z=0 时看起来很简洁；仿射版本若漏减 z，会得到系统性错误。</p>
 <p>手算：激活 scale=0.5、z=-3、码 <code>[-2,1]</code>，恢复为
 <code>[0.5,2]</code>；权重 scale=0.25、z=7、码
@@ -14208,26 +14212,14 @@ INT8 中执行。转换开销、batch、prefill/decode
 量化：误差不只落在一个矩阵上</h2>
 <p>对一个已经可见的前缀，注意力是：</p>
 <p><span class="math display">\[
-y=\operatorname{softmax}(QK^\top/\sqrt{d_h})V.
+y=\operatorname{softmax}(qK^\top/\sqrt{d})V.
 \]</span></p>
-<p><strong>大白话：</strong>当前 query 和每个缓存的 key 打分，softmax
-变成权重，再对缓存的 value 加权求和；K 存歪了会改权重，V
-存歪了会改被加的内容。</p>
-<p>其中：<span class="math inline">\(Q\)</span>
-是当前一步的查询（这里只有一行，<span
-class="math inline">\([1,d_h]\)</span>；为免和上文的整数码 <span
-class="math inline">\(q\)</span> 混淆，用大写）；<span
-class="math inline">\(K\)</span>、<span class="math inline">\(V\)</span>
-是缓存的键和值，<span class="math inline">\([T,d_h]\)</span>；<span
-class="math inline">\(d_h\)</span> 是每头宽度，本例为 2；<span
-class="math inline">\(y\)</span> 是这一头的输出。</p>
 <ul>
 <li>K 的误差先改变分数，再经过 softmax 改变各位置的权重。</li>
 <li>V 的误差改变被加权求和的内容。</li>
 <li>两者都会影响输出；多层、多步生成还可能放大或抵消误差。</li>
 </ul>
-<p>脚本用 <span
-class="math inline">\(Q\)</span>=<code>[0.8,-0.3]</code>，三个 K 行
+<p>脚本用 q=<code>[0.8,-0.3]</code>，三个 K 行
 <code>[0.12,-0.7]</code>、<code>[1.3,0.04]</code>、<code>[-0.31,0.9]</code>，V
 行
 <code>[0.2,2]</code>、<code>[1.2,-0.4]</code>、<code>[-0.7,0.05]</code>。每个
@@ -14560,20 +14552,11 @@ streaming/nonstreaming
 <p>如果一个引擎用 Q4、另一个用
 BF16，那是在比较两套部署方案，不能把差异全归给调度器。若某格式只有一边支持，就标记为“无可比配置”，不要偷偷换模型。</p>
 <p>真正的首 token 延迟 TTFT 是从定义好的请求起点到第一个输出 token；TPOT
-是后续输出 token 的平均间隔。假设记录了真实的逐 token 时间 <span
-class="math inline">\(t_1,\ldots,t_N\)</span>：</p>
+是后续输出 token 的平均间隔。假设记录了真实的逐 token 时间 t₁…t_N：</p>
 <p><span class="math display">\[
 \mathrm{TTFT}=t_1-t_{start},\qquad
 \mathrm{TPOT}=\frac{t_N-t_1}{N-1}\quad(N&gt;1).
 \]</span></p>
-<p><strong>大白话：</strong>TTFT 是等第一个字等了多久；TPOT
-是第一个字之后，剩下的字平均隔多久来一个，<span
-class="math inline">\(N\)</span> 个 token 之间只有 <span
-class="math inline">\(N-1\)</span> 个间隔。</p>
-<p>其中：<span class="math inline">\(t_{start}\)</span>
-是请求起点时刻，<span class="math inline">\(t_k\)</span> 是第 <span
-class="math inline">\(k\)</span> 个输出 token 到达的时刻；<span
-class="math inline">\(N\)</span> 是输出 token 数。</p>
 <p>开始于 10.0 秒，token 到达于 10.2、10.3、10.6 秒，TTFT≈0.2
 秒，TPOT≈0.2 秒。N=0 时两者缺失，N=1 时 TPOT 缺失，不写 0 假装更快。</p>
 <p><strong>只有 SSE content
@@ -14779,11 +14762,6 @@ revision
 两列配置，先找不同，再找共同点</h2>
 <p>下表直接对应上述两个不可变配置，不从模型名猜测数值。</p>
 <div class="table-wrapper"><table>
-<colgroup>
-<col style="width: 27%" />
-<col style="width: 36%" />
-<col style="width: 36%" />
-</colgroup>
 <thead>
 <tr>
 <th>字段／含义</th>
@@ -14798,34 +14776,32 @@ revision
 <td style="text-align: right;"><code>qwen3_moe</code></td>
 </tr>
 <tr>
-<td>层数 <span class="math inline">\(L\)</span></td>
+<td>层数 L</td>
 <td style="text-align: right;">28</td>
 <td style="text-align: right;">48</td>
 </tr>
 <tr>
-<td>隐藏宽度 <span class="math inline">\(D\)</span></td>
+<td>隐藏宽度 D</td>
 <td style="text-align: right;">1024</td>
 <td style="text-align: right;">2048</td>
 </tr>
 <tr>
-<td>Q 头数 <span class="math inline">\(H_q\)</span></td>
+<td>Q 头数 Hq</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: right;">32</td>
 </tr>
 <tr>
-<td>KV 头数 <span class="math inline">\(H_{kv}\)</span></td>
+<td>KV 头数 Hkv</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">4</td>
 </tr>
 <tr>
-<td><code>head_dim</code>，每头宽度 <span
-class="math inline">\(d_h\)</span></td>
+<td><code>head_dim</code>，每头宽度 d</td>
 <td style="text-align: right;">128</td>
 <td style="text-align: right;">128</td>
 </tr>
 <tr>
-<td><code>vocab_size</code>，embedding 行数 <span
-class="math inline">\(\lvert\mathcal V\rvert\)</span></td>
+<td><code>vocab_size</code>，embedding 行数 V</td>
 <td style="text-align: right;">151936</td>
 <td style="text-align: right;">151936</td>
 </tr>
@@ -14898,13 +14874,8 @@ alt="两份固定配置如何映射到注意力、FFN 和输出预算" /></a>
 <h2 id="p25.3-一个最容易算错的维度d-不一定等于-hq-d">P25.3
 一个最容易算错的维度：D 不一定等于 Hq × d</h2>
 <p>以前的小型教学模型常把 <code>head_dim</code> 写成
-<code>D // Hq</code>。本章两个 checkpoint <strong>显式指定 <span
-class="math inline">\(d_h=128\)</span></strong>，所以：</p>
-<p>其中：<span class="math inline">\(H_q\)</span> 是 Q 头数，<span
-class="math inline">\(d_h\)</span> 是每头宽度，<span
-class="math inline">\(D\)</span> 是隐藏宽度；本章的 <span
-class="math inline">\(H_qd_h\)</span> 不等于 <span
-class="math inline">\(D\)</span>，这正是要强调的地方。</p>
+<code>D // Hq</code>。本章两个 checkpoint <strong>显式指定
+d=128</strong>，所以：</p>
 <ul>
 <li>dense：D=1024，但 Q 投影宽度为 16×128=2048；</li>
 <li>MoE：D=2048，但 Q 投影宽度为 32×128=4096。</li>
@@ -14921,13 +14892,11 @@ k_proj.weight / v_proj      [1024,1024]  → K/V [B,8,T,128]
 拼接                         [B,T,2048]
 o_proj.weight               [1024,2048]  → 输出 [B,T,1024]</code></pre>
 <p>因此不能只把 <a href="#p14-grouped-kv">S4</a> 的模型尺寸改成
-1024，就称它为“Qwen3-0.6B 实现”。S4 的旧假设是 <span
-class="math inline">\(D=H_qd_h\)</span>；本章的微型探针另写显式 head
+1024，就称它为“Qwen3-0.6B 实现”。S4 的旧假设是
+<code>D=Hq*d</code>；本章的微型探针另写显式 head
 dimension，并且仍不提供官方 checkpoint 兼容性承诺。</p>
 <p>Q/K 的头数关系遵循 GQA：dense 每组 2 个 Q 头共用 1 个 KV 头，MoE 每组
-8 个 Q 头共用 1 个 KV 头。分组按连续顺序，例子 <span
-class="math inline">\(H_q=4\)</span>、<span
-class="math inline">\(H_{kv}=2\)</span> 的对应关系是
+8 个 Q 头共用 1 个 KV 头。分组按连续顺序，例子 Hq=4、Hkv=2 的对应关系是
 <code>[0,0,1,1]</code>，不是轮流的 <code>[0,1,0,1]</code>。</p>
 <h2 id="p25.4-走一遍-blockqk-norm-不是又一个-layernorm">P25.4 走一遍
 block：QK-norm 不是又一个 LayerNorm</h2>
@@ -14938,46 +14907,23 @@ block：QK-norm 不是又一个 LayerNorm</h2>
 <strong>QK-norm</strong>，随后才应用 RoPE；V 不做这两项变换。</p>
 <p>RMSNorm 对最后一维计算：</p>
 <p><span class="math display">\[
-\operatorname{RMSNorm}(z)_k
-=
-\gamma_k\frac{z_k}{\sqrt{\frac{1}{n}\sum_{k&#39;=1}^{n}z_{k&#39;}^2+\epsilon}}.
+\operatorname{RMSNorm}(z)_j
+= g_j\frac{z_j}{\sqrt{\frac{1}{d}\sum_{i=1}^{d}z_i^2+\epsilon}}.
 \]</span></p>
-<p><strong>大白话：</strong>先算这一行数字的“均方根”当作音量，把整行除以它统一音量，再让每一维乘上自己可学的增益。不减均值，所以比
-LayerNorm 少一步。</p>
-<p>其中：<span class="math inline">\(z\)</span>
-是被归一化的那一行向量，<span class="math inline">\(z_k\)</span>
-是它的第 <span class="math inline">\(k\)</span> 维，<span
-class="math inline">\(k&#39;\)</span> 是求和用的维度下标；<span
-class="math inline">\(n\)</span> 是最后一维的长度；<span
-class="math inline">\(\gamma_k\)</span> 是第 <span
-class="math inline">\(k\)</span> 维的可学习 gain（代码里的
-<code>weight</code>）；<span class="math inline">\(\epsilon\)</span>
-是防止除以零的小常数（配置里的 <code>rms_norm_eps</code>）。</p>
-<p>对 block 输入，<span class="math inline">\(n=D\)</span>；对单个 Q/K
-头，<span class="math inline">\(n=d_h\)</span>。这里不减均值，也没有
-LayerNorm 的偏置向量。Q 和 K 各有一个长度 <span
-class="math inline">\(d_h\)</span> 的可学习
-gain，它们在同类头之间共享，<strong>不是每个头各拥有一份 <span
-class="math inline">\(H_q\times d_h\)</span> 或 <span
-class="math inline">\(H_{kv}\times d_h\)</span> 的
-gain</strong>。这会直接影响参数统计。</p>
+<p>对 block 输入，最后一维是 D；对单个 Q/K 头，最后一维是
+d。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 d
+的可学习 gain，它们在同类头之间共享，<strong>不是每个头各拥有一份 Hq×d
+或 Hkv×d 的 gain</strong>。这会直接影响参数统计。</p>
 <p>本章探针保留 float64 精度来做标量对照；固定官方实现的 RMSNorm 有转到
 float32
 求统计量再转回的逻辑。即使数学结构一样，两种数值路径也不能宣称逐位等价，更不代表
 BF16 GPU kernel 的误差行为已经复现。</p>
-<p>RoPE 也有布局约定。本快照使用 <strong>split-half</strong> 配对：<span
-class="math inline">\(d_h=4\)</span> 时，维度 0 与 2 配一对，1 与 3
-配一对。若记角度为 θ，第一对是：</p>
+<p>RoPE 也有布局约定。本快照使用 <strong>split-half</strong> 配对：d=4
+时，维度 0 与 2 配一对，1 与 3 配一对。若记角度为 θ，第一对是：</p>
 <p><span class="math display">\[
 (z_0,z_2) \mapsto
 (z_0\cos\theta-z_2\sin\theta,\ z_2\cos\theta+z_0\sin\theta).
 \]</span></p>
-<p><strong>大白话：</strong>把第 0 维和第 2
-维看成平面上一个点的两个坐标，绕原点转 <span
-class="math inline">\(\theta\)</span> 角；长度不变，只改方向。</p>
-<p>其中：<span class="math inline">\(z_0,z_2\)</span> 是一个 Q/K
-头向量的第 0、2 维；<span class="math inline">\(\theta\)</span>
-是这一对维度在当前位置的旋转角（局部符号），等于位置乘以这一对的频率。</p>
 <p>另一种实现可能把相邻维度 0/1、2/3
 配对。它们都能表达旋转位置机制，但权重布局、旋转方式和 checkpoint
 转换必须一致；不能把一种公式塞进另一种布局，再仅凭“都叫
@@ -14988,31 +14934,15 @@ RoPE”认定兼容。</p>
 与专家：激活少，不代表存储少</h2>
 <p>Dense FFN 与每个 MoE 专家都使用三矩阵的 SwiGLU 结构：</p>
 <p><span class="math display">\[
-\operatorname{FFN}(x)=
-\big[\operatorname{SiLU}(xW_{\mathrm{gate}})\odot(xW_{\mathrm{up}})\big]W_{\mathrm{down}}.
+\operatorname{FFN}(x)=W_{down}
+\big[\operatorname{SiLU}(W_{gate}x)\odot(W_{up}x)\big].
 \]</span></p>
-<p><strong>大白话：</strong>一路（up）准备内容，另一路（gate）过 SiLU
-后当“音量旋钮”逐元素调节它，最后用 down 投影压回原宽度。</p>
-<p>其中：<span class="math inline">\(x\)</span>
-是一个位置的输入行向量，长 <span class="math inline">\(D\)</span>；<span
-class="math inline">\(W_{\mathrm{gate}},W_{\mathrm{up}}\in\mathbb
-R^{D\times d_{\mathrm{ff}}}\)</span>，<span
-class="math inline">\(W_{\mathrm{down}}\in\mathbb
-R^{d_{\mathrm{ff}}\times D}\)</span>（按全书行向量写法；checkpoint 里按
-<code>[输出,输入]</code> 存的是它们的转置）；<span
-class="math inline">\(\odot\)</span> 是逐元素乘法；<span
-class="math inline">\(d_{\mathrm{ff}}\)</span> 是中间宽度。</p>
-<p>宽度为 <span class="math inline">\(d_{\mathrm{ff}}\)</span>
-时，三个无偏置矩阵一共 <span
-class="math inline">\(3Dd_{\mathrm{ff}}\)</span>
+<p>宽度为 M 时，三个无偏置矩阵一共 <code>3*D*M</code>
 个参数。<strong>gate_proj 是 SwiGLU 的门，不是 MoE 的路由器。</strong>
-MoE 另有一个从 <span class="math inline">\(D\)</span> 到专家数 <span
-class="math inline">\(N_E\)</span> 的
+MoE 另有一个从 D 到专家数 E 的
 <code>mlp.gate</code>，它决定调用哪些完整专家。</p>
-<p>对本章的 30B-A3B，固定配置是：<span
-class="math inline">\(N_E=128\)</span>、<span
-class="math inline">\(k=8\)</span>、每个专家 <span
-class="math inline">\(d_{\mathrm{ff}}=768\)</span>，<code>decoder_sparse_step=1</code>、<code>mlp_only_layers=[]</code>。因此
+<p>对本章的 30B-A3B，固定配置是：E=128、k=8、每个专家
+M=768，<code>decoder_sparse_step=1</code>、<code>mlp_only_layers=[]</code>。因此
 48 层均使用 MoE；固定实现中没有额外的 shared expert 分支。不要把 <a
 href="#p18-moe">S5 教学 MoE</a> 默认的共享专家设置照搬进来。</p>
 <p>单个 token 的路由流程是：</p>
@@ -15039,33 +14969,15 @@ softmax”，在正常有限数值下与上述归一化等价；相等 logits �
 只生成名字与形状，不分配真正的大矩阵。参数数目由各维乘积得到，再按组件求和。</p>
 <p>对这两个对象，一层的注意力投影参数为：</p>
 <p><span class="math display">\[
-P_{\mathrm{attn}}=2D(H_qd_h)+2D(H_{kv}d_h).
+P_{attn}=2D(H_qd)+2D(H_{kv}d).
 \]</span></p>
-<p><strong>大白话：</strong>Q 投影把 <span
-class="math inline">\(D\)</span> 维映到 <span
-class="math inline">\(H_q\)</span> 个头、每头 <span
-class="math inline">\(d_h\)</span> 维，O 投影再映回来，所以是两份 <span
-class="math inline">\(D\times H_qd_h\)</span>；K、V 只有 <span
-class="math inline">\(H_{kv}\)</span> 个头，是两份 <span
-class="math inline">\(D\times H_{kv}d_h\)</span>。</p>
-<p>其中：<span class="math inline">\(P_{\mathrm{attn}}\)</span>
-是一层注意力投影的参数数；<span class="math inline">\(D\)</span>
-是隐藏宽度，<span class="math inline">\(H_q\)</span>、<span
-class="math inline">\(H_{kv}\)</span> 是 Q 头数与 KV 头数，<span
-class="math inline">\(d_h\)</span> 是每头宽度。本章 <span
-class="math inline">\(H_qd_h\ne D\)</span>，所以不能化简成 <span
-class="math inline">\(2D^2\)</span> 之类。</p>
-<p>前一项对应 Q 与 O，后一项对应 K 与 V。再加 Q/K norm 的 <span
-class="math inline">\(2d_h\)</span>、两个 block RMSNorm 的 <span
-class="math inline">\(2D\)</span>。最终输出前的 RMSNorm 另加 <span
-class="math inline">\(D\)</span>。</p>
-<p>Dense 每层再加 <span
-class="math inline">\(3Dd_{\mathrm{ff}}\)</span>。MoE 每层再加 router 的
-<span class="math inline">\(DN_E\)</span> 与全部专家的 <span
-class="math inline">\(N_E\cdot3Dd_{\mathrm{ff}}\)</span>。embedding 为
-<span class="math inline">\(\lvert\mathcal V\rvert D\)</span>；输出 head
-也是 <span class="math inline">\(\lvert\mathcal V\rvert
-D\)</span>，但只有未绑定时才新增一份独立参数。</p>
+<p>前一项对应 Q 与 O，后一项对应 K 与 V。再加 Q/K norm 的
+<code>2d</code>、两个 block RMSNorm 的 <code>2D</code>。最终输出前的
+RMSNorm 另加 D。</p>
+<p>Dense 每层再加 <code>3DM</code>。MoE 每层再加 router 的
+<code>DE</code> 与全部专家的 <code>E*3DM</code>。embedding 为
+<code>VD</code>；输出 head 也是
+<code>VD</code>，但只有未绑定时才新增一份独立参数。</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -15142,10 +15054,6 @@ embedding／输出矩阵、注意力、norm、router；每个 MoE 层只计 k
 + \frac{8}{128}\times28,991,029,248
 = 3,353,032,704.
 \]</span></p>
-<p><strong>大白话：</strong>从总数里先拿掉全部专家，再按“每个 token 只用
-128 个专家中的 8 个”的比例把专家加回来，就是这一口径下的激活参数。</p>
-<p>其中：30,532,122,624 是唯一架构参数总数，28,991,029,248 是全部专家
-FFN 的参数，<span class="math inline">\(8/128=k/N_E\)</span>。</p>
 <p>这与<a
 href="https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md">该版本模型卡</a>描述的约
 30.5B 总参数、3.3B
@@ -15159,22 +15067,10 @@ href="https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f
 Hkv 计算</h2>
 <p>不量化、各层都保存 K/V 时，逻辑 payload 为：</p>
 <p><span class="math display">\[
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times
-b_{\mathrm{elem}},
+\text{bytes}=2\times L\times B\times T\times H_{kv}\times d\times s,
 \]</span></p>
-<p><strong>大白话：</strong>和 P24 的 KV 账本是同一个乘法：K、V
-两份，每层、每条序列、每个 KV 头、每个 token 存一条长 <span
-class="math inline">\(d_h\)</span> 的向量。</p>
-<p>其中：2 对应 K 与 V；<span class="math inline">\(L\)</span>
-是层数，<span class="math inline">\(B\)</span> 是批大小，<span
-class="math inline">\(H_{kv}\)</span> 是 KV 头数，<span
-class="math inline">\(T\)</span> 是缓存的 token 数，<span
-class="math inline">\(d_h\)</span> 是每头宽度，<span
-class="math inline">\(b_{\mathrm{elem}}\)</span> 是 K/V
-张量每个元素的字节数。假设 <span
-class="math inline">\(B=1\)</span>、<span
-class="math inline">\(T=4096\)</span>、BF16 的 <span
-class="math inline">\(b_{\mathrm{elem}}=2\)</span>：</p>
+<p>其中 2 对应 K 与 V，s 是每个元素的字节数。假设 B=1、T=4096、BF16 的
+s=2：</p>
 <ul>
 <li>0.6B：469,762,048 字节，即 <strong>448 MiB</strong>；</li>
 <li>30B-A3B：402,653,184 字节，即 <strong>384 MiB</strong>。</li>
@@ -15182,10 +15078,9 @@ class="math inline">\(b_{\mathrm{elem}}=2\)</span>：</p>
 <p>这是一个很好的反直觉检查：<strong>总参数更多，不代表每条序列的 KV
 cache 一定更大。</strong> MoE 对象有更多层，但 KV
 头数更少。缓存量主要取决于上述维度，不直接由专家总参数推出来。</p>
-<p>如果误把 <span class="math inline">\(H_q\)</span> 代替 <span
-class="math inline">\(H_{kv}\)</span>，dense 会多算 2 倍，MoE 会多算 8
-倍。本章注意力在运算时临时展开 KV 头，返回的缓存仍是 <span
-class="math inline">\([B,H_{kv},T,d_h]\)</span>；这不是
+<p>如果误把 Hq 代替 Hkv，dense 会多算 2 倍，MoE 会多算 8
+倍。本章注意力在运算时临时展开 KV 头，返回的缓存仍是
+<code>[B,Hkv,T,d]</code>；这不是
 FlashAttention，不声称避免了注意力矩阵或临时展开的内存。</p>
 <p>数字只覆盖张量逻辑内容，不包括权重、临时工作区、allocator、页面碎片、通信缓冲、padding、量化
 scale 或多请求调度。不要据此直接宣布“某张显卡一定装得下”。</p>
@@ -15300,12 +15195,9 @@ URL，并打印本章精确参数和缓存数字。程序无网络请求。</p>
 时给出安装 <code>requirements.txt</code> 的提示并以状态 2
 退出；不是“只打印配置就算可选实验通过”。本章没有额外安装
 Transformers，也不修改仓库的依赖锁定。</p>
-<p>微型配置为 <span class="math inline">\(D=8\)</span>、<span
-class="math inline">\(H_q=4\)</span>、<span
-class="math inline">\(H_{kv}=2\)</span>、<span
-class="math inline">\(d_h=4\)</span>、2 层、词表 17，仍然保留 <span
-class="math inline">\(H_qd_h\ne D\)</span> 的关键结构。dense 的 FFN 宽度
-12；MoE 是 4 个宽度 6 的专家、每 token 选 2
+<p>微型配置为 D=8、Hq=4、Hkv=2、d=4、2 层、词表 17，仍然保留
+<code>Hq*d != D</code> 的关键结构。dense 的 FFN 宽度 12；MoE 是 4 个宽度
+6 的专家、每 token 选 2
 个，没有共享专家。它们只随机初始化，没有训练。</p>
 <p>本次实际输出的稳定字段为：</p>
 <pre class="text"><code>tiny dense: params=1536; shape=(1, 5, 17); cache_bytes=1280
@@ -15360,9 +15252,8 @@ tokenizer 测量 prompt 长度。选择 thinking
 <p>先手算，再在 <code>tests/test_qwen3_case.py</code>
 中找到同名测试。</p>
 <ol type="1">
-<li><strong>0.6B 的 Q 投影输出为什么不是 1024？</strong> 因为显式 <span
-class="math inline">\(d_h=128\)</span>、<span
-class="math inline">\(H_q=16\)</span>，输出为 2048；O 再映回 1024。见
+<li><strong>0.6B 的 Q 投影输出为什么不是 1024？</strong> 因为显式
+d=128、Hq=16，输出为 2048；O 再映回 1024。见
 <code>test_exercise_explicit_head_width_and_qk_norm_weights</code>。</li>
 <li><strong>Q norm 是否有 16×128 个 gain？</strong> 没有，本快照只有 128
 个，按最后一维归一化、跨头共享。对应同一形状测试及
@@ -15515,9 +15406,6 @@ KV 来源要按 P26.4 的 CED、CSA2 和 SWA 分开读。</p>
 <p><span class="math display">\[
 512+64=576.
 \]</span></p>
-<p>其中：512 是内容 latent 的宽度（<code>kv_lora_rank</code>），64
-是共享位置键的宽度（<code>qk_rope_head_dim</code>）；576 是每
-token、每层要缓存的元素个数。</p>
 <p>若假设都用两字节存储，payload 是 1,152
 字节。但这是<strong>特定缓存表示的元素账</strong>，不是整个请求的显存：层数、batch、token
 数、分配器、量化
@@ -15908,28 +15796,13 @@ C=\begin{bmatrix}1&amp;2\\-1&amp;1\\2&amp;0\end{bmatrix},\quad
 W_K=\begin{bmatrix}1&amp;2\\-1&amp;1\end{bmatrix},\quad
 W_V=\begin{bmatrix}2&amp;0\\1&amp;3\end{bmatrix}.
 \]</span></p>
-<p>其中：<span class="math inline">\(C\)</span> 是三行内容
-latent（一行一个位置）；<span class="math inline">\(W_K\)</span>、<span
-class="math inline">\(W_V\)</span> 是把 latent 上投影成内容 K、V
-的矩阵，所以 <span class="math inline">\(K=CW_K\)</span>、<span
-class="math inline">\(V=CW_V\)</span>。</p>
 <p>内容 query 为 <code>[2,-1]</code>，位置 query 为
 <code>[1,2]</code>，三行已经旋转过的位置 key 为
 <code>[[0,1],[1,0],[2,-1]]</code>。内容与位置宽度各为 2，所以此例分母为
-<span class="math inline">\(\sqrt4=2\)</span>。</p>
-<p>路径一展开 <span class="math inline">\(K=CW_K\)</span>、<span
-class="math inline">\(V=CW_V\)</span> 再注意力；路径二把内容 query <span
-class="math inline">\(q\)</span> 改为 <span
-class="math inline">\(qW_K^\top\)</span>，先对 <span
-class="math inline">\(C\)</span> 做加权平均，最后乘 <span
-class="math inline">\(W_V\)</span>。</p>
-<p><strong>大白话：</strong><span
-class="math inline">\(q(CW_K)^\top=(qW_K^\top)C^\top\)</span>，<span
-class="math inline">\(\big(w\,C\big)W_V=w\,(CW_V)\)</span>：矩阵乘法可以换个结合顺序，所以不必先把每个位置的
-K、V 展开存下来。</p>
-<p>其中：<span class="math inline">\(q\)</span> 是内容 query
-行向量，<span class="math inline">\(w\)</span> 是 softmax
-后的注意力权重行向量。 两个路径的 logits 都应为
+√4=2。</p>
+<p>路径一展开 <code>K=CW_K</code>、<code>V=CW_V</code>
+再注意力；路径二把 query 改为 <code>qW_Kᵀ</code>，先对 C
+做加权平均，最后乘 <code>W_V</code>。两个路径的 logits 都应为
 <code>[-2,-1,0]</code>，输出约 <code>[2.776358,1.274369]</code>。</p>
 <p>这里检查的是线性代数恒等式与位置分支没有丢失；它省略 V3 的多头、query
 低秩投影、归一化、真实 RoPE 生成和训练权重。<strong>小实验正确不等于完整
@@ -15947,13 +15820,6 @@ scale 暂取 1：</p>
 <p><span class="math display">\[
 y=[1,-1]+\tfrac13[6,2]+\tfrac23[0,4]=[3,7/3].
 \]</span></p>
-<p><strong>大白话：</strong>共享专家的输出照单全收，两位被选中的路由专家按原始分数归一化后的比例
-1/3、2/3 加进来。</p>
-<p>其中：<span class="math inline">\([1,-1]\)</span>
-是共享专家输出，<span class="math inline">\([6,2]\)</span>、<span
-class="math inline">\([0,4]\)</span> 是下标 2、1
-两位路由专家的输出，<span class="math inline">\(y\)</span> 是这一层 MoE
-的输出。</p>
 <p>只要选择顺序不变，改变 bias 的大小不应改变这组权重。若把 bias
 加进归一化，数值就变了。固定 V3 配置的 routing scale 是
 2.5，脚本参数也可取 2.5；上述输出随之变成
@@ -16125,18 +15991,9 @@ R(\theta)\begin{bmatrix}x\\y\end{bmatrix}
 =\begin{bmatrix}\cos\theta&amp;-\sin\theta\\\sin\theta&amp;\cos\theta\end{bmatrix}
 \begin{bmatrix}x\\y\end{bmatrix}.
 \]</span></p>
-<p><strong>大白话：</strong>旋转矩阵把平面上的点绕原点转 <span
-class="math inline">\(\theta\)</span> 角，长度不变。</p>
-<p>其中：<span class="math inline">\((x,y)\)</span>
-是一对通道的两个坐标（这里按几何习惯写成列向量）；<span
-class="math inline">\(\theta\)</span> 是旋转角（局部符号）；<span
-class="math inline">\(R(\theta)\)</span> 是旋转矩阵。</p>
-<p>位置 <span class="math inline">\(i\)</span> 的 query 旋转 <span
-class="math inline">\(i\theta\)</span>，位置 <span
-class="math inline">\(j\)</span> 的 key 旋转 <span
-class="math inline">\(j\theta\)</span>；点积可整理成净旋转 <span
-class="math inline">\((j-i)\theta\)</span>，所以相对位置进入分数。例如
-<code>[1,0]</code> 旋转 π/2 得到 <code>[0,1]</code>，但其长度仍为
+<p>座位 m 的 query 旋转 mθ，座位 n 的 key 旋转 nθ；点积可整理成净旋转
+<code>(n−m)θ</code>，所以相对位置进入分数。例如 <code>[1,0]</code> 旋转
+π/2 得到 <code>[0,1]</code>，但其长度仍为
 1。这个几何关系不自动保证任意长上下文都可靠，完整数值与 YaRN 边界见 <a
 href="#p12-rope">P12</a>。</p>
 <p><span id="杀手锏-2rmsnorm先不管平均数只控制振幅"></span></p>
@@ -16145,13 +16002,6 @@ epsilon：</p>
 <p><span class="math display">\[
 \operatorname{RMSNorm}(x)=\frac{x}{\sqrt{\operatorname{mean}(x^2)+\epsilon}}\odot\gamma.
 \]</span></p>
-<p>其中：<span class="math inline">\(x\)</span>
-是一个位置的行向量；<span
-class="math inline">\(\operatorname{mean}(x^2)\)</span>
-是各维平方的平均；<span class="math inline">\(\epsilon\)</span>
-是防止除以零的小常数；<span class="math inline">\(\gamma\)</span>
-是逐维可学习的缩放（局部符号）；<span
-class="math inline">\(\odot\)</span> 是逐元素乘法。</p>
 <p>例如 <code>[3,4]</code> 的均方根为 √12.5；令 γ 为 1、忽略小
 epsilon，归一化后约 <code>[0.849,1.131]</code>，均值不为零。它与
 LayerNorm 不是同一个操作，也不能保证固定“快
@@ -16164,16 +16014,6 @@ epsilon 的实现与反例。</p>
 \operatorname{SwiGLU}(x)=
 \bigl(\operatorname{SiLU}(xW_g)\odot xW_u\bigr)W_d.
 \]</span></p>
-<p>其中：<span class="math inline">\(x\)</span>
-是一个位置的行向量；<span class="math inline">\(W_g\)</span>、<span
-class="math inline">\(W_u\)</span> 是门控支路和内容支路的投影（<span
-class="math inline">\(D\times d_{\mathrm{ff}}\)</span>），<span
-class="math inline">\(W_d\)</span> 是压回 <span
-class="math inline">\(D\)</span> 维的下投影（<span
-class="math inline">\(d_{\mathrm{ff}}\times D\)</span>）；<span
-class="math inline">\(\operatorname{SiLU}\)</span> 逐元素计算 <span
-class="math inline">\(a/(1+e^{-a})\)</span>（<span
-class="math inline">\(a\)</span> 是局部变量）。</p>
 <p>中间的 ⊙ 是逐元素乘法，不是点积。若某个 gate 输入恰为
 0，SiLU(0)=0，该通道的内容支路就被关掉。门控不等于 MoE
 路由：前者通常调节 dense
@@ -16523,14 +16363,9 @@ padding、跨文档 packing 或聊天模板。</p>
 <code>stream[:, 1:]</code>。最后一个标签来自第九个
 token，<strong>不是把窗口开头卷回来</strong>。这能验证 next-token
 的位置关系。</p>
-<p>统一小配置为 <span class="math inline">\(B=2\)</span>、<span
-class="math inline">\(T=8\)</span>、<span
-class="math inline">\(D=16\)</span>、<span
-class="math inline">\(H_q=4\)</span>、每头 <span
-class="math inline">\(d_h=4\)</span>、层数 <span
-class="math inline">\(L=2\)</span>、上下文上限 16。GQA 使用 <span
-class="math inline">\(H_{kv}=2\)</span>；MoE 每层 4
-个路由专家、top-k=2、专家宽度 7，另有 1 个宽度 5 的共享专家。</p>
+<p>统一小配置为 B=2、T=8、D=16、Hq=4、每头 d=4、层数 L=2、上下文上限
+16。GQA 使用 Hkv=2；MoE 每层 4 个路由专家、top-k=2、专家宽度 7，另有 1
+个宽度 5 的共享专家。</p>
 <h3 id="脚本到底做了什么">脚本到底做了什么</h3>
 <p>顺着 <code>run_healthcheck</code>
 阅读，比一次看完所有模型源代码容易：</p>
@@ -16646,33 +16481,18 @@ optimizer 或 RNG
 </table></div>
 <p>缓存公式是：</p>
 <p><span class="math display">\[
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times
-b_{\mathrm{elem}}.
+\text{bytes}=2\times L\times B\times H_{kv}\times T\times d\times s.
 \]</span></p>
-<p><strong>大白话：</strong>K、V 两份，每层、每条序列、每个 KV 头、每个
-token 都存一条长 <span class="math inline">\(d_h\)</span>
-的向量，个数乘起来再乘每个数的字节数。</p>
-<p>其中：第一个 2 是 K 和 V 两份；<span class="math inline">\(L\)</span>
-是层数，<span class="math inline">\(B\)</span> 是批大小，<span
-class="math inline">\(H_{kv}\)</span> 是 KV 头数，<span
-class="math inline">\(T\)</span> 是缓存的 token 数，<span
-class="math inline">\(d_h\)</span> 是每头宽度，<span
-class="math inline">\(b_{\mathrm{elem}}\)</span> 是 K/V
-张量每元素字节数（float32 为 4）。MHA 时 <span
-class="math inline">\(H_{kv}=H_q=4\)</span>；因此
-<code>2×2×2×4×8×4×4=4096</code>。GQA 把 <span
-class="math inline">\(H_{kv}\)</span> 改为 2，结果为
+<p>第一个 2 是 K 和 V 两份，s 是每元素字节数。MHA 时 Hkv=Hq=4；因此
+<code>2×2×2×4×8×4×4=4096</code>。GQA 把 Hkv 改为 2，结果为
 2048。这是从实际缓存张量 <code>numel×element_size</code>
 求和后，再与独立整数账本对照的值。</p>
 <p>这里<strong>不是测出来的进程内存，更不是显存峰值</strong>。模型权重、注意力分数、临时复制、Python
 对象、分配器缓存都没计入。S4 计算注意力时还会临时展开共享
-K/V；存储的缓存必须保留 <span class="math inline">\(H_{kv}\)</span>
-个头，不能把展开后的 <span class="math inline">\(H_q\)</span>
-份偷偷存回去。</p>
-<p><span class="math inline">\(H_q=4\)</span>、<span
-class="math inline">\(H_{kv}=2\)</span> 时，查询头的映射是
-<code>[0,0,1,1]</code>。给两个 KV 头分别填入 <code>[10,11]</code> 和
-<code>[20,21]</code>，只放一个可见 key，四个查询头输出应为：</p>
+K/V；存储的缓存必须保留 Hkv 头，不能把展开后的 Hq 份偷偷存回去。</p>
+<p>Hq=4、Hkv=2 时，查询头的映射是 <code>[0,0,1,1]</code>。给两个 KV
+头分别填入 <code>[10,11]</code> 和 <code>[20,21]</code>，只放一个可见
+key，四个查询头输出应为：</p>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
@@ -16718,17 +16538,8 @@ A：换计算顺序，不换模型含义</h3>
 个，把各段 logits 按时间拼接。要求每个位置都对齐，不只比较最后一个生成
 token。</p>
 <p><span class="math display">\[
-\left|z_{\mathrm{cache}}-z_{\mathrm{full}}\right|\leq
-\mathrm{atol}+\mathrm{rtol}\left|z_{\mathrm{full}}\right|.
+\left|z_{cache}-z_{full}\right|\leq atol+rtol\left|z_{full}\right|.
 \]</span></p>
-<p><strong>大白话：</strong>两条路算出的每个 logit
-只许差一点点：允许一个固定的小误差，再加上与数值大小成比例的一点误差，大数可以差得稍多。</p>
-<p>其中：<span class="math inline">\(z_{\mathrm{full}}\)</span>
-是完整前向在某位置某类别的 logit，<span
-class="math inline">\(z_{\mathrm{cache}}\)</span>
-是分块缓存路径的对应值，逐元素比较；<span
-class="math inline">\(\mathrm{atol}\)</span> 是绝对容差，<span
-class="math inline">\(\mathrm{rtol}\)</span> 是相对容差。</p>
 <p>本章 float32 使用
 <code>atol=3e-6</code>、<code>rtol=1e-5</code>，同时记录最大绝对误差。不同批形、矩阵乘法路径与累加顺序会带来末位浮点差异，所以不能把所有缓存比较写成逐
 bit 相等；也不能随意把容差放宽到“看起来差不多”。</p>
@@ -16913,7 +16724,7 @@ monkey-patch 后的任意运行时结构。</p>
 <td>ID 的含义不同</td>
 </tr>
 <tr>
-<td>GQA 的 <span class="math inline">\(H_{kv}\)</span> 从 2 改为 1</td>
+<td>GQA 的 Hkv 从 2 改为 1</td>
 <td>拒绝</td>
 <td>KV 投影与缓存形状改变</td>
 </tr>
@@ -17029,18 +16840,10 @@ ablation。</p>
 <p>A→B 只换归一化，复制并核对所有非 norm 状态。B→C 只换 FFN
 家族与预算匹配宽度，复制并核对所有非 FFN 状态。脚本分别确认 14 个和 15
 个不该改变的张量完全相同；输入、标签、dtype、设备和检查路径也相同。</p>
-<p>为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 <span
-class="math inline">\(2Dm\)</span>，SwiGLU 三个矩阵的参数为 <span
-class="math inline">\(3Dn\)</span>（<span
-class="math inline">\(D\)</span> 是模型宽度；<span
-class="math inline">\(m\)</span>、<span class="math inline">\(n\)</span>
-分别是 GELU 与 SwiGLU 的 FFN 中间宽度 <span
-class="math inline">\(d_{\mathrm{ff}}\)</span>，用两个字母区分两种结构）。要让参数相等需
-<span class="math inline">\(n=2m/3\)</span>。<span
-class="math inline">\(D=16\)</span>、<span
-class="math inline">\(m=64\)</span> 时，理想 n 为 42 又
-2/3；宽度必须是整数，选择 43 后为 <code>3×16×43=2064</code>，每层多 16
-个，两层总共多 32 个。</p>
+<p>为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为
+<code>2Dm</code>，SwiGLU 三个矩阵的参数为 <code>3Dn</code>。D=16、m=64
+时，理想 n 为 42 又 2/3；宽度必须是整数，选择 43 后为
+<code>3×16×43=2064</code>，每层多 16 个，两层总共多 32 个。</p>
 <p>所以这个实验应叫<strong>FFN
 家族加近似匹配宽度的消融</strong>，不能叫“仅改变激活函数，其他完全不变”。RMSNorm
 不做减均值，而 SwiGLU 多了一条门控乘积；它们的原始定义分别见 <a
@@ -17765,12 +17568,14 @@ class="math inline">\((1\times2+3\times4)/4=3.5\)</span>；</li>
 href="#p19-pretraining">P19</a>。</p>
 <h3 id="p28.a5-symbols">A.5 全书符号约定：一个字母，一种意思</h3>
 <p>公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的<strong>全局符号</strong>，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式<strong>要改成的写法</strong>；某章还没改写完成时，以该式的「其中：」为准。附录自己的
-A.1、A.2、D.1、F.0 也属于后续改写批次：其中 A.1 的交叉熵 <span
-class="math inline">\(L\)</span> 与 <span
-class="math inline">\(\mathrm{softmax}(QK^T/\cdots)\)</span>、A.2
-的每头宽度 <span class="math inline">\(d\)</span>、D.1 的 <span
+A.1、A.2、D.1、F.0 也要按本表改写（F9）：其中 A.1 的交叉熵 <span
+class="math inline">\(L\)</span>、稳定 softmax 的最大值 <span
+class="math inline">\(m\)</span>、周期 <span
+class="math inline">\(T=2\pi/\lvert\omega\rvert\)</span> 与 <span
+class="math inline">\(\mathrm{softmax}(QK^T/\cdots)\)</span>，A.2
+的每头宽度 <span class="math inline">\(d\)</span>，D.1 的 <span
 class="math inline">\(d_{\mathrm{head}}\)</span> 与字节数 <span
-class="math inline">\(s\)</span>、F.0 的 <span
+class="math inline">\(s\)</span>，F.0 的 <span
 class="math inline">\(\bar L\)</span>
 暂时保留旧写法，读的时候按本表换算。</p>
 <p><strong>尺寸与计数</strong></p>
@@ -17794,7 +17599,7 @@ class="math inline">\(\bar L\)</span>
 <td><span class="math inline">\(B\)</span></td>
 <td>批大小：一次并排处理几条序列</td>
 <td>例：<span class="math inline">\(B=2\)</span></td>
-<td>不作缩放定律里的常数</td>
+<td>不作缩放定律里的常数，也不作 LoRA 矩阵名</td>
 </tr>
 <tr>
 <td><span class="math inline">\(T\)</span></td>
@@ -17802,7 +17607,8 @@ class="math inline">\(\bar L\)</span>
 数</td>
 <td>例：<span class="math inline">\(T=3\)</span></td>
 <td>转置写 <span class="math inline">\(^\top\)</span>；温度写 <span
-class="math inline">\(\tau\)</span></td>
+class="math inline">\(\tau\)</span>；周期写 <span
+class="math inline">\(\lambda\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(T_q,\ T_{kv}\)</span></td>
@@ -17818,11 +17624,19 @@ class="math inline">\(\tau\)</span></td>
 <td>不再写成 <span class="math inline">\(L\)</span></td>
 </tr>
 <tr>
+<td><span class="math inline">\(T_{\mathrm{win}}\)</span></td>
+<td>滑动窗口长度（含当前位置自己）</td>
+<td>例：<span class="math inline">\(T_{\mathrm{win}}=3\)</span></td>
+<td>不写 <span class="math inline">\(W\)</span>（<span
+class="math inline">\(W\)</span> 只指权重）</td>
+</tr>
+<tr>
 <td><span class="math inline">\(D\)</span></td>
 <td>模型宽度：每个位置的总特征数，代码里叫 <code>d_model</code></td>
 <td>例：<span class="math inline">\(D=8\)</span></td>
-<td>正文公式统一写 <span class="math inline">\(D\)</span>，不写 <span
-class="math inline">\(d_{model}\)</span></td>
+<td>正文公式统一写 <span class="math inline">\(D\)</span>；KL 散度写
+<span class="math inline">\(\operatorname{KL}\)</span>，数据并行份数写
+<span class="math inline">\(N_{\mathrm{dp}}\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(\mathcal V\)</span> / <span
@@ -17868,9 +17682,12 @@ d_k}\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(d_{\mathrm{ff}}\)</span></td>
-<td>FFN 中间层宽度</td>
+<td>FFN 中间层宽度；要比较两种 FFN 时写 <span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{GELU}}\)</span>、<span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\)</span></td>
 <td>常见 <span class="math inline">\(d_{\mathrm{ff}}=4D\)</span></td>
-<td></td>
+<td>不用 <span class="math inline">\(H\)</span>、<span
+class="math inline">\(M\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(L\)</span></td>
@@ -17890,11 +17707,15 @@ class="math inline">\(T\)</span></td>
 <td><span class="math inline">\(E\)</span> 只指 embedding 表</td>
 </tr>
 <tr>
-<td><span class="math inline">\(b_{\mathrm{elem}}\)</span></td>
-<td>每个张量元素占几个字节</td>
-<td>float32 为 4，float16/bfloat16 为 2</td>
-<td>不用 <span class="math inline">\(s\)</span>（<span
-class="math inline">\(s\)</span> 留给注意力分数）</td>
+<td><span class="math inline">\(N_{\ast}\)</span></td>
+<td>带下标的 <span class="math inline">\(N\)</span>
+一律表示“个数”：<span class="math inline">\(N_S\)</span>
+共享专家数、<span class="math inline">\(N_{\mathrm{valid}}\)</span>
+有效目标数、<span class="math inline">\(N_{\mathrm{dp}}\)</span>
+数据并行份数、<span class="math inline">\(N_{\mathrm{GELU}}\)</span>
+等参数个数</td>
+<td>例：<span class="math inline">\(N_{\mathrm{valid}}=2\)</span></td>
+<td>正文不再用不带下标的 <span class="math inline">\(N\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(N_{\mathrm{param}},\
@@ -17904,6 +17725,15 @@ N_{\mathrm{tok}}\)</span></td>
 L(N_{\mathrm{param}},N_{\mathrm{tok}})\)</span></td>
 <td>不借用 <span class="math inline">\(N\)</span>、<span
 class="math inline">\(D\)</span></td>
+</tr>
+<tr>
+<td><span class="math inline">\(b_{\mathrm{elem}}\)</span></td>
+<td>每个张量元素占几个字节；带文字下标的 <span
+class="math inline">\(b\)</span> 都是字节数（如 ZeRO 的 <span
+class="math inline">\(b_p,b_g,b_o\)</span>）</td>
+<td>float32 为 4，float16/bfloat16 为 2</td>
+<td>不用 <span class="math inline">\(s\)</span>；FFN 偏置写 <span
+class="math inline">\(b_1,b_2\)</span></td>
 </tr>
 </tbody>
 </table></div>
@@ -17956,10 +17786,14 @@ class="math inline">\(x_i^{(l)}\)</span></td>
 class="math inline">\([B,T,D]\)</span></td>
 </tr>
 <tr>
-<td><span class="math inline">\(Q,\ K,\ V\)</span></td>
-<td>查询、键、值矩阵</td>
+<td><span class="math inline">\(Q,\ K,\ V,\ O\)</span></td>
+<td>查询、键、值矩阵与注意力输出；小写 <span
+class="math inline">\(q_i,k_j,v_j,o_i\)</span> 是它们的第 <span
+class="math inline">\(i\)</span>、<span class="math inline">\(j\)</span>
+行</td>
 <td>单头 <span class="math inline">\([T,d_k]\)</span>、<span
 class="math inline">\([T,d_k]\)</span>、<span
+class="math inline">\([T,d_v]\)</span>、<span
 class="math inline">\([T,d_v]\)</span></td>
 </tr>
 <tr>
@@ -17972,9 +17806,18 @@ class="math inline">\(D\)</span> 时为 <span
 class="math inline">\([D,D]\)</span></td>
 </tr>
 <tr>
+<td><span class="math inline">\(W_{\mathrm{gate}},\ W_{\mathrm{up}},\
+W_{\mathrm{down}}\)</span></td>
+<td>门控 FFN 的三块权重</td>
+<td><span class="math inline">\([D,d_{\mathrm{ff}}]\)</span>、<span
+class="math inline">\([D,d_{\mathrm{ff}}]\)</span>、<span
+class="math inline">\([d_{\mathrm{ff}},D]\)</span></td>
+</tr>
+<tr>
 <td><span class="math inline">\(s_{ij}\)</span></td>
 <td>第 <span class="math inline">\(i\)</span> 个 query 对第 <span
-class="math inline">\(j\)</span> 个 key 的缩放分数</td>
+class="math inline">\(j\)</span> 个 key 的缩放分数；一行里的最大值记
+<span class="math inline">\(s_{\max}\)</span></td>
 <td>标量，整张表 <span class="math inline">\([T,T]\)</span></td>
 </tr>
 <tr>
@@ -18001,9 +17844,24 @@ class="math inline">\(u=x+\operatorname{Attention}(\cdot)\)</span></td>
 <td>标量</td>
 </tr>
 <tr>
+<td><span class="math inline">\(\Omega\)</span></td>
+<td>参与损失的有效位置集合，<span
+class="math inline">\(N_{\mathrm{valid}}=\lvert\Omega\rvert\)</span></td>
+<td>由 <span class="math inline">\((b,t)\)</span> 组成</td>
+</tr>
+<tr>
 <td><span class="math inline">\(\tau\)</span></td>
 <td>温度：采样温度或注意力 logits 的温度</td>
 <td>标量，<span class="math inline">\(\tau&gt;0\)</span></td>
+</tr>
+<tr>
+<td><span class="math inline">\(\omega_i\)</span>、<span
+class="math inline">\(\lambda_i\)</span></td>
+<td>第 <span class="math inline">\(i\)</span>
+对维度的角频率（每前进一个位置转多少弧度）、对应波长 <span
+class="math inline">\(\lambda_i=2\pi/\omega_i\)</span></td>
+<td>位置 <span class="math inline">\(t\)</span> 的转角是 <span
+class="math inline">\(t\omega_i\)</span></td>
 </tr>
 <tr>
 <td><span class="math inline">\(\kappa\)</span></td>
@@ -18038,11 +17896,19 @@ class="math inline">\(u=x+\operatorname{Attention}(\cdot)\)</span></td>
 </thead>
 <tbody>
 <tr>
-<td>P15、P17 的序列长度</td>
-<td><span class="math inline">\(N\)</span></td>
-<td><span class="math inline">\(T\)</span>（两种长度同时出现时用 <span
-class="math inline">\(T_q\)</span>、<span
-class="math inline">\(T_{kv}\)</span>）</td>
+<td>第 3 章、P15 稳定 softmax 的最大值</td>
+<td><span class="math inline">\(m\)</span></td>
+<td><span class="math inline">\(s_{\max}\)</span>（对 logits <span
+class="math inline">\(z\)</span> 做时写 <span
+class="math inline">\(z_{\max}\)</span>）</td>
+</tr>
+<tr>
+<td>第 1 章、P20、P23 的词表大小（含形状表）</td>
+<td><span
+class="math inline">\(V\)</span>、<code>[B,T,V]</code>、<code>[V,D_model]</code></td>
+<td><span class="math inline">\(\lvert\mathcal V\rvert\)</span>；形状写
+<span class="math inline">\([B,T,\lvert\mathcal V\rvert]\)</span>、<span
+class="math inline">\([\lvert\mathcal V\rvert,D]\)</span></td>
 </tr>
 <tr>
 <td>第 5 章的位置、最大位置数</td>
@@ -18052,11 +17918,58 @@ class="math inline">\(L_{max}\)</span></td>
 class="math inline">\(T_{\max}\)</span></td>
 </tr>
 <tr>
+<td>第 5 章相对位置里的两个位置</td>
+<td><span class="math inline">\(p\)</span>、<span
+class="math inline">\(q\)</span></td>
+<td><span class="math inline">\(m\)</span>、<span
+class="math inline">\(n\)</span></td>
+</tr>
+<tr>
+<td>第 6 章残差要拟合的目标映射</td>
+<td><span class="math inline">\(H(x)\)</span></td>
+<td><span class="math inline">\(\mathcal H(x)\)</span></td>
+</tr>
+<tr>
+<td>第 7 章采样温度</td>
+<td><span class="math inline">\(T\)</span></td>
+<td><span class="math inline">\(\tau\)</span></td>
+</tr>
+<tr>
+<td>P11、P12、P14、P24、P25、P27 的 KV 字节式</td>
+<td><span class="math inline">\(M_{KV}\)</span>、<span
+class="math inline">\(s\)</span>、<span
+class="math inline">\(b_{KV}\)</span>、<span
+class="math inline">\(d\)</span>、<span
+class="math inline">\(D_{head}\)</span></td>
+<td><span class="math inline">\(\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot
+H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}\)</span>，<span
+class="math inline">\(b_{\mathrm{elem}}\)</span> 按每个张量元素计</td>
+</tr>
+<tr>
+<td>各章每头宽度</td>
+<td><span class="math inline">\(d\)</span></td>
+<td><span class="math inline">\(d_h\)</span></td>
+</tr>
+<tr>
 <td>P12 RoPE 的位置</td>
 <td><span class="math inline">\(p\)</span></td>
 <td><span class="math inline">\(t\)</span>；讨论两个位置的相对距离时用
 <span class="math inline">\(m\)</span>、<span
 class="math inline">\(n\)</span></td>
+</tr>
+<tr>
+<td>P12 RoPE 每对维度的频率、YaRN 混合后的频率</td>
+<td><span class="math inline">\(\theta_i\)</span>、<span
+class="math inline">\(\theta&#39;\)</span>；P12.3 不带下标的 <span
+class="math inline">\(\theta\)</span>（<span
+class="math inline">\(R(m\theta)\)</span>、例子里的 <span
+class="math inline">\(\theta=1\)</span>）</td>
+<td><span class="math inline">\(\omega_i\)</span>、<span
+class="math inline">\(\omega&#39;\)</span>（与第 5 章一致；原论文写作
+<span class="math inline">\(\theta\)</span>），转角 <span
+class="math inline">\(t\omega_i\)</span>；只看一对维度时写 <span
+class="math inline">\(R(m\omega_i)\)</span>、<span
+class="math inline">\(\omega_i=1\)</span></td>
 </tr>
 <tr>
 <td>P12 YaRN 的扩展倍数</td>
@@ -18070,10 +17983,73 @@ class="math inline">\(s\)</span>）</td>
 <td><span class="math inline">\(T_{\mathrm{train}}\)</span></td>
 </tr>
 <tr>
-<td>第 7 章采样温度、P12 YaRN 温度</td>
-<td><span class="math inline">\(T\)</span>、<span
-class="math inline">\(t\)</span></td>
+<td>P12 YaRN 的注意力温度</td>
+<td><span class="math inline">\(t\)</span></td>
 <td><span class="math inline">\(\tau\)</span></td>
+</tr>
+<tr>
+<td>P13 SiLU 的自变量</td>
+<td><span
+class="math inline">\(\operatorname{SiLU}(t)=t\sigma(t)\)</span></td>
+<td><span
+class="math inline">\(\operatorname{SiLU}(g)=g\sigma(g)\)</span>（<span
+class="math inline">\(g=xW_{\mathrm{gate}}\)</span> 正是 SiLU
+的输入；<span class="math inline">\(z\)</span> 仍表示乘积 <span
+class="math inline">\(\operatorname{SiLU}(g)\odot
+a_{\mathrm{up}}\)</span>；<span class="math inline">\(t\)</span>
+只作位置编号）</td>
+</tr>
+<tr>
+<td>P13 FFN 中间宽度</td>
+<td><span class="math inline">\(H\)</span>、<span
+class="math inline">\(M\)</span></td>
+<td><span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{GELU}}\)</span>、<span
+class="math inline">\(d_{\mathrm{ff}}^{\mathrm{SwiGLU}}\)</span></td>
+</tr>
+<tr>
+<td>P13、P26 门控 FFN 的权重与 up 分支</td>
+<td><span class="math inline">\(W_g,W_u,W_d\)</span>；<span
+class="math inline">\(u=xW_u\)</span></td>
+<td><span
+class="math inline">\(W_{\mathrm{gate}},W_{\mathrm{up}},W_{\mathrm{down}}\)</span>；<span
+class="math inline">\(a_{\mathrm{up}}=xW_{\mathrm{up}}\)</span>（<span
+class="math inline">\(u\)</span> 只指残差结果）</td>
+</tr>
+<tr>
+<td>P14 MLA 的 KV 压缩权重</td>
+<td><span class="math inline">\(W_{down}\)</span></td>
+<td><span class="math inline">\(W_{\mathrm{DKV}}\)</span>（<span
+class="math inline">\(W_{\mathrm{down}}\)</span> 只指 FFN）</td>
+</tr>
+<tr>
+<td>P15、P17 的序列长度</td>
+<td><span class="math inline">\(N\)</span></td>
+<td><span class="math inline">\(T\)</span>（两种长度同时出现时用 <span
+class="math inline">\(T_q\)</span>、<span
+class="math inline">\(T_{kv}\)</span>）</td>
+</tr>
+<tr>
+<td>P15、P24 TPOT 式里的输出 token 数（同时是最后一个时刻的下标）</td>
+<td>P15：<span class="math inline">\(t_1\ldots t_n\)</span>、<span
+class="math inline">\((t_n-t_1)/(n-1)\)</span>；P24：<span
+class="math inline">\(t_1\ldots t_N\)</span>、<span
+class="math inline">\((t_N-t_1)/(N-1)\)</span></td>
+<td><span class="math inline">\(t_1\ldots
+t_{T_{\mathrm{out}}}\)</span>、<span
+class="math inline">\((t_{T_{\mathrm{out}}}-t_1)/(T_{\mathrm{out}}-1)\)</span>，<span
+class="math inline">\(T_{\mathrm{out}}&gt;1\)</span></td>
+</tr>
+<tr>
+<td>P16、P17 的窗口长度</td>
+<td><span class="math inline">\(W\)</span>、<span
+class="math inline">\(n_{win}\)</span></td>
+<td><span class="math inline">\(T_{\mathrm{win}}\)</span></td>
+</tr>
+<tr>
+<td>P17 有界重放的段起点</td>
+<td><span class="math inline">\(s\)</span></td>
+<td><span class="math inline">\(i_0\)</span></td>
 </tr>
 <tr>
 <td>P17 的层表示</td>
@@ -18085,7 +18061,7 @@ class="math inline">\(x_i^{(l)}\)</span></td>
 <tr>
 <td>P17 的编码器输出</td>
 <td><span class="math inline">\(E\)</span></td>
-<td><span class="math inline">\(Z_{\mathrm{enc}}\)</span></td>
+<td><span class="math inline">\(X_{\mathrm{enc}}\)</span></td>
 </tr>
 <tr>
 <td>P18 的专家个数</td>
@@ -18106,18 +18082,109 @@ class="math inline">\(F^{\mathrm{sh}}_{e&#39;}\)</span>）</td>
 <td><span class="math inline">\(\mathcal I_k\)</span></td>
 </tr>
 <tr>
+<td>P18 摊平后的 token 数</td>
+<td><span class="math inline">\(N\)</span></td>
+<td><span class="math inline">\(BT\)</span></td>
+</tr>
+<tr>
+<td>P18、P21、P25 的参数个数</td>
+<td><span class="math inline">\(P_{\ast}\)</span></td>
+<td><span class="math inline">\(N_{\ast}\)</span>（如 <span
+class="math inline">\(N_{\mathrm{total}}\)</span>、<span
+class="math inline">\(N_{\mathrm{LoRA}}\)</span>）</td>
+</tr>
+<tr>
 <td>P19 Chinchilla 式</td>
 <td><span class="math inline">\(L(N,D)\approx
 E+A/N^\alpha+B/D^\beta\)</span></td>
 <td><span class="math inline">\(\mathcal L\approx
-c_0+c_{\mathrm{param}}/N_{\mathrm{param}}^{\alpha}+c_{\mathrm{tok}}/N_{\mathrm{tok}}^{\beta}\)</span></td>
+c_{\mathrm{irred}}+c_{\mathrm{param}}/N_{\mathrm{param}}^{\alpha}+c_{\mathrm{tok}}/N_{\mathrm{tok}}^{\beta}\)</span></td>
 </tr>
 <tr>
 <td>P20 的有效位置集合、有效目标数</td>
 <td><span class="math inline">\(\mathcal V\)</span>、<span
 class="math inline">\(N\)</span></td>
 <td><span class="math inline">\(\Omega\)</span>、<span
-class="math inline">\(N_{\mathrm{valid}}=\lvert\Omega\rvert\)</span></td>
+class="math inline">\(N_{\mathrm{valid}}\)</span></td>
+</tr>
+<tr>
+<td>P20 ZeRO 显存式</td>
+<td><span class="math inline">\(M_k\)</span>、<span
+class="math inline">\(P\)</span>、<span
+class="math inline">\(D\)</span></td>
+<td><span class="math inline">\(\mathrm{Mem}_k\)</span>、<span
+class="math inline">\(N_{\mathrm{param}}\)</span>、<span
+class="math inline">\(N_{\mathrm{dp}}\)</span></td>
+</tr>
+<tr>
+<td>P21 SFT 损失的 mask 与分母</td>
+<td><span class="math inline">\(m_{b,t+1}\)</span>、<span
+class="math inline">\(N\)</span></td>
+<td>对 <span class="math inline">\(\Omega\)</span> 求和，<span
+class="math inline">\(N_{\mathrm{valid}}\)</span></td>
+</tr>
+<tr>
+<td>P21 LoRA 的两块矩阵与乘法方向</td>
+<td>列向量写法：<span class="math inline">\(W_0\in\mathbb
+R^{d_{\mathrm{out}}\times d_{\mathrm{in}}}\)</span>，<span
+class="math inline">\(A\in\mathbb R^{r\times
+d_{\mathrm{in}}}\)</span>，<span class="math inline">\(B\in\mathbb
+R^{d_{\mathrm{out}}\times r}\)</span>，<span
+class="math inline">\(\Delta W=\frac{\alpha}{r}BA\)</span>，<span
+class="math inline">\(y=W_0x+\frac{\alpha}{r}B(Ax)\)</span></td>
+<td><span class="math inline">\(W_A:[r,d_{\mathrm{in}}]\)</span>，<span
+class="math inline">\(W_B:[d_{\mathrm{out}},r]\)</span>，<span
+class="math inline">\(\Delta W=\frac{\alpha}{r}W_BW_A\)</span>，与 <span
+class="math inline">\(W_0:[d_{\mathrm{out}},d_{\mathrm{in}}]\)</span>
+同形；行向量前向写 <span class="math inline">\(y=x(W_0+\Delta
+W)^\top=xW_0^\top+\frac{\alpha}{r}(xW_A^\top)W_B^\top\)</span>（两项都要转置，不能把
+<span class="math inline">\(x\Delta W\)</span> 加到 <span
+class="math inline">\(xW_0^\top\)</span> 上）</td>
+</tr>
+<tr>
+<td>P22 的 KL 散度</td>
+<td><span class="math inline">\(D_{\mathrm{KL}}\)</span></td>
+<td><span class="math inline">\(\operatorname{KL}\)</span></td>
+</tr>
+<tr>
+<td>P22 GRPO 的奖励标准差、回复长度、回复个数</td>
+<td><span class="math inline">\(s\)</span>、<span
+class="math inline">\(L_i\)</span>、<span
+class="math inline">\(N\)</span></td>
+<td><span class="math inline">\(\sigma_r\)</span>、<span
+class="math inline">\(T_i\)</span>、<span
+class="math inline">\(N_{\mathrm{resp}}\)</span></td>
+</tr>
+<tr>
+<td>P22 GRPO 损失里的逐 token KL
+项（本章枚举整个词表算出的<strong>精确</strong>条件 KL）</td>
+<td><span class="math inline">\(K_{i,t}\)</span></td>
+<td><span
+class="math inline">\(\operatorname{KL}_{i,t}\)</span>（不加帽子）</td>
+</tr>
+<tr>
+<td>P22 原论文的逐 token KL <strong>估计量</strong>（单个样本，不是精确
+KL）</td>
+<td><span class="math inline">\(k\)</span></td>
+<td><span
+class="math inline">\(\widehat{\operatorname{KL}}_{i,t}\)</span>（只有估计量加帽子）</td>
+</tr>
+<tr>
+<td>P22 <code>grpo_loss</code> 的张量形状</td>
+<td><code>[N,L,V]</code>、<code>[N,L]</code>、<code>[N]</code></td>
+<td><span class="math inline">\([N_{\mathrm{resp}},T,\lvert\mathcal
+V\rvert]\)</span>、<span
+class="math inline">\([N_{\mathrm{resp}},T]\)</span>、<span
+class="math inline">\([N_{\mathrm{resp}}]\)</span>（这里的 <span
+class="math inline">\(T\)</span> 是填充后的长度，每份回复的有效长度
+<span class="math inline">\(T_i\le T\)</span>）</td>
+</tr>
+<tr>
+<td>P22 KL 估计里的“动作 / 状态”</td>
+<td><span class="math inline">\(a\)</span>、<span
+class="math inline">\(s\)</span></td>
+<td><span class="math inline">\(y_t\)</span>、<span
+class="math inline">\((x,y_{&lt;t})\)</span></td>
 </tr>
 <tr>
 <td>P23 MTP 的额外 head 个数（深度）</td>
@@ -18134,77 +18201,163 @@ class="math inline">\(N_{\mathrm{valid}}=\lvert\Omega\rvert\)</span></td>
 <td>P23 的辅助损失权重</td>
 <td><span class="math inline">\(\lambda\)</span></td>
 <td><span class="math inline">\(w_{\mathrm{mtp}}\)</span>（<span
-class="math inline">\(\lambda\)</span> 只留给 YaRN 的波长）</td>
+class="math inline">\(\lambda\)</span> 只指波长）</td>
 </tr>
 <tr>
-<td>P23 的位置隐藏向量</td>
-<td><span class="math inline">\(h_t\)</span></td>
-<td><span class="math inline">\(x_t\)</span>（<span
-class="math inline">\(X\)</span> 的第 <span
-class="math inline">\(t\)</span> 行），按行向量写成 <span
-class="math inline">\(x_tW_j\)</span></td>
+<td>P23 的 head 乘法</td>
+<td><span class="math inline">\(W_jh_t\)</span></td>
+<td><span class="math inline">\(h_tW_j^\top\)</span>（<span
+class="math inline">\(W_j\)</span> 按 <span
+class="math inline">\([\lvert\mathcal V\rvert,D]\)</span> 存）</td>
 </tr>
 <tr>
-<td>P22 GRPO 的回复长度</td>
-<td><span class="math inline">\(L_i\)</span></td>
-<td><span class="math inline">\(T_i\)</span></td>
-</tr>
-<tr>
-<td>P13 SwiGLU 的 up 分支</td>
-<td><span class="math inline">\(u=xW_u\)</span></td>
-<td><span
-class="math inline">\(a_{\mathrm{up}}=xW_{\mathrm{up}}\)</span>（<span
-class="math inline">\(u\)</span> 只指残差结果）</td>
-</tr>
-<tr>
-<td>P11、P12、P14、P24、P25、P27 的 KV 字节式</td>
+<td>P24 量化步长（格点间距）</td>
 <td><span class="math inline">\(s\)</span>、<span
-class="math inline">\(b_{KV}\)</span>、<span
-class="math inline">\(d\)</span>、<span
-class="math inline">\(D_{head}\)</span></td>
-<td><span
-class="math inline">\(2LBH_{kv}Td_hb_{\mathrm{elem}}\)</span>，<span
-class="math inline">\(b_{\mathrm{elem}}\)</span> 按每个张量元素计</td>
+class="math inline">\(s_x\)</span>、<span
+class="math inline">\(s_w\)</span></td>
+<td>量化 <span class="math inline">\(x\)</span> 时写 <span
+class="math inline">\(\Delta_x\)</span>，量化权重时写 <span
+class="math inline">\(\Delta_w\)</span>；步长一律带下标，不写裸 <span
+class="math inline">\(\Delta\)</span>（裸 <span
+class="math inline">\(\Delta\)</span> 留给差值）</td>
+</tr>
+<tr>
+<td>各章损失</td>
+<td><span class="math inline">\(L\)</span>、<span
+class="math inline">\(L_{CE}\)</span>、<span
+class="math inline">\(L_{aux}\)</span>、<span
+class="math inline">\(L_j\)</span></td>
+<td><span class="math inline">\(\mathcal L\)</span>、<span
+class="math inline">\(\mathcal L_{\mathrm{CE}}\)</span>、<span
+class="math inline">\(\mathcal L_{\mathrm{aux}}\)</span>、<span
+class="math inline">\(\mathcal L_j\)</span></td>
 </tr>
 </tbody>
 </table></div>
 <p><strong>下标与写法</strong></p>
 <ul>
-<li>编号字母：<span class="math inline">\(i\)</span>、<span
-class="math inline">\(j\)</span> 是 query、key 的位置，<span
-class="math inline">\(t\)</span> 是时间步或当前位置，<span
-class="math inline">\(m\)</span>、<span class="math inline">\(n\)</span>
-是一对位置，<span class="math inline">\(h\)</span> 是第几个头，<span
-class="math inline">\(e\)</span> 是第几个专家，<span
-class="math inline">\(l\)</span> 是第几层。</li>
-<li>第 2 章 RNN 的记忆状态 <span class="math inline">\(h_t\)</span>、第
-6 章 FFN 激活前的中间结果 <span class="math inline">\(h\)</span>
-是<strong>本章局部字母</strong>，在所在公式的「其中：」里说明；逐层的隐藏状态统一写
-<span class="math inline">\(X^{(l)}\)</span>。</li>
+<li>编号字母（主要当编号用）：<span
+class="math inline">\(i\)</span>、<span class="math inline">\(j\)</span>
+是 query、key 的位置，<span class="math inline">\(t\)</span>
+是时间步或当前位置，<span class="math inline">\(m\)</span>、<span
+class="math inline">\(n\)</span> 是一对位置（第 5 章、P12 和第 9 章 RoPE
+例子里的“座位 <span class="math inline">\(m\)</span>、<span
+class="math inline">\(n\)</span>”都是这个意思），<span
+class="math inline">\(h\)</span> 是第几个头，<span
+class="math inline">\(e\)</span> 是第几个专家，P23
+的预测距离（horizon）也用 <span class="math inline">\(j\)</span>，<span
+class="math inline">\(l\)</span> 是第几层，<span
+class="math inline">\(b\)</span> 是 batch 里第几条。指数里的 <span
+class="math inline">\(e\)</span> 仍是自然常数。有两处例外要认得：<span
+class="math inline">\(i\)</span> 在 RoPE、YaRN 里也是维度对的编号（第
+<span class="math inline">\(i\)</span> 个频率对，<span
+class="math inline">\(\omega_i\)</span>、<span
+class="math inline">\(\lambda_i\)</span> 的 <span
+class="math inline">\(i\)</span>）；<span
+class="math inline">\(h\)</span> 作下标（如 <span
+class="math inline">\(W_h^Q\)</span>）是第几个头，单独出现的 <span
+class="math inline">\(h\)</span>、<span
+class="math inline">\(h_t\)</span>
+则是章内局部量（见下面的局部字母）。带文字下标的小写 <span
+class="math inline">\(n\)</span> 表示个数（如 <span
+class="math inline">\(n_{\mathrm{mtp}}\)</span>、P18 的 <span
+class="math inline">\(n_e\)</span>）；带下标的 <span
+class="math inline">\(d\)</span> 都是某种宽度（如 MLA 的 <span
+class="math inline">\(d_c\)</span>、<span
+class="math inline">\(d_r\)</span>，LoRA 的 <span
+class="math inline">\(d_{\mathrm{in}}\)</span>、<span
+class="math inline">\(d_{\mathrm{out}}\)</span>）。</li>
 <li>向量按<strong>行向量</strong>写，线性层写 <span
 class="math inline">\(xW\)</span>；形状用方括号
 <code>[B,T,D]</code>，从左到右是轴的顺序。权重若按 <span
 class="math inline">\([\text{输出},\text{输入}]\)</span> 存（如 MoE 路由
-<span class="math inline">\(W_r\)</span>），乘的时候写转置 <span
-class="math inline">\(xW_r^\top\)</span>。</li>
+<span class="math inline">\(W_r\)</span>、MTP head <span
+class="math inline">\(W_j\)</span>、LoRA 的 <span
+class="math inline">\(W_0\)</span>），乘的时候写转置 <span
+class="math inline">\(xW^\top\)</span>。</li>
 <li>转置统一写 <span class="math inline">\(A^\top\)</span>；Softmax
 统一写 <span
 class="math inline">\(\operatorname{softmax}\)</span>，沿最后一维（key
 所在的维）归一化；<span class="math inline">\(\log\)</span>
-默认是自然对数。</li>
+默认是自然对数；期望写 <span class="math inline">\(\mathbb
+E\)</span>；单位矩阵写 <span class="math inline">\(I\)</span>。</li>
 </ul>
 <p><strong>局部字母：每条公式自己说清楚</strong></p>
-<p>有些字母在不同章节各管一摊，硬统一反而难读，例如 <span
-class="math inline">\(\sigma\)</span>（标准差，或 sigmoid 函数）、<span
-class="math inline">\(\alpha\)</span>（LoRA
-缩放、辅助损失系数、接受概率等）、<span
-class="math inline">\(\beta\)</span>（LayerNorm 偏移，或 DPO/KL
-系数）、<span class="math inline">\(\gamma\)</span>（LayerNorm 缩放，或
-YaRN 的过渡系数）、<span
-class="math inline">\(\theta\)</span>（旋转角，或模型参数 <span
+<p>有些字母在不同章节各管一摊，硬统一反而难读。它们是<strong>局部符号</strong>：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。</p>
+<ul>
+<li>希腊字母：<span class="math inline">\(\sigma\)</span>（标准差，或
+sigmoid 函数）、<span class="math inline">\(\alpha\)</span>（LoRA
+缩放、辅助损失系数、接受概率、缩放定律指数等）、<span
+class="math inline">\(\beta\)</span>（LayerNorm 偏移、DPO/KL
+系数、缩放定律指数）、<span
+class="math inline">\(\gamma\)</span>（LayerNorm 缩放，或 YaRN
+的过渡系数）、<span
+class="math inline">\(\theta\)</span>（夹角、旋转矩阵 <span
+class="math inline">\(R(\theta)\)</span> 的角，或模型参数 <span
+class="math inline">\(\pi_\theta\)</span>、<span
+class="math inline">\(p_\theta\)</span>）、<span
+class="math inline">\(\pi\)</span>（圆周率，或策略 <span
 class="math inline">\(\pi_\theta\)</span>）、<span
+class="math inline">\(\phi\)</span>（旋转角、特征映射，或奖励模型参数）、<span
+class="math inline">\(\rho\)</span>（概率比）、<span
+class="math inline">\(\delta\)</span>、<span
+class="math inline">\(\Delta\)</span>（不带下标的 <span
+class="math inline">\(\Delta\)</span> 只表示差值，如 P12 的 <span
+class="math inline">\(\Delta=n-m\)</span>、E.0 的 <span
+class="math inline">\(\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}\)</span>；<span
+class="math inline">\(\Delta W\)</span> 是更新量；P22 DPO 的 <span
+class="math inline">\(\Delta_\theta\)</span>、<span
+class="math inline">\(\Delta_{\mathrm{ref}}\)</span>
+是两个对数比的差；量化步长只写带下标的 <span
+class="math inline">\(\Delta_x\)</span>、<span
+class="math inline">\(\Delta_w\)</span>）、<span
+class="math inline">\(\mu\)</span>（均值）。</li>
+<li>拉丁字母：<span
+class="math inline">\(x\)</span>（某个式子的输入：一个位置的向量、它的第
+<span class="math inline">\(i\)</span> 个分量，或 P21–P23 里的 token
+序列）、<span class="math inline">\(y\)</span>（输出向量、目标 token，或
+P22 里的回复）、<span class="math inline">\(h\)</span>（第 2 章 RNN
+的记忆状态 <span class="math inline">\(h_t\)</span>、第 6 章 FFN
+激活前的中间结果、P23 主干最后一层的隐藏向量 <span
+class="math inline">\(h_t\)</span>）、<span
+class="math inline">\(a\)</span>（第 6 章 ReLU 的输出、P12 YaRN
+的长度缩放系数、第 1 章的示例向量、第 3 章的注意力权重 <span
+class="math inline">\(a_{ij}\)</span>、P15 的请求到达时刻）、<span
+class="math inline">\(b\)</span>（第 1 章、P12 的示例向量）、<span
+class="math inline">\(f\)</span>（第 2 章 RNN 的更新函数、P18 的分配比例
+<span class="math inline">\(f_e\)</span>）、<span
+class="math inline">\(g\)</span>（SwiGLU 的门控分支、P20 的梯度）、<span
 class="math inline">\(r\)</span>（LoRA 秩、奖励 <span
-class="math inline">\(r_\phi\)</span>、频段比值等）。它们是<strong>局部符号</strong>：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。</p>
+class="math inline">\(r_\phi\)</span>、频段比值、特征宽度、第 3
+章的求和下标）、<span class="math inline">\(k\)</span>（第 5
+章的位移量、top-k 的个数、P20 的训练步编号 <span
+class="math inline">\(\theta_k\)</span>）、<span
+class="math inline">\(q\)</span>（P23 的草稿分布 <span
+class="math inline">\(q(x)\)</span>、P24 的量化整数）、<span
+class="math inline">\(z\)</span>（多数时候是 softmax 之前的 logits；也作
+SwiGLU 的门控乘积、线性注意力的归一化量、DPO 的间隔、P24 的零点）、<span
+class="math inline">\(w\)</span>（单个权重、路由权重 <span
+class="math inline">\(w_e\)</span>、注意力权重 <span
+class="math inline">\(w_{tj}\)</span>）、<span
+class="math inline">\(c\)</span>（第 2 章的上下文向量、P14 MLA
+的压缩向量 <span class="math inline">\(c_t\)</span>）、<span
+class="math inline">\(t_1,t_{\mathrm{start}}\)</span> 等 P15、P24
+的计时时刻、<span class="math inline">\(A\)</span>（注意力子层函数、GRPO
+的优势 <span class="math inline">\(A_i\)</span>）、<span
+class="math inline">\(F\)</span>（第 6 章的残差分支 <span
+class="math inline">\(F(x)\)</span>）、<span
+class="math inline">\(P\)</span>（第 5 章的换序操作、P15
+的概率矩阵）、<span class="math inline">\(C\)</span>、<span
+class="math inline">\(G\)</span>、<span
+class="math inline">\(R\)</span>、<span
+class="math inline">\(S\)</span>、<span class="math inline">\(U\)</span>
+等只在一章出现的大写字母。</li>
+<li>第 2 章 <span class="math inline">\(h_t\)</span>、第 6 章 <span
+class="math inline">\(h\)</span>、P23 <span
+class="math inline">\(h_t\)</span>
+都不是全局的层表示；逐层的隐藏状态统一写 <span
+class="math inline">\(X^{(l)}\)</span>。</li>
+</ul>
 <h2 id="附录-b深度学习常见黑话大白话翻译词典">附录
 B：深度学习常见“黑话”大白话翻译词典</h2>
 <h3 id="表-b-1ai-行业黑话通俗翻译词典">表 B-1：AI
