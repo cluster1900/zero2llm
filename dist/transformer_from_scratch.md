@@ -4052,23 +4052,21 @@ PagedAttention 有配合分页布局读取 KV 的注意力计算方式；块管�
 
 普通注意力的熟悉写法是：
 
-$$
-S=\frac{QK^\top}{\sqrt{d_k}},\qquad P=\operatorname{softmax}(S+M),\qquad O=PV
-$$
+```text
+S = Q Kᵀ / √d
+P = softmax(S + mask)
+O = P V
+```
 
-三步各干一件事：先给每个 query–key 配对打分，再把每行分数变成加起来为 1 的权重（mask 让不许看的位置权重为 0），最后按权重把 value 加起来。本章所有技巧都不改这三步算出的结果，只改“中间那两张大表放在哪里、怎么搬”。
+如果 Q、K 都有 N 个位置，S 和 P 各有 N×N 个数。以单个 batch、单个头、每数 2 字节举例：
 
-其中：$Q$、$K$、$V$ 是一个头的查询、键、值矩阵；$K^\top$ 是 $K$ 的转置；$d_k$ 是 Q/K 的宽度；$S$ 是缩放后的分数表，第 $i$ 行第 $j$ 列就是 $s_{ij}$；$M$ 是加性 mask（允许为 0，禁止为 $-\infty$）；$\operatorname{softmax}$ 沿每行（key 所在的维）归一化；$P$ 是注意力权重表（本章局部记号）；$O$ 是输出。
-
-如果 Q、K 都有 $T$ 个位置，$S$ 和 $P$ 各有 $T\times T$ 个数。以单个 batch、单个头、每数 2 字节举例：
-
-- $T=4096$：一张矩阵有 16,777,216 个数，占 33,554,432 字节，也就是 32 MiB。
-- $T=8192$：一张矩阵占 128 MiB；长度翻倍，面积变成 4 倍。
+- N=4096：一张矩阵有 16,777,216 个数，占 33,554,432 字节，也就是 32 MiB。
+- N=8192：一张矩阵占 128 MiB；长度翻倍，面积变成 4 倍。
 - 如果实现同时保存 S 和 P，这两张矩阵的容量还要相加；实际峰值取决于实现，不能只靠这个公式断言。
 
-账本就是 $T^2\times b_{\mathrm{elem}}$：长度翻倍，表的边长翻倍，面积变成 4 倍。其中 $T$ 是序列长度，$b_{\mathrm{elem}}$ 是每个数的字节数（这里为 2）。这里 MiB=2²⁰ 字节，不是十进制 MB。多 batch、多头会继续乘上相应维度。
+这里 MiB=2²⁰ 字节，不是十进制 MB。多 batch、多头会继续乘上相应维度。
 
-GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 $T\times T$ 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 $O(T^2d_k)$，不是 $O(Td_k)$（论文把长度记作 N、宽度记作 d）。[FlashAttention 原论文（arXiv 2205.14135v2），§3](https://arxiv.org/pdf/2205.14135v2)
+GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 GPU 也可能使用 GDDR）和容量较小、访问更近的片上存储。把完整 S 写回显存、再读回来做 Softmax、再写 P，会产生额外 IO。**FlashAttention 的核心是按片上存储条件分块组织计算，用在线 Softmax 累积输出，避免把完整 N×N 中间矩阵写到 HBM。** 它没有因此跳过普通稠密注意力的所有合法 QK 配对；标准稠密情形的算术复杂度仍为 O(N²d)，不是 O(Nd)。[FlashAttention 原论文（arXiv 2205.14135v2），§3](https://arxiv.org/pdf/2205.14135v2)
 
 这还涉及 GPU 内核融合、线程组织、反向传播重计算等。本章只实现其中容易手算的**前向归一化递推**。
 
@@ -4078,17 +4076,15 @@ GPU 有容量较大的设备显存（原论文讨论的 GPU 使用 HBM，其他 
 
 | 名称 | 形状 | 含义 |
 | --- | --- | --- |
-| Q | $[T_q,d_k]$ | 当前要计算的 query |
-| K | $[T_{kv},d_k]$ | 可读取的全部 key |
-| V | $[T_{kv},d_v]$ | 对应 value |
-| allowed | $[T_q,T_{kv}]$ | 布尔 mask；True 表示允许读取 |
-| O | $[T_q,d_v]$ | 每个 query 的加权输出 |
+| Q | [Nq,d] | 当前要计算的 query |
+| K | [Nk,d] | 可读取的全部 key |
+| V | [Nk,dv] | 对应 value |
+| allowed | [Nq,Nk] | 布尔 mask；True 表示允许读取 |
+| O | [Nq,dv] | 每个 query 的加权输出 |
 
-这里 $T_q$ 是 query 的个数，$T_{kv}$ 是可读 key/value 的个数，$d_k$ 是 Q/K 宽度，$d_v$ 是 V 的宽度。
+本例默认 query block 为 2 行，key block 为 3 行。Nq=5、Nk=7 时，query 分成 `[2,2,1]`，key 分成 `[3,3,1]`。最后一块不满也必须处理，不能直接用整数除法把它丢掉。
 
-本例默认 query block 为 2 行，key block 为 3 行。$T_q=5$、$T_{kv}=7$ 时，query 分成 `[2,2,1]`，key 分成 `[3,3,1]`。最后一块不满也必须处理，不能直接用整数除法把它丢掉。
-
-为方便观察，脚本可接收完整布尔 mask；这张教学 mask 本身仍可能占 $O(T_qT_{kv})$ 空间。生产 kernel 可以由位置索引直接形成因果约束。本实验没有宣称整个 Python 程序只占线性内存。
+为方便观察，脚本可接收完整布尔 mask；这张教学 mask 本身仍可能占 O(Nq×Nk) 空间。生产 kernel 可以由位置索引直接形成因果约束。本实验没有宣称整个 Python 程序只占线性内存。
 
 对于已有 3 个历史位置、当前有 2 个新 query、总共 5 个 key 的例子：
 
@@ -4111,11 +4107,7 @@ ell = Σ exp(s_j - m)
 acc = Σ exp(s_j - m) × v_j
 ```
 
-三本账各有分工：m 是“目前见过的最高分”，用来防止指数溢出；ell 是 Softmax 分母（已减去 m）；acc 是分子，即按同样指数权重累加的 value。
-
-其中：$s_j$ 是这一行 query 对第 $j$ 个合法 key 的缩放分数；$v_j$ 是对应的 value 向量；Σ 对已处理的合法 key 求和；m、ell（即 ℓ）、acc 是本节的局部记号。
-
-m 和 ell 是标量；acc 是 $d_v$ 维向量。最后输出 `acc / ell`。注意 acc 还没有归一化，不是当前已经算好的概率均值。
+m 和 ell 是标量；acc 是 dv 维向量。最后输出 `acc / ell`。注意 acc 还没有归一化，不是当前已经算好的概率均值。
 
 现在读到下一块，合法分数为 s_new。新的最大值可能变大：
 
@@ -4128,17 +4120,11 @@ next_ell = alpha × ell + Σ p_new
 next_acc = alpha × acc + Σ p_new × v_new
 ```
 
-每读一块就做三件事：更新最高分；把旧账按新最高分“换汇”（乘 alpha）；再把这一块的指数权重加进分母和分子。
-
-其中：s_new 是新块里的合法分数，v_new 是对应 value；next_m、next_ell、next_acc 是更新后的三本账；alpha 是旧账的换算系数（局部记号）；p_new 是新块的未归一化指数权重。
-
 为什么必须乘 alpha？旧账用的是 exp(s−m)，新账用的是 exp(s−next_m)。利用指数运算：
 
 ```text
 exp(s - next_m) = exp(s - m) × exp(m - next_m)
 ```
-
-白话说，换了参照的最高分，旧账上的每一项都要乘同一个系数 $e^{m-\text{next\_m}}$ 才能和新账对齐，就像不同币种先换汇再相加。
 
 所以旧分母和旧分子必须一起换到新尺度。只缩放其中一个，或者把每块 Softmax 后的输出直接相加，都不对。
 
@@ -4146,7 +4132,7 @@ exp(s - next_m) = exp(s - m) × exp(m - next_m)
 
 ## P15.5 手算：分成两块，仍然得到 6
 
-设 $d_k=d_v=1$，Q=`[1]`，K=`[0, ln 2, ln 4]`，V=`[2,4,8]`。缩放分母 $\sqrt{d_k}=1$，三个分数正好就是 K。没有 mask。
+设 d=dv=1，Q=`[1]`，K=`[0, ln 2, ln 4]`，V=`[2,4,8]`。缩放分母 √d=1，三个分数正好就是 K。没有 mask。
 
 先做完整计算：三个指数之比为 1:2:4，因此：
 
@@ -4214,9 +4200,9 @@ m = next_m
 
 这里的精确，是指没有用稀疏采样、低秩近似等方法改变这条注意力公式所包含的合法配对。换一种加法顺序、分块顺序或累积精度，浮点末位仍可能不同。
 
-必修实验用 Python float，通常对应双精度浮点；随机例子固定 seed=15。5 个 query、7 个 key、$d_k=3$、$d_v=2$ 时，本次 full/block 最大差值为 `1.11e-16`，检查阈值为 `1e-12`。这是这组小输入的数值检查，不是任意长度、任意 dtype 都具有相同误差的证明。
+必修实验用 Python float，通常对应双精度浮点；随机例子固定 seed=15。5 个 query、7 个 key、d=3、dv=2 时，本次 full/block 最大差值为 `1.11e-16`，检查阈值为 `1e-12`。这是这组小输入的数值检查，不是任意长度、任意 dtype 都具有相同误差的证明。
 
-只有 full/block 相等还不够：两条路径可能一起忘记 $\sqrt{d_k}$。所以还需要标准库 Decimal 的 **65 位十进制有效数字精度独立参考**：逐 query 直接算点积、指数和归一化，不经过生产实现的 Softmax 或 block 更新。
+只有 full/block 相等还不够：两条路径可能一起忘记 √d。所以还需要标准库 Decimal 的 **65 位十进制有效数字精度独立参考**：逐 query 直接算点积、指数和归一化，不经过生产实现的 Softmax 或 block 更新。
 
 这与 GQA 的区别也很重要：GQA 改变 KV 头的组织方式；在线 Softmax 只是计算同一组 Q/K/V 的方式。不能用这章的数值等价实验证明任意 MHA 改 GQA 都不损失质量。
 
@@ -4235,10 +4221,6 @@ m = next_m
 块内偏移 = t % b
 物理块号 = block_table[逻辑块号]
 ```
-
-整除给出“第几页”，余数给出“页内第几行”，再查块表把逻辑页换成真实的物理页，就像查目录找到书页。
-
-其中：b 是每个物理块能放的 token 数（块大小，局部记号）；t 是 token 在本请求里的逻辑位置，从 0 开始；`//` 是向下取整除法，`%` 是取余数；block_table 是本请求的块表。
 
 例如 b=2，块表是 `[1,2,0]`。逻辑位置 4 在逻辑块 2、偏移 0，对应物理块 0。读取时必须按 `[1,2,0]`，不能为了“排序整齐”改成 `[0,1,2]`。
 
@@ -4300,9 +4282,9 @@ A 仍然是 `[10,20,30]`，B 是 `[10,20,30,40]`；完整前缀块 0 继续共�
 
 最后一行不是物理存了 7 个 token，因为 `[10,20]` 仍共享；也不是只存 4 个，因为尾部的 30 已各有一份。
 
-若每个物理载荷只有一个 K 标量和一个 V 标量，且真正使用 float32 数组，则“5 个已写载荷”的理想 payload 是 `5×2×4=40` 字节（载荷数 × K、V 两个标量 × 每个 float32 占 4 字节），“6 个已分配槽位”的理想容量是 48 字节。**本脚本使用 Python 对象，不实际只占这些字节。** 块表、引用计数、对象开销、分配器、临时工作区和模型权重都不在这个理想账本里。
+若每个物理载荷只有一个 K 标量和一个 V 标量，且真正使用 float32 数组，则“5 个已写载荷”的理想 payload 是 `5×2×4=40` 字节，“6 个已分配槽位”的理想容量是 48 字节。**本脚本使用 Python 对象，不实际只占这些字节。** 块表、引用计数、对象开销、分配器、临时工作区和模型权重都不在这个理想账本里。
 
-对没有共享的一个长度为 T 的请求，分配槽位是 $\lceil T/b\rceil\times b$（$\lceil\cdot\rceil$ 是向上取整：不满一块也要占一整块），尾块空槽位范围为 0 到 $b-1$。其中 $T$ 是请求的 token 数，b 是块大小。例如 b=4、T=9，需要 3 块，共 12 槽位，空 3 个。分页不是“所有浪费严格等于零”；块越大、越小也有不同管理和访问开销。
+对没有共享的一个长度为 T 的请求，分配槽位是 `ceil(T/b)×b`，尾块空槽位范围为 0 到 b−1。例如 b=4、T=9，需要 3 块，共 12 槽位，空 3 个。分页不是“所有浪费严格等于零”；块越大、越小也有不同管理和访问开销。
 
 池容量不足时，`append()` 会在改变块表和引用计数前报告 `MemoryError`。这里没有实现 GPU 抢占、交换到 CPU 或重计算恢复；不能把异常提示当成完整服务系统的容错方案。
 
@@ -4346,7 +4328,7 @@ C 在 t=10 到达时，两槽仍被占用，所以连续 batch 也不是立刻�
 
 两种方法都完成 8 个输出 token。按这个人造观察窗口，静态是 `8/0.06≈133.333` tokens/s，连续是 `8/0.04=200` tokens/s。注意两个窗口不一样长：各自从 t=0 算到自己最后一个输出 token，静态 60 ms，连续 40 ms。若同用 0–60 ms 窗口，两者都完成 8 个 token，都是 `8/0.06≈133.333` tokens/s；200 只是来自更短的 40 ms 窗口。
 
-真实批大小会影响轮时，KV 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token 间隔可能变长。必须把每轮执行时间和排队一起看。
+真实 batch 大小会影响轮时，KV 不够也可能不能接入新请求。更多并发可以提高总吞吐，但单请求等待或 token 间隔可能变长。必须把每轮执行时间和排队一起看。
 
 ## P15.13 Prefill、decode 与排队会互相影响
 
@@ -4372,10 +4354,6 @@ TPOT = (tₙ - t₁) / (n - 1)，n>1       后续每 token 平均间隔
 E2E  = tₙ - a                         整个请求耗时
 输出吞吐 = 观察窗口内输出 token 数 / 窗口秒数
 ```
-
-四个指标都只是“时间戳相减”：TTFT 看第一个字等了多久，TPOT 把首字之后的总时长平摊到每个间隔上，E2E 是整单用时，吞吐是“窗口里出了几个字 ÷ 窗口多长”。
-
-其中：a 是请求到达时刻；$t_1,\ldots,t_n$ 是依次收到各输出 token 的时刻（局部记号，与序列长度 $T$ 无关）；n 是这个请求的输出 token 数；分母 $n-1$ 是首字之后的间隔个数。
 
 TTFT 可以包含排队、prefill、采样与网络等延迟，不等于纯 prefill kernel 时间。TPOT 这里排除了第一 token 的等待。只有一个输出 token 时，没有后续间隔，所以脚本返回 `None`，不是除以零，也不是假装 TPOT=0。
 
@@ -4454,8 +4432,8 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 ## P15.17 自测题与参考答案
 
-1. FlashAttention 为什么不等于把稠密 attention 改成 $O(Td_k)$？与 GQA 分别改了什么？
-2. $T$ 从 4096 变为 8192，单头一张 2 字节 score 矩阵从多少 MiB 变成多少？
+1. FlashAttention 为什么不等于把稠密 attention 改成 O(Nd)？与 GQA 分别改了什么？
+2. N 从 4096 变为 8192，单头一张 2 字节 score 矩阵从多少 MiB 变成多少？
 3. 手算例子第二块到来时，alpha、ell、acc、最终输出各是多少？若平均两块各自均值，会得到多少？
 4. 第一块全 mask，后块才出现合法 key，该怎样初始化？若整行全 mask，本 API 输出什么？
 5. b=4、长度 9 的无共享请求分配几个块、几个空槽？块表 `[9,2,7]` 中位置 7 对应哪里？
@@ -4467,7 +4445,7 @@ with sdpa_kernel(backends=[SDPBackend.FLASH_ATTENTION]):
 
 参考答案：
 
-1. 它保留全部合法 QK 配对，标准稠密算术量仍为 $O(T^2d_k)$，重点是计算组织与 IO。GQA 改变 KV 头共享方式，属于模型表示的改变。
+1. 它保留全部合法 QK 配对，标准稠密算术量仍为 O(N²d)，重点是计算组织与 IO。GQA 改变 KV 头共享方式，属于模型表示的改变。
 2. 32 MiB → 128 MiB，增长 4 倍；这只是单张矩阵，不是完整模型峰值。
 3. alpha=0.5，ell=1.75，acc=10.5，输出=6。错误的块均值平均是 17/3，约 5.6667。
 4. 空块跳过，保持 ell=0；首个合法块用 alpha=0。整行无合法 key 返回全零，这是明确约定，不是正常概率分布。
@@ -4521,10 +4499,6 @@ $$
 \max(0,i-W+1)\le j\le i
 $$
 
-这条不等式就是一扇“往回开 W 格的窗”：右端 $j\le i$ 保证不看未来，左端 $i-W+1$ 让窗口连自己共 W 格；外面套 max(0, ·) 只是防止序列开头时下标变成负数。
-
-其中：i 是 query 的位置，j 是 key 的位置，都从 0 开始；W 是窗口大小（包含当前位置，本章局部记号）。
-
 例如 W=3，是“当前位 + 前面至多两位”，不是“前三位 + 当前位”。T=6 的 mask 如下，1 表示允许读取：
 
 | query i \ key j | 0 | 1 | 2 | 3 | 4 | 5 | 可见位置 |
@@ -4567,11 +4541,7 @@ $$
 [\max(0,i-L(W-1)),\ i]
 $$
 
-每叠一层，信息最多再往回“跳” W−1 格，跳 L 次就是 $L(W-1)$ 格；同样用 max 截在位置 0。
-
-其中：$L$ 是层数；i、W 同上。
-
-区间长度最多是 $1+L(W-1)$。逐位置 FFN、归一化和残差不增加新的跨位置边。代码 `receptive_positions()` 逐层合并可达集合。
+区间长度最多是 `1+L×(W−1)`。逐位置 FFN、归一化和残差不增加新的跨位置边。代码 `receptive_positions()` 逐层合并可达集合。
 
 **结构上存在一条路径，不等于信息一定被学会、保留或准确检索。** 远处原始 K/V 已经不在当前层的窗口中；传来的只是中间隐藏表示。也不能把理论可达长度当成实测的长上下文能力。
 
@@ -4584,12 +4554,8 @@ $$
 本章定义一个更简单的因果教学图样，设全局位置集合为 G：
 
 $$
-A_{ij}=(j\le i)\ \land\ [(j>i-W)\ \lor\ (j\in G)\ \lor\ (i\in G)]
+M_{ij}=(j\le i)\ \land\ [(j>i-W)\ \lor\ (j\in G)\ \lor\ (i\in G)]
 $$
-
-读法：先过“不看未来”这道总闸，再满足三个条件之一就放行——key 在窗口里、key 是全局位置、或者 query 自己是全局位置。
-
-其中：$A_{ij}$ 是布尔可见性（True 表示 query i 可以读 key j；为了和全书的加性 mask $M$ 区分，这里写作 A）；G 是全局位置集合；$\land$ 是“且”，$\lor$ 是“或”，$\in$ 是“属于”；i、j、W 同上。
 
 - 普通 query 可以读局部窗口，以及已经出现的全局 key。
 - 全局 query 可以读全部过去和自己，但仍然不能读未来。
@@ -4612,17 +4578,13 @@ $$
 
 ## P16.6 线性注意力先改相似度，再移动括号
 
-普通 Softmax 注意力的未归一化权重是 $\exp(q\cdot k/\sqrt{d_k})$。本章换成正特征的内积：
+普通 Softmax 注意力的未归一化权重是 `exp(q·k/√d)`。本章换成正特征的内积：
 
 $$
 \phi(x)=\operatorname{ELU}(x)+1
 =\begin{cases}x+1,&x\ge0\\e^x,&x<0\end{cases},\qquad
 w_{tj}=\phi(q_t)^\top\phi(k_j)
 $$
-
-φ 把任意实数变成正数：正半轴平移 1，负半轴用 $e^x$ 平滑地压向 0。于是两个特征向量的内积一定为正，可以像 exp 分数一样当作“权重”用。
-
-其中：x 是 φ 的输入（向量时逐坐标计算）；ELU 是指数线性单元；$q_t$ 是位置 t 的 query，$k_j$ 是位置 j 的 key（这里按列向量写）；$\phi(q_t)^\top\phi(k_j)$ 是两者特征的内积；$w_{tj}$ 是 query t 给 key j 的未归一化权重；$d_k$ 是 Q/K 宽度。
 
 这是一个新的核函数，**不与原来的 Softmax 注意力精确等价**。它的“线性”指固定特征宽度时，计算量可对序列长度 T 呈线性关系，不是说整层没有非线性。采用该特征映射及下面的因果归一化表达，依据的是 [Linear Transformer 原论文，ICML 2020，§3.2–3.4、式 7–12](https://proceedings.mlr.press/v119/katharopoulos20a/katharopoulos20a.pdf)。
 
@@ -4633,13 +4595,9 @@ y_t=\frac{\sum_{j=0}^{t}\bigl(\phi(q_t)^\top\phi(k_j)\bigr)v_j}
 {\sum_{j=0}^{t}\phi(q_t)^\top\phi(k_j)}
 $$
 
-这和普通注意力的“加权平均”是同一个形状，只是把 exp 分数换成了 $w_{tj}$；分子按权重把 value 加起来，分母把权重本身加起来。
-
-其中：$y_t$ 是位置 t 的输出；$v_j$ 是位置 j 的 value；求和从 $j=0$ 到 $t$，体现因果性。
-
 正权重除以总和后加起来为 1。分母不能省略，否则重复历史会改变输出尺度，且不再是这个算式。
 
-本章省略头轴，只保留一个头；多头可在 B 之外再增加 H 轴。设特征宽度为 r、value 宽度为 $d_v$。本例 φ 不改变维度，所以 $r=d_k$，但别把这个特例当成所有核映射的定义。
+本章省略头轴，只保留一个头；多头可在 B 之外再增加 H 轴。设特征宽度为 r、value 宽度为 d_v。本例 φ 不改变维度，所以 r=d，但别把这个特例当成所有核映射的定义。
 
 | 张量 | 形状 | 含义 |
 | --- | --- | --- |
@@ -4661,11 +4619,7 @@ z_t=z_{t-1}+\phi(k_t),\qquad
 y_t=\frac{\phi(q_t)^\top S_t}{\phi(q_t)^\top z_t}
 $$
 
-这三步就是把上一节的两个求和“做成存折”：$S_t$ 存分子里与 query 无关的部分，$z_t$ 存分母里与 query 无关的部分，每来一个 token 往里存一笔；读的时候只需拿 $\phi(q_t)$ 和两本存折各做一次内积，不用回头翻历史。
-
-其中：$S_t$ 是 $[r,d_v]$ 的状态矩阵，$z_t$ 是 $r$ 维的归一化状态，下标 $t$ 表示已存入位置 0…t；$\phi(k_t)v_t^\top$ 是外积；$v_t^\top$ 是 $v_t$ 的转置；其余符号同上。
-
-外积把 r 个 key 特征与 $d_v$ 个 value 分量两两相乘，产生 r×d_v 个数。先把当前 k、v 加入状态，再读取，才能包含 j=t。这里的矩阵结合律对**选定的核**精确成立；它不能把已经改掉的核变回 Softmax。
+外积把 r 个 key 特征与 d_v 个 value 分量两两相乘，产生 r×d_v 个数。先把当前 k、v 加入状态，再读取，才能包含 j=t。这里的矩阵结合律对**选定的核**精确成立；它不能把已经改掉的核变回 Softmax。
 
 手算 B=1、r=2、d_v=1：
 
@@ -4715,11 +4669,7 @@ $$
 y_{T-1}=\frac{a}{a+(T-1)b}
 $$
 
-目标的 value 是 1、干扰项是 0，所以输出就是“目标权重占总权重的比例”。每条干扰的 b 很小，但 T 一大就积少成多，把比例拉下来。
-
-其中：a 是目标 key 得到的权重，b 是每条干扰 key 得到的权重（本节局部记号）；$T$ 是序列长度，$T-1$ 是干扰项条数；$y_{T-1}$ 是最后一个位置的输出。
-
-Softmax 的目标与干扰打分差是 $64/\sqrt2$（点积 32 与 −32 之差，再除以 $\sqrt{d_k}=\sqrt2$），所以对应输出为 $1/[1+(T-1)e^{-64/\sqrt2}]$，这些长度下打印成 1。W=4 的单层路径在 T>4 时彻底读不到位置 0，因此输出为 0。三者并没有被要求使用相同核或相同存储量，那正是实验改变的因素。
+Softmax 的目标与干扰打分差是 `64/√2`，所以对应输出为 `1/[1+(T−1)exp(−64/√2)]`，这些长度下打印成 1。W=4 的单层路径在 T>4 时彻底读不到位置 0，因此输出为 0。三者并没有被要求使用相同核或相同存储量，那正是实验改变的因素。
 
 状态只含 S 的 2×1 个数和 z 的 2 个数，float64 每数 8 字节，共 `(2×1+2)×8=32`。这不包含输入、输出、模型参数、Python 对象或 autograd 保存的中间状态。
 
@@ -4729,16 +4679,14 @@ Softmax 的目标与干扰打分差是 $64/\sqrt2$（点积 32 与 −32 之差�
 
 ## P16.9 复杂度是账本，不是速度承诺
 
-下面只数单层、单头的注意力主体，忽略投影、FFN 和常数；batch 可另外乘 B。全量 Q/K 宽度 $d_k$、value 宽度 $d_v$；全局位置数量为 g。
+下面只数单层、单头的注意力主体，忽略投影、FFN 和常数；batch 可另外乘 B。全量 Q/K 宽度 d、value 宽度 d_v；全局位置数量为 g。
 
 | 机制 | 整段处理的理论主体成本 | 逐 token 推理保存的历史表示 |
 | --- | --- | --- |
-| 全量注意力 | $O(T^2(d_k+d_v))$ | $O(T(d_k+d_v))$ |
-| 真正按窗口执行的 SWA | $O(TW(d_k+d_v))$ | 可用至多 W 位置的 K/V |
-| 局部 + 固定数量全局位置 | $O(T(W+g)(d_k+d_v))$ | 局部与全局位置的 K/V；全局 query 另需审查 |
-| 本章的线性递推 | $O(Trd_v+Tr)$ | S、z，共 $rd_v+r$ 个数 |
-
-读这张表的诀窍：全量注意力每个位置都要和 T 个位置配对，所以是 $T^2$；窗口和全局位置把“配对数”降到 W 或 W+g；线性递推每步只更新、读取固定大小的状态。其中：$T$ 序列长度，W 窗口，g 全局位置数，r 特征宽度，$d_k$、$d_v$ 同上。
+| 全量注意力 | O(T²(d+d_v)) | O(T(d+d_v)) |
+| 真正按窗口执行的 SWA | O(TW(d+d_v)) | 可用至多 W 位置的 K/V |
+| 局部 + 固定数量全局位置 | O(T(W+g)(d+d_v)) | 局部与全局位置的 K/V；全局 query 另需审查 |
+| 本章的线性递推 | O(Trd_v+Tr) | S、z，共 r×d_v+r 个数 |
 
 第三行需特别注意：如果未来有一个全局 query 要直接读取全部旧 key，就不能提前只留窗口与若干全局 key。本章只画 mask，没有实现这种缓存生命周期；不能拿稀疏边数代替完整的存储证明。g 若随 T 增长，也不能再把它视为固定常数。
 
@@ -4859,15 +4807,11 @@ tokenizer 的 encode / decode 又是第四件事：文本与 token ID 的转换�
 
 ## P17.3 普通 decoder-only 的依赖链
 
-设位置 i 的输入向量是 $x_i$，第 l 层的输入表示是 $x_i^{(l)}$，把所有位置的 $x_i^{(l)}$ 一行一行叠起来就是矩阵 $X^{(l)}$。先忽略归一化与多头，普通 self-attention 的 K/V 通常来自本层输入：
+设位置 i 的输入向量是 x_i，第 l 层的输入表示是 h_i^(l)。先忽略归一化与多头，普通 self-attention 的 K/V 通常来自本层输入：
 
 $$
-K^{(l)}=X^{(l)}W_K^{(l)},\qquad V^{(l)}=X^{(l)}W_V^{(l)}.
+K^{(l)}=H^{(l)}W_K^{(l)},\qquad V^{(l)}=H^{(l)}W_V^{(l)}.
 $$
-
-白话：第 l 层要查的“资料卡”由第 l 层自己的输入现做——想要高层的卡，就得先把下面各层都走一遍。
-
-其中：上标 $(l)$ 表示第 l 层；$X^{(l)}$ 是该层输入，形状 $[T,D]$（一行一个位置）；$W_K^{(l)}$、$W_V^{(l)}$ 是该层的 key、value 投影；$K^{(l)}$、$V^{(l)}$ 是得到的键、值矩阵。
 
 因此，如果想得到很高一层的历史 K/V，通常要先算完历史 token 在下面各层的表示。KV cache 可以避免“已经算过又重算”，但没有缓存的新输入仍要经过这条层间链。
 
@@ -4875,30 +4819,24 @@ $$
 
 ## P17.4 CED 改了哪条边
 
-把下半部分的最终输出记为 $Z_{\mathrm{enc}}$，形状 $[B,T,D]$。$B$ 是批大小，$T$ 是输入长度，$D$ 是每个 token 的表示宽度。上半部分 decoder 的某层输入仍记为 $X^{(l)}$。（全书 $E$ 专指 embedding 表，所以这里不用 E；配图里的“E”“N”就是这里的 $Z_{\mathrm{enc}}$、$T$。）
+把下半部分的最终输出记为 E，形状 [B,N,D]。B 是 batch，N 是输入长度，D 是每个 token 的表示宽度。上半部分 decoder 的某层输入仍记为 H^(l)。
 
 为了先看清路径，本章教学模型使用分开的 K、V：
 
 $$
-K_g^{(l)}=Z_{\mathrm{enc}}W_{Kg}^{(l)},\qquad V_g^{(l)}=Z_{\mathrm{enc}}W_{Vg}^{(l)}.
+K_g^{(l)}=E W_{Kg}^{(l)},\qquad V_g^{(l)}=E W_{Vg}^{(l)}.
 $$
 
-和上一节的式子比，只换了乘号左边的那一项：资料卡不再用本层输入现做，而是统一用 encoder 的最终输出来做，所以能在 decoder 开工前一次备好。
-
-其中：$Z_{\mathrm{enc}}$ 是 causal encoder 的最终输出；$W_{Kg}^{(l)}$、$W_{Vg}^{(l)}$ 是第 l 个 decoder 层的 global key、value 投影；$K_g^{(l)}$、$V_g^{(l)}$ 是该层读取的 global 键、值。
-
-下标 g 是 global。**右边是 $Z_{\mathrm{enc}}$，不是 $X^{(l)}$。** 查询 Q 则仍由当前 decoder 层提出。可以把它理解成：多个深层处理步骤各自提问，但查阅的历史资料可以先由下面的网络准备好。
+下标 g 是 global。**右边是 E，不是 H^(l)。** 查询 Q 则仍由当前 decoder 层提出。可以把它理解成：多个深层处理步骤各自提问，但查阅的历史资料可以先由下面的网络准备好。
 
 生产模型的报告用 KV latent C 和压缩权重 Z 表达投影，不是本章这两块独立矩阵；CSA2 还会跨层复用，因此并非每个 decoder 层都独占一份 global cache。先分开写 K/V 是为了看清来源，不是对官方 checkpoint 的逐张量复刻。
 
 与此同时，局部路径仍保留原来的依赖：
 
 $$
-K_{local}^{(l)}=X^{(l)}W_{Kl}^{(l)},\qquad
-V_{local}^{(l)}=X^{(l)}W_{Vl}^{(l)}.
+K_{local}^{(l)}=H^{(l)}W_{Kl}^{(l)},\qquad
+V_{local}^{(l)}=H^{(l)}W_{Vl}^{(l)}.
 $$
-
-其中：$W_{Kl}^{(l)}$、$W_{Vl}^{(l)}$ 是第 l 层的局部 key、value 投影；$K_{local}^{(l)}$、$V_{local}^{(l)}$ 是滑动窗口里读取的局部键、值；$X^{(l)}$ 同上。
 
 local 的意思是滑动窗口，不是“来自另一台本地机器”。这两套 KV 不能互换：global 可以承接较远的历史，local 保留本层对最近上下文的加工。
 
@@ -4906,9 +4844,9 @@ local 的意思是滑动窗口，不是“来自另一台本地机器”。这�
 
 ### 因果 encoder 为什么不会偷看未来
 
-“encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的 encoder 是因果的：$Z_{\mathrm{enc}}$ 的第 j 行只依赖 $x_0$ 到 $x_j$。
+“encoder”这个词本身不保证双向或单向，mask 才决定可见性。这里的 encoder 是因果的：E_j 只依赖 x_0 到 x_j。
 
-decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串起来，任何可读条目（$Z_{\mathrm{enc}}$ 的第 j 行）都不可能包含 $x_{i+1}$ 之后的信息。局部路径同样必须满足 j≤i。因此允许提前算出整段 $Z_{\mathrm{enc}}$ 和 global bank，**不代表每个 query 都可以读 bank 的所有行**。
+decoder 在位置 i 又只读取位置 j≤i 的 global 条目。两条规则串起来，任何可读条目 E_j 都不可能包含 x_(i+1) 之后的信息。局部路径同样必须满足 j≤i。因此允许提前算出整段 E 和 global bank，**不代表每个 query 都可以读 bank 的所有行**。
 
 这里的 global 指覆盖历史的范围，不保证生产系统每次读取所有历史条目。真实模型还会做稀疏选择；本章为了隔离数据来源，用稠密的因果 global attention，省去索引器。
 
@@ -4920,15 +4858,11 @@ replay（重放）就是重新运行一段历史的计算，用它恢复当前�
 
 设局部窗口 W 包含当前 token，每层最多再读取 W−1 个旧位置。单层看起来只需要一小段，但多层会把影响向前传播：第二层的某个局部 value 已经混合了第一层更早的信息。因此“最后 W 行还在”不等于“能从这 W 个原始输入精确重建所有深层状态”。[报告 §1](https://arxiv.org/html/2609.19969v1#S1) 给出的精确重建长度是最近 L × n_win 个 token（L 为层数，n_win 为窗口大小）。
 
-[报告 §3.2.2](https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2) 的 Bounded Replay 只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 $i_0$、当前 query 为 i，局部可见范围变成：
+[报告 §3.2.2](https://arxiv.org/html/2609.19969v1#S3.SS2.SSS2) 的 Bounded Replay 只重放一段固定长度后缀，并把局部注意力截断在段内。若段起点为 s、当前 query 为 i，局部可见范围变成：
 
 $$
-\max(i_0,i-W+1)\le j\le i.
+\max(s,i-W+1)\le j\le i.
 $$
-
-和 P16 的窗口不等式相比，只是把左边的“0”换成了段起点：replay 从哪里开始，窗口就最多退到哪里，段外的旧位置一律看不见。
-
-其中：$i_0$ 是 replay 段的起点位置（本节局部记号；全书 $s$ 留给注意力分数）；i 是 query 位置，j 是 key 位置；W 是包含当前位置的窗口大小。
 
 这会丢掉 replay 边界之前的局部依赖。**报告明确说这不是全量计算的数学等价重建。** 官方对响应质量影响的判断来自其模型与评估，本书的小矩阵误差不能验证或否定那项质量结论。
 
@@ -4968,7 +4902,7 @@ ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两�
 本模型故意只保留：
 
 1. 因果的局部 encoder。
-2. 每个 decoder 层从同一个最终 $Z_{\mathrm{enc}}$ 投影 global K/V。
+2. 每个 decoder 层从同一个最终 E 投影 global K/V。
 3. decoder 本层输入产生 local K/V。
 4. 完整前向、增量缓存和近似后缀 replay 三条路径。
 
@@ -4991,13 +4925,13 @@ ToyCED 输入不是 token ID，而是已经准备好的二维向量。默认两�
 
 encoder 只看自身及前一个位置，再加回残差：
 
-| 位置 | encoder 可见输入 | 均值 | 加上本位置输入后的 $Z_{\mathrm{enc}}$ |
+| 位置 | encoder 可见输入 | 均值 | 加上本位置输入后的 E |
 | --- | --- | --- | --- |
 | 0 | [1] | 1 | 2 |
 | 1 | [1,2] | 3/2 | 7/2 |
 | 2 | [2,3] | 5/2 | 11/2 |
 
-于是 $Z_{\mathrm{enc}}=[2,7/2,11/2]$。decoder 的 global V 直接来自这三行 $Z_{\mathrm{enc}}$，local V 来自本层输入；第一层的输入恰好也是 $Z_{\mathrm{enc}}$，但多层时不能继续混为一谈。
+于是 E=[2,7/2,11/2]。decoder 的 global V 直接来自这三行 E，local V 来自本层输入；第一层的输入恰好也是 E，但多层时不能继续混为一谈。
 
 位置 2 的完整 decoder 输出为：
 
@@ -5008,13 +4942,9 @@ $$
 =\frac{41}{3}.
 $$
 
-三块加起来就是这一层的全部工作：原样保留的残差、读全部历史 global 条目的平均、读窗口内 local 条目的平均。因为 Q、K 投影都为零，Softmax 退化成“可见位置一律等权”，所以每块都是简单平均。
-
-其中：$11/2$ 是位置 2 自己的输入（第一层 decoder 的输入就是 $Z_{\mathrm{enc}}$）；global 平均对位置 0、1、2 的 $Z_{\mathrm{enc}}$ 取平均；local 平均只对窗口 W=2 内的位置 1、2 取平均。
-
 完整的输出是 `[6,9,41/3]`。
 
-现在只 replay 末尾 W=2 个位置，即位置 1、2。**global bank 仍有全部三行 $Z_{\mathrm{enc}}$**，只是 decoder 的局部计算从位置 1 重新开始。
+现在只 replay 末尾 W=2 个位置，即位置 1、2。**global bank 仍有全部三行 E**，只是 decoder 的局部计算从位置 1 重新开始。
 
 - replay 位置 1 的 global 均值仍为 (2+7/2)/2=11/4；local 却只能看到自己，为 7/2。输出是 7/2+11/4+7/2=39/4=9.75，而完整结果是 9。
 - replay 位置 2 恰好已经拥有完整的单层局部窗口，所以这一行仍是 41/3。
@@ -5031,7 +4961,7 @@ kv = join_kv(encoder @ layer.global_k, encoder @ layer.global_v,
              offset, None if old is None else old[i])
 ```
 
-这里的 encoder 变量就是两层 causal encoder 的最终输出 $Z_{\mathrm{enc}}$，不是把 decoder 的输出换个变量名。每层 global bank 都在 decoder 开始前生成，不依赖 decoder 本身。
+这里的 encoder 就是两层 causal encoder 的最终输出，不是把 decoder 的输出换个变量名。每层 global bank 都在 decoder 开始前生成，不依赖 decoder 本身。
 
 相反，decoder 的局部路径是：
 
@@ -5042,13 +4972,13 @@ q = h @ layer.q
 h = h + attention(q, global_kv[i], offset) + attention(q, kv, offset, window)
 ```
 
-代码里的 h 就是正文的 $X^{(l)}$，每经过一层就改变。于是第二层 local V 会跟着第一层的处理改变，而提前准备的 global V 不会。
+h 每经过一层就改变。于是第二层 local V 会跟着第一层的处理改变，而提前准备的 global V 不会。
 
 可以对此做“干预”，不只检查变量名：把第一层 decoder 的 local V 投影放大三倍，重新计算。结果应当是：encoder-derived global banks 保持不变，第二层 decoder 的 local cache 和最终输出改变。如果 global bank 也被改变了，说明路径很可能接回了 decoder 自己。
 
 ## P17.10 形状和绝对位置必须一起记
 
-默认例子 $B=1$、$T=6$、$D=2$、W=3。这里 D 始终是向量宽度；后文用 L_e、L_d 表示 encoder、decoder 的层数。
+默认例子 B=1、N=6、D=2、W=3。这里 D 始终是向量宽度；后文用 L_e、L_d 表示 encoder、decoder 的层数。
 
 | 对象 | 完整 prefill 后的形状 / 位置 | 来源 |
 | --- | --- | --- |
@@ -5069,26 +4999,22 @@ bounded 路径会把 approximate 标记保留到后续 decode。它记录“来�
 
 ## P17.11 算清少走的路径，别把路径数叫速度
 
-定义：$B$ 为批大小，$T$ 为 prompt 长度，$L_e$ / $L_d$ 分别为 encoder / decoder 层数，$R=\min(T,W)$ 为 replay 长度。
+定义：B 为 batch，N 为 prompt 长度，L_e / L_d 分别为 encoder / decoder 层数，R=min(N,W) 为 replay 长度。
 
 本实验把“一个 token 的表示经过一个层”记作一次 **token-layer visit**。完整和有界路径分别是：
 
 $$
-C_{full}=BT(L_e+L_d),\qquad
-C_{bounded}=B(TL_e+RL_d).
+C_{full}=BN(L_e+L_d),\qquad
+C_{bounded}=B(NL_e+RL_d).
 $$
 
-这是“人次 × 层数”的点名册：完整路径里每个 token 都要走完 encoder 和 decoder 的每一层；有界路径里 encoder 照走，decoder 只让最后 R 个 token 走。
+令 B=1、L_e=L_d=L/2 且 N≥W，则 C_bounded=NL/2+WL/2，对应报告 §2.2 的 O(NL/2+n_win·L/2) 路径计数写法；短输入仍应使用 R=min(N,W)。
 
-其中：$C_{full}$、$C_{bounded}$ 是两条路径的 token-layer visit 次数（C 取 count 之意，本节局部记号）；$B$、$T$、$L_e$、$L_d$、$R$ 同上。
+这里的 full 基线是同一个 CED 教学模型的完整执行，不是另一个普通 decoder-only 模型，更不是两个训练模型的质量对比。这是本模型实际循环累计的层处理次数，不是仅打印一条假想公式。被省掉的是 `B(N−R)L_d` 次 decoder token-layer visit。
 
-令 $B=1$、$L_e=L_d=L/2$ 且 $T\ge W$，则 $C_{bounded}=TL/2+WL/2$，对应报告 §2.2 的 O(NL/2+n_win·L/2) 路径计数写法（报告里的 N 就是这里的 $T$，n_win 就是 W）；短输入仍应使用 $R=\min(T,W)$。
+但不能把所有工作都塞进这个计数：两条路径仍为全部 N 个 encoder 输出做 global K/V 投影。本教学模型每个 decoder 层各有一对投影，故两边都要 `BNL_d` 对投影。**官方 CSA2 有跨层复用，不能把本实验这个投影数量直接套到真实模型。**
 
-这里的 full 基线是同一个 CED 教学模型的完整执行，不是另一个普通 decoder-only 模型，更不是两个训练模型的质量对比。这是本模型实际循环累计的层处理次数，不是仅打印一条假想公式。被省掉的是 $B(T-R)L_d$ 次 decoder token-layer visit。
-
-但不能把所有工作都塞进这个计数：两条路径仍为全部 $T$ 个 encoder 输出做 global K/V 投影。本教学模型每个 decoder 层各有一对投影，故两边都要 $BTL_d$ 对投影。**官方 CSA2 有跨层复用，不能把本实验这个投影数量直接套到真实模型。**
-
-默认 $B=1$、$T=6$、$L_e=L_d=2$、W=3：
+默认 B=1、N=6、L_e=L_d=2、W=3：
 
 | 计数项目 | 完整路径 | 有界路径 |
 | --- | --- | --- |
@@ -5099,7 +5025,7 @@ $$
 
 24 变成 18，**不等于运行时间变成 3/4**。不同路径的每次 attention 涉及的 key 数不同，投影和内存操作也有成本；本脚本甚至显式构造稠密分数矩阵，再用 mask 遮住局部不可见位置，根本不是稀疏 GPU kernel。
 
-当 $T\le W$ 时，$R=T$，有界路径不会省掉 decoder 的任何位置。只有输入显著长于窗口时，计数差异才突出。即使如此，也不能由这个固定小矩阵实验推出官方吞吐、TTFT、TPOT、显存节省或语言质量。
+当 N≤W 时，R=N，有界路径不会省掉 decoder 的任何位置。只有输入显著长于窗口时，计数差异才突出。即使如此，也不能由这个固定小矩阵实验推出官方吞吐、TTFT、TPOT、显存节省或语言质量。
 
 ## P17.12 运行与验证
 
@@ -5175,48 +5101,40 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p 'test_ced_architecture
 
 $$
 u=x+\operatorname{Attention}(\operatorname{Norm}_1(x)),\qquad
-y=u+\operatorname{FFN}(\operatorname{Norm}_2(u)).
+h=u+\operatorname{FFN}(\operatorname{Norm}_2(u)).
 $$
 
 S5 不改变第一条支路，只把第二式的 FFN 换成 MoE：
 
 $$
-y=u+\operatorname{MoE}(\operatorname{Norm}_2(u)).
+h=u+\operatorname{MoE}(\operatorname{Norm}_2(u)).
 $$
-
-换句话说，只换了第二道工序的师傅班子：工单进出的流程（先归一化、做完再加回残差）原样不动。
-
-其中：x 是进入本 Block 的一个 token 的行向量，宽 $D$；$u$ 是注意力子层加完残差后的结果（全书同义）；$y$ 是本 Block 的输出，也就是下一层的输入；$\operatorname{Norm}_1$、$\operatorname{Norm}_2$ 是两处 RMSNorm；$\operatorname{MoE}(\cdot)$ 是下面要定义的混合专家模块。
 
 因此，MoE 本身不再加一次输入残差。注意力负责读取其他位置，MoE 在本层逐 token 加工已经得到的表示。换 FFN 不意味着换掉因果 mask，也不意味着取消 GQA 的 K/V 缓存。
 
 ![S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃](assets/diagrams/p18-moe.svg)
 
-图中的 E 就是正文的 $N_E$，即可选的路由专家数量；k 是每 token 选择的数量；S 就是正文的 $N_S$，即始终参与的共享专家数量（配图沿用旧字母；全书 $E$ 专指 embedding 表）。**$N_E$ 和 k 不能混写。** k=2、$N_E=4$ 时，模型保存四个路由专家，单个 token 只调用其中两个。
+图中的 E 是可选的路由专家数量，k 是每 token 选择的数量，S 是始终参与的共享专家数量。**E 和 k 不能混写。** k=2、E=4 时，模型保存四个路由专家，单个 token 只调用其中两个。
 
 ## P18.2 路由器先打分，再选择，再加权
 
 设一个 token 的输入是行向量 x，宽度为 D。教学路由器是一层不带 bias 的 Linear：
 
 $$
-z=xW_r^\top,\qquad W_r\in\mathbb{R}^{N_E\times D},\qquad
-p_e=\frac{\exp(z_e)}{\sum_{j=0}^{N_E-1}\exp(z_j)}.
+z=xW_r^T,\qquad W_r\in\mathbb{R}^{E\times D},\qquad
+p_e=\frac{\exp(z_e)}{\sum_j\exp(z_j)}.
 $$
 
-z 是分数，p 是本章选用的 Softmax affinity，意思是 token 对专家的相对偏好。它不是词表上的下一个 token 概率，维度 $N_E$ 也不是词表大小 $\lvert\mathcal V\rvert$。路由器像前台给每位师傅打一个“对口分”，Softmax 再把这些分数换成加起来为 1 的偏好比例。
+z 是分数，p 是本章选用的 Softmax affinity，意思是 token 对专家的相对偏好。它不是词表上的下一个 token 概率，维度 E 也不是词表大小 V。
 
-其中：x 是一个 token 经 $\operatorname{Norm}_2$ 之后的行向量，宽 $D$；$W_r$ 是路由矩阵，按 $[N_E,D]$（输出×输入）存，所以乘的时候写转置；$z$ 有 $N_E$ 个分量，$z_e$ 是第 e 个路由专家的分数；$p_e$ 是 token 对第 e 个专家的 affinity；$N_E$ 是路由专家个数；j 是求和用的专家编号（从 0 数起）。
-
-接着取 p 最大的 k 个专家，记为集合 $\mathcal I_k$。本章再把**所选专家**的权重归一化：
+接着取 p 最大的 k 个专家，记为集合 K。本章再把**所选专家**的权重归一化：
 
 $$
-w_e=\frac{p_e}{\sum_{j\in\mathcal I_k}p_j}\quad(e\in\mathcal I_k),\qquad
-\operatorname{MoE}(x)=\sum_{e\in\mathcal I_k}w_e F_e(x)+\sum_{e'=1}^{N_S}F^{\mathrm{sh}}_{e'}(x).
+w_e=\frac{p_e}{\sum_{j\in K}p_j}\quad(e\in K),\qquad
+\operatorname{MoE}(x)=\sum_{e\in K}w_e F_e(x)+\sum_{s=1}^{S}F_s^{shared}(x).
 $$
 
-没有被选中的路由专家不计算 F_e(x)，也不参与这次加权和。共享专家全部执行，输出直接相加，不与路由专家一起归一化，也不除以 $N_S$。先在被选中的几位师傅之间重新分配话语权，让它们的权重加起来为 1；再把每张工单都要做的共享检查原样加上。
-
-其中：$\mathcal I_k$ 是 affinity 最大的 k 个路由专家的编号集合；k 是每 token 选几个；$w_e$ 是被选专家 e 的组合权重；$F_e$ 是第 e 个路由专家（一个 SwiGLU FFN）；$N_S$ 是共享专家个数；$e'$ 是共享专家编号，$F^{\mathrm{sh}}_{e'}$ 是第 $e'$ 个共享专家。
+没有被选中的路由专家不计算 F_e(x)，也不参与这次加权和。共享专家全部执行，输出直接相加，不与路由专家一起归一化，也不除以 S。
 
 这是本书明确选择的一套教学约定，不是“所有 MoE 的唯一公式”。尤其要区分原始 Softmax、所选权重归一化、Sigmoid affinity、输出缩放等细节。即便都叫 top-2，公式不同也会产生不同输出。
 
@@ -5232,33 +5150,31 @@ $$
 
 A 选择的原始概率和为 0.7，所以不是“0.4 倍下标 0 的专家加 0.3 倍下标 1 的专家”，而是 4/7 与 3/7。C 的平局不随机打破。
 
-请求负载是 `[2,2,1,1]`，总和 6=N×k（N=3 是 token 数，k=2）。它数的是 **token—专家分配次数**，不是不同 token 的数量，也不包括共享专家。一个 token 选择两个专家，会计两次；每个共享专家另外处理全部 N=3 个 token。
+请求负载是 `[2,2,1,1]`，总和 6=N×k。它数的是 **token—专家分配次数**，不是不同 token 的数量，也不包括共享专家。一个 token 选择两个专家，会计两次；每个共享专家另外处理全部 N=3 个 token。
 
 ### 再把输出算成一个具体数字
 
 为了单独检查组合规则，暂时不用 SwiGLU，把三个专家换成简单倍率：F0(x)=x，F1(x)=10x，F2(x)=100x。令 affinity 比例为 1:2:4，top-2 选下标 2 和 1 的专家，归一化权重为 2/3 和 1/3：
 
 $$
-\operatorname{MoE}_{\mathrm{routed}}(x)=\tfrac23\times100x+\tfrac13\times10x=70x.
+y_{routed}=\tfrac23\times100x+\tfrac13\times10x=70x.
 $$
-
-其中：$\operatorname{MoE}_{\mathrm{routed}}(x)$ 只是 MoE 输出里路由专家那一部分；2/3、1/3 是 4:2 归一化后的组合权重；100x、10x 分别是下标 2、1 的专家的输出。
 
 再加两个共享分支 3x 和 5x，得到 78x，而不是 74x（74x 是把两个共享分支取平均的错误算法：70+(3+5)/2）。这个倍率实验只用来验算组合，不把线性倍率当成真正的专家能力；正式模块和另一组独立梯度测试都使用 SwiGLU。
 
 ## P18.3 张量账本：先摊平，最后放回
 
-设输入 X 的形状为 [B,T,D]，N=B×T（N 是摊平后的 token 数，本章局部记号）。MoE 的路由和专家计算不需要先混合不同 token，因此把前两维暂时摊平即可。
+设输入 X 的形状为 [B,T,D]，N=B×T。MoE 的路由和专家计算不需要先混合不同 token，因此把前两维暂时摊平即可。
 
 | 张量 | 形状 | 含义 |
 | --- | --- | --- |
 | flat | [N,D] | 当前调用的全部 token 向量 |
-| router.weight | $[N_E,D]$ | 为所有路由专家打分 |
-| logits、probs | $[N,N_E]$ | 每 token 对每个路由专家的分数、affinity |
+| router.weight | [E,D] | 为所有路由专家打分 |
+| logits、probs | [N,E] | 每 token 对每个路由专家的分数、affinity |
 | indices | [N,k] | 被选中的专家编号 |
 | weights | [N,k] | 丢弃前的组合权重 |
 | kept | [N,k] | 容量实验中是否接受该分配 |
-| requested、accepted | $[N_E]$ | 容量处理前后各专家的分配次数 |
+| requested、accepted | [E] | 容量处理前后各专家的分配次数 |
 | output | [N,D] → [B,T,D] | 专家结果按原 token 位置合回 |
 
 **dispatch** 是按专家收集 token；**combine** 是把结果送回 token 原位置并加权。它们不能只做 reshape：同一个 token 可能出现在多个专家的小批次中，结果要相加，而不是覆盖。
@@ -5267,23 +5183,21 @@ $$
 
 ## P18.4 专家多了，参数和计算怎样算
 
-沿用 P13 的无 bias SwiGLU，中间宽度为 $d_{\mathrm{ff}}$ 的一个专家有三张矩阵：gate、up、down。参数量为 $3Dd_{\mathrm{ff}}$。路由器有 $DN_E$ 个参数。
+沿用 P13 的无 bias SwiGLU，中间宽度为 d_f 的一个专家有三张矩阵：gate、up、down。参数量为 3D d_f。路由器有 DE 个参数。
 
-设每个路由专家的中间宽度为 $d_{\mathrm{ff}}$，每个共享专家的为 $d_{\mathrm{ff}}^{\mathrm{sh}}$，则**仅 MoE 模块**：
-
-$$
-N_{\mathrm{param}}^{\mathrm{total}}=N_E(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E,
-$$
+设路由专家宽度为 d_r，共享专家宽度为 d_s，则**仅 MoE 模块**：
 
 $$
-N_{\mathrm{param}}^{\mathrm{active}}=k(3Dd_{\mathrm{ff}})+N_S(3Dd_{\mathrm{ff}}^{\mathrm{sh}})+DN_E.
+P_{total}=E(3Dd_r)+S(3Dd_s)+DE,
 $$
 
-这里的 active 是不丢弃时，每 token 参与运算的权重预算。路由器需要给全部 $N_E$ 个专家打分，所以不能只算 k 个 router 行；共享专家也不能漏算。两式都不包含 attention、norm、embedding 和输出 head，更不是整模型内存公式。两式只差第一项：店里养着 $N_E$ 位路由师傅，每张工单只请 k 位，而共享师傅和前台每次都在。
+$$
+P_{active/token}=k(3Dd_r)+S(3Dd_s)+DE.
+$$
 
-其中：$N_{\mathrm{param}}^{\mathrm{total}}$ 是 MoE 模块保存的参数总数；$N_{\mathrm{param}}^{\mathrm{active}}$ 是每 token 参与运算的参数预算；3 对应 gate、up、down 三张矩阵；$N_E$、$N_S$ 是路由专家与共享专家个数；$DN_E$ 是路由矩阵 $W_r$ 的元素数。
+这里的 active 是不丢弃时，每 token 参与运算的权重预算。路由器需要给全部 E 个专家打分，所以不能只算 k 个 router 行；共享专家也不能漏算。两式都不包含 attention、norm、embedding 和输出 head，更不是整模型内存公式。
 
-手算 $D=4$、$N_E=4$、$k=2$、$d_{\mathrm{ff}}=2$、$N_S=1$、$d_{\mathrm{ff}}^{\mathrm{sh}}=2$：
+手算 D=4、E=4、k=2、d_r=2、S=1、d_s=2：
 
 - 一个路由专家：3×4×2=24。
 - 共享专家：24；路由器：4×4=16。
@@ -5296,7 +5210,7 @@ $$
 
 考虑 D=4、没有共享专家的两个方案：
 
-| 方案 | $N_E$ | k | 专家宽度 | 全部专家参数，不含 router | 每 token 专家参数，不含 router | 含 router 总参数 |
+| 方案 | E | k | 专家宽度 | 全部专家参数，不含 router | 每 token 专家参数，不含 router | 含 router 总参数 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 较粗 | 2 | 1 | 8 | 192 | 96 | 200 |
 | 较细 | 4 | 2 | 4 | 192 | 96 | 208 |
@@ -5318,24 +5232,18 @@ $$
 $$
 f_e=\frac{n_e}{Nk},\qquad
 \bar p_e=\frac1N\sum_{t=1}^{N}p_{t,e},\qquad
-\mathcal L_{\mathrm{aux}}=N_E\sum_e f_e\bar p_e.
+L_{aux}=E\sum_e f_e\bar p_e.
 $$
 
-n_e 使用丢弃前的 requested 计数；f 的总和为 1。计数来自离散选择，本实现不对它求梯度，梯度通过平均 affinity 流向 router。训练时再乘一个小系数 α。
-
-$f_e$ 看实际派了几张单，$\bar p_e$ 看平均有多想派；两者一起偏向同一位师傅时和最大，所以压低它就是劝路由器别扎堆。乘 $N_E$ 是为了让完全均匀时结果正好为 1。
-
-其中：$n_e$ 是丢弃前第 e 个专家收到的分配次数；N 是 token 数，k 是每 token 选几个，所以 $Nk$ 是分配总次数；$f_e$ 是专家 e 分到的份额；$p_{t,e}$ 是第 t 个 token 对专家 e 的 affinity，$\bar p_e$ 是它在 N 个 token 上的平均；$\mathcal L_{\mathrm{aux}}$ 是均衡辅助损失。
+n_e 使用丢弃前的 requested 计数；f 的总和为 1。计数来自离散选择，本实现不对它求梯度，梯度通过平均 affinity 流向 router。训练时再乘一个小系数 alpha：
 
 $$
-\mathcal L=\mathcal L_{\mathrm{CE}}+\alpha\cdot\operatorname{mean}_{\mathrm{layers}}(\mathcal L_{\mathrm{aux}}).
+L=L_{CE}+\alpha\cdot\operatorname{mean}_{layers}(L_{aux}).
 $$
 
-其中：$\mathcal L$ 是训练时反向传播用的总损失；$\mathcal L_{\mathrm{CE}}$ 是下一 token 交叉熵；α 是辅助项系数（本章局部字母）；$\operatorname{mean}_{\mathrm{layers}}$ 对所有 MoE 层的辅助项取平均。
+S5 默认 alpha=0.01，且只有提供 targets 才返回训练损失。均衡辅助项不是标签预测的交叉熵；对验证损失或困惑度做比较时，应单独计算 CE，不把 CE+辅助项直接拿去算 perplexity。
 
-S5 默认 α=0.01，且只有提供 targets 才返回训练损失。均衡辅助项不是标签预测的交叉熵；对验证损失或困惑度做比较时，应单独计算 CE，不把 CE+辅助项直接拿去算 perplexity。
-
-在 A、B、C 的例子里，f=[1/3,1/3,1/6,1/6]，平均 p=[0.3,0.3,0.2,0.2]，所以未乘系数的 $\mathcal L_{\mathrm{aux}}=16/15\approx1.066667$。
+在 A、B、C 的例子里，f=[1/3,1/3,1/6,1/6]，平均 p=[0.3,0.3,0.2,0.2]，所以未乘系数的 L_aux=16/15≈1.066667。
 
 不要把“辅助损失等于 1”读成“硬路由已均衡”。例如四个专家的 p 都等于 1/4，在我们的固定平局规则下，所有 token 都选下标 0、1 的专家，计数仍失衡，但上述辅助项恰好也是 1。应同时查看计数、概率和训练效果。
 
@@ -5429,7 +5337,7 @@ route 里不用默认 topk 的偶然平局顺序，而使用稳定降序排序�
 
 ### 缓存也必须认识路由配置
 
-S5 继续调用 S4 的 compact GQA cache，形状仍为 $[B,H_{kv},T,d_h]$。但高层的历史 K/V 依赖低层 MoE 的输出，所以改变低层路由也会让缓存失效。
+S5 继续调用 S4 的 compact GQA cache，形状仍为 [B,Hkv,T,d]。但高层的历史 K/V 依赖低层 MoE 的输出，所以改变低层路由也会让缓存失效。
 
 已有签名追踪权重、位置参数、norm epsilon 等；S5 另外追踪实际模块上的 top_k、capacity、balance_mode，以及 balancing bias 等 buffer 的身份、原地修改版本、dtype 和 device。bias 虽然不是 Parameter，也必须纳入。
 
@@ -5464,7 +5372,7 @@ compact KV payload bytes: 1536; no GPU timing measured
 
 后一组直方图来自未训练的两层 S5，B=2、T=6、k=2，所以每层计数和为 24。不能把随机初始化下的分工当成学到的专家能力。脚本用合成 token 做一次梯度 smoke，循环左移标签也只是用于验证反向，并非本书推荐的语料构造或验证集评估方法。
 
-KV 的 1536 字节可以独立复算：按 $2LBH_{kv}Td_hb_{\mathrm{elem}}$，即 2（K/V）×2 层×批大小 2×2 KV 头×6 token×4 头宽×4 字节。MoE 没有把 $H_{kv}$ 改成 $N_E$；专家参数内存与 KV payload 是两本不同的账。
+KV 的 1536 字节可以独立复算：2（K/V）×2 层×2 batch×6 token×2 KV 头×4 头宽×4 字节。MoE 没有把 Hkv 改成 E；专家参数内存与 KV payload 是两本不同的账。
 
 运行本章测试文件，末尾应显示 `OK`；测试分类、计数与错误版本清单见 `docs/testing.md`。
 
@@ -5474,7 +5382,7 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 
 当专家分布在不同设备上，dispatch 不再只是本机索引：需要把 token 向量送到相应专家所在的设备，算完后把输出送回。常见 expert parallel 会用到 all-to-all 一类通信，但具体分组、复制和合并方案各不相同。
 
-一个粗略账本是：N 个 token，每个发往 k 个远端专家，每份 D 维、每元素 $b_{\mathrm{elem}}$ 字节，那么一次向外发送的向量 payload 约为 $NkDb_{\mathrm{elem}}$；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。
+一个粗略账本是：N 个 token，每个发往 k 个远端专家，每份 D 维、每元素 q 字节，那么一次向外发送的向量 payload 约为 NkDq；返回还要再算一趟。它不是网络实测：同节点合并、专家共置、本地命中、元数据、padding、反向通信和通信计算重叠都会改变真实开销。
 
 因此，决定时延的至少包括：
 
@@ -5498,11 +5406,11 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 ## P18.12 自测：先写答案，再运行断言
 
 1. A 的 p=[0.4,0.3,0.2,0.1]、k=2，输出权重是 0.4、0.3 吗？三行 A、B、C 一共发生多少次路由分配？
-2. $D=4$、$N_E=4$、$k=2$、路由和共享宽度都为 2、一个共享专家时，MoE 总参数与每 token 激活预算各多少？是整模型参数吗？
-3. 把 $N_E=2$、k=1、宽度 8 换成 $N_E=4$、k=2、宽度 4，专家参数预算保持什么？包含 router 后还严格相等吗？
+2. D=4、E=4、k=2、路由和共享宽度都为 2、一个共享专家时，MoE 总参数与每 token 激活预算各多少？是整模型参数吗？
+3. 把 E=2、k=1、宽度 8 换成 E=4、k=2、宽度 4，专家参数预算保持什么？包含 router 后还严格相等吗？
 4. A、B、C 的请求计数为何是 [2,2,1,1]？capacity=1 后计数和 C 的路由贡献怎样变？
 5. 部分丢弃例子第二行只保留下标 1 的专家，权重应为 1 还是 3/7？共享分支受不受影响？
-6. 所有 token 的四个 affinity 都是 1/4，top-2 的硬负载会均匀吗？$\mathcal L_{\mathrm{aux}}=1$ 能证明均衡吗？
+6. 所有 token 的四个 affinity 都是 1/4，top-2 的硬负载会均匀吗？L_aux=1 能证明均衡吗？
 7. top-1 且所选权重归一化时，单靠任务损失能在本实现中更新 router 吗？辅助项呢？
 8. bias 更新采用负载 [4,0,2,2]、步长 0.1 时，增量是多少？已建的 KV cache 能否继续用？
 9. 缓存和完整前向都用同一个错误的“所有专家平均”函数，二者一致能证明 MoE 正确吗？
@@ -5519,7 +5427,7 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 7. 不能通过这条任务路径，唯一组合权重恒为 1，router 梯度为零；辅助项在测试的集中路由案例中提供非零梯度。见本章测试。
 8. [-0.1,+0.1,0,0]；更新 buffer 后必须重置缓存。见本章测试。
 9. 不能。见本章测试。
-10. 2×2×2×2×6×4×4=1536（$2LBH_{kv}Td_hb_{\mathrm{elem}}$）；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见本章测试。
+10. 2×2×2×6×2×4×4=1536；这是当前请求的 K/V 张量，形状依赖层数、KV 头与长度，而不是专家矩阵。见本章测试。
 
 到这里，S0→S5 已经把“多保存一些参数”和“每 token 真正调用哪些参数”分开。接下来进入训练流水线：即使路由与缓存都正确，数据边界、去重、切分和预算没有处理好，也训练不出可靠的模型。
 
@@ -9223,27 +9131,29 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 ### A.5 全书符号约定：一个字母，一种意思 {#p28.a5-symbols}
 
-公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的**全局符号**，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式**要改成的写法**；某章还没改写完成时，以该式的「其中：」为准。附录自己的 A.1、A.2、D.1、F.0 也属于后续改写批次：其中 A.1 的交叉熵 $L$ 与 $\mathrm{softmax}(QK^T/\cdots)$、A.2 的每头宽度 $d$、D.1 的 $d_{\mathrm{head}}$ 与字节数 $s$、F.0 的 $\bar L$ 暂时保留旧写法，读的时候按本表换算。
+公式里的字母就像地图上的图例：图例统一了，换一章也不会迷路。下表是全书的**全局符号**，每个符号只表示一种东西；每条公式后面的「其中：」会再提醒一次它在这里指什么。本表是各章公式**要改成的写法**；某章还没改写完成时，以该式的「其中：」为准。附录自己的 A.1、A.2、D.1、F.0 也要按本表改写（F9）：其中 A.1 的交叉熵 $L$、稳定 softmax 的最大值 $m$、周期 $T=2\pi/\lvert\omega\rvert$ 与 $\mathrm{softmax}(QK^T/\cdots)$，A.2 的每头宽度 $d$，D.1 的 $d_{\mathrm{head}}$ 与字节数 $s$，F.0 的 $\bar L$ 暂时保留旧写法，读的时候按本表换算。
 
 **尺寸与计数**
 
 | 符号 | 唯一含义 | 常见形状或取值 | 不要和谁混 |
 |---|---|---|---|
-| $B$ | 批大小：一次并排处理几条序列 | 例：$B=2$ | 不作缩放定律里的常数 |
-| $T$ | 序列长度：一条序列有几个 token；做 KV cache 时是已缓存的 token 数 | 例：$T=3$ | 转置写 $^\top$；温度写 $\tau$ |
+| $B$ | 批大小：一次并排处理几条序列 | 例：$B=2$ | 不作缩放定律里的常数，也不作 LoRA 矩阵名 |
+| $T$ | 序列长度：一条序列有几个 token；做 KV cache 时是已缓存的 token 数 | 例：$T=3$ | 转置写 $^\top$；温度写 $\tau$；周期写 $\lambda$ |
 | $T_q,\ T_{kv}$ | 同一个式子里同时出现两种长度时：本次 query 的个数、可读 key/value 的个数 | 增量解码时 $T_q=1$ | 只有一种长度时直接写 $T$ |
 | $T_{\mathrm{train}}$ | 训练时见过的最长上下文长度（位置外推时用） | 例：$T_{\mathrm{train}}=8$ | 不再写成 $L$ |
-| $D$ | 模型宽度：每个位置的总特征数，代码里叫 `d_model` | 例：$D=8$ | 正文公式统一写 $D$，不写 $d_{model}$ |
+| $T_{\mathrm{win}}$ | 滑动窗口长度（含当前位置自己） | 例：$T_{\mathrm{win}}=3$ | 不写 $W$（$W$ 只指权重） |
+| $D$ | 模型宽度：每个位置的总特征数，代码里叫 `d_model` | 例：$D=8$ | 正文公式统一写 $D$；KL 散度写 $\operatorname{KL}$，数据并行份数写 $N_{\mathrm{dp}}$ |
 | $\mathcal V$ / $\lvert\mathcal V\rvert$ | 词表（全部 token 的集合）/ 词表大小 | embedding 表 $E\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ | 大写 $V$ 只指 Value |
 | $H$ | 注意力头数（GQA 中指 query 头数，也可写 $H_q$） | 例：$H=2$ | FFN 隐藏宽度不用 $H$；P17 的层表示 $H^{(l)}$ 改为 $X^{(l)}$ |
 | $H_{kv}$ | KV 头数：MHA 时 $H_{kv}=H$，MQA 时为 1 | $1\le H_{kv}\le H$ | 正文写数学符号 $H_{kv}$，不写代码标识符 `H_kv` |
 | $d_h$ | 单个头的宽度（Q/K/V 各头等宽时） | 例：$d_h=4$ | 不再写 $d$、$D_{head}$、$d_{\mathrm{head}}$ |
 | $d_k,\ d_v$ | 单头注意力里 Q/K 与 V 的宽度（第 3 章）；多头且等宽时 $d_k=d_v=d_h$ | $W_Q\in\mathbb R^{D\times d_k}$ | |
-| $d_{\mathrm{ff}}$ | FFN 中间层宽度 | 常见 $d_{\mathrm{ff}}=4D$ | |
+| $d_{\mathrm{ff}}$ | FFN 中间层宽度；要比较两种 FFN 时写 $d_{\mathrm{ff}}^{\mathrm{GELU}}$、$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ | 常见 $d_{\mathrm{ff}}=4D$ | 不用 $H$、$M$ |
 | $L$ | 层数；编码器、解码器分别为 $L_e$、$L_d$ | 例：$L=2$ | 损失写 $\mathcal L$，长度写 $T$ |
 | $N_E$ | MoE 的路由专家个数；第 $e$ 个专家记 $F_e$ | 路由矩阵按 $[N_E,D]$ 存，打分 $z=xW_r^\top$ | $E$ 只指 embedding 表 |
-| $b_{\mathrm{elem}}$ | 每个张量元素占几个字节 | float32 为 4，float16/bfloat16 为 2 | 不用 $s$（$s$ 留给注意力分数） |
+| $N_{\ast}$ | 带下标的 $N$ 一律表示“个数”：$N_S$ 共享专家数、$N_{\mathrm{valid}}$ 有效目标数、$N_{\mathrm{dp}}$ 数据并行份数、$N_{\mathrm{GELU}}$ 等参数个数 | 例：$N_{\mathrm{valid}}=2$ | 正文不再用不带下标的 $N$ |
 | $N_{\mathrm{param}},\ N_{\mathrm{tok}}$ | 缩放定律里的参数量、训练 token 数 | $\mathcal L(N_{\mathrm{param}},N_{\mathrm{tok}})$ | 不借用 $N$、$D$ |
+| $b_{\mathrm{elem}}$ | 每个张量元素占几个字节；带文字下标的 $b$ 都是字节数（如 ZeRO 的 $b_p,b_g,b_o$） | float32 为 4，float16/bfloat16 为 2 | 不用 $s$；FFN 偏置写 $b_1,b_2$ |
 
 **头宽与模型宽度的关系要带条件。** 只有在「各头等宽，且所有头拼起来的投影总宽等于 $D$」时，才有 $D=Hd_h$、$d_h=D/H$，输出投影 $W_O$ 才是 $[D,D]$ 的方阵。一般情况下 $W_O$ 的形状是 $[Hd_v,D]$（原论文写作 $hd_v\times d_{\mathrm{model}}$）。反例就在本书里：附录 E.2 的 Qwen3 配置 $D=1024$、16 个头、每头 128，Q 投影宽 $16\times128=2048\neq D$；P25 的微型配置也刻意保留 $H_qd_h\neq D$。
 
@@ -9253,14 +9163,17 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 |---|---|---|
 | $E$ | embedding 表，第 $i$ 行是 token $i$ 的向量 | $[\lvert\mathcal V\rvert, D]$ |
 | $X$、$X^{(l)}$ | 一层的输入表示（隐藏状态），一行一个位置；$X^{(l)}$ 是第 $l$ 层的输入，其中第 $i$ 行记 $x_i^{(l)}$ | $[T,D]$，带 batch 时 $[B,T,D]$ |
-| $Q,\ K,\ V$ | 查询、键、值矩阵 | 单头 $[T,d_k]$、$[T,d_k]$、$[T,d_v]$ |
+| $Q,\ K,\ V,\ O$ | 查询、键、值矩阵与注意力输出；小写 $q_i,k_j,v_j,o_i$ 是它们的第 $i$、$j$ 行 | 单头 $[T,d_k]$、$[T,d_k]$、$[T,d_v]$、$[T,d_v]$ |
 | $W_Q,\ W_K,\ W_V,\ W_O$ | Q/K/V 投影与输出投影；第 $h$ 个头的写 $W_h^Q$ 等 | $W_Q:[D,d_k]$；$W_O:[Hd_v,D]$，等宽且总宽为 $D$ 时为 $[D,D]$ |
-| $s_{ij}$ | 第 $i$ 个 query 对第 $j$ 个 key 的缩放分数 | 标量，整张表 $[T,T]$ |
+| $W_{\mathrm{gate}},\ W_{\mathrm{up}},\ W_{\mathrm{down}}$ | 门控 FFN 的三块权重 | $[D,d_{\mathrm{ff}}]$、$[D,d_{\mathrm{ff}}]$、$[d_{\mathrm{ff}},D]$ |
+| $s_{ij}$ | 第 $i$ 个 query 对第 $j$ 个 key 的缩放分数；一行里的最大值记 $s_{\max}$ | 标量，整张表 $[T,T]$ |
 | $M$ | 加性 mask：允许看的位置为 0，禁看的位置为 $-\infty$ | $[T,T]$ |
 | $p_i$ | 概率：softmax 输出的第 $i$ 项 | 标量，各项和为 1 |
 | $u$ | 注意力子层加完残差后的结果，$u=x+\operatorname{Attention}(\cdot)$ | 与 $x$ 同形 |
 | $\mathcal L$ | 损失（默认对有效目标取平均的交叉熵） | 标量 |
+| $\Omega$ | 参与损失的有效位置集合，$N_{\mathrm{valid}}=\lvert\Omega\rvert$ | 由 $(b,t)$ 组成 |
 | $\tau$ | 温度：采样温度或注意力 logits 的温度 | 标量，$\tau>0$ |
+| $\omega_i$、$\lambda_i$ | 第 $i$ 对维度的角频率（每前进一个位置转多少弧度）、对应波长 $\lambda_i=2\pi/\omega_i$ | 位置 $t$ 的转角是 $t\omega_i$ |
 | $\kappa$ | 位置插值、YaRN 的上下文扩展倍数 | 例：$\kappa=4$ |
 | $\epsilon$ | 防止除以零的小常数 | 例：$10^{-5}$ |
 | $\eta$ | 学习率 | 例：$0.1$ |
@@ -9269,37 +9182,65 @@ Q 的下标 0、1 的头共享 KV 下标 0 的头；Q 下标 2、3 的头共享 
 
 | 出现在哪里 | 旧写法 | 新写法 |
 |---|---|---|
-| P15、P17 的序列长度 | $N$ | $T$（两种长度同时出现时用 $T_q$、$T_{kv}$） |
+| 第 3 章、P15 稳定 softmax 的最大值 | $m$ | $s_{\max}$（对 logits $z$ 做时写 $z_{\max}$） |
+| 第 1 章、P20、P23 的词表大小（含形状表） | $V$、`[B,T,V]`、`[V,D_model]` | $\lvert\mathcal V\rvert$；形状写 $[B,T,\lvert\mathcal V\rvert]$、$[\lvert\mathcal V\rvert,D]$ |
 | 第 5 章的位置、最大位置数 | $pos$、$L_{max}$ | $t$、$T_{\max}$ |
+| 第 5 章相对位置里的两个位置 | $p$、$q$ | $m$、$n$ |
+| 第 6 章残差要拟合的目标映射 | $H(x)$ | $\mathcal H(x)$ |
+| 第 7 章采样温度 | $T$ | $\tau$ |
+| P11、P12、P14、P24、P25、P27 的 KV 字节式 | $M_{KV}$、$s$、$b_{KV}$、$d$、$D_{head}$ | $\mathrm{Mem}_{KV}=2\cdot L\cdot B\cdot H_{kv}\cdot T\cdot d_h\cdot b_{\mathrm{elem}}$，$b_{\mathrm{elem}}$ 按每个张量元素计 |
+| 各章每头宽度 | $d$ | $d_h$ |
 | P12 RoPE 的位置 | $p$ | $t$；讨论两个位置的相对距离时用 $m$、$n$ |
+| P12 RoPE 每对维度的频率、YaRN 混合后的频率 | $\theta_i$、$\theta'$；P12.3 不带下标的 $\theta$（$R(m\theta)$、例子里的 $\theta=1$） | $\omega_i$、$\omega'$（与第 5 章一致；原论文写作 $\theta$），转角 $t\omega_i$；只看一对维度时写 $R(m\omega_i)$、$\omega_i=1$ |
 | P12 YaRN 的扩展倍数 | $s$ | $\kappa$（原论文写作 $s$） |
 | P12 YaRN 的原训练长度 | $L$ | $T_{\mathrm{train}}$ |
-| 第 7 章采样温度、P12 YaRN 温度 | $T$、$t$ | $\tau$ |
+| P12 YaRN 的注意力温度 | $t$ | $\tau$ |
+| P13 SiLU 的自变量 | $\operatorname{SiLU}(t)=t\sigma(t)$ | $\operatorname{SiLU}(g)=g\sigma(g)$（$g=xW_{\mathrm{gate}}$ 正是 SiLU 的输入；$z$ 仍表示乘积 $\operatorname{SiLU}(g)\odot a_{\mathrm{up}}$；$t$ 只作位置编号） |
+| P13 FFN 中间宽度 | $H$、$M$ | $d_{\mathrm{ff}}^{\mathrm{GELU}}$、$d_{\mathrm{ff}}^{\mathrm{SwiGLU}}$ |
+| P13、P26 门控 FFN 的权重与 up 分支 | $W_g,W_u,W_d$；$u=xW_u$ | $W_{\mathrm{gate}},W_{\mathrm{up}},W_{\mathrm{down}}$；$a_{\mathrm{up}}=xW_{\mathrm{up}}$（$u$ 只指残差结果） |
+| P14 MLA 的 KV 压缩权重 | $W_{down}$ | $W_{\mathrm{DKV}}$（$W_{\mathrm{down}}$ 只指 FFN） |
+| P15、P17 的序列长度 | $N$ | $T$（两种长度同时出现时用 $T_q$、$T_{kv}$） |
+| P15、P24 TPOT 式里的输出 token 数（同时是最后一个时刻的下标） | P15：$t_1\ldots t_n$、$(t_n-t_1)/(n-1)$；P24：$t_1\ldots t_N$、$(t_N-t_1)/(N-1)$ | $t_1\ldots t_{T_{\mathrm{out}}}$、$(t_{T_{\mathrm{out}}}-t_1)/(T_{\mathrm{out}}-1)$，$T_{\mathrm{out}}>1$ |
+| P16、P17 的窗口长度 | $W$、$n_{win}$ | $T_{\mathrm{win}}$ |
+| P17 有界重放的段起点 | $s$ | $i_0$ |
 | P17 的层表示 | $H^{(l)}$、$h_i^{(l)}$ | $X^{(l)}$、$x_i^{(l)}$ |
-| P17 的编码器输出 | $E$ | $Z_{\mathrm{enc}}$ |
+| P17 的编码器输出 | $E$ | $X_{\mathrm{enc}}$ |
 | P18 的专家个数 | $E$ | $N_E$ |
 | P18 的共享专家个数与编号 | $S$、$s$ | $N_S$、$e'$（共享专家记 $F^{\mathrm{sh}}_{e'}$） |
 | P18 的 top-k 选中集合 | $K$ | $\mathcal I_k$ |
-| P19 Chinchilla 式 | $L(N,D)\approx E+A/N^\alpha+B/D^\beta$ | $\mathcal L\approx c_0+c_{\mathrm{param}}/N_{\mathrm{param}}^{\alpha}+c_{\mathrm{tok}}/N_{\mathrm{tok}}^{\beta}$ |
-| P20 的有效位置集合、有效目标数 | $\mathcal V$、$N$ | $\Omega$、$N_{\mathrm{valid}}=\lvert\Omega\rvert$ |
+| P18 摊平后的 token 数 | $N$ | $BT$ |
+| P18、P21、P25 的参数个数 | $P_{\ast}$ | $N_{\ast}$（如 $N_{\mathrm{total}}$、$N_{\mathrm{LoRA}}$） |
+| P19 Chinchilla 式 | $L(N,D)\approx E+A/N^\alpha+B/D^\beta$ | $\mathcal L\approx c_{\mathrm{irred}}+c_{\mathrm{param}}/N_{\mathrm{param}}^{\alpha}+c_{\mathrm{tok}}/N_{\mathrm{tok}}^{\beta}$ |
+| P20 的有效位置集合、有效目标数 | $\mathcal V$、$N$ | $\Omega$、$N_{\mathrm{valid}}$ |
+| P20 ZeRO 显存式 | $M_k$、$P$、$D$ | $\mathrm{Mem}_k$、$N_{\mathrm{param}}$、$N_{\mathrm{dp}}$ |
+| P21 SFT 损失的 mask 与分母 | $m_{b,t+1}$、$N$ | 对 $\Omega$ 求和，$N_{\mathrm{valid}}$ |
+| P21 LoRA 的两块矩阵与乘法方向 | 列向量写法：$W_0\in\mathbb R^{d_{\mathrm{out}}\times d_{\mathrm{in}}}$，$A\in\mathbb R^{r\times d_{\mathrm{in}}}$，$B\in\mathbb R^{d_{\mathrm{out}}\times r}$，$\Delta W=\frac{\alpha}{r}BA$，$y=W_0x+\frac{\alpha}{r}B(Ax)$ | $W_A:[r,d_{\mathrm{in}}]$，$W_B:[d_{\mathrm{out}},r]$，$\Delta W=\frac{\alpha}{r}W_BW_A$，与 $W_0:[d_{\mathrm{out}},d_{\mathrm{in}}]$ 同形；行向量前向写 $y=x(W_0+\Delta W)^\top=xW_0^\top+\frac{\alpha}{r}(xW_A^\top)W_B^\top$（两项都要转置，不能把 $x\Delta W$ 加到 $xW_0^\top$ 上） |
+| P22 的 KL 散度 | $D_{\mathrm{KL}}$ | $\operatorname{KL}$ |
+| P22 GRPO 的奖励标准差、回复长度、回复个数 | $s$、$L_i$、$N$ | $\sigma_r$、$T_i$、$N_{\mathrm{resp}}$ |
+| P22 GRPO 损失里的逐 token KL 项（本章枚举整个词表算出的**精确**条件 KL） | $K_{i,t}$ | $\operatorname{KL}_{i,t}$（不加帽子） |
+| P22 原论文的逐 token KL **估计量**（单个样本，不是精确 KL） | $k$ | $\widehat{\operatorname{KL}}_{i,t}$（只有估计量加帽子） |
+| P22 `grpo_loss` 的张量形状 | `[N,L,V]`、`[N,L]`、`[N]` | $[N_{\mathrm{resp}},T,\lvert\mathcal V\rvert]$、$[N_{\mathrm{resp}},T]$、$[N_{\mathrm{resp}}]$（这里的 $T$ 是填充后的长度，每份回复的有效长度 $T_i\le T$） |
+| P22 KL 估计里的“动作 / 状态” | $a$、$s$ | $y_t$、$(x,y_{<t})$ |
 | P23 MTP 的额外 head 个数（深度） | $D$ | $n_{\mathrm{mtp}}$ |
 | P23 第 $j$ 个 horizon 的有效位置集合 | $M_j$ | $\Omega_j$ |
-| P23 的辅助损失权重 | $\lambda$ | $w_{\mathrm{mtp}}$（$\lambda$ 只留给 YaRN 的波长） |
-| P23 的位置隐藏向量 | $h_t$ | $x_t$（$X$ 的第 $t$ 行），按行向量写成 $x_tW_j$ |
-| P22 GRPO 的回复长度 | $L_i$ | $T_i$ |
-| P13 SwiGLU 的 up 分支 | $u=xW_u$ | $a_{\mathrm{up}}=xW_{\mathrm{up}}$（$u$ 只指残差结果） |
-| P11、P12、P14、P24、P25、P27 的 KV 字节式 | $s$、$b_{KV}$、$d$、$D_{head}$ | $2LBH_{kv}Td_hb_{\mathrm{elem}}$，$b_{\mathrm{elem}}$ 按每个张量元素计 |
+| P23 的辅助损失权重 | $\lambda$ | $w_{\mathrm{mtp}}$（$\lambda$ 只指波长） |
+| P23 的 head 乘法 | $W_jh_t$ | $h_tW_j^\top$（$W_j$ 按 $[\lvert\mathcal V\rvert,D]$ 存） |
+| P24 量化步长（格点间距） | $s$、$s_x$、$s_w$ | 量化 $x$ 时写 $\Delta_x$，量化权重时写 $\Delta_w$；步长一律带下标，不写裸 $\Delta$（裸 $\Delta$ 留给差值） |
+| 各章损失 | $L$、$L_{CE}$、$L_{aux}$、$L_j$ | $\mathcal L$、$\mathcal L_{\mathrm{CE}}$、$\mathcal L_{\mathrm{aux}}$、$\mathcal L_j$ |
 
 **下标与写法**
 
-- 编号字母：$i$、$j$ 是 query、key 的位置，$t$ 是时间步或当前位置，$m$、$n$ 是一对位置，$h$ 是第几个头，$e$ 是第几个专家，$l$ 是第几层。
-- 第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果 $h$ 是**本章局部字母**，在所在公式的「其中：」里说明；逐层的隐藏状态统一写 $X^{(l)}$。
-- 向量按**行向量**写，线性层写 $xW$；形状用方括号 `[B,T,D]`，从左到右是轴的顺序。权重若按 $[\text{输出},\text{输入}]$ 存（如 MoE 路由 $W_r$），乘的时候写转置 $xW_r^\top$。
-- 转置统一写 $A^\top$；Softmax 统一写 $\operatorname{softmax}$，沿最后一维（key 所在的维）归一化；$\log$ 默认是自然对数。
+- 编号字母（主要当编号用）：$i$、$j$ 是 query、key 的位置，$t$ 是时间步或当前位置，$m$、$n$ 是一对位置（第 5 章、P12 和第 9 章 RoPE 例子里的“座位 $m$、$n$”都是这个意思），$h$ 是第几个头，$e$ 是第几个专家，P23 的预测距离（horizon）也用 $j$，$l$ 是第几层，$b$ 是 batch 里第几条。指数里的 $e$ 仍是自然常数。有两处例外要认得：$i$ 在 RoPE、YaRN 里也是维度对的编号（第 $i$ 个频率对，$\omega_i$、$\lambda_i$ 的 $i$）；$h$ 作下标（如 $W_h^Q$）是第几个头，单独出现的 $h$、$h_t$ 则是章内局部量（见下面的局部字母）。带文字下标的小写 $n$ 表示个数（如 $n_{\mathrm{mtp}}$、P18 的 $n_e$）；带下标的 $d$ 都是某种宽度（如 MLA 的 $d_c$、$d_r$，LoRA 的 $d_{\mathrm{in}}$、$d_{\mathrm{out}}$）。
+- 向量按**行向量**写，线性层写 $xW$；形状用方括号 `[B,T,D]`，从左到右是轴的顺序。权重若按 $[\text{输出},\text{输入}]$ 存（如 MoE 路由 $W_r$、MTP head $W_j$、LoRA 的 $W_0$），乘的时候写转置 $xW^\top$。
+- 转置统一写 $A^\top$；Softmax 统一写 $\operatorname{softmax}$，沿最后一维（key 所在的维）归一化；$\log$ 默认是自然对数；期望写 $\mathbb E$；单位矩阵写 $I$。
 
 **局部字母：每条公式自己说清楚**
 
-有些字母在不同章节各管一摊，硬统一反而难读，例如 $\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率等）、$\beta$（LayerNorm 偏移，或 DPO/KL 系数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（旋转角，或模型参数 $\pi_\theta$）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值等）。它们是**局部符号**：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。
+有些字母在不同章节各管一摊，硬统一反而难读。它们是**局部符号**：只在所在公式和紧跟的「其中：」里有效，翻到下一条公式要重新看「其中：」，不要把上一章的意思带过来。
+
+- 希腊字母：$\sigma$（标准差，或 sigmoid 函数）、$\alpha$（LoRA 缩放、辅助损失系数、接受概率、缩放定律指数等）、$\beta$（LayerNorm 偏移、DPO/KL 系数、缩放定律指数）、$\gamma$（LayerNorm 缩放，或 YaRN 的过渡系数）、$\theta$（夹角、旋转矩阵 $R(\theta)$ 的角，或模型参数 $\pi_\theta$、$p_\theta$）、$\pi$（圆周率，或策略 $\pi_\theta$）、$\phi$（旋转角、特征映射，或奖励模型参数）、$\rho$（概率比）、$\delta$、$\Delta$（不带下标的 $\Delta$ 只表示差值，如 P12 的 $\Delta=n-m$、E.0 的 $\Delta=x_{\mathrm{new}}-x_{\mathrm{old}}$；$\Delta W$ 是更新量；P22 DPO 的 $\Delta_\theta$、$\Delta_{\mathrm{ref}}$ 是两个对数比的差；量化步长只写带下标的 $\Delta_x$、$\Delta_w$）、$\mu$（均值）。
+- 拉丁字母：$x$（某个式子的输入：一个位置的向量、它的第 $i$ 个分量，或 P21–P23 里的 token 序列）、$y$（输出向量、目标 token，或 P22 里的回复）、$h$（第 2 章 RNN 的记忆状态 $h_t$、第 6 章 FFN 激活前的中间结果、P23 主干最后一层的隐藏向量 $h_t$）、$a$（第 6 章 ReLU 的输出、P12 YaRN 的长度缩放系数、第 1 章的示例向量、第 3 章的注意力权重 $a_{ij}$、P15 的请求到达时刻）、$b$（第 1 章、P12 的示例向量）、$f$（第 2 章 RNN 的更新函数、P18 的分配比例 $f_e$）、$g$（SwiGLU 的门控分支、P20 的梯度）、$r$（LoRA 秩、奖励 $r_\phi$、频段比值、特征宽度、第 3 章的求和下标）、$k$（第 5 章的位移量、top-k 的个数、P20 的训练步编号 $\theta_k$）、$q$（P23 的草稿分布 $q(x)$、P24 的量化整数）、$z$（多数时候是 softmax 之前的 logits；也作 SwiGLU 的门控乘积、线性注意力的归一化量、DPO 的间隔、P24 的零点）、$w$（单个权重、路由权重 $w_e$、注意力权重 $w_{tj}$）、$c$（第 2 章的上下文向量、P14 MLA 的压缩向量 $c_t$）、$t_1,t_{\mathrm{start}}$ 等 P15、P24 的计时时刻、$A$（注意力子层函数、GRPO 的优势 $A_i$）、$F$（第 6 章的残差分支 $F(x)$）、$P$（第 5 章的换序操作、P15 的概率矩阵）、$C$、$G$、$R$、$S$、$U$ 等只在一章出现的大写字母。
+- 第 2 章 $h_t$、第 6 章 $h$、P23 $h_t$ 都不是全局的层表示；逐层的隐藏状态统一写 $X^{(l)}$。
 
 ## 附录 B：深度学习常见“黑话”大白话翻译词典 {#附录-b深度学习常见黑话大白话翻译词典}
 
