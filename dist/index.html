@@ -2062,12 +2062,13 @@ class="math inline">\(d_v\)</span> 个数。</p>
 <p>其中：<span class="math inline">\(i\)</span> 是 query 的位置，<span
 class="math inline">\(j\)</span> 是 key 的位置，<span
 class="math inline">\(j&#39;\)</span> 是分母里把同一行所有 key
-都走一遍的求和编号；<span class="math inline">\(q_i\)</span>、<span
-class="math inline">\(k_j\)</span>、<span
-class="math inline">\(v_j\)</span> 分别是 <span
+都走一遍的求和编号；<span class="math inline">\(q_i\)</span> 是 <span
 class="math inline">\(Q\)</span> 下标 <span
-class="math inline">\(i\)</span> 的行、<span
-class="math inline">\(K\)</span> 和 <span
+class="math inline">\(i\)</span> 的行，<span
+class="math inline">\(k_j\)</span> 是 <span
+class="math inline">\(K\)</span> 下标 <span
+class="math inline">\(j\)</span> 的行，<span
+class="math inline">\(v_j\)</span> 是 <span
 class="math inline">\(V\)</span> 下标 <span
 class="math inline">\(j\)</span> 的行；<span
 class="math inline">\(s_{ij}\)</span> 是缩放后的分数；<span
@@ -2331,7 +2332,9 @@ class="math inline">\([-2,-1,0]\)</span>，结果约为 <span
 class="math inline">\([0.0900,0.2447,0.6652]\)</span>。最大指数是
 1，避免了这里的指数上溢。很小项仍可能下溢为
 0，这是有限精度现象，不能宣称“所有计算都精确”。</p>
-<p>配套纯 Python 脚本的核心就是：</p>
+<p>配套纯 Python 脚本的核心就是下面三行（代码里的 <code>m</code>
+就是上面的 <span
+class="math inline">\(s_{\max}\)</span>，变量名与脚本保持一致）：</p>
 <div class="sourceCode" id="cb20"><pre
 class="sourceCode python"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> <span class="bu">max</span>(scores)</span>
 <span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>exps <span class="op">=</span> [math.exp(s <span class="op">-</span> m) <span class="cf">for</span> s <span class="kw">in</span> scores]</span>
