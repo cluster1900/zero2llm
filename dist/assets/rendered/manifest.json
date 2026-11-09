@@ -1,0 +1,234 @@
+{
+  "diagrams": {
+    "learning_layers": {
+      "kind": "static",
+      "sha256": "2cc3c705b73235dc86cefe6f0734eea13e4ffb2c08eafa9c1ac547922dda8669",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/learning_layers.svg"
+    },
+    "batch1_route": {
+      "kind": "static",
+      "sha256": "d27586c20762cafc3a8d90b944ef55411cc3f869c099b250148e181130a14ac0",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/batch1_route.svg"
+    },
+    "embedding_lookup": {
+      "kind": "static",
+      "sha256": "c14f26ffe0509f5b457c4de69a7ded8e12ab7f42d888fa409535c56e541b1a32",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/embedding_lookup.svg"
+    },
+    "word_vector_space": {
+      "kind": "static",
+      "sha256": "0200efd7011dba661169fbd0918a701e9fc4daedf2b45f650fbc60312961c07a",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/word_vector_space.svg"
+    },
+    "bpe_pipeline": {
+      "kind": "static",
+      "sha256": "ab07c1caabd741d7e6f97eb0cc226177c776d2217b44c1b0a45113c879607009",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/bpe_pipeline.svg"
+    },
+    "flow-84635206051a": {
+      "kind": "mermaid",
+      "sha256": "84635206051a7d97a839dbf533fd596f22744b5875008e1ecb51082b7dbe097d",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "flow-3d58967fc068": {
+      "kind": "mermaid",
+      "sha256": "3d58967fc068ff148e73e464e975ac11502fbae3914c2d65caa19ad9fdda7112",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "attention_mechanism": {
+      "kind": "static",
+      "sha256": "007aa668ef475ffe6efc10e36385f74645f316b73659d626b538826c1a0d40de",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/attention_mechanism.svg"
+    },
+    "flow-32da2122435e": {
+      "kind": "mermaid",
+      "sha256": "32da2122435e1b0a5bfb0a37da5dc94978b7e2761e5baf0b50101b67b5f67685",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "flow-e59ba8fcee2e": {
+      "kind": "mermaid",
+      "sha256": "e59ba8fcee2e49e45f0c81379d24e078890da73d0b4c7f248690e39720f0179c",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "multi_head_attention": {
+      "kind": "static",
+      "sha256": "59d36704ebaed1ebcc3886c42cf3e8672781d7ac47ded7665611e8f11f8e6be3",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/multi_head_attention.svg"
+    },
+    "positional_encoding_waves": {
+      "kind": "static",
+      "sha256": "f17447c03489626ef5e27fefadb1b6a76328b8e03fa91a12b174e0803f99c235",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/positional_encoding_waves.svg"
+    },
+    "transformer_block": {
+      "kind": "static",
+      "sha256": "5b92fe37c642a2f6bf84fd4d3a8b9b6267e32bb0bbc6e2ce644bc3b29ae73a60",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/transformer_block.svg"
+    },
+    "transformer_full_architecture": {
+      "kind": "static",
+      "sha256": "fb291de088847e980e81fa1beb90f6bd76d732265f683f408a3a6c0ed42eca19",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/transformer_full_architecture.svg"
+    },
+    "flow-99f1aa76a4ba": {
+      "kind": "mermaid",
+      "sha256": "99f1aa76a4ba2f5e37b6e2a297d0edf84d5eb10f1b3892da71ef59f4a59c5d59",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "flow-550bbb1ad2f4": {
+      "kind": "mermaid",
+      "sha256": "550bbb1ad2f49b899d466954b5f0a3bdf930e92f5968bd5c064d41726aa33906",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "causal_mask": {
+      "kind": "static",
+      "sha256": "5639458c32bad20aa6eef330dc52d708681416b0a2bdae228202f066c6d2e57b",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/causal_mask.svg"
+    },
+    "flow-ed42531e828f": {
+      "kind": "mermaid",
+      "sha256": "ed42531e828f7da960520c4dbaa13f84dd5bc794196f80764a696620214bd38a",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "flow-9b62f68b43a9": {
+      "kind": "mermaid",
+      "sha256": "9b62f68b43a92927013db31826a41d7b7beac619df7ac16a5351ee48f6141161",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "flow-0299971fbce4": {
+      "kind": "mermaid",
+      "sha256": "0299971fbce483d256d5bb67a4cc5d3ffba85ca6014e2dca9f4f45d9a285508e",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "flow-a3f07f2a8050": {
+      "kind": "mermaid",
+      "sha256": "a3f07f2a8050fb5bf4eaef161f28930cbcdc59cae13cf580216287faa32235a9",
+      "renderer": "legacy: committed before D0 (bot-hub#126)"
+    },
+    "p12-rope": {
+      "kind": "static",
+      "sha256": "f157a0b208054c284fce426a3c13f2948968c5b362bb7a270475d4e9cfe1a3bc",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p12-rope.svg"
+    },
+    "p13-modern-block": {
+      "kind": "static",
+      "sha256": "b3c7ba2522c701737c287c35f9205178f7b48137e80f3820abfea7d9a822cff6",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p13-modern-block.svg"
+    },
+    "grouped_kv_mla": {
+      "kind": "static",
+      "sha256": "52e8e17253dcf5531320474d8d48a912adfcc2f6b26ad81cd14c7400dc443073",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/grouped_kv_mla.svg"
+    },
+    "p15-attention-systems": {
+      "kind": "static",
+      "sha256": "130d71568a5d060a5f6d1435c617bfb91f04bca018752168552d0e9814e5c550",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p15-attention-systems.svg"
+    },
+    "p16-sparse-linear": {
+      "kind": "static",
+      "sha256": "5275378af07a4b52214799420c426964b31b20d342b4628798a95a7992dbbc4f",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p16-sparse-linear.svg"
+    },
+    "p17-ced": {
+      "kind": "static",
+      "sha256": "f930d60c426ab0e4189539b05fd9a2c96ae91e9c798f6fb10951b3b36509ed4d",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p17-ced.svg"
+    },
+    "p18-moe": {
+      "kind": "static",
+      "sha256": "dc2eb6c6a086820ced8920e66a0800c2fd26ca1016d889d36dffff309871f19a",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p18-moe.svg"
+    },
+    "p19-pretraining": {
+      "kind": "static",
+      "sha256": "13df3acc5f92d734d9bbdf5fe86e6fc375a1ff17f02d74a4da40e1a393b989da",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p19-pretraining.svg"
+    },
+    "p20-frameworks": {
+      "kind": "static",
+      "sha256": "d21794da87a2ab37fad944461e92b8f5254a4fce6a6f11a457913cda02ff72b3",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p20-frameworks.svg"
+    },
+    "p21-sft": {
+      "kind": "static",
+      "sha256": "af5aff32ec037862b62b5baeba230edb370718697106e5668dc2ca1714bd9152",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p21-sft.svg"
+    },
+    "p22-preference": {
+      "kind": "static",
+      "sha256": "10796e5adee6c1d2ed9a542830b202097d0074c64092b3753db830b584203fa3",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p22-preference.svg"
+    },
+    "p23-mtp": {
+      "kind": "static",
+      "sha256": "5d796065b74c90d493466c1d341ee44c102a76eb93faa609376af03b6bd99474",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p23-mtp.svg"
+    },
+    "p24-quantization": {
+      "kind": "static",
+      "sha256": "174fcec2d296811f706f271914d73b8dce7f8aced4c611f9f9140c9d75673cca",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p24-quantization.svg"
+    },
+    "p25-qwen3": {
+      "kind": "static",
+      "sha256": "2041f88373988d94e319fa7dd6c519b485b5e52e87d58ad619ff0a99b1a31280",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p25-qwen3.svg"
+    },
+    "p26-deepseek": {
+      "kind": "static",
+      "sha256": "aa932d14b12a46173142eb1db6f712169d6a929927c3a9a66491350a475dbeb3",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p26-deepseek.svg"
+    },
+    "p27-healthcheck": {
+      "kind": "static",
+      "sha256": "b47128703b91a6486dd146ce65f27a9c974e2d0a66507cbb39423b88b024e0a7",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p27-healthcheck.svg"
+    },
+    "cache_causal": {
+      "kind": "static",
+      "sha256": "1ad1f0598fe2405278377ed7f7facc36b61e9b4546ad0d7c806d21d696b185af",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p27/cache_causal.svg"
+    },
+    "negative_controls": {
+      "kind": "static",
+      "sha256": "aad616db091e072d3255ebc7b9c54b601d0b91474d0a74bca33e4b26e7fb77f7",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p27/negative_controls.svg"
+    },
+    "cpu_timing": {
+      "kind": "static",
+      "sha256": "ab9644bd297168d4ad22f4d9f2da9f5fd4d9ed65e74b41d31215b426aa6180aa",
+      "renderer": "legacy: committed before D0 (bot-hub#126)",
+      "source": "assets/diagrams/p27/cpu_timing.svg"
+    }
+  }
+}
