@@ -12,8 +12,11 @@ RULINGS=[
 ("chapters/03_qkv_self_attention.md","A[\"缩放：Score ÷ √2<br/>√2 ≈ 1.414\"]","A[\"缩放：Score ÷ √d_k（本例 √2）<br/>√2 ≈ 1.414\"]"),
 ("chapters/04_multi_head_attention.md","## 4.4 多了头，掩码规则没有变\n\n多头把分数","## 4.4 多了头，掩码规则没有变\n\n掩码规则与第 3 章相同，本节只补多头带来的两点：同一个掩码怎样按头广播；以及所有头都被全屏蔽时输出为零，只屏蔽一个头则未必如此。\n\n多头把分数"),
 ]
+# bot-hub#126 F4: the 06 §6.9 pointer now carries an inline 「其中：」/白话 note for its formula symbol
+# (Wu: every formula explained); F_i -> F_l because A.5 reserves i for query positions. Kept on one
+# line and within 3 sentences so the pointer-shape assertions stay unchanged.
 G3=[
-("chapters/06_residual_layernorm_ffn.md","6.1 的残差把每层输出都以权重 1 相加。","6.1 的残差把每个子层的增量 $F_i$ 都以权重 1 相加。"),
+("chapters/06_residual_layernorm_ffn.md","6.1 的残差把每层输出都以权重 1 相加。","6.1 的残差把每个子层的增量 $F_l$ 都以权重 1 相加。**其中：** $F_l$ 是第 $l$ 个子层（注意力或 FFN）算出的增量，$l$ 只是子层编号；**白话：** 每一层的“批注”都原样记到同一条主干上，谁也不比谁分量重。"),
 ("chapters/06_residual_layernorm_ffn.md","不把它冒充上一批 `attention_core.py`","不把它冒充第 3 章 `attention_core.py`"),
 ("chapters/06_residual_layernorm_ffn.md","Activation: 过滤杂念 (非线性思维跃迁)","Activation: 过滤杂念 (非线性)"),
 ("chapters/07_encoder_decoder.md","省略头轴后，Q=[1,2,4]，K=[1,3,4]，V=[1,3,4]；分数为 [1,2,3]，聚合结果为 [1,2,4]。","省略头轴后，Q 形状 (1,2,4)，K 与 V 形状 (1,3,4)；分数形状 (1,2,3)，聚合结果形状 (1,2,4)。"),

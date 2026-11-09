@@ -1,6 +1,6 @@
 % 写给初学者的 Transformer：从零开始的大模型极简数学与代码之旅
 % Zero2Transformer 教程
-% 2026-11-09
+% 2026-11-10
 
 # 前言与阅读指南：先看懂一小步，再搭起一个模型
 
@@ -2224,7 +2224,7 @@ Pre-LN zero-sublayer identity max error=0.000000
 
 ## 6.9 延伸阅读：AttnRes {#p07-attnres}
 
-6.1 的残差把每个子层的增量 $F_i$ 都以权重 1 相加。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把它换成沿深度方向的注意力：每层用一个可学习的 pseudo-query，对 embedding 和此前各层的输出做加权平均；[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)采用了这个做法。
+6.1 的残差把每个子层的增量 $F_l$ 都以权重 1 相加。**其中：** $F_l$ 是第 $l$ 个子层（注意力或 FFN）算出的增量，$l$ 只是子层编号；**白话：** 每一层的“批注”都原样记到同一条主干上，谁也不比谁分量重。[Attention Residuals，arXiv:2603.15031](https://arxiv.org/abs/2603.15031) 把它换成沿深度方向的注意力：每层用一个可学习的 pseudo-query，对 embedding 和此前各层的输出做加权平均；[Kimi K3 技术报告，arXiv:2607.24653](https://arxiv.org/abs/2607.24653)采用了这个做法。
 
 
 ---
@@ -2560,6 +2560,8 @@ Python 切片是 `x = ids[start:start+T]`，`y = ids[start+1:start+T+1]`。右�
 | --- | --- | --- | --- | --- |
 | 0 | (ln(3), 0) | (0.75, 0.25) | A | -ln(0.75) = 0.287682072 |
 | 1 | (0, ln(3)) | (0.25, 0.75) | A | -ln(0.25) = 1.386294361 |
+
+**白话：** 因为 $e^{\ln 3}=3$、$e^0=1$，logits $(\ln 3,0)$ 经 softmax 就是按 3∶1 分成 $(0.75,0.25)$；位置 1 把两个分数对调，正确答案 A 只分到 0.25，罚得就重得多。
 
 默认平均损失为 `(0.287682072 + 1.386294361) / 2 = 0.836988217`。不是先把正确答案概率平均成 0.5 再取负对数，后者是不同的量。PyTorch 的 `cross_entropy` 已包含稳定的 log-softmax 计算，**传 logits，不要先 softmax 再传进去**。
 
