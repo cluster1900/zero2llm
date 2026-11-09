@@ -6488,6 +6488,21 @@ labels[1] = [-100, 7, 8, 10, 3, -100]
 - 第一列没有前一个输入位置来预测它。本例显式将它设为 -100，下面会解释一个与版本有关的原因。
 - attention_mask 控制注意力可见性；labels=-100 控制监督位置。二者职责不同，一个不能代替另一个。
 
+一张图把内部 shift、忽略位和外面再 shift 的后果放在一起：
+
+```mermaid
+flowchart TD
+    %% id: p20-double-shift
+    accTitle: 框架已经 shift 过，外面再 shift 一次就会错位
+    accDescr: labels 与 input_ids 同形 [2,6]；模型内部用 logits[:, :-1] 对 labels[:, 1:]；BOS/PAD 记为 -100，有效目标 N_valid=9；外面再 shift 就错一格。
+    A["labels 与 input_ids 同形<br/>[B,T]=[2,6]"] --> B["模型内部<br/>logits[:, :-1] 对 labels[:, 1:]"]
+    B --> C["BOS / PAD 记为 -100<br/>有效目标 N_valid = |Ω| = 9"]
+    C --> D{"外面再 shift 一次？"}
+    D -->|不要| E["目标与分母对齐"]
+    D -->|再做一次| F["错一格 / 分母错"]
+```
+
+
 独立参考计算不调用模型返回的 loss，也不调用框架的交叉熵函数，而是自己写：
 
 $$
@@ -6583,6 +6598,37 @@ python3.12 -m venv /tmp/zero2llm-frameworks
 rank 是分布式进程的编号；world size 是进程总数。常见 GPU 训练把一个 rank 对应一张 GPU，但这不是这些词的定义。
 
 最容易理解的数据并行是 DDP：各 rank 持有同一模型副本，读取不同数据，反向传播时同步梯度，再按一致规则更新。它提高了可以共同处理的数据量，**没有自动把模型参数、梯度和普通优化器状态都分成几份**。DDP 也不会替你切分输入数据，数据采样器必须配合。相关职责见 [PyTorch 2.14 固定版 DDP API](https://docs.pytorch.org/docs/2.14/generated/torch.nn.parallel.DistributedDataParallel.html)；这里引用其机制说明，不声称本次运行了 PyTorch 2.14 的多卡测试。
+把各 rank 的前向、反传和梯度同步画在时间轴上：
+
+```mermaid
+sequenceDiagram
+    %% id: p20-ddp-steps
+    accTitle: DDP：各 rank 先各算一份，再 AllReduce 平均梯度
+    accDescr: rank0 与 rank1 读不同数据，各自前向与反传；AllReduce 平均梯度后各自按同一规则 step，参数仍一致。
+    participant R0 as rank0
+    participant S1 as ㅤ
+    participant R1 as rank1
+    participant S2 as ㅤ
+    participant AR as AllReduce
+    par 读 batch
+      R0->>R0: 读自己的 batch
+    and
+      R1->>R1: 读另一份 batch
+    end
+    par 前向与反传
+      R0->>R0: 前向 → 反传（写 .grad）
+    and
+      R1->>R1: 前向 → 反传（写 .grad）
+    end
+    R0->>AR: 提交梯度
+    R1->>AR: 提交梯度
+    AR-->>R0: 平均后的梯度
+    AR-->>R1: 平均后的梯度
+    R0->>R0: 按同一规则 step
+    R1->>R1: 按同一规则 step
+    Note over R0,R1: 参数仍一致
+```
+
 
 假设每个 rank 一次处理 $B$ 条，累积 $n_{\mathrm{acc}}$ 次后更新，数据并行组有 $N_{\mathrm{dp}}$ 个 rank，理想情况下每次更新包含的样本条数为：
 
@@ -6681,6 +6727,29 @@ ZeRO 主要回答“数据并行组中谁保存哪些训练状态”。其他并
 **Pipeline parallel，流水线并行（PP）：**把不同层放到不同设备。例如 4 层网络，设备 A 负责第 1–2 层，设备 B 负责第 3–4 层。样本的激活先从 A 传给 B，反向梯度再反方向流回。把大 batch 切为 microbatch 可以让不同阶段交错工作，但启动、收尾或阶段不均衡会产生空闲时间，称为 pipeline bubble。不是把层拆开就能永远满载。[Megatron 的大规模训练论文](https://arxiv.org/abs/2104.04473)
 
 **Expert parallel，专家并行（EP）：**把 MoE 专家分散到不同设备，路由后把 token 发给相应专家，再把输出送回。它和 P18 的“一个 token 只激活少数专家”有关，但不是同一概念：稀疏激活描述模型计算，EP 描述专家放在哪。路由不均衡会让某些设备忙、某些设备闲；跨设备 token 交换也有成本。[Megatron-Core core_v0.12.0 的 MoE 与并行说明](https://github.com/NVIDIA/Megatron-LM/tree/core_v0.12.0)
+三种并行切的轴不同，通信落点也不一样：
+
+```mermaid
+flowchart TB
+    %% id: p20-tp-pp-ep
+    accTitle: TP、PP、EP 切的不是同一条轴
+    accDescr: TP 在层内拆权重：按列拆后拼接，按行拆后求和；PP 按层分设备，激活向前、梯度向后；EP 按专家分设备，token 送去再送回。
+    subgraph TP["张量并行 TP：层内拆 W"]
+      direction LR
+      TP1["按列拆 → 拼接输出"] --- TP2["按行拆 → all-reduce 求和"]
+    end
+    subgraph PP["流水线并行 PP：按层分设备"]
+      direction LR
+      PP1["激活向前传"] --- PP2["梯度向后传"]
+    end
+    subgraph EP["专家并行 EP：按专家分设备"]
+      direction LR
+      EP1["token 送到专家设备"] --- EP2["结果送回再加权"]
+    end
+    TP ~~~ PP
+    PP ~~~ EP
+```
+
 
 这些策略可以组合，但**不能把所有并行度数字无脑相乘**。简单的纯 dense DP×TP×PP 布局常可按独立进程组规划；加入 EP、context parallel 或不同专家组后，要按框架实际 rank 分组规则检查哪些维度独立、哪些共享。不清楚自己的 data-parallel group 大小时，前一节的 $N_{\mathrm{dp}}$ 也就可能填错。
 
@@ -6696,6 +6765,19 @@ ZeRO 主要回答“数据并行组中谁保存哪些训练状态”。其他并
 [TRL 0.17.0 官方总览](https://huggingface.co/docs/trl/v0.17.0/en/index) 列出 SFT、DPO、GRPO、奖励模型等入口；[同版 SFTTrainer 说明](https://huggingface.co/docs/trl/v0.17.0/en/sft_trainer) 展示它与模型、数据和训练配置的连接。本章只建立定位，不安装 TRL，也不把 SFTTrainer 的名字等同于“自动正确的对话微调”。assistant-only 标签、LoRA、DPO 的偏好对和 GRPO 的奖励分组分别留给 P21、P22，那里会单独锁版本和检查目标。
 
 一个实用顺序是：先用单进程证明数据、loss 和保存加载正确；确实需要更多吞吐再试数据并行；确认状态占用是瓶颈再考虑分片；当单层或网络规模、通信条件要求进一步切分时，再研究 TP / PP / EP。这个顺序不是性能定律，而是降低排错变量的工程方法。
+把这个先后顺序收成一张决策图：
+
+```mermaid
+flowchart TD
+    %% id: p20-framework-choice
+    accTitle: 先单进程证明正确，再按瓶颈选框架
+    accDescr: 单进程验证数据、loss 与保存；常用结构与 Trainer 用 Transformers；后训练用 TRL；内存或吞吐瓶颈用 DeepSpeed ZeRO；超大模型需要 TP/PP/EP 时用 Megatron。
+    A["① 单进程验证：数据 / loss /<br/>保存"] --> B["② 需要结构与 Trainer → Transformers"]
+    B --> C["③ 后训练 SFT/DPO/GRPO → TRL"]
+    C --> D["④ 内存或吞吐瓶颈 → DeepSpeed ZeRO"]
+    D --> E["⑤ 需要 TP/PP/EP → Megatron"]
+```
+
 
 ## P20.9 保存模型，不一定等于能继续训练
 
@@ -6925,6 +7007,28 @@ PAD 则没有真实语义，补齐时 input_ids 加 PAD，attention_mask 加 0�
 盲目 `ids[:max_length]` 可能在 assistant header、答案中间或 EOS 前截断。有时还会把只含问题、不含答案的样本交给 loss。另一种坏补丁是截断后强加 EOS：原本应继续的回答被错误教成“到这里结束”。
 
 本章采用保守、可测试的策略：保留 BOS、可选 system，以及从开头开始能装下的**完整 user/assistant 对**，只在轮与轮之间截断。第一轮都放不下就明确报错，不返回一个零目标样本，不跳过长轮后拼上后面的轮，也不创造 EOS。
+截断规则可以画成一张判断图：
+
+```mermaid
+flowchart TB
+    %% id: p21-drop-turns
+    accTitle: 宁可丢掉装不下的完整轮，也不造半个答案
+    accDescr: 从前往后逐轮放入：整轮装得下就保留；装不下就丢弃这一轮及之后；一轮都装不下就拒绝样本；不补 EOS，空回答也监督 EOS。
+    subgraph Head["整轮截断：装得下保留，装不下丢弃本轮及之后"]
+      direction LR
+      H["约定：不补假 EOS<br/>空回答也监督 EOS"]
+      A["从前往后逐轮放入"]
+    end
+    Head --> B{"这一整轮装得下？"}
+    B -->|是| C["保留该轮<br/>继续看下一轮"]
+    C -->|还有下一轮| B
+    C -->|每轮都装得下| F["返回已保留轮"]
+    B -->|否| D["丢弃本轮及之后"]
+    D --> E{"前面至少有一轮？"}
+    E -->|是| F
+    E -->|否| G["拒绝样本<br/>不造半截答案"]
+```
+
 
 去掉 system 的两轮例子长度为 15；第一轮长度为 8：
 
@@ -7446,6 +7550,19 @@ positions 是原序列中目标的位置 1…T−1，starts 是该行答案开�
 EOS 如果确实属于答案，应当计入；PAD 不计入。这个 helper 只支持右 padding、有至少一个 prompt token 和一个答案 token 的输入，遇到左 padding、中间断开的 mask、空答案或非法 ID 就报错。它不负责 tokenizer 拼接边界，调用方还要保证 chosen / rejected 共用同一 prompt 和一致的结束规则。
 
 修改被排除位置的 logits，不应改变结果。这样才能发现“维度正确但监督错位”的错误。
+把从 logits 到一对答案 log p 的形状账本画出来：
+
+```mermaid
+flowchart TD
+    %% id: p22-logp-pair
+    accTitle: 从变长 token 筛出一对答案 log p
+    accDescr: logits 形状 [B,T,|𝒱|]；logits[:, :-1] 对 input[:, 1:] 取 log p；用答案起点与右侧 PAD 构造掩码；按行求和得 [B]；chosen 与 rejected 两两配对。
+    A["logits [B,T,|𝒱|]<br/>input_ids / mask [B,T]"] --> B["causal shift：logits[:, :-1]<br/>对 input[:, 1:] 取 log p"]
+    B --> C["答案起点 + 右侧 PAD 构造 mask"]
+    C --> D["按行求和 → [B]"]
+    D --> E["chosen / rejected 两两配对"]
+```
+
 
 ## P22.6 GRPO：同一道题，先比较一组答案
 
@@ -7511,6 +7628,22 @@ $$
 
 - A=+1、ρ=1.4：收益取 min(1.4,1.2)=1.2，不再鼓励这项收益无限上涨。
 - A=−1、ρ=0.6：收益取 min(−0.6,−0.8)=−0.8，不能错误地取 max。
+
+clip 之后取 min 还是看起来像 max，全看优势的正负：
+
+```mermaid
+flowchart TD
+    %% id: p22-clip-sign
+    accTitle: clip 之后取 min，上涨与下跌都靠优势符号管住
+    accDescr: ρ=exp(log π_θ − log π_old)；A>0 时 min(ρA, clip(ρ)A) 限制上涨；A<0 时同一式子限制下跌；先在答案内平均再对答案平均，取负号得要最小化的损失。
+    A["ρ = exp(log π_θ − log π_old)"] --> B{"优势 A 的符号"}
+    B -->|"A &gt; 0"| C["min(ρA, clip(ρ,0.8,1.2)A)<br/>限制上涨"]
+    B -->|"A &lt; 0"| D["同一个 min 式子<br/>限制下跌"]
+    C --> E["答案内平均 → 答案间平均"]
+    D --> E
+    E --> F["取负号 → 最小化损失<br/>另加 β·KL 项"]
+```
+
 
 clip 的作用依赖优势符号和更新方向，并不是所有范围外的概率比都“没有梯度”；它也不保证实际 KL 永远小于一个固定值。更新后的概率仍需检查。
 
