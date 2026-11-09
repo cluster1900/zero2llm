@@ -7040,20 +7040,24 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 
 ## P23.4 MTP：在同一位置多问几个未来问题
 
-普通 next-token prediction 在位置 t 的隐藏向量 h_t 上，预测下一个 token x_{t+1}。S6 的教学旁路另外增加独立线性 head，用**同一个 h_t** 预测 x_{t+2}、x_{t+3}……。
+普通 next-token prediction 在位置 $t$ 的隐藏状态 $X^{(L)}_t$ 上，预测下一个 token $x_{t+1}$。S6 的教学旁路另外增加独立线性 head，用**同一个 $X^{(L)}_t$** 预测 $x_{t+2}$、$x_{t+3}$……。
 
-设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon j：
+设有 $n_{\mathrm{mtp}}$ 个额外 head，总共 $n_{\mathrm{mtp}}+1$ 个预测距离，记为 horizon $j$：
 
 $$
-z_t^{(1)}=W_1h_t,\qquad
-z_t^{(j)}=W_jh_t\quad(j=2,\ldots,D+1).
+z_t^{(1)}=X^{(L)}_tW_1^\top,\qquad
+z_t^{(j)}=X^{(L)}_tW_j^\top\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
 $$
 
-主 head 是 S5 原来的 head，不是再复制一个。h_t 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 h_t。
+**大白话：**同一个位置的隐藏状态，同时交给几位“考官”：主 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head 只是换一张输出矩阵，读的是同一份表示。
+
+其中：$X^{(L)}_t$ 是最后一层（经过最终 RMSNorm）的隐藏状态 $X^{(L)}$ 在位置 $t$ 的那一行，长 $D$；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵（按 PyTorch 的 `[输出,输入]` 存放，所以右乘它的转置）；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
+
+主 head 是 S5 原来的 head，不是再复制一个。$X^{(L)}_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $X^{(L)}_t$。
 
 ### 五个 token，把标签写出来
 
-输入为 `[1,2,3,4,5]`，D=2。这里的整数是 token ID，不是它们的数值大小。
+输入为 `[1,2,3,4,5]`，$n_{\mathrm{mtp}}=2$。这里的整数是 token ID，不是它们的数值大小。
 
 | 隐藏位置的输入 token | 1 | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- | --- |
@@ -7068,12 +7072,12 @@ $$
 | 项目 | 形状 |
 | --- | --- |
 | token ID、每个 horizon 的 labels | [B,T] |
-| 归一化后的隐藏状态 | [B,T,D_model] |
-| 每个 head 的权重 | [V,D_model] |
-| 每个 horizon 的 logits | [B,T,V] |
+| 归一化后的隐藏状态 | $[B,T,D]$ |
+| 每个 head 的权重 | $[\lvert\mathcal V\rvert,D]$ |
+| 每个 horizon 的 logits | $[B,T,\lvert\mathcal V\rvert]$ |
 | 每个 horizon 的 CE | 标量 |
 
-这里 D 表示“额外预测 head 数”，D_model 表示隐藏宽度，V 表示词表大小。代码特意用 `depth` 与 `config.d_model` 区分，避免把两个 D 混写。
+这里 $n_{\mathrm{mtp}}$ 表示“额外预测 head 数”，$D$ 表示隐藏宽度，$\lvert\mathcal V\rvert$ 表示词表大小。代码同样用 `depth` 与 `config.d_model` 区分这两个数，不要把它们混写成同一个字母。
 
 ### 这是教学并行旁路，不是完整 V3 MTP
 
@@ -7083,33 +7087,43 @@ S6 没有实现那条串行结构，也没有复现其权重共享、训练规�
 
 ## P23.5 损失：先算哪些格，再决定怎么平均
 
-对 horizon j 的有效位置集合 M_j，本章定义：
+对 horizon $j$ 的有效位置集合 $\Omega_j$，本章定义：
 
 $$
-L_j=-\frac{1}{|M_j|}\sum_{(b,t)\in M_j}
+\mathcal L_j=-\frac{1}{|\Omega_j|}\sum_{(b,t)\in \Omega_j}
 \log\operatorname{softmax}(z_{b,t}^{(j)})[x_{b,t+j}].
 $$
 
-若 M_j 为空，令 L_j=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。
+**大白话：**第 $j$ 位考官只在“还有答案可对”的格子上考试：看它给真正的第 $t+j$ 个 token 多少概率，取负对数当扣分，再按这些格子的个数求平均。
 
-S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 D 个额外 head 的损失取平均：
+其中：$\Omega_j$ 是 horizon $j$ 下标签不是 -100 的位置 $(b,t)$ 集合，$|\Omega_j|$ 是它的元素个数；$b$ 是第几条样本，$t$ 是位置；$z_{b,t}^{(j)}$ 是该位置第 $j$ 个 head 的 logits；$[x_{b,t+j}]$ 表示取出真实 token $x_{b,t+j}$ 那一项的概率；$\mathcal L_j$ 是该 horizon 的平均交叉熵。
+
+若 $\Omega_j$ 为空，令 $\mathcal L_j=0$，并保留可反向传播的零值。否则“对空集合取均值”可能得到 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。
+
+S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 $n_{\mathrm{mtp}}$ 个额外 head 的损失取平均：
 
 $$
-L=L_1+\frac{\lambda}{D}\sum_{j=2}^{D+1}L_j+L_{MoE}\quad(D>0).
+\mathcal L=\mathcal L_1+\frac{\lambda}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal L_j+\mathcal L_{\mathrm{MoE}}\quad(n_{\mathrm{mtp}}>0).
 $$
 
-D=0 时省略中间项；L_MoE 是 S5 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon 没有标签时，其 CE 为零，但**整项训练损失未必为零**，因为 MoE 辅助项可能仍存在。把所有 horizon 的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。
+**大白话：**主任务的分数照记；几位旁路考官的分数先取平均，再乘一个小权重 $\lambda$ 当“附加题”；MoE 的负载均衡罚款原样加上。
+
+其中：$\mathcal L$ 是总训练损失；$\mathcal L_1$ 是主 head（下一个 token）的损失，$\mathcal L_j$ 见上式；$\lambda$ 是 MTP 辅助损失的权重（局部符号，代码里的 `weight`）；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已乘过系数的负载辅助项。
+
+$n_{\mathrm{mtp}}=0$ 时省略中间项；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon 没有标签时，其 CE 为零，但**整项训练损失未必为零**，因为 MoE 辅助项可能仍存在。把所有 horizon 的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。
 
 ### 两个有效位置，手算交叉熵与梯度
 
 假设三分类概率在第一个有效位置为 `[1/6,2/6,3/6]`，标签是下标 2 的类别；另一个有效位置为 `[3/6,2/6,1/6]`，标签是下标 1 的类别。两者中间有一个忽略位置：
 
 $$
-L=\frac{-\log(3/6)-\log(2/6)}{2}
+\mathcal L=\frac{-\log(3/6)-\log(2/6)}{2}
 =\frac{\log 2+\log 3}{2}.
 $$
 
-对第一个位置的 logits，梯度是 `(概率 − one_hot)/2`，即 `[1/12,1/6,-1/4]`。第二个有效位置为 `[1/4,-1/3,1/12]`；忽略位置的三个梯度全为 0。
+其中：3/6、2/6 是两个有效位置上正确类别的概率，分母 2 是有效位置数；$\log$ 为自然对数。
+
+对第一个位置的 logits，梯度是 $(p-\mathrm{onehot})/2$，即 `[1/12,1/6,-1/4]`（$p$ 是该位置的 softmax 概率，$\mathrm{onehot}$ 是标签的独热向量，除以 2 是因为对两个有效位置取平均）。第二个有效位置为 `[1/4,-1/3,1/12]`；忽略位置的三个梯度全为 0。
 
 ### 三种 mask 不要混用
 
@@ -7133,7 +7147,7 @@ $$
 
 沿源码阅读 `mtp_logits`：
 
-- `tok_emb(idx)` 把 [B,T] 转成 [B,T,D_model]。
+- `tok_emb(idx)` 把 $[B,T]$ 转成 $[B,T,D]$。
 - 依次经过 S5 原来的 blocks，继续保留因果注意力和 MoE。
 - `ln_f(hidden)` 得到各个 head 共用的表示。
 - 原 head 生成 horizon 1 的 logits，额外线性层分别生成 horizon 2、3……。
@@ -7216,6 +7230,10 @@ $$
 \alpha(x)=\min(1,p(x)/q(x)).
 $$
 
+**大白话：**草稿抽到 $x$ 后，目标模型觉得它“至少和草稿一样可能”就照单全收；否则按两者概率之比打折接受。
+
+其中：$p$ 是目标模型的概率分布，$q$ 是草稿模型的概率分布，$x$ 是从 $q$ 抽出的 token；$\alpha(x)$ 是接受概率（局部符号）。
+
 拒绝时不能随意重抽，也不能直接选目标最大项，而应从归一化的正差分布抽取：
 
 $$
@@ -7223,9 +7241,13 @@ r(x)=\frac{\max(0,p(x)-q(x))}
 {\sum_y\max(0,p(y)-q(y))}.
 $$
 
+**大白话：**被拒绝后，只从“目标比草稿更想要”的那些 token 里补抽，补抽比例正好填平草稿少给的概率，所以最终分布仍与目标 $p$ 一致。
+
+其中：$r(x)$ 是拒绝后重新抽样用的残差分布（局部符号）；$y$ 遍历整个词表；$\max(0,\cdot)$ 只保留正差。
+
 这套接受与校正规则的依据见 [Fast Inference from Transformers via Speculative Decoding v2，§2.3 与附录 A](https://arxiv.org/html/2211.17192v2)。若 q(x)=0，正常从 q 采样不会得到该 x；p=q 时拒绝概率为零，不应去归一化一个全零残差。涉及 temperature 或截断采样时，要使用相应处理后的分布，不能混用原始 logits 和修改后的概率。
 
-手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4 的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到 [0.6,0.4]。
+手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4 的拒绝质量。正差 $p-q$ 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到 [0.6,0.4]。
 
 **本章只对这个概率恒等式做精确分数验算，没有随机投机采样器。** 代码中的 `greedy_decode` 不接受 temperature、top-p 或随机 generator，也没有概率校正实现。不要删除这条边界，再把“贪心序列相同”写成“随机采样分布保持”。
 
@@ -7334,7 +7356,7 @@ batch 小时解码受内存带宽限制，多验证几个草稿位置几乎不�
 | --- | --- | --- | --- |
 | 线性层权重 W | [输出通道,输入通道] | 训练完成后相对固定 | 每层／每组 scale、权重格式、矩阵乘内核 |
 | 激活 X | [B,T,D] | 每次请求、每层计算 | 数据分布会变；静态校准还是动态 scale |
-| KV cache | 每层各一份 [B,H_kv,T,D_head] | prefill 写入，decode 继续追加 | K/V 的尺度、cache dtype、注意力内核与长序列误差 |
+| KV cache | 每层各一份 $[B,H_{kv},T,d_h]$ | prefill 写入，decode 继续追加 | K/V 的尺度、cache dtype、注意力内核与长序列误差 |
 
 W8A16 表示权重 8 位、激活通常为 16 位；W8A8 表示两者都为 8 位。**仅凭 W8A8 看不出 KV cache 的格式**，也看不出是 INT8 还是 FP8、累加器的位宽、哪几层保持高精度。要继续读配置。
 
@@ -7343,10 +7365,12 @@ INT8 是带符号整数，通常有 -128 到 127 这 256 个码；FP8 是另一�
 权重压小不会自动把 KV 压小。标准 GQA 的缓存主体字节数仍可按 [P14](#p14-grouped-kv) 计算：
 
 $$
-M_{KV}=2L B H_{kv} T D_{head}\,b_{KV}.
+M_{KV}=2L B H_{kv} T d_h\,b_{\mathrm{elem}}.
 $$
 
-这里 2 是 K 和 V，b_KV 是每元素的字节数。把 2 字节换成 1 字节，只是**数据主体**约减半；scale、分页、对齐、临时缓冲和其他层仍需要空间。MLA、跨层共享等结构不能直接套同一个账本。
+**大白话：**每层、每条序列、每个 KV 头、每个 token 都要存一条长 $d_h$ 的 K 和一条 V；把这些个数乘起来，再乘每个数占几个字节。
+
+其中：2 是 K 和 V 两份；$L$ 是层数，$B$ 是 batch 大小，$H_{kv}$ 是 KV 头数，$T$ 是已缓存的 token 数，$d_h$ 是每头宽度；$b_{\mathrm{elem}}$ 是 K/V 张量每元素的字节数；$M_{KV}$ 是缓存主体的总字节数。把 2 字节换成 1 字节，只是**数据主体**约减半；scale、分页、对齐、临时缓冲和其他层仍需要空间。MLA、跨层共享等结构不能直接套同一个账本。
 
 ## P24.2 一把短尺子：scale 与 zero-point
 
@@ -7357,6 +7381,10 @@ q=\operatorname{clip}\bigl(\operatorname{round}_{even}(x/s)+z,\ q_{min},\ q_{max
 \qquad
 \hat x=s(q-z).
 $$
+
+**大白话：**先用尺子的刻度 $s$ 量出 $x$ 是几格，四舍五入到整数格，再整体平移 $z$ 格，超出码表就贴到端点；读回时反过来减去平移、乘回刻度。
+
+其中：$x$ 是原始浮点值，$q$ 是存下来的整数码，$\hat x$ 是反量化后的近似值；$s$ 是 scale（量化刻度，局部符号，本章不指注意力分数），$z$ 是 zero-point；$q_{min}$、$q_{max}$ 是码的上下界；$\operatorname{round}_{even}$ 是“恰好一半取偶数”的舍入。下面的列表逐项再解释一遍。
 
 - **scale，s**：相邻两个格点间隔多远，必须有限且大于 0。
 - **zero-point，z**：真实数值 0 对应哪个整数码，必须是范围内的整数。
@@ -7402,6 +7430,10 @@ $$
 s=(2-(-1))/255=1/85,
 \qquad z=-128-\operatorname{round}(-1/s)=-43.
 $$
+
+**大白话：**把 $[-1,2]$ 这段长度 3 平均切成 255 格，每格 $1/85$；再挪动零点，让最小值 $-1$ 正好落在码 $-128$ 上。
+
+其中：255 是 $[-128,127]$ 之间的格数；$s$、$z$ 同上式。
 
 | x | round(x/s) | q=round(x/s)-43 | x̂=(q+43)/85 |
 | --- | --- | --- | --- |
@@ -7486,6 +7518,10 @@ $$
 \sum_i x_iw_i\ \approx\ s_xs_w\sum_i(q_{x,i}-z_x)(q_{w,i}-z_w).
 $$
 
+**大白话：**两边各自先减掉零点、在整数里乘加，最后只乘一次两把尺子的刻度，就回到浮点结果；整数部分可以交给快的整数乘法器。
+
+其中：$x_i$、$w_i$ 是激活和权重的第 $i$ 项；$q_{x,i}$、$q_{w,i}$ 是它们的整数码；$s_x,z_x$ 与 $s_w,z_w$ 分别是激活、权重的 scale 和 zero-point。
+
 对称 z=0 时看起来很简洁；仿射版本若漏减 z，会得到系统性错误。
 
 手算：激活 scale=0.5、z=-3、码 `[-2,1]`，恢复为 `[0.5,2]`；权重 scale=0.25、z=7、码 `[9,3]`，恢复为 `[0.5,-1]`。
@@ -7507,14 +7543,18 @@ $$
 对一个已经可见的前缀，注意力是：
 
 $$
-y=\operatorname{softmax}(qK^\top/\sqrt{d})V.
+y=\operatorname{softmax}(QK^\top/\sqrt{d_h})V.
 $$
+
+**大白话：**当前 query 和每个缓存的 key 打分，softmax 变成权重，再对缓存的 value 加权求和；K 存歪了会改权重，V 存歪了会改被加的内容。
+
+其中：$Q$ 是当前一步的查询（这里只有一行，$[1,d_h]$；为免和上文的整数码 $q$ 混淆，用大写）；$K$、$V$ 是缓存的键和值，$[T,d_h]$；$d_h$ 是每头宽度，本例为 2；$y$ 是这一头的输出。
 
 - K 的误差先改变分数，再经过 softmax 改变各位置的权重。
 - V 的误差改变被加权求和的内容。
 - 两者都会影响输出；多层、多步生成还可能放大或抵消误差。
 
-脚本用 q=`[0.8,-0.3]`，三个 K 行 `[0.12,-0.7]`、`[1.3,0.04]`、`[-0.31,0.9]`，V 行 `[0.2,2]`、`[1.2,-0.4]`、`[-0.7,0.05]`。每个 K/V 行独立对称量化后再反量化，得到：
+脚本用 $Q$=`[0.8,-0.3]`，三个 K 行 `[0.12,-0.7]`、`[1.3,0.04]`、`[-0.31,0.9]`，V 行 `[0.2,2]`、`[1.2,-0.4]`、`[-0.7,0.05]`。每个 K/V 行独立对称量化后再反量化，得到：
 
 | 输出分量 | 原始缓存 | 量化恢复的缓存 |
 | --- | --- | --- |
@@ -7688,12 +7728,16 @@ data: [DONE]
 
 如果一个引擎用 Q4、另一个用 BF16，那是在比较两套部署方案，不能把差异全归给调度器。若某格式只有一边支持，就标记为“无可比配置”，不要偷偷换模型。
 
-真正的首 token 延迟 TTFT 是从定义好的请求起点到第一个输出 token；TPOT 是后续输出 token 的平均间隔。假设记录了真实的逐 token 时间 t₁…t_N：
+真正的首 token 延迟 TTFT 是从定义好的请求起点到第一个输出 token；TPOT 是后续输出 token 的平均间隔。假设记录了真实的逐 token 时间 $t_1,\ldots,t_N$：
 
 $$
 \mathrm{TTFT}=t_1-t_{start},\qquad
 \mathrm{TPOT}=\frac{t_N-t_1}{N-1}\quad(N>1).
 $$
+
+**大白话：**TTFT 是等第一个字等了多久；TPOT 是第一个字之后，剩下的字平均隔多久来一个，$N$ 个 token 之间只有 $N-1$ 个间隔。
+
+其中：$t_{start}$ 是请求起点时刻，$t_k$ 是第 $k$ 个输出 token 到达的时刻；$N$ 是输出 token 数。
 
 开始于 10.0 秒，token 到达于 10.2、10.3、10.6 秒，TTFT≈0.2 秒，TPOT≈0.2 秒。N=0 时两者缺失，N=1 时 TPOT 缺失，不写 0 假装更快。
 
@@ -7810,12 +7854,12 @@ FP4 块格式让每一小块元素共享一个 scale，块越小，异常值影�
 | 字段／含义 | 0.6B dense | 30B-A3B MoE |
 | --- | ---: | ---: |
 | `model_type` | `qwen3` | `qwen3_moe` |
-| 层数 L | 28 | 48 |
-| 隐藏宽度 D | 1024 | 2048 |
-| Q 头数 Hq | 16 | 32 |
-| KV 头数 Hkv | 8 | 4 |
-| `head_dim`，每头宽度 d | 128 | 128 |
-| `vocab_size`，embedding 行数 V | 151936 | 151936 |
+| 层数 $L$ | 28 | 48 |
+| 隐藏宽度 $D$ | 1024 | 2048 |
+| Q 头数 $H_q$ | 16 | 32 |
+| KV 头数 $H_{kv}$ | 8 | 4 |
+| `head_dim`，每头宽度 $d_h$ | 128 | 128 |
+| `vocab_size`，embedding 行数 $\lvert\mathcal V\rvert$ | 151936 | 151936 |
 | dense FFN `intermediate_size` | 3072 | 6144，当前全 MoE 层不使用它 |
 | 单专家 `moe_intermediate_size` | 不适用 | 768 |
 | 专家总数／每 token 选中数 | 不适用 | 128 / 8 |
@@ -7836,7 +7880,10 @@ FP4 块格式让每一小块元素共享一个 scale，块越小，异常值影�
 
 ## P25.3 一个最容易算错的维度：D 不一定等于 Hq × d
 
-以前的小型教学模型常把 `head_dim` 写成 `D // Hq`。本章两个 checkpoint **显式指定 d=128**，所以：
+以前的小型教学模型常把 `head_dim` 写成 `D // Hq`。本章两个 checkpoint **显式指定 $d_h=128$**，所以：
+
+其中：$H_q$ 是 Q 头数，$d_h$ 是每头宽度，$D$ 是隐藏宽度；本章的 $H_qd_h$ 不等于 $D$，这正是要强调的地方。
+
 
 - dense：D=1024，但 Q 投影宽度为 16×128=2048；
 - MoE：D=2048，但 Q 投影宽度为 32×128=4096。
@@ -7854,9 +7901,9 @@ k_proj.weight / v_proj      [1024,1024]  → K/V [B,8,T,128]
 o_proj.weight               [1024,2048]  → 输出 [B,T,1024]
 ```
 
-因此不能只把 [S4](#p14-grouped-kv) 的模型尺寸改成 1024，就称它为“Qwen3-0.6B 实现”。S4 的旧假设是 `D=Hq*d`；本章的微型探针另写显式 head dimension，并且仍不提供官方 checkpoint 兼容性承诺。
+因此不能只把 [S4](#p14-grouped-kv) 的模型尺寸改成 1024，就称它为“Qwen3-0.6B 实现”。S4 的旧假设是 $D=H_qd_h$；本章的微型探针另写显式 head dimension，并且仍不提供官方 checkpoint 兼容性承诺。
 
-Q/K 的头数关系遵循 GQA：dense 每组 2 个 Q 头共用 1 个 KV 头，MoE 每组 8 个 Q 头共用 1 个 KV 头。分组按连续顺序，例子 Hq=4、Hkv=2 的对应关系是 `[0,0,1,1]`，不是轮流的 `[0,1,0,1]`。
+Q/K 的头数关系遵循 GQA：dense 每组 2 个 Q 头共用 1 个 KV 头，MoE 每组 8 个 Q 头共用 1 个 KV 头。分组按连续顺序，例子 $H_q=4$、$H_{kv}=2$ 的对应关系是 `[0,0,1,1]`，不是轮流的 `[0,1,0,1]`。
 
 ## P25.4 走一遍 block：QK-norm 不是又一个 LayerNorm
 
@@ -7873,19 +7920,27 @@ RMSNorm 对最后一维计算：
 
 $$
 \operatorname{RMSNorm}(z)_j
-= g_j\frac{z_j}{\sqrt{\frac{1}{d}\sum_{i=1}^{d}z_i^2+\epsilon}}.
+= \gamma_j\frac{z_j}{\sqrt{\frac{1}{n}\sum_{i=1}^{n}z_i^2+\epsilon}}.
 $$
 
-对 block 输入，最后一维是 D；对单个 Q/K 头，最后一维是 d。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 d 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 Hq×d 或 Hkv×d 的 gain**。这会直接影响参数统计。
+**大白话：**先算这一行数字的“均方根”当作音量，把整行除以它统一音量，再让每一维乘上自己可学的增益。不减均值，所以比 LayerNorm 少一步。
+
+其中：$z$ 是被归一化的那一行向量，$z_j$ 是它的第 $j$ 维；$n$ 是最后一维的长度；$\gamma_j$ 是第 $j$ 维的可学习 gain（代码里的 `weight`）；$\epsilon$ 是防止除以零的小常数（配置里的 `rms_norm_eps`）。
+
+对 block 输入，$n=D$；对单个 Q/K 头，$n=d_h$。这里不减均值，也没有 LayerNorm 的偏置向量。Q 和 K 各有一个长度 $d_h$ 的可学习 gain，它们在同类头之间共享，**不是每个头各拥有一份 $H_q\times d_h$ 或 $H_{kv}\times d_h$ 的 gain**。这会直接影响参数统计。
 
 本章探针保留 float64 精度来做标量对照；固定官方实现的 RMSNorm 有转到 float32 求统计量再转回的逻辑。即使数学结构一样，两种数值路径也不能宣称逐位等价，更不代表 BF16 GPU kernel 的误差行为已经复现。
 
-RoPE 也有布局约定。本快照使用 **split-half** 配对：d=4 时，维度 0 与 2 配一对，1 与 3 配一对。若记角度为 θ，第一对是：
+RoPE 也有布局约定。本快照使用 **split-half** 配对：$d_h=4$ 时，维度 0 与 2 配一对，1 与 3 配一对。若记角度为 θ，第一对是：
 
 $$
 (z_0,z_2) \mapsto
 (z_0\cos\theta-z_2\sin\theta,\ z_2\cos\theta+z_0\sin\theta).
 $$
+
+**大白话：**把第 0 维和第 2 维看成平面上一个点的两个坐标，绕原点转 $\theta$ 角；长度不变，只改方向。
+
+其中：$z_0,z_2$ 是一个 Q/K 头向量的第 0、2 维；$\theta$ 是这一对维度在当前位置的旋转角（局部符号），等于位置乘以这一对的频率。
 
 另一种实现可能把相邻维度 0/1、2/3 配对。它们都能表达旋转位置机制，但权重布局、旋转方式和 checkpoint 转换必须一致；不能把一种公式塞进另一种布局，再仅凭“都叫 RoPE”认定兼容。
 
@@ -7896,13 +7951,17 @@ $$
 Dense FFN 与每个 MoE 专家都使用三矩阵的 SwiGLU 结构：
 
 $$
-\operatorname{FFN}(x)=W_{down}
-\big[\operatorname{SiLU}(W_{gate}x)\odot(W_{up}x)\big].
+\operatorname{FFN}(x)=
+\big[\operatorname{SiLU}(xW_{\mathrm{gate}})\odot(xW_{\mathrm{up}})\big]W_{\mathrm{down}}.
 $$
 
-宽度为 M 时，三个无偏置矩阵一共 `3*D*M` 个参数。**gate_proj 是 SwiGLU 的门，不是 MoE 的路由器。** MoE 另有一个从 D 到专家数 E 的 `mlp.gate`，它决定调用哪些完整专家。
+**大白话：**一路（up）准备内容，另一路（gate）过 SiLU 后当“音量旋钮”逐元素调节它，最后用 down 投影压回原宽度。
 
-对本章的 30B-A3B，固定配置是：E=128、k=8、每个专家 M=768，`decoder_sparse_step=1`、`mlp_only_layers=[]`。因此 48 层均使用 MoE；固定实现中没有额外的 shared expert 分支。不要把 [S5 教学 MoE](#p18-moe) 默认的共享专家设置照搬进来。
+其中：$x$ 是一个位置的输入行向量，长 $D$；$W_{\mathrm{gate}},W_{\mathrm{up}}\in\mathbb R^{D\times d_{\mathrm{ff}}}$，$W_{\mathrm{down}}\in\mathbb R^{d_{\mathrm{ff}}\times D}$（按全书行向量写法；checkpoint 里按 `[输出,输入]` 存的是它们的转置）；$\odot$ 是逐元素乘法；$d_{\mathrm{ff}}$ 是中间宽度。
+
+宽度为 $d_{\mathrm{ff}}$ 时，三个无偏置矩阵一共 $3Dd_{\mathrm{ff}}$ 个参数。**gate_proj 是 SwiGLU 的门，不是 MoE 的路由器。** MoE 另有一个从 $D$ 到专家数 $N_E$ 的 `mlp.gate`，它决定调用哪些完整专家。
+
+对本章的 30B-A3B，固定配置是：$N_E=128$、$k=8$、每个专家 $d_{\mathrm{ff}}=768$，`decoder_sparse_step=1`、`mlp_only_layers=[]`。因此 48 层均使用 MoE；固定实现中没有额外的 shared expert 分支。不要把 [S5 教学 MoE](#p18-moe) 默认的共享专家设置照搬进来。
 
 单个 token 的路由流程是：
 
@@ -7922,12 +7981,16 @@ $$
 对这两个对象，一层的注意力投影参数为：
 
 $$
-P_{attn}=2D(H_qd)+2D(H_{kv}d).
+P_{\mathrm{attn}}=2D(H_qd_h)+2D(H_{kv}d_h).
 $$
 
-前一项对应 Q 与 O，后一项对应 K 与 V。再加 Q/K norm 的 `2d`、两个 block RMSNorm 的 `2D`。最终输出前的 RMSNorm 另加 D。
+**大白话：**Q 投影把 $D$ 维映到 $H_q$ 个头、每头 $d_h$ 维，O 投影再映回来，所以是两份 $D\times H_qd_h$；K、V 只有 $H_{kv}$ 个头，是两份 $D\times H_{kv}d_h$。
 
-Dense 每层再加 `3DM`。MoE 每层再加 router 的 `DE` 与全部专家的 `E*3DM`。embedding 为 `VD`；输出 head 也是 `VD`，但只有未绑定时才新增一份独立参数。
+其中：$P_{\mathrm{attn}}$ 是一层注意力投影的参数数；$D$ 是隐藏宽度，$H_q$、$H_{kv}$ 是 Q 头数与 KV 头数，$d_h$ 是每头宽度。本章 $H_qd_h\ne D$，所以不能化简成 $2D^2$ 之类。
+
+前一项对应 Q 与 O，后一项对应 K 与 V。再加 Q/K norm 的 $2d_h$、两个 block RMSNorm 的 $2D$。最终输出前的 RMSNorm 另加 $D$。
+
+Dense 每层再加 $3Dd_{\mathrm{ff}}$。MoE 每层再加 router 的 $DN_E$ 与全部专家的 $N_E\cdot3Dd_{\mathrm{ff}}$。embedding 为 $\lvert\mathcal V\rvert D$；输出 head 也是 $\lvert\mathcal V\rvert D$，但只有未绑定时才新增一份独立参数。
 
 | 组件 | 0.6B dense | 30B-A3B MoE |
 | --- | ---: | ---: |
@@ -7953,6 +8016,10 @@ $$
 = 3,353,032,704.
 $$
 
+**大白话：**从总数里先拿掉全部专家，再按“每个 token 只用 128 个专家中的 8 个”的比例把专家加回来，就是这一口径下的激活参数。
+
+其中：30,532,122,624 是唯一架构参数总数，28,991,029,248 是全部专家 FFN 的参数，$8/128=k/N_E$。
+
 这与[该版本模型卡](https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/ad44e777bcd18fa416d9da3bd8f70d33ebb85d39/README.md)描述的约 30.5B 总参数、3.3B 激活参数处在相应量级，但我们明确保留自己的完整计算口径，不把近似标签当作严格恒等式。
 
 为何强调“完整矩阵”？输入 embedding 实际查表只访问选中 token 的行；计算次数、内存读取、算术 FLOPs 不等于这一参数计数。一个 batch 中不同 token 还可能走不同专家，选中专家的并集超过 k。**A3B 不等于只需装下 3B 权重，更不意味着它一定比某个 dense 3B 更快。**
@@ -7962,17 +8029,19 @@ $$
 不量化、各层都保存 K/V 时，逻辑 payload 为：
 
 $$
-\text{bytes}=2\times L\times B\times T\times H_{kv}\times d\times s,
+\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}},
 $$
 
-其中 2 对应 K 与 V，s 是每个元素的字节数。假设 B=1、T=4096、BF16 的 s=2：
+**大白话：**和 P24 的 KV 账本是同一个乘法：K、V 两份，每层、每条序列、每个 KV 头、每个 token 存一条长 $d_h$ 的向量。
+
+其中：2 对应 K 与 V；$L$ 是层数，$B$ 是 batch 大小，$H_{kv}$ 是 KV 头数，$T$ 是缓存的 token 数，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是 K/V 张量每个元素的字节数。假设 $B=1$、$T=4096$、BF16 的 $b_{\mathrm{elem}}=2$：
 
 - 0.6B：469,762,048 字节，即 **448 MiB**；
 - 30B-A3B：402,653,184 字节，即 **384 MiB**。
 
 这是一个很好的反直觉检查：**总参数更多，不代表每条序列的 KV cache 一定更大。** MoE 对象有更多层，但 KV 头数更少。缓存量主要取决于上述维度，不直接由专家总参数推出来。
 
-如果误把 Hq 代替 Hkv，dense 会多算 2 倍，MoE 会多算 8 倍。本章注意力在运算时临时展开 KV 头，返回的缓存仍是 `[B,Hkv,T,d]`；这不是 FlashAttention，不声称避免了注意力矩阵或临时展开的内存。
+如果误把 $H_q$ 代替 $H_{kv}$，dense 会多算 2 倍，MoE 会多算 8 倍。本章注意力在运算时临时展开 KV 头，返回的缓存仍是 $[B,H_{kv},T,d_h]$；这不是 FlashAttention，不声称避免了注意力矩阵或临时展开的内存。
 
 数字只覆盖张量逻辑内容，不包括权重、临时工作区、allocator、页面碎片、通信缓冲、padding、量化 scale 或多请求调度。不要据此直接宣布“某张显卡一定装得下”。
 
@@ -8050,7 +8119,7 @@ OMP_NUM_THREADS=1 python -m unittest discover -s tests -p test_qwen3_case.py -v
 
 `--torch` 使用 CPU、附录 H 所列 PyTorch、Jinja2 `3.1.6`、种子 250、单线程、float64。缺少 PyTorch 或 Jinja2 时给出安装 `requirements.txt` 的提示并以状态 2 退出；不是“只打印配置就算可选实验通过”。本章没有额外安装 Transformers，也不修改仓库的依赖锁定。
 
-微型配置为 D=8、Hq=4、Hkv=2、d=4、2 层、词表 17，仍然保留 `Hq*d != D` 的关键结构。dense 的 FFN 宽度 12；MoE 是 4 个宽度 6 的专家、每 token 选 2 个，没有共享专家。它们只随机初始化，没有训练。
+微型配置为 $D=8$、$H_q=4$、$H_{kv}=2$、$d_h=4$、2 层、词表 17，仍然保留 $H_qd_h\ne D$ 的关键结构。dense 的 FFN 宽度 12；MoE 是 4 个宽度 6 的专家、每 token 选 2 个，没有共享专家。它们只随机初始化，没有训练。
 
 本次实际输出的稳定字段为：
 
@@ -8089,7 +8158,7 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 
 先手算，再在 `tests/test_qwen3_case.py` 中找到同名测试。
 
-1. **0.6B 的 Q 投影输出为什么不是 1024？** 因为显式 d=128、Hq=16，输出为 2048；O 再映回 1024。见 `test_exercise_explicit_head_width_and_qk_norm_weights`。
+1. **0.6B 的 Q 投影输出为什么不是 1024？** 因为显式 $d_h=128$、$H_q=16$，输出为 2048；O 再映回 1024。见 `test_exercise_explicit_head_width_and_qk_norm_weights`。
 2. **Q norm 是否有 16×128 个 gain？** 没有，本快照只有 128 个，按最后一维归一化、跨头共享。对应同一形状测试及 `test_exercise_qk_norm_and_split_half_rotation_hand_reference`。
 3. **0.6B 的输入／输出 embedding 是否应该计算两遍？** 不应，绑定后唯一架构参数为 596,049,920。见 `test_exact_real_parameter_totals_independent_hand_arithmetic`。
 4. **30B-A3B 应该再加宽度 6144 的 dense FFN 吗？** 不应，这份配置所有层都选择专家路径。把稀疏步长改成 2、层数改成 4，并排除下标 1 的层后，只有下标 3 的层是 MoE。见 `test_mixed_sparse_layer_selection_no_unused_dense_mlp_count`。
@@ -8156,6 +8225,8 @@ pretrained inference: NOT RUN; no weights or BPE vocabulary loaded
 $$
 512+64=576.
 $$
+
+其中：512 是内容 latent 的宽度（`kv_lora_rank`），64 是共享位置键的宽度（`qk_rope_head_dim`）；576 是每 token、每层要缓存的元素个数。
 
 若假设都用两字节存储，payload 是 1,152 字节。但这是**特定缓存表示的元素账**，不是整个请求的显存：层数、batch、token 数、分配器、量化 scale、工作区与权重尚未计入；具体后端也可能采用不同布局。先说清“谁的哪一块缓存”，再谈节省多少。[P14](#p14-grouped-kv) 解释为什么线性上投影可以吸收到查询或输出侧，本章稍后用三行数据复核它。
 
@@ -8294,9 +8365,16 @@ W_K=\begin{bmatrix}1&2\\-1&1\end{bmatrix},\quad
 W_V=\begin{bmatrix}2&0\\1&3\end{bmatrix}.
 $$
 
-内容 query 为 `[2,-1]`，位置 query 为 `[1,2]`，三行已经旋转过的位置 key 为 `[[0,1],[1,0],[2,-1]]`。内容与位置宽度各为 2，所以此例分母为 √4=2。
+其中：$C$ 是三行内容 latent（一行一个位置）；$W_K$、$W_V$ 是把 latent 上投影成内容 K、V 的矩阵，所以 $K=CW_K$、$V=CW_V$。
 
-路径一展开 `K=CW_K`、`V=CW_V` 再注意力；路径二把 query 改为 `qW_Kᵀ`，先对 C 做加权平均，最后乘 `W_V`。两个路径的 logits 都应为 `[-2,-1,0]`，输出约 `[2.776358,1.274369]`。
+内容 query 为 `[2,-1]`，位置 query 为 `[1,2]`，三行已经旋转过的位置 key 为 `[[0,1],[1,0],[2,-1]]`。内容与位置宽度各为 2，所以此例分母为 $\sqrt4=2$。
+
+路径一展开 $K=CW_K$、$V=CW_V$ 再注意力；路径二把内容 query $q$ 改为 $qW_K^\top$，先对 $C$ 做加权平均，最后乘 $W_V$。
+
+**大白话：**$q(CW_K)^\top=(qW_K^\top)C^\top$，$\big(w\,C\big)W_V=w\,(CW_V)$：矩阵乘法可以换个结合顺序，所以不必先把每个位置的 K、V 展开存下来。
+
+其中：$q$ 是内容 query 行向量，$w$ 是 softmax 后的注意力权重行向量。
+两个路径的 logits 都应为 `[-2,-1,0]`，输出约 `[2.776358,1.274369]`。
 
 这里检查的是线性代数恒等式与位置分支没有丢失；它省略 V3 的多头、query 低秩投影、归一化、真实 RoPE 生成和训练权重。**小实验正确不等于完整 MLA 内核正确。**
 
@@ -8309,6 +8387,10 @@ $$
 $$
 y=[1,-1]+\tfrac13[6,2]+\tfrac23[0,4]=[3,7/3].
 $$
+
+**大白话：**共享专家的输出照单全收，两位被选中的路由专家按原始分数归一化后的比例 1/3、2/3 加进来。
+
+其中：$[1,-1]$ 是共享专家输出，$[6,2]$、$[0,4]$ 是下标 2、1 两位路由专家的输出，$y$ 是这一层 MoE 的输出。
 
 只要选择顺序不变，改变 bias 的大小不应改变这组权重。若把 bias 加进归一化，数值就变了。固定 V3 配置的 routing scale 是 2.5，脚本参数也可取 2.5；上述输出随之变成 `[6,22/3]`，共享分支不跟着缩放。本实验不把这三位专家宣传成真实训练后的专家。
 
@@ -8399,7 +8481,11 @@ R(\theta)\begin{bmatrix}x\\y\end{bmatrix}
 \begin{bmatrix}x\\y\end{bmatrix}.
 $$
 
-座位 m 的 query 旋转 mθ，座位 n 的 key 旋转 nθ；点积可整理成净旋转 `(n−m)θ`，所以相对位置进入分数。例如 `[1,0]` 旋转 π/2 得到 `[0,1]`，但其长度仍为 1。这个几何关系不自动保证任意长上下文都可靠，完整数值与 YaRN 边界见 [P12](#p12-rope)。
+**大白话：**旋转矩阵把平面上的点绕原点转 $\theta$ 角，长度不变。
+
+其中：$(x,y)$ 是一对通道的两个坐标（这里按几何习惯写成列向量）；$\theta$ 是旋转角（局部符号）；$R(\theta)$ 是旋转矩阵。
+
+位置 $i$ 的 query 旋转 $i\theta$，位置 $j$ 的 key 旋转 $j\theta$；点积可整理成净旋转 $(j-i)\theta$，所以相对位置进入分数。例如 `[1,0]` 旋转 π/2 得到 `[0,1]`，但其长度仍为 1。这个几何关系不自动保证任意长上下文都可靠，完整数值与 YaRN 边界见 [P12](#p12-rope)。
 
 []{#杀手锏-2rmsnorm先不管平均数只控制振幅}
 
@@ -8408,6 +8494,8 @@ $$
 $$
 \operatorname{RMSNorm}(x)=\frac{x}{\sqrt{\operatorname{mean}(x^2)+\epsilon}}\odot\gamma.
 $$
+
+其中：$x$ 是一个位置的行向量；$\operatorname{mean}(x^2)$ 是各维平方的平均；$\epsilon$ 是防止除以零的小常数；$\gamma$ 是逐维可学习的缩放（局部符号）；$\odot$ 是逐元素乘法。
 
 例如 `[3,4]` 的均方根为 √12.5；令 γ 为 1、忽略小 epsilon，归一化后约 `[0.849,1.131]`，均值不为零。它与 LayerNorm 不是同一个操作，也不能保证固定“快 10%–50%”；速度依赖实现和硬件。[P13](#p13-modern-block) 有带 epsilon 的实现与反例。
 
@@ -8419,6 +8507,8 @@ $$
 \operatorname{SwiGLU}(x)=
 \bigl(\operatorname{SiLU}(xW_g)\odot xW_u\bigr)W_d.
 $$
+
+其中：$x$ 是一个位置的行向量；$W_g$、$W_u$ 是门控支路和内容支路的投影（$D\times d_{\mathrm{ff}}$），$W_d$ 是压回 $D$ 维的下投影（$d_{\mathrm{ff}}\times D$）；$\operatorname{SiLU}(u)=u/(1+e^{-u})$。
 
 中间的 ⊙ 是逐元素乘法，不是点积。若某个 gate 输入恰为 0，SiLU(0)=0，该通道的内容支路就被关掉。门控不等于 MoE 路由：前者通常调节 dense 中间通道，后者决定哪些专家支路参与。具体参数量与隐藏宽度要一起算，见 [P13](#p13-modern-block)。
 
@@ -8631,10 +8721,12 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 缓存公式是：
 
 $$
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d\times s.
+\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}.
 $$
 
-第一个 2 是 K 和 V 两份，s 是每元素字节数。MHA 时 Hkv=Hq=4；因此 `2×2×2×4×8×4×4=4096`。GQA 把 Hkv 改为 2，结果为 2048。这是从实际缓存张量 `numel×element_size` 求和后，再与独立整数账本对照的值。
+**大白话：**K、V 两份，每层、每条序列、每个 KV 头、每个 token 都存一条长 $d_h$ 的向量，个数乘起来再乘每个数的字节数。
+
+其中：第一个 2 是 K 和 V 两份；$L$ 是层数，$B$ 是 batch 大小，$H_{kv}$ 是 KV 头数，$T$ 是缓存的 token 数，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是 K/V 张量每元素字节数（float32 为 4）。MHA 时 $H_{kv}=H_q=4$；因此 `2×2×2×4×8×4×4=4096`。GQA 把 $H_{kv}$ 改为 2，结果为 2048。这是从实际缓存张量 `numel×element_size` 求和后，再与独立整数账本对照的值。
 
 这里**不是测出来的进程内存，更不是显存峰值**。模型权重、注意力分数、临时复制、Python 对象、分配器缓存都没计入。S4 计算注意力时还会临时展开共享 K/V；存储的缓存必须保留 Hkv 头，不能把展开后的 Hq 份偷偷存回去。
 
@@ -8656,8 +8748,12 @@ Hq=4、Hkv=2 时，查询头的映射是 `[0,0,1,1]`。给两个 KV 头分别填
 对同一组权重 θ 和输入 x，完整计算得到 `model(x)`。分块计算则先喂 3 个 token，再喂 1 个，最后喂 4 个，把各段 logits 按时间拼接。要求每个位置都对齐，不只比较最后一个生成 token。
 
 $$
-\left|z_{cache}-z_{full}\right|\leq atol+rtol\left|z_{full}\right|.
+\left|z_{\mathrm{cache}}-z_{\mathrm{full}}\right|\leq \mathrm{atol}+\mathrm{rtol}\left|z_{\mathrm{full}}\right|.
 $$
+
+**大白话：**两条路算出的每个 logit 只许差一点点：允许一个固定的小误差，再加上与数值大小成比例的一点误差，大数可以差得稍多。
+
+其中：$z_{\mathrm{full}}$ 是完整前向在某位置某类别的 logit，$z_{\mathrm{cache}}$ 是分块缓存路径的对应值，逐元素比较；$\mathrm{atol}$ 是绝对容差，$\mathrm{rtol}$ 是相对容差。
 
 本章 float32 使用 `atol=3e-6`、`rtol=1e-5`，同时记录最大绝对误差。不同批形、矩阵乘法路径与累加顺序会带来末位浮点差异，所以不能把所有缓存比较写成逐 bit 相等；也不能随意把容差放宽到“看起来差不多”。
 
@@ -8815,7 +8911,7 @@ S3 特殊设置可以在数学上退化成之前的结构，S6 depth=0 也可以
 
 A→B 只换归一化，复制并核对所有非 norm 状态。B→C 只换 FFN 家族与预算匹配宽度，复制并核对所有非 FFN 状态。脚本分别确认 14 个和 15 个不该改变的张量完全相同；输入、标签、dtype、设备和检查路径也相同。
 
-为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 `2Dm`，SwiGLU 三个矩阵的参数为 `3Dn`。D=16、m=64 时，理想 n 为 42 又 2/3；宽度必须是整数，选择 43 后为 `3×16×43=2064`，每层多 16 个，两层总共多 32 个。
+为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 $2Dm$，SwiGLU 三个矩阵的参数为 $3Dn$（$D$ 是模型宽度；$m$、$n$ 分别是 GELU 与 SwiGLU 的 FFN 中间宽度 $d_{\mathrm{ff}}$，用两个字母区分两种结构）。要让参数相等需 $n=2m/3$。$D=16$、$m=64$ 时，理想 n 为 42 又 2/3；宽度必须是整数，选择 43 后为 `3×16×43=2064`，每层多 16 个，两层总共多 32 个。
 
 所以这个实验应叫**FFN 家族加近似匹配宽度的消融**，不能叫“仅改变激活函数，其他完全不变”。RMSNorm 不做减均值，而 SwiGLU 多了一条门控乘积；它们的原始定义分别见 [RMSNorm v1](https://arxiv.org/abs/1910.07467v1) 与 [GLU Variants v1](https://arxiv.org/abs/2002.05202v1)。
 

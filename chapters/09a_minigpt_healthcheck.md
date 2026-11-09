@@ -135,10 +135,12 @@ python -m unittest discover -s tests -p 'test_minigpt_healthcheck.py' -v
 缓存公式是：
 
 $$
-\text{bytes}=2\times L\times B\times H_{kv}\times T\times d\times s.
+\text{bytes}=2\times L\times B\times H_{kv}\times T\times d_h\times b_{\mathrm{elem}}.
 $$
 
-第一个 2 是 K 和 V 两份，s 是每元素字节数。MHA 时 Hkv=Hq=4；因此 `2×2×2×4×8×4×4=4096`。GQA 把 Hkv 改为 2，结果为 2048。这是从实际缓存张量 `numel×element_size` 求和后，再与独立整数账本对照的值。
+**大白话：**K、V 两份，每层、每条序列、每个 KV 头、每个 token 都存一条长 $d_h$ 的向量，个数乘起来再乘每个数的字节数。
+
+其中：第一个 2 是 K 和 V 两份；$L$ 是层数，$B$ 是 batch 大小，$H_{kv}$ 是 KV 头数，$T$ 是缓存的 token 数，$d_h$ 是每头宽度，$b_{\mathrm{elem}}$ 是 K/V 张量每元素字节数（float32 为 4）。MHA 时 $H_{kv}=H_q=4$；因此 `2×2×2×4×8×4×4=4096`。GQA 把 $H_{kv}$ 改为 2，结果为 2048。这是从实际缓存张量 `numel×element_size` 求和后，再与独立整数账本对照的值。
 
 这里**不是测出来的进程内存，更不是显存峰值**。模型权重、注意力分数、临时复制、Python 对象、分配器缓存都没计入。S4 计算注意力时还会临时展开共享 K/V；存储的缓存必须保留 Hkv 头，不能把展开后的 Hq 份偷偷存回去。
 
@@ -160,8 +162,12 @@ Hq=4、Hkv=2 时，查询头的映射是 `[0,0,1,1]`。给两个 KV 头分别填
 对同一组权重 θ 和输入 x，完整计算得到 `model(x)`。分块计算则先喂 3 个 token，再喂 1 个，最后喂 4 个，把各段 logits 按时间拼接。要求每个位置都对齐，不只比较最后一个生成 token。
 
 $$
-\left|z_{cache}-z_{full}\right|\leq atol+rtol\left|z_{full}\right|.
+\left|z_{\mathrm{cache}}-z_{\mathrm{full}}\right|\leq \mathrm{atol}+\mathrm{rtol}\left|z_{\mathrm{full}}\right|.
 $$
+
+**大白话：**两条路算出的每个 logit 只许差一点点：允许一个固定的小误差，再加上与数值大小成比例的一点误差，大数可以差得稍多。
+
+其中：$z_{\mathrm{full}}$ 是完整前向在某位置某类别的 logit，$z_{\mathrm{cache}}$ 是分块缓存路径的对应值，逐元素比较；$\mathrm{atol}$ 是绝对容差，$\mathrm{rtol}$ 是相对容差。
 
 本章 float32 使用 `atol=3e-6`、`rtol=1e-5`，同时记录最大绝对误差。不同批形、矩阵乘法路径与累加顺序会带来末位浮点差异，所以不能把所有缓存比较写成逐 bit 相等；也不能随意把容差放宽到“看起来差不多”。
 
@@ -319,7 +325,7 @@ S3 特殊设置可以在数学上退化成之前的结构，S6 depth=0 也可以
 
 A→B 只换归一化，复制并核对所有非 norm 状态。B→C 只换 FFN 家族与预算匹配宽度，复制并核对所有非 FFN 状态。脚本分别确认 14 个和 15 个不该改变的张量完全相同；输入、标签、dtype、设备和检查路径也相同。
 
-为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 `2Dm`，SwiGLU 三个矩阵的参数为 `3Dn`。D=16、m=64 时，理想 n 为 42 又 2/3；宽度必须是整数，选择 43 后为 `3×16×43=2064`，每层多 16 个，两层总共多 32 个。
+为什么 C 不是正好 2048？无 bias 时，GELU 两个矩阵的参数为 $2Dm$，SwiGLU 三个矩阵的参数为 $3Dn$（$D$ 是模型宽度；$m$、$n$ 分别是 GELU 与 SwiGLU 的 FFN 中间宽度 $d_{\mathrm{ff}}$，用两个字母区分两种结构）。要让参数相等需 $n=2m/3$。$D=16$、$m=64$ 时，理想 n 为 42 又 2/3；宽度必须是整数，选择 43 后为 `3×16×43=2064`，每层多 16 个，两层总共多 32 个。
 
 所以这个实验应叫**FFN 家族加近似匹配宽度的消融**，不能叫“仅改变激活函数，其他完全不变”。RMSNorm 不做减均值，而 SwiGLU 多了一条门控乘积；它们的原始定义分别见 [RMSNorm v1](https://arxiv.org/abs/1910.07467v1) 与 [GLU Variants v1](https://arxiv.org/abs/2002.05202v1)。
 

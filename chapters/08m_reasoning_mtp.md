@@ -83,20 +83,24 @@ MTP 是 **Multi-Token Prediction，多 token 预测**；speculative decoding 是
 
 ## P23.4 MTP：在同一位置多问几个未来问题
 
-普通 next-token prediction 在位置 t 的隐藏向量 h_t 上，预测下一个 token x_{t+1}。S6 的教学旁路另外增加独立线性 head，用**同一个 h_t** 预测 x_{t+2}、x_{t+3}……。
+普通 next-token prediction 在位置 $t$ 的隐藏状态 $X^{(L)}_t$ 上，预测下一个 token $x_{t+1}$。S6 的教学旁路另外增加独立线性 head，用**同一个 $X^{(L)}_t$** 预测 $x_{t+2}$、$x_{t+3}$……。
 
-设有 D 个额外 head，总共 D+1 个预测距离，记为 horizon j：
+设有 $n_{\mathrm{mtp}}$ 个额外 head，总共 $n_{\mathrm{mtp}}+1$ 个预测距离，记为 horizon $j$：
 
 $$
-z_t^{(1)}=W_1h_t,\qquad
-z_t^{(j)}=W_jh_t\quad(j=2,\ldots,D+1).
+z_t^{(1)}=X^{(L)}_tW_1^\top,\qquad
+z_t^{(j)}=X^{(L)}_tW_j^\top\quad(j=2,\ldots,n_{\mathrm{mtp}}+1).
 $$
 
-主 head 是 S5 原来的 head，不是再复制一个。h_t 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 h_t。
+**大白话：**同一个位置的隐藏状态，同时交给几位“考官”：主 head 问下一个词，旁路 head 分别问再往后第 2、3……个词。各 head 只是换一张输出矩阵，读的是同一份表示。
+
+其中：$X^{(L)}_t$ 是最后一层（经过最终 RMSNorm）的隐藏状态 $X^{(L)}$ 在位置 $t$ 的那一行，长 $D$；$W_j\in\mathbb R^{\lvert\mathcal V\rvert\times D}$ 是第 $j$ 个 horizon 的输出矩阵（按 PyTorch 的 `[输出,输入]` 存放，所以右乘它的转置）；$z_t^{(j)}$ 是预测位置 $t+j$ 的 logits，长 $\lvert\mathcal V\rvert$；$j$ 是预测距离；$n_{\mathrm{mtp}}$ 是额外 head 数，代码里叫 `depth`。
+
+主 head 是 S5 原来的 head，不是再复制一个。$X^{(L)}_t$ 只能看见当前位置及之前的 token；为了预测更远处，我们没有把真实未来 token 偷塞进 $X^{(L)}_t$。
 
 ### 五个 token，把标签写出来
 
-输入为 `[1,2,3,4,5]`，D=2。这里的整数是 token ID，不是它们的数值大小。
+输入为 `[1,2,3,4,5]`，$n_{\mathrm{mtp}}=2$。这里的整数是 token ID，不是它们的数值大小。
 
 | 隐藏位置的输入 token | 1 | 2 | 3 | 4 | 5 |
 | --- | --- | --- | --- | --- | --- |
@@ -111,12 +115,12 @@ $$
 | 项目 | 形状 |
 | --- | --- |
 | token ID、每个 horizon 的 labels | [B,T] |
-| 归一化后的隐藏状态 | [B,T,D_model] |
-| 每个 head 的权重 | [V,D_model] |
-| 每个 horizon 的 logits | [B,T,V] |
+| 归一化后的隐藏状态 | $[B,T,D]$ |
+| 每个 head 的权重 | $[\lvert\mathcal V\rvert,D]$ |
+| 每个 horizon 的 logits | $[B,T,\lvert\mathcal V\rvert]$ |
 | 每个 horizon 的 CE | 标量 |
 
-这里 D 表示“额外预测 head 数”，D_model 表示隐藏宽度，V 表示词表大小。代码特意用 `depth` 与 `config.d_model` 区分，避免把两个 D 混写。
+这里 $n_{\mathrm{mtp}}$ 表示“额外预测 head 数”，$D$ 表示隐藏宽度，$\lvert\mathcal V\rvert$ 表示词表大小。代码同样用 `depth` 与 `config.d_model` 区分这两个数，不要把它们混写成同一个字母。
 
 ### 这是教学并行旁路，不是完整 V3 MTP
 
@@ -126,33 +130,43 @@ S6 没有实现那条串行结构，也没有复现其权重共享、训练规�
 
 ## P23.5 损失：先算哪些格，再决定怎么平均
 
-对 horizon j 的有效位置集合 M_j，本章定义：
+对 horizon $j$ 的有效位置集合 $\Omega_j$，本章定义：
 
 $$
-L_j=-\frac{1}{|M_j|}\sum_{(b,t)\in M_j}
+\mathcal L_j=-\frac{1}{|\Omega_j|}\sum_{(b,t)\in \Omega_j}
 \log\operatorname{softmax}(z_{b,t}^{(j)})[x_{b,t+j}].
 $$
 
-若 M_j 为空，令 L_j=0，并保留可反向传播的零值。否则“对空集合取均值”可能得到 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。
+**大白话：**第 $j$ 位考官只在“还有答案可对”的格子上考试：看它给真正的第 $t+j$ 个 token 多少概率，取负对数当扣分，再按这些格子的个数求平均。
 
-S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 D 个额外 head 的损失取平均：
+其中：$\Omega_j$ 是 horizon $j$ 下标签不是 -100 的位置 $(b,t)$ 集合，$|\Omega_j|$ 是它的元素个数；$b$ 是第几条样本，$t$ 是位置；$z_{b,t}^{(j)}$ 是该位置第 $j$ 个 head 的 logits；$[x_{b,t+j}]$ 表示取出真实 token $x_{b,t+j}$ 那一项的概率；$\mathcal L_j$ 是该 horizon 的平均交叉熵。
+
+若 $\Omega_j$ 为空，令 $\mathcal L_j=0$，并保留可反向传播的零值。否则“对空集合取均值”可能得到 NaN。因为不同 horizon 的有效标签数不同，分母不能固定写成 B×T。
+
+S6 的明确约定是先对每个 horizon 的有效标签取均值，再对 $n_{\mathrm{mtp}}$ 个额外 head 的损失取平均：
 
 $$
-L=L_1+\frac{\lambda}{D}\sum_{j=2}^{D+1}L_j+L_{MoE}\quad(D>0).
+\mathcal L=\mathcal L_1+\frac{\lambda}{n_{\mathrm{mtp}}}\sum_{j=2}^{n_{\mathrm{mtp}}+1}\mathcal L_j+\mathcal L_{\mathrm{MoE}}\quad(n_{\mathrm{mtp}}>0).
 $$
 
-D=0 时省略中间项；L_MoE 是 S5 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon 没有标签时，其 CE 为零，但**整项训练损失未必为零**，因为 MoE 辅助项可能仍存在。把所有 horizon 的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。
+**大白话：**主任务的分数照记；几位旁路考官的分数先取平均，再乘一个小权重 $\lambda$ 当“附加题”；MoE 的负载均衡罚款原样加上。
+
+其中：$\mathcal L$ 是总训练损失；$\mathcal L_1$ 是主 head（下一个 token）的损失，$\mathcal L_j$ 见上式；$\lambda$ 是 MTP 辅助损失的权重（局部符号，代码里的 `weight`）；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已乘过系数的负载辅助项。
+
+$n_{\mathrm{mtp}}=0$ 时省略中间项；$\mathcal L_{\mathrm{MoE}}$ 是 S5 已有且已乘系数的负载辅助项，不要重复乘或悄悄删除。一个 horizon 没有标签时，其 CE 为零，但**整项训练损失未必为零**，因为 MoE 辅助项可能仍存在。把所有 horizon 的有效位置放一起再平均也是另一种可定义的目标，但不是本章这一个。
 
 ### 两个有效位置，手算交叉熵与梯度
 
 假设三分类概率在第一个有效位置为 `[1/6,2/6,3/6]`，标签是下标 2 的类别；另一个有效位置为 `[3/6,2/6,1/6]`，标签是下标 1 的类别。两者中间有一个忽略位置：
 
 $$
-L=\frac{-\log(3/6)-\log(2/6)}{2}
+\mathcal L=\frac{-\log(3/6)-\log(2/6)}{2}
 =\frac{\log 2+\log 3}{2}.
 $$
 
-对第一个位置的 logits，梯度是 `(概率 − one_hot)/2`，即 `[1/12,1/6,-1/4]`。第二个有效位置为 `[1/4,-1/3,1/12]`；忽略位置的三个梯度全为 0。
+其中：3/6、2/6 是两个有效位置上正确类别的概率，分母 2 是有效位置数；$\log$ 为自然对数。
+
+对第一个位置的 logits，梯度是 $(p-\mathrm{onehot})/2$，即 `[1/12,1/6,-1/4]`（$p$ 是该位置的 softmax 概率，$\mathrm{onehot}$ 是标签的独热向量，除以 2 是因为对两个有效位置取平均）。第二个有效位置为 `[1/4,-1/3,1/12]`；忽略位置的三个梯度全为 0。
 
 ### 三种 mask 不要混用
 
@@ -176,7 +190,7 @@ $$
 
 沿源码阅读 `mtp_logits`：
 
-- `tok_emb(idx)` 把 [B,T] 转成 [B,T,D_model]。
+- `tok_emb(idx)` 把 $[B,T]$ 转成 $[B,T,D]$。
 - 依次经过 S5 原来的 blocks，继续保留因果注意力和 MoE。
 - `ln_f(hidden)` 得到各个 head 共用的表示。
 - 原 head 生成 horizon 1 的 logits，额外线性层分别生成 horizon 2、3……。
@@ -259,6 +273,10 @@ $$
 \alpha(x)=\min(1,p(x)/q(x)).
 $$
 
+**大白话：**草稿抽到 $x$ 后，目标模型觉得它“至少和草稿一样可能”就照单全收；否则按两者概率之比打折接受。
+
+其中：$p$ 是目标模型的概率分布，$q$ 是草稿模型的概率分布，$x$ 是从 $q$ 抽出的 token；$\alpha(x)$ 是接受概率（局部符号）。
+
 拒绝时不能随意重抽，也不能直接选目标最大项，而应从归一化的正差分布抽取：
 
 $$
@@ -266,9 +284,13 @@ r(x)=\frac{\max(0,p(x)-q(x))}
 {\sum_y\max(0,p(y)-q(y))}.
 $$
 
+**大白话：**被拒绝后，只从“目标比草稿更想要”的那些 token 里补抽，补抽比例正好填平草稿少给的概率，所以最终分布仍与目标 $p$ 一致。
+
+其中：$r(x)$ 是拒绝后重新抽样用的残差分布（局部符号）；$y$ 遍历整个词表；$\max(0,\cdot)$ 只保留正差。
+
 这套接受与校正规则的依据见 [Fast Inference from Transformers via Speculative Decoding v2，§2.3 与附录 A](https://arxiv.org/html/2211.17192v2)。若 q(x)=0，正常从 q 采样不会得到该 x；p=q 时拒绝概率为零，不应去归一化一个全零残差。涉及 temperature 或截断采样时，要使用相应处理后的分布，不能混用原始 logits 和修改后的概率。
 
-手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4 的拒绝质量。正差 p−q 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到 [0.6,0.4]。
+手算一个两词表例子：p=[0.6,0.4]，q=[0.2,0.8]。A 的接受概率是 1，B 的接受概率是 0.5；被直接接受的质量分别是 0.2、0.4，尚有 0.4 的拒绝质量。正差 $p-q$ 只在 A 上为正，所以这 0.4 全补给 A，最后恰好得到 [0.6,0.4]。
 
 **本章只对这个概率恒等式做精确分数验算，没有随机投机采样器。** 代码中的 `greedy_decode` 不接受 temperature、top-p 或随机 generator，也没有概率校正实现。不要删除这条边界，再把“贪心序列相同”写成“随机采样分布保持”。
 
