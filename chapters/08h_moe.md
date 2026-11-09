@@ -31,7 +31,7 @@ $$
 
 ![S5 教学 MoE：输入分为路由专家与共享专家两条路径，top-k 权重只组合被选专家，容量丢弃仅为独立实验，语言模型保持不丢弃](assets/diagrams/p18-moe.svg)
 
-图中的 E 就是正文的 $N_E$，即可选的路由专家数量；k 是每 token 选择的数量；S 就是正文的 $N_S$，即始终参与的共享专家数量（配图沿用旧字母；全书 $E$ 专指 embedding 表）。**$N_E$ 和 k 不能混写。** k=2、$N_E=4$ 时，模型保存四个路由专家，单个 token 只调用其中两个。
+图中标了 $N_E=4$、$k=2$；$N_E$ 是可选的路由专家数量，$k$ 是每 token 选择的数量。共享专家始终参与，数量记 $N_S$（图中共享专家框未标具体数；全书 $E$ 专指 embedding 表）。**$N_E$ 和 $k$ 不能混写。** $k=2$、$N_E=4$ 时，模型保存四个路由专家，单个 token 只调用其中两个。
 
 ## P18.2 路由器先打分，再选择，再加权
 
@@ -103,6 +103,20 @@ $$
 **dispatch** 是按专家收集 token；**combine** 是把结果送回 token 原位置并加权。它们不能只做 reshape：同一个 token 可能出现在多个专家的小批次中，结果要相加，而不是覆盖。
 
 例如上面的 A、B、C：下标 0 的专家收 A、C；下标 1 的专家收 A、C；下标 2 的专家收 B；下标 3 的专家收 B。下标 0 的专家的两个输出再分别回到 A、C 的位置。并没有把 A 的结果交给 C。
+
+
+```mermaid
+flowchart TD
+    %% id: p18-dispatch-combine
+    accTitle: MoE 先摊平再按专家收集，combine 按原位置加权放回
+    accDescr: X 形状 [B,T,D] 摊平为 [B·T,D]；路由得到 top-k 下标与权重后，dispatch 按专家收集 token，各专家算 F_e，combine 回到原位置加权求和，再还原 [B,T,D]。同一 token 可能去多个专家。
+    X["X [B,T,D]"] --> F["摊平 [B·T,D]"]
+    F --> R["路由：top-k 下标与权重"]
+    R --> D["dispatch：按专家收集 token\n同一 token 可去多个专家"]
+    D --> E["各专家计算 F_e"]
+    E --> C["combine：按原位置加权求和"]
+    C --> Y["还原 [B,T,D]"]
+```
 
 ## P18.4 专家多了，参数和计算怎样算
 
@@ -225,6 +239,28 @@ A、B、C 例子设置 capacity=1 后，requested 仍是 `[2,2,1,1]`，accepted 
 
 “今天没收到梯度”不等于“永远不会变化”：其他 batch 可能路由到它，优化器的历史动量、权重衰减和梯度清理方式也会影响实际更新。
 
+
+```mermaid
+flowchart TD
+    %% id: p18-grad-paths
+    accTitle: 主损失分叉到被选专家与组合权重，辅助损失才打到全部 affinity
+    accDescr: 三条路径分叉：主损失更新被选专家参数（未选 grad 可为 None）；主损失经组合权重 w 回路由器，top-1 时 w≡1 使该任务梯度为 0；辅助损失经全部 affinity p 更新路由器。
+    subgraph P1["路径 1"]
+      direction LR
+      L1["主损失"] --> E["被选专家参数；未选 grad 可为 None"]
+    end
+    subgraph P2["路径 2"]
+      direction LR
+      L2["主损失"] --> W["w → 路由器；top-1 时为 0"]
+    end
+    subgraph P3["路径 3"]
+      direction LR
+      A["辅助损失"] --> P["全部 affinity p → 路由器"]
+    end
+    P1 ~~~ P2
+    P2 ~~~ P3
+```
+
 ## P18.8 顺着代码走一次
 
 关键实现没有写成一个与主线无关的玩具。`MoEGPT` 继承 `GroupedGPT`，保留 attention、norm、残差、embedding 和 head，只替换每个 Block 的 mlp。
@@ -324,6 +360,25 @@ CPU 数值对齐不是 GPU 速度测试，也不是质量评测。浮点末位�
 - 服务目标是 prefill 吞吐、单请求 decode 延迟，还是并发服务。
 
 “激活参数较少，所以普通电脑一定更快”是不成立的。小 batch 下，大量小矩阵乘法和调度可能更慢。性能要回到 P15 的相同请求长度、并发、硬件与 TTFT/TPOT 等指标上测；本章没有 GPU 或多卡实验。
+
+
+```mermaid
+sequenceDiagram
+    %% id: p18-expert-parallel
+    accTitle: 多设备 MoE 要付 all-to-all 往返，整步速度被最忙的设备拖住
+    accDescr: 本机先路由，再 all-to-all 把 token 送到专家所在设备，远端算 F_e 后 all-to-all 送回，本机加权相加并加上共享专家；最忙的设备决定整步的等待时间。
+    participant L as 本机
+    participant N as 网络 all-to-all
+    participant R as 远端专家设备
+    L->>L: 本机做路由
+    L->>N: 按专家打包 token
+    N->>R: 送到专家所在设备
+    R->>R: 计算 F_e
+    R->>N: 送回专家输出
+    N->>L: 收齐各设备结果
+    L->>L: 加权并加共享
+    Note over L,R: 最忙的设备决定整步等待时间
+```
 
 ## P18.11 和官方资料对照：学机制，不冒充复现
 
