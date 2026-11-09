@@ -6198,6 +6198,19 @@ EOS 不是同一回事：生成句号不会自动停。温度 0 是贪心；温�
 <p>S0 超过 128 个输入字符时，在生成循环中取最后 128 字并把位置重新编号为
 0–127。这是一个明确的<strong>滑窗重算策略</strong>，不是无限上下文，也不能与沿用旧绝对位置的缓存结果直接比较。P11
 的缓存演示到容量上限就报错，不伪装成同一滑窗策略。</p>
+<p>下图把 S0
+的停止与滑窗重算画成状态图：预算到了就停，句号不会停；超长时只把末 128
+字送进模型，但返回的仍是完整序列。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p08-generate-stop.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p08-generate-stop.svg" class="book-diagram"
+width="462"
+alt="S0 生成循环：预算停、句号不停、超长就滑窗重算。生成中每步接一个新字；新增数达预算就停且遇句号不停；序列超过 128 时只用最后 128 字作模型输入并把位置重编为 0–127，返回仍是完整序列。" /></a>
+<div class="diagram-caption">
+S0 生成循环：预算停、句号不停、超长就滑窗重算
+</div>
+</div>
 <h2 id="保存再加载基线必须能回来">8.7 保存再加载：基线必须能回来</h2>
 <p>只有 loss 日志不够。后续要比较
 S0/S1，必须复用完全相同的权重、配置和词表。配套
@@ -6317,6 +6330,19 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb71-1"><a h
 <p>这里的片段是调用顺序，完整可运行示例在源码。<code>cached_forward</code>
 不选 token，只返回当前新块的 logits；<code>generate_cached</code>
 才负责选择与循环。它每次调用从空缓存开始，防止第二个请求误接在第一个请求后面。</p>
+<p>下图按调用顺序对照：新请求必须
+<code>cache=None</code>；<code>cached_forward</code> 只回 logits，选字由
+<code>generate_cached</code> 完成。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p11-prefill-decode.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p11-prefill-decode.svg" class="book-diagram"
+width="347"
+alt="Prefill 写出各层 K/V；decode 只追加新位置。新请求 cache=None。Prefill 送整段 prompt，各层写入 K/V，cached_forward 返回末位 logits，generate_cached 再选出首字；随后只送新 token，各层追加 K/V 并读全部历史。" /></a>
+<div class="diagram-caption">
+Prefill 写出各层 K/V；decode 只追加新位置
+</div>
+</div>
 <h2 id="p11.3-逐层形状与位置偏移">P11.3 逐层形状与位置偏移</h2>
 <p>设已有 P 个位置，本次新输入 C 个位置；头数 H，每头宽度 d，主干宽度
 D=H×d。</p>
@@ -6378,6 +6404,18 @@ class="sourceCode python"><code class="sourceCode python"><span id="cb72-1"><a h
 是缓存长度。旧位置向量已经进入旧 K/V
 的计算，不应给旧缓存再加一次位置向量。参数表最大 128 行，索引只能是
 0–127。</p>
+<p>下图标出新块从偏移 P 起编号后，Q 与拼好的 K/V
+如何凑成矩形分数表。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p11-shapes-offset.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p11-shapes-offset.svg" class="book-diagram"
+width="607"
+alt="新块位置从 P 起编，拼完后分数是矩形而不是方阵。已缓存 P 个、新块 C 个即 T_q=C、T_kv=P+C；新位置是 P…P+C−1，新 Q 为 [B,H,C,d_h]，旧 K/V 拼上新的得到 [B,H,P+C,d_h]，分数 [B,H,C,P+C]。例 H=4、d_h=12、P=3、C=2。" /></a>
+<div class="diagram-caption">
+新块位置从 P 起编，拼完后分数是矩形而不是方阵
+</div>
+</div>
 <h2 id="p11.4-矩形-mask最容易写错的两行">P11.4 矩形
 mask：最容易写错的两行</h2>
 <p>把提示分块计算，或者一次追加两个
@@ -6547,6 +6585,18 @@ S0 一样没有 EOS，按预算停止。</p>
 <p>批量实验只支持同长、无 padding 的 B 个请求，位置从 0
 开始对齐。若要把长短不一的用户请求动态加入/退出，需要分别记录有效长度、注意力可见性与缓存所有权，本教学实现没有做到。对不同
 batch 直接复用旧 cache 会报错，不会替你猜如何重排请求。</p>
+<p>下图按 <code>generate_cached</code>
+的真实顺序：先做容量检查，再处理零预算；变长批或跨批复用缓存也在检查请求时拦下。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p11-length-bounds.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p11-length-bounds.svg" class="book-diagram"
+width="694"
+alt="S1 超长直接拒绝，预算为 0 不进模型，缓存也不能跨批复用。提示加预算超过 128 先拒绝（删旧 K/V 不等于滑窗重编号）；新增预算为 0 则直接返回；通过后按预算 decode 且无 EOS；变长批或复用别的 batch 的缓存也在检查请求时报错。" /></a>
+<div class="diagram-caption">
+S1 超长直接拒绝，预算为 0 不进模型，缓存也不能跨批复用
+</div>
+</div>
 <h2 id="p11.8-计时首-token-与后续-token-分开记">P11.8 计时：首 token
 与后续 token 分开记</h2>
 <div class="sourceCode" id="cb74"><pre
@@ -7064,6 +7114,18 @@ RoPE 的 CPU 结果标成“YaRN 复现”。</p>
 所用的角度规则就过期。当前 S2 固定规则并拒绝改配置后复用旧缓存；它不实现
 Dynamic YaRN。若要扩展，需要专门设计未旋转 K
 的保留/重算等一致性策略，不能只改一个频率变量后继续拼旧 K。</p>
+<p>下图先按波长把频率对分成三段改 ω_i，再让 Q、K 同乘 a，使点积乘
+a²；「中途改 κ」只是旁注，不接在主链上。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p12-yarn-bands.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p12-yarn-bands.svg" class="book-diagram"
+width="715"
+alt="YaRN 先按波长分频段改 ω_i，再让 Q、K 同乘 a，点积乘 a²。每个频率对算 λ_i=2π/ω_i 与 r=T_train/λ_i，再和 α、β 比较：高频保留 ω_i，低频用 ω_i/κ，中间线性混合；随后 Q、K 都乘 a，点积乘 a²。中途改 κ 会使已旋转的旧 K 作废，图中仅作旁注。" /></a>
+<div class="diagram-caption">
+YaRN 先按波长分频段改 ω_i，再让 Q、K 同乘 a，点积乘 a²
+</div>
+</div>
 <h2 id="p12.9-cpu-反例短距离记住了长距离未必记得住">P12.9 CPU
 反例：短距离记住了，长距离未必记得住</h2>
 <p>我们不拿三首诗自然语言输出评判长上下文，而是造一个明确任务：</p>
@@ -8252,6 +8314,18 @@ v5，§2.1.2</a></p>
 </ol>
 <p>对同一组低秩参数，这两种括号位置的结果应当只差浮点舍入，但两条路径相等仍不足以证明算对：它们可能一起忘记位置项，或一起用了错误的缩放分母。</p>
 <p>本函数为核对而同时保留两条路径的张量，<strong>它本身并不是一段峰值内存优化实现</strong>。</p>
+<p>下图对照展开与吸收两条算内容分数的路径：位置项加进分数后再除以
+√(d_c+d_r)，最后才 Softmax；「两路结果相等」标在内容分数上。</p>
+<div class="diagram-figure">
+<a href="assets/rendered/flow-p14-mla-absorb.svg"
+title="点击查看原尺寸图"><img
+src="assets/rendered/flow-p14-mla-absorb.svg" class="book-diagram"
+width="494"
+alt="MLA 内容分数两种括号顺序相同，位置项在 Softmax 前相加。展开路径把 c_t 上投影成各头 K/V 再与 q^C 打分；吸收路径让 q^C 乘上投影的转置直接对 c_t 打分。两路内容分数相等后，先加位置项 q^R·k^R 再除以 √(d_c+d_r)，然后 Softmax 加权；位置项不在输出之后才加。" /></a>
+<div class="diagram-caption">
+MLA 内容分数两种括号顺序相同，位置项在 Softmax 前相加
+</div>
+</div>
 <h2 id="p14.10-rope-位置项为什么单独算">P14.10 RoPE
 位置项为什么单独算</h2>
 <p>不能把位置从内存账本里删掉。若把每个历史位置的内容 K
